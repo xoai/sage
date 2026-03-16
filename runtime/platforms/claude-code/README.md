@@ -66,7 +66,7 @@ prompt context for each workflow.
 
 ### Skills = On-Demand Knowledge
 
-Sage skills live in `sage/skills/@sage/`. When the navigator or a
+Sage skills live in `sage/skills/`. When the navigator or a
 command references a skill, the agent reads its SKILL.md and follows
 the methodology. Skills aren't auto-loaded — they're read on demand
 when referenced. This keeps context clean.

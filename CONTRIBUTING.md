@@ -50,7 +50,7 @@ assessment, data analysis, game design.
   section. Check the contract and add practical failure modes.
 - **Improve reference files:** If you're a domain expert and a reference file
   is missing important methodology or anti-patterns, propose improvements.
-- **Add examples:** Worked examples (like `skills/@sage/product-management/examples/jtbd-sample.md`)
+- **Add examples:** Worked examples (like `skills/product-management/examples/jtbd-sample.md`)
   help users understand what good output looks like.
 
 ### Report Issues
@@ -93,8 +93,8 @@ find skills -maxdepth 1 -type d | wc -l  # Packs
 1. **Read the relevant contract** for the module type you're contributing.
 2. **Read an existing module** of the same type as reference. Start with a
    well-built example:
-   - Pack: `skills/@sage/nextjs/` or `skills/@sage/react/`
-   - Playbook: `skills/@sage/product-management/` (non-code) or `skills/@sage/ux-design/` (enriching)
+   - Pack: `skills/nextjs/` or `skills/react/`
+   - Playbook: `skills/product-management/` (non-code) or `skills/ux-design/` (enriching)
    - Skill: `core/capabilities/planning/specify/SKILL.md`
 3. **Build the module** following the contract and authoring guide.
 4. **Run validation:** `bash develop/validators/contracts/validate-all.sh .`

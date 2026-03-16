@@ -340,7 +340,7 @@ produces personas, journey maps, and a pain point inventory. That's not a
 nudge to an existing skill. That's its own process with its own skills.
 
 **Why not extensions?** Extensions are technology-specific. UX design applies
-whether you build in React or Flutter. If you put UX guidance into `@sage/react`,
+whether you build in React or Flutter. If you put UX guidance into `react`,
 Vue users lose it. The litmus test holds: "If I switch my tech stack, does this
 still apply?" Yes → playbook. No → extension.
 
@@ -373,7 +373,7 @@ The key architectural decisions:
 
 - **Areas split naturally.** Security has both a playbook (`play-security`:
   threat modeling, risk assessment — tech-agnostic) and a domain extension
-  (`@sage/security`: OWASP patterns — web-specific). The playbook decides
+  (`security`: OWASP patterns — web-specific). The playbook decides
   WHAT threats to model. The extension decides HOW to prevent them in the
   specific stack.
 
@@ -552,9 +552,9 @@ collapsible "Old Patterns (Deprecated Reference)" sections at the end of
 their anti-patterns files. Each contains a migration table mapping deprecated
 API → current replacement.
 
-Currently applied to: @sage/nextjs (Pages Router → App Router, Class →
-Hooks), @sage/react-native (Bridge → New Architecture, Navigation v4 → v7),
-@sage/react (Class Components → Hooks, Legacy Context → createContext).
+Currently applied to: nextjs (Pages Router → App Router, Class →
+Hooks), react-native (Bridge → New Architecture, Navigation v4 → v7),
+react (Class Components → Hooks, Legacy Context → createContext).
 
 These sections are reference material, not behavioral instructions. The
 anti-patterns tell agents what to avoid; the old patterns sections help
@@ -615,7 +615,7 @@ team maintains this. The user never touches it. Contributors rarely touch it.
 **Ring 2 — Packs and Playbooks:** The extensibility surface. This is where
 community value grows. Packs provide framework-specific judgment. Playbooks
 provide discipline-specific processes. Both are top-level because they're the
-primary value proposition — a developer browsing the repo sees skills/@sage/ immediately
+primary value proposition — a developer browsing the repo sees skills/ immediately
 and knows "this has guidance for my framework."
 
 **Ring 3 — Runtime and Develop:** Supporting infrastructure. Runtime holds
@@ -651,7 +651,7 @@ This insight led to the three-layer information model:
 - **Packs = Judgment:** When to prefer server components over client components.
   Why useEffect for data fetching is wrong in App Router. Which patterns from
   training data are stale. Changes slowly (major framework versions). Delivered
-  via CLAUDE.md principles and .sage/skills/@sage/ detail files.
+  via CLAUDE.md principles and .sage/skills/ detail files.
 
 - **Gates = Verification:** Do tests pass? Do imports resolve? Is there mobile
   overflow? Evidence-based, deterministic. Changes rarely. Delivered via bash
@@ -746,8 +746,8 @@ conversation memory.
 
 ```
 - [ ] Task 3: Build auth middleware
-  - Read first: .sage/skills/@sage/nextjs/patterns/nextjs-patterns.md (middleware),
-    .sage/skills/@sage/stack-nextjs-supabase/integration/stack-integration.md
+  - Read first: .sage/skills/nextjs/patterns/nextjs-patterns.md (middleware),
+    .sage/skills/stack-nextjs-supabase/integration/stack-integration.md
   - Files: src/middleware.ts
   - Action: ...
 ```

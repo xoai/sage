@@ -141,7 +141,7 @@ Break the work into tasks. Each task must be:
 ```
 ### Task N: [descriptive name]
 
-**Read first:** [pack pattern files relevant to this task — check .sage/skills/@sage/]
+**Read first:** [pack pattern files relevant to this task — check .sage/skills/]
 **Files:** [exact file paths to create or modify]
 **Action:** [what to do — be specific enough that there's no ambiguity]
 **Test:** [what test to write, what it should verify]

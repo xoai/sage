@@ -85,13 +85,13 @@ mkdir -p "$pack_dir/anti-patterns"
 mkdir -p "$pack_dir/constitution"
 mkdir -p "$pack_dir/gates"
 
-echo "Creating pack: @sage/$pack_name (Layer $layer — $layer_name)"
+echo "Creating pack: $pack_name (Layer $layer — $layer_name)"
 
 # ─── Generate SKILL.md manifest ──────────────────────────────────────────────────
 
 cat > "$pack_dir/SKILL.md manifest" << EOF
 ---
-name: "@sage/$pack_name"
+name: "$pack_name"
 description: "TODO: One sentence describing what agent mistakes this pack corrects"
 version: "1.0.0"
 license: "MIT"
@@ -122,7 +122,7 @@ echo "  ✓ SKILL.md manifest"
 # ─── Generate README ──────────────────────────────────────────────────────
 
 cat > "$pack_dir/README.md" << EOF
-# @sage/$pack_name
+# $pack_name
 
 **Layer $layer — ${layer_name^} Pack**
 
@@ -226,7 +226,7 @@ echo "  ✓ constitution/${pack_name}.constitution-additions.md"
 # ─── Generate tests.md ────────────────────────────────────────────────────
 
 cat > "$pack_dir/tests.md" << EOF
-# Pack Tests: @sage/$pack_name
+# Pack Tests: $pack_name
 
 **Framework version tested:** TODO
 **Last tested:** $(date +%Y-%m-%d)

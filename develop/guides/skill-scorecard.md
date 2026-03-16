@@ -191,7 +191,7 @@ that only works 60%. Token costs matter, but behavior change and correctness mat
 
 Before submitting a skill:
 
-1. Run `bash .sage/tools/sage-check-pack.sh skills/@sage/<your-pack>` — fix all errors
+1. Run `bash .sage/tools/sage-check-pack.sh skills/<your-pack>` — fix all errors
 2. Write 3-5 test prompts in `tests.md` — demonstrate behavior change
 3. Self-review each pattern: "Would an agent get this wrong without this guidance?"
 4. Self-review each anti-pattern: "Have I seen an agent actually do this?"

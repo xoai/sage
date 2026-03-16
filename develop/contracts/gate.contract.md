@@ -167,10 +167,10 @@ Every gate MUST NOT:
 
 | Order | Name | Category | Source |
 |-------|------|----------|--------|
-| 51 | owasp-security | safety | @sage/security extension |
-| 52 | accessibility | quality | @sage/web extension |
-| 53 | performance-budget | quality | @sage/web extension |
-| 54 | license-compliance | compliance | @sage/opensource extension |
+| 51 | owasp-security | safety | security extension |
+| 52 | accessibility | quality | web extension |
+| 53 | performance-budget | quality | web extension |
+| 54 | license-compliance | compliance | opensource extension |
 
 ---
 

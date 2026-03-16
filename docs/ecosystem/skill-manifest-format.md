@@ -9,7 +9,7 @@ valid skill (Layer 0).
 ```yaml
 ---
 # ── Identity (optional) ──
-name: "@sage/react"
+name: "react"
 version: "2.1.0"
 description: "React component patterns, state management, and performance"
 
@@ -18,21 +18,21 @@ type: knowledge              # knowledge | process | composite | bundle
 layer: framework             # domain | framework | stack
 
 # ── Relationships (optional) ──
-extends: "@sage/react"      # "I'm a stricter version" (at most one)
-replaces: "@sage/react"     # "I'm a complete alternative" (at most one)
+extends: "react"      # "I'm a stricter version" (at most one)
+replaces: "react"     # "I'm a complete alternative" (at most one)
 complements:                 # "I work alongside these"
-  - "@sage/web"
+  - "web"
 
 # ── Dependencies (optional) ──
 requires:
   sage: ">=1.0.0"
   skills:
-    - "@sage/react@^2.0.0"
+    - "react@^2.0.0"
 
 # ── Bundle members (type: bundle only) ──
 includes:
-  - "@sage/jtbd"
-  - "@sage/prd"
+  - "jtbd"
+  - "prd"
 
 # ── Ecosystem (optional) ──
 author: "sage-team"

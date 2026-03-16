@@ -12,7 +12,7 @@ framework handles universal software engineering; extensions handle domain knowl
 ## Required Directory Structure
 
 ```
-skills/@sage/<extension-name>/
+skills/<extension-name>/
 ├── SKILL.md manifest            # REQUIRED — Manifest declaring what the extension provides
 ├── README.md                 # REQUIRED — What this extension does, who it's for
 │
@@ -40,7 +40,7 @@ skills/@sage/<extension-name>/
 
 ```yaml
 ---
-name: <string>                 # Scoped name, e.g., "@sage/web" or "community-gamedev"
+name: <string>                 # Scoped name, e.g., "web" or "community-gamedev"
 description: <string>          # What agent mistakes this pack corrects
 version: <semver>
 license: <string>              # e.g., "MIT", "Apache-2.0"
@@ -128,8 +128,8 @@ Extensions can add domain-specific principles to the constitution. These additio
 
 ## Installation and Activation
 
-Packs are installed by placing them in `skills/@sage/` (bundled) or
-`.sage/skills/@sage/` (project-local). They are activated in `.sage/config.yaml`:
+Packs are installed by placing them in `skills/` (bundled) or
+`.sage/skills/` (project-local). They are activated in `.sage/config.yaml`:
 
 ```yaml
 packs:
@@ -154,8 +154,8 @@ context without modifying the shared pack.
 ### Overlay Structure
 
 ```
-.sage/skills/@sage/<pack-name>/
-├── SKILL.md manifest          # type: overlay, extends: @sage/<community-pack>
+.sage/skills/<pack-name>/
+├── SKILL.md manifest          # type: overlay, extends: <community-pack>
 └── overrides.md       # Project-specific additions (≤500 tokens)
 ```
 
@@ -165,7 +165,7 @@ context without modifying the shared pack.
 ---
 name: "@project/<pack-name>"
 type: overlay
-extends: "@sage/<community-pack-name>"
+extends: "<community-pack-name>"
 version: "1.0.0"
 ---
 ```
@@ -175,8 +175,8 @@ version: "1.0.0"
 When both a community pack and a project overlay exist for the same framework:
 
 ```
-1. Community pack loaded first     (skills/@sage/<name>/ — shared patterns)
-2. Project overlay loaded second   (.sage/skills/@sage/<name>/ — project rules)
+1. Community pack loaded first     (skills/<name>/ — shared patterns)
+2. Project overlay loaded second   (.sage/skills/<name>/ — project rules)
 ```
 
 The overlay ADDS to the community pack — it does not replace it.

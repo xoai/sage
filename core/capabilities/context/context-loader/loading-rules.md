@@ -128,9 +128,9 @@ project overlays:
 
 ```
 For each enabled pack:
-1. Load community pack content    skills/@sage/<n>/patterns/*.md + anti-patterns/*.md
-2. Load constitution additions    skills/@sage/<n>/constitution/*.md
-3. Check for project overlay      .sage/skills/@sage/<n>/overrides.md
+1. Load community pack content    skills/<n>/patterns/*.md + anti-patterns/*.md
+2. Load constitution additions    skills/<n>/constitution/*.md
+3. Check for project overlay      .sage/skills/<n>/overrides.md
 4. If overlay exists, append it   (overlay adds/overrides community guidance)
 ```
 

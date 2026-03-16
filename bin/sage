@@ -479,24 +479,71 @@ sage_upgrade() {
 }
 
 # ═══════════════════════════════════════════════════════════════
+# SKILL MANAGEMENT (delegates to Python)
+# ═══════════════════════════════════════════════════════════════
+
+require_python() {
+  if ! command -v python3 &>/dev/null; then
+    echo ""
+    echo -e "  ${RED}Skill management requires Python 3.8+${RESET}"
+    echo "  Install Python: https://www.python.org/downloads/"
+    exit 1
+  fi
+}
+
+skill_manager() {
+  require_python
+  local manager="$SAGE_FRAMEWORK/runtime/tools/skill_manager.py"
+  if [ ! -f "$manager" ]; then
+    echo -e "  ${RED}❌ skill_manager.py not found at $manager${RESET}"
+    exit 1
+  fi
+  python3 "$manager" "$@"
+}
+
+sage_find() {
+  skill_manager find "$@"
+}
+
+sage_add() {
+  skill_manager add "$@"
+}
+
+sage_remove() {
+  skill_manager remove "$@"
+}
+
+sage_skills() {
+  skill_manager list "$@"
+}
+
+# ═══════════════════════════════════════════════════════════════
 # COMMAND: help
 # ═══════════════════════════════════════════════════════════════
 sage_help() {
   echo ""
   echo -e "${BOLD}Sage${RESET} — An intelligent skills framework for AI agents"
   echo ""
-  echo "Usage:"
-  echo "  sage new <name>     Create a new project with Sage"
-  echo "  sage init           Add Sage to the current directory"
-  echo "  sage update         Regenerate platform files"
-  echo "  sage upgrade        Update Sage to the latest version"
-  echo "  sage help           Show this help"
+  echo "Project commands:"
+  echo "  sage new <name>                  Create a new project with Sage"
+  echo "  sage init                        Add Sage to the current directory"
+  echo "  sage update                      Regenerate platform files"
+  echo "  sage upgrade                     Update Sage to the latest version"
+  echo ""
+  echo "Skill management:"
+  echo "  sage find <query>                Search community skill catalog"
+  echo "  sage find <query> --fuzzy        Typo-tolerant search"
+  echo "  sage add <registry> <skill>      Install a community skill"
+  echo "  sage remove <skill>              Remove a skill from project"
+  echo "  sage skills                      List installed skills"
+  echo ""
+  echo "  sage help                        Show this help"
   echo ""
   echo "Examples:"
-  echo "  sage new my-app     # Create my-app/ with Sage configured"
-  echo "  cd existing-proj && sage init   # Add Sage to existing project"
-  echo "  sage update         # Regenerate CLAUDE.md, GEMINI.md, etc."
-  echo "  sage upgrade        # Pull latest Sage from GitHub"
+  echo "  sage new my-app                  # Create project with Sage"
+  echo "  sage find vue                    # Search for Vue skills"
+  echo "  sage add antfu/skills vue        # Install Vue skill"
+  echo "  sage skills                      # List what\'s installed"
   echo ""
 }
 
@@ -504,13 +551,17 @@ sage_help() {
 # MAIN
 # ═══════════════════════════════════════════════════════════════
 COMMAND="${1:-}"
-ARG="${2:-}"
+shift 2>/dev/null || true
 
 case "$COMMAND" in
-  new)              sage_new "$ARG" ;;
+  new)              sage_new "$@" ;;
   init)             sage_init ;;
   update)           sage_update ;;
   upgrade)          sage_upgrade ;;
+  find)             sage_find "$@" ;;
+  add)              sage_add "$@" ;;
+  remove)           sage_remove "$@" ;;
+  skills)           sage_skills "$@" ;;
   help|--help|-h)   sage_help ;;
   "")               sage_help ;;
   *)

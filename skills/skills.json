@@ -1,0 +1,136 @@
+{
+  "skills": {
+    "api": {
+      "source": "built-in",
+      "version": "1.0.0"
+    },
+    "baas": {
+      "source": "built-in",
+      "version": "1.0.0"
+    },
+    "flutter": {
+      "source": "built-in",
+      "version": "1.0.0"
+    },
+    "jtbd": {
+      "source": "built-in",
+      "version": "1.0.0"
+    },
+    "mobile": {
+      "source": "built-in",
+      "version": "1.0.0"
+    },
+    "nextjs": {
+      "source": "built-in",
+      "version": "1.0.0"
+    },
+    "opportunity-map": {
+      "source": "built-in",
+      "version": "1.0.0"
+    },
+    "pack-discover": {
+      "source": "built-in",
+      "version": "1.0.0"
+    },
+    "pack-draft": {
+      "source": "built-in",
+      "version": "1.0.0"
+    },
+    "pack-observe": {
+      "source": "built-in",
+      "version": "1.0.0"
+    },
+    "pack-source-process": {
+      "source": "built-in",
+      "version": "1.0.0"
+    },
+    "pack-validate": {
+      "source": "built-in",
+      "version": "1.0.0"
+    },
+    "prd": {
+      "source": "built-in",
+      "version": "1.0.0"
+    },
+    "product-management": {
+      "source": "built-in",
+      "version": "1.0.0"
+    },
+    "react": {
+      "source": "built-in",
+      "version": "1.0.0"
+    },
+    "react-native": {
+      "source": "built-in",
+      "version": "1.0.0"
+    },
+    "skill-builder": {
+      "source": "built-in",
+      "version": "1.0.0"
+    },
+    "stack-flutter-firebase": {
+      "source": "built-in",
+      "version": "1.0.0"
+    },
+    "stack-nextjs-fullstack": {
+      "source": "built-in",
+      "version": "1.0.0"
+    },
+    "stack-nextjs-supabase": {
+      "source": "built-in",
+      "version": "1.0.0"
+    },
+    "stack-react-native-expo": {
+      "source": "built-in",
+      "version": "1.0.0"
+    },
+    "user-interview": {
+      "source": "built-in",
+      "version": "1.0.0"
+    },
+    "ux-audit": {
+      "source": "built-in",
+      "version": "1.0.0"
+    },
+    "ux-brief": {
+      "source": "built-in",
+      "version": "1.0.0"
+    },
+    "ux-design": {
+      "source": "built-in",
+      "version": "1.0.0"
+    },
+    "ux-discovery": {
+      "source": "built-in",
+      "version": "1.0.0"
+    },
+    "ux-evaluate": {
+      "source": "built-in",
+      "version": "1.0.0"
+    },
+    "ux-heuristic-review": {
+      "source": "built-in",
+      "version": "1.0.0"
+    },
+    "ux-plan-tasks": {
+      "source": "built-in",
+      "version": "1.0.0"
+    },
+    "ux-research": {
+      "source": "built-in",
+      "version": "1.0.0"
+    },
+    "ux-specify": {
+      "source": "built-in",
+      "version": "1.0.0"
+    },
+    "ux-writing": {
+      "source": "built-in",
+      "version": "1.0.0"
+    },
+    "web": {
+      "source": "built-in",
+      "version": "1.0.0"
+    }
+  }
+}

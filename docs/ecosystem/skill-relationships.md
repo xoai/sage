@@ -9,13 +9,13 @@ The default behavior is peaceful coexistence.
 
 ```yaml
 complements:
-  - "@sage/react"
+  - "react"
 ```
 
 Both skills are active simultaneously. No conflict expected.
 If accidental overlap occurs, the skill declared later in config wins.
 
-**Example:** `@sage/react-testing` complements `@sage/react`. One teaches
+**Example:** `react-testing` complements `react`. One teaches
 component patterns, the other teaches testing patterns. No conflict.
 
 ## extends
@@ -23,13 +23,13 @@ component patterns, the other teaches testing patterns. No conflict.
 "I'm a stricter or modified version. I override specific patterns."
 
 ```yaml
-extends: "@sage/react"
+extends: "react"
 ```
 
 The extending skill overrides patterns it declares. The base skill provides
 everything else. At most ONE skill can extend a given base.
 
-**Example:** `@community/react-strict` extends `@sage/react`. It enforces
+**Example:** `react-strict` extends `react`. It enforces
 stricter rules on state management while inheriting all other React patterns.
 
 ## replaces
@@ -37,13 +37,13 @@ stricter rules on state management while inheriting all other React patterns.
 "I'm a complete alternative. Deactivate the other skill."
 
 ```yaml
-replaces: "@sage/jtbd"
+replaces: "jtbd"
 ```
 
 The original skill is deactivated entirely. Only one can be active.
 User is warned at install time.
 
-**Example:** `@community/jtbd-kalbach` replaces `@sage/jtbd`. They use
+**Example:** `jtbd-kalbach` replaces `jtbd`. They use
 incompatible methodologies — running both would produce confused output.
 
 ## No Declaration = Peaceful Coexistence

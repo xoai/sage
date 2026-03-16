@@ -116,7 +116,7 @@ else
 fi
 
 # Copy constitution additions from active skills
-for skill_dir in "$SAGE_DIR"/skills/@sage/*/; do
+for skill_dir in "$SAGE_DIR"/skills/*/; do
   skill_name=$(basename "$skill_dir")
   for const_file in "$skill_dir"/constitution/*.md "$skill_dir"/*constitution*.md; do
     if [ -f "$const_file" ]; then
@@ -127,14 +127,17 @@ for skill_dir in "$SAGE_DIR"/skills/@sage/*/; do
 done
 
 # ═══════════════════════════════════════════════════════════════
-# Skills — Deployed from skills/@sage/ to .agent/skills/
+# Skills — Deployed from skills/ to .agent/skills/
 # ═══════════════════════════════════════════════════════════════
 echo ""
 echo "🔧 Deploying skills to .agent/skills/..."
 
 skill_count=0
-for skill_dir in "$SAGE_DIR"/skills/@sage/*/; do
+for skill_dir in "$SAGE_DIR"/skills/*/; do
   skill_name=$(basename "$skill_dir")
+
+  # Skip non-skill entries
+  [ ! -f "$skill_dir/SKILL.md" ] && continue
 
   # Skip bundles — they're metapackages, not deployable
   if grep -q "type: bundle" "$skill_dir/SKILL.md" 2>/dev/null; then

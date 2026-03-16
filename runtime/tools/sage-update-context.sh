@@ -26,10 +26,10 @@ cp "$TEMPLATE" "$OUTPUT"
 # Build pack section
 PACK_SECTION=""
 for pack in $PACKS; do
-  pack_dir="$SAGE_SRC/skills/@sage/$pack"
+  pack_dir="$SAGE_SRC/skills/$pack"
   [ -d "$pack_dir" ] || continue
   layer=$(grep '^layer:' "$pack_dir/SKILL.md manifest" 2>/dev/null | head -1 | sed 's/layer:\s*//')
-  PACK_SECTION="$PACK_SECTION\n### @sage/$pack (L$layer)\n"
+  PACK_SECTION="$PACK_SECTION\n### $pack (L$layer)\n"
   # Append patterns summary (first line of each pattern)
   for pf in "$pack_dir"/patterns/*.md; do
     [ -f "$pf" ] || continue

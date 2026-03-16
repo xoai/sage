@@ -3,8 +3,8 @@
 #
 # Usage:
 #   bash .sage/tools/sage-check-pack.sh <pack-directory>
-#   bash .sage/tools/sage-check-pack.sh skills/@sage/react
-#   bash .sage/tools/sage-check-pack.sh skills/@sage/nextjs --verbose
+#   bash .sage/tools/sage-check-pack.sh skills/react
+#   bash .sage/tools/sage-check-pack.sh skills/nextjs --verbose
 #
 # Checks (automated dimensions from Pack Scorecard):
 #   Dimension 2 — Efficiency: token counting, layer limits
@@ -23,7 +23,7 @@ verbose=false
 if [ -z "$pack_dir" ] || [ ! -d "$pack_dir" ]; then
   echo "Usage: sage-check-pack.sh <pack-directory>"
   echo ""
-  echo "Example: sage-check-pack.sh skills/@sage/react"
+  echo "Example: sage-check-pack.sh skills/react"
   exit 1
 fi
 
@@ -38,7 +38,7 @@ fail()  { echo "  ❌ $1"; errors=$((errors + 1)); }
 warn()  { echo "  ⚠️  $1"; warnings=$((warnings + 1)); }
 info()  { $verbose && echo "  ℹ️  $1" || true; }
 
-echo "── Pack Quality Check: @sage/$pack_name ──"
+echo "── Pack Quality Check: $pack_name ──"
 echo ""
 
 # ─── Approximate token count (words × 1.3) ────────────────────────────────
@@ -124,9 +124,9 @@ if [ "$layer" -ge 2 ]; then
     for dep in $deps; do
       dep_dir="$(dirname "$pack_dir")/$dep"
       if [ -d "$dep_dir" ]; then
-        pass "Dependency '@sage/$dep' exists"
+        pass "Dependency '$dep' exists"
       else
-        warn "Dependency '@sage/$dep' not found at $dep_dir"
+        warn "Dependency '$dep' not found at $dep_dir"
       fi
     done
   else
@@ -341,7 +341,7 @@ if [ -n "$deps" ]; then
     # Simple contradiction check: look for opposing directives on same terms
     contradiction_found=false
     # This is a heuristic — manual review is needed for real contradiction detection
-    pass "No obvious contradictions with @sage/$dep (heuristic check)"
+    pass "No obvious contradictions with $dep (heuristic check)"
   done
 else
   if [ "$layer" -eq 1 ]; then
@@ -364,7 +364,7 @@ echo ""
 # ═══════════════════════════════════════════════════════════════════════════
 
 echo "──────────────────────────────────────"
-echo "Pack: @sage/$pack_name (Layer $layer)"
+echo "Pack: $pack_name (Layer $layer)"
 echo "Tokens: ~$total_tokens / $total_limit"
 
 if [ "$errors" -gt 0 ]; then

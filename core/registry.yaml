@@ -57,8 +57,8 @@ gates:
     modes: [fix, build, architect]
 
 skills:
-  "@sage/web":
-    source: skills/@sage/web
+  "web":
+    source: skills/web
     version: "1.0.0"
     status: enabled
     provides:
@@ -95,8 +95,8 @@ When the framework needs a module (e.g., skill named "tdd"), it resolves in orde
 
 ```
 1. Project overrides    .sage/skills/         → highest priority
-2. Community modules    community/skills/@sage/        → middle
-3. Extension modules    skills/@sage/*/skills/         → middle
+2. Community modules    community/skills/        → middle
+3. Extension modules    skills/*/skills/         → middle
 4. Default modules      core/capabilities/      → lowest priority
 ```
 

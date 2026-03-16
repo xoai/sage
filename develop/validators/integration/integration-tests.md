@@ -136,7 +136,7 @@ solutions too early), or analyst persona persists during implementation
 ## Test I7: Extension Adds Constitution + Gate
 
 **Setup:**
-1. Enable a hypothetical `@sage/security` extension that adds:
+1. Enable a hypothetical `security` extension that adds:
    - Constitution addition: "All inputs must be sanitized against XSS"
    - Gate 51: OWASP security scan
 2. Configure in `.sage/config.yaml`: `extensions: [security]`

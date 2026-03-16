@@ -28,8 +28,8 @@ the engine lives in core/.
 ```
 sage/
 ├── core/          ← YOU ARE HERE (the engine)
-├── skills/@sage/         ← extensible knowledge (community contributes)
-├── skills/@sage/     ← extensible processes (community contributes)
+├── skills/         ← extensible knowledge (community contributes)
+├── skills/     ← extensible processes (community contributes)
 ├── runtime/       ← execution plumbing (tools, MCP, platforms)
 ├── develop/       ← contributor toolkit (contracts, guides, validators)
 └── docs/          ← philosophy (why decisions were made)

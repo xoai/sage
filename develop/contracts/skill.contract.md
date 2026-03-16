@@ -240,7 +240,7 @@ Resolution order when multiple skills claim the same name:
 ```
 1. Project override    (.sage/skills/<name>/)        — highest priority
 2. Community replacement (community/skills/<name>/)    — middle priority
-3. Extension skill     (skills/@sage/<pack>/skills/<name>/) — middle priority
+3. Extension skill     (skills/<pack>/skills/<name>/) — middle priority
 4. Default skill       (skills/<category>/<name>/)     — lowest priority
 ```
 

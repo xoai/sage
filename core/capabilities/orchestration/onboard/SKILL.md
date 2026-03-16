@@ -76,11 +76,11 @@ Based on detected stack, select which packs activate:
 
 ```
 PACKS TO LOAD:
-  L1: @sage/web (web application detected)
-  L1: @sage/baas (Supabase detected)
-  L2: @sage/nextjs (Next.js detected)
-  L2: @sage/react (React detected)
-  L3: @sage/stack-nextjs-supabase (Next.js + Supabase detected)
+  L1: web (web application detected)
+  L1: baas (Supabase detected)
+  L2: nextjs (Next.js detected)
+  L2: react (React detected)
+  L3: stack-nextjs-supabase (Next.js + Supabase detected)
 ```
 
 Show to user: "These packs will guide code quality. Look right?"

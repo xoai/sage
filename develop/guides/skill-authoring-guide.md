@@ -28,7 +28,7 @@ Tell your agent: "I want to create a pack for React Query"
 → Phase 5: Validate — run checker, measure improvement
 ```
 
-See `skills/@sage/skill-builder/` for the full playbook.
+See `skills/skill-builder/` for the full playbook.
 
 ## Manual Quick Start
 
@@ -38,10 +38,10 @@ If you prefer to work manually:
 # Community pack: scaffold and build
 bash .sage/tools/sage-new-pack.sh my-framework --layer 2
 # Edit the generated files
-bash .sage/tools/sage-check-pack.sh skills/@sage/my-framework
+bash .sage/tools/sage-check-pack.sh skills/my-framework
 
 # Project overlay: create overrides for an existing pack
-mkdir -p .sage/skills/@sage/react-query
+mkdir -p .sage/skills/react-query
 # Create overrides.md with your project conventions
 # Create SKILL.md manifest with type: overlay
 ```
@@ -63,7 +63,7 @@ Ask yourself two questions:
 ## Pack Structure
 
 ```
-skills/@sage/my-framework/
+skills/my-framework/
 ├── SKILL.md manifest                    # Manifest (required)
 ├── README.md                    # Overview for humans (required)
 ├── patterns/
@@ -81,7 +81,7 @@ skills/@sage/my-framework/
 
 ```yaml
 ---
-name: "@sage/my-framework"
+name: "my-framework"
 description: "One sentence: what agent mistakes this pack corrects"
 version: "1.0.0"
 license: "MIT"
@@ -335,7 +335,7 @@ Tests: Pattern "Server Components for Data Fetching" + Anti-pattern "useEffect i
 **Dependencies:** None (L1 is the root).
 **Activation:** Broad detection (any web project, any mobile project).
 
-**Example:** `@sage/web` — accessibility, performance, security headers.
+**Example:** `web` — accessibility, performance, security headers.
 These apply whether you're using React, Vue, Svelte, or plain HTML.
 
 ### Layer 2 — Framework Packs
@@ -346,8 +346,8 @@ These apply whether you're using React, Vue, Svelte, or plain HTML.
 **Dependencies:** Must declare L1 pack.
 **Activation:** Specific framework detected in project files.
 
-**Example:** `@sage/react` — hooks discipline, composition patterns, state management.
-These apply only to React projects, building on `@sage/web` principles.
+**Example:** `react` — hooks discipline, composition patterns, state management.
+These apply only to React projects, building on `web` principles.
 
 ### Layer 3 — Stack Compositions
 
@@ -357,7 +357,7 @@ These apply only to React projects, building on `@sage/web` principles.
 **Dependencies:** Must declare L2 packs.
 **Activation:** All stack components detected.
 
-**Example:** `@sage/stack-nextjs-fullstack` — how Prisma connects to Next.js
+**Example:** `stack-nextjs-fullstack` — how Prisma connects to Next.js
 server actions, how Auth.js integrates with middleware. These seam patterns
 aren't in any individual tool's docs.
 
@@ -376,24 +376,24 @@ without forking or modifying the shared pack.
 ### Creating an Overlay
 
 ```bash
-mkdir -p .sage/skills/@sage/react-query
+mkdir -p .sage/skills/react-query
 ```
 
-**`.sage/skills/@sage/react-query/SKILL.md manifest`:**
+**`.sage/skills/react-query/SKILL.md manifest`:**
 ```yaml
 ---
 name: "@project/react-query"
 type: overlay
-extends: "@sage/react-query"
+extends: "react-query"
 version: "1.0.0"
 ---
 ```
 
-**`.sage/skills/@sage/react-query/overrides.md`:**
+**`.sage/skills/react-query/overrides.md`:**
 ```markdown
 # Project Overlay: React Query
 
-## Extends: @sage/react-query
+## Extends: react-query
 
 ## Query Key Convention
 All query keys follow [entity, action, ...params] format:

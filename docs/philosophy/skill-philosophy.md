@@ -19,7 +19,7 @@ Both encode judgment — they differ in WHAT KIND of judgment and HOW they deliv
 Both are distinct from raw knowledge (API reference, syntax docs) which is better
 served by MCP connections to official documentation.
 
-For the full playbook design philosophy, see `skills/@sage/README.md` and
+For the full playbook design philosophy, see `skills/README.md` and
 `develop/contracts/playbook.contract.md`.
 
 ---
@@ -74,7 +74,7 @@ tell you when to use it, when to avoid it, and what the docs don't warn you abou
 
 ### Layer 1: Domain Foundations
 
-`@sage/web` and `@sage/mobile` contain principles that are universal within their
+`web` and `mobile` contain principles that are universal within their
 domain and change slowly:
 
 - **Web:** Accessibility (WCAG 2.2 AA), performance budgets (LCP < 2.5s), security
@@ -89,7 +89,7 @@ These load whenever the domain matches. They don't reference specific frameworks
 
 ### Layer 2: Framework Skills
 
-`@sage/react`, `@sage/nextjs`, `@sage/vue`, `@sage/flutter`, etc. contain
+`react`, `nextjs`, `vue`, `flutter`, etc. contain
 framework-specific judgment:
 
 - Patterns specific to this framework's mental model
@@ -98,17 +98,17 @@ framework-specific judgment:
 - Framework-specific quality checks
 
 Layer 2 packs can be installed standalone. A developer using React without Next.js
-installs `@sage/web` + `@sage/react` and gets React-specific guidance without
+installs `web` + `react` and gets React-specific guidance without
 Next.js opinions.
 
-When multiple Layer 2 packs overlap, the more specific skill overrides. `@sage/nextjs`
-overrides `@sage/react`'s data-fetching patterns because Next.js does data fetching
+When multiple Layer 2 packs overlap, the more specific skill overrides. `nextjs`
+overrides `react`'s data-fetching patterns because Next.js does data fetching
 differently (server components vs hooks). The override is explicit in the skill
 manifest.
 
 ### Layer 3: Stack Compositions
 
-`@sage/stack-nextjs-fullstack`, `@sage/stack-react-native-expo`, etc. contain
+`stack-nextjs-fullstack`, `stack-react-native-expo`, etc. contain
 integration judgment for specific framework combinations:
 
 - How the frameworks connect at the seams
@@ -133,10 +133,10 @@ skill detects the tech stack automatically:
 ```
 codebase-scan reads package.json → detects next 15.x, react 19, tailwindcss 4
   → context loader checks installed extensions
-  → loads: @sage/web (domain match)
-  → loads: @sage/react (detected framework)
-  → loads: @sage/nextjs (detected framework, overrides some React patterns)
-  → loads: @sage/stack-nextjs-fullstack (if installed, all components detected)
+  → loads: web (domain match)
+  → loads: react (detected framework)
+  → loads: nextjs (detected framework, overrides some React patterns)
+  → loads: stack-nextjs-fullstack (if installed, all components detected)
 ```
 
 Extensions that aren't installed are not loaded. Extensions that are installed but
@@ -278,7 +278,7 @@ The model was informed by ESLint's config composition and Linux's driver model.
 
 ### Why Flat Namespace
 
-`skills/@sage/react/` not `skills/knowledge/framework/react/`. Users browse
+`skills/react/` not `skills/knowledge/framework/react/`. Users browse
 skills by name, not by type. Flat namespacing with `@scope/` prefixes provides
-identity without hierarchy. Two levels (`@sage/`, `@community/`, `@username/`)
+identity without hierarchy. Two levels (``, ``, `@username/`)
 is enough.

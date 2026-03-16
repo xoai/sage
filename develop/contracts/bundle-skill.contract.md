@@ -56,7 +56,7 @@ DISCOVER → SPECIFY → PLAN → IMPLEMENT → REVIEW → VERIFY
 ## Required Directory Structure
 
 ```
-skills/@sage/<playbook-name>/
+skills/<playbook-name>/
 ├── playbook.yaml                # REQUIRED — Manifest with integration points
 ├── README.md                    # REQUIRED — Purpose, discipline, what it produces
 │
@@ -87,7 +87,7 @@ skills/@sage/<playbook-name>/
 ```yaml
 ---
 # REQUIRED FIELDS
-name: <string>                    # Scoped name: "@sage/play-ux-design"
+name: <string>                    # Scoped name: "play-ux-design"
 description: <string>             # What discipline this covers
 version: <semver>
 type: playbook                    # MUST be "playbook"
@@ -223,8 +223,8 @@ because each adds without modifying what came before.
 
 ```bash
 # Install playbooks
-sage playbooks add @sage/play-ux-design
-sage playbooks add @sage/play-product
+sage playbooks add play-ux-design
+sage playbooks add play-product
 
 # They integrate automatically based on mode
 /sage:build "add user profile page"

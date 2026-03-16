@@ -103,9 +103,9 @@ the web, and synthesize results. It returns a compressed summary.
 ```
 Subagent task: "Research how Next.js 16 changed the caching model compared to
 Next.js 15. Focus on: what's different for Server Components, what migration
-steps are needed, and what the @sage/nextjs pack should update."
+steps are needed, and what the nextjs pack should update."
 
-Context to include: @sage/nextjs pack rules (caching section only)
+Context to include: nextjs pack rules (caching section only)
 Return: 3-5 bullet summary of key changes + specific migration steps
 ```
 

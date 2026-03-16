@@ -184,11 +184,11 @@ if [ -f "$SAGE_DIR/config.yaml" ]; then
 
       # Check if the extension's stack is detected
       case "$ext" in
-        react) echo "$detected" | grep -q "react" && pass "@sage/react (stack detected)" || warn "@sage/react enabled but React not detected" ;;
-        nextjs) echo "$detected" | grep -q "nextjs" && pass "@sage/nextjs (stack detected)" || warn "@sage/nextjs enabled but Next.js not detected" ;;
-        react-native) echo "$detected" | grep -q "react-native" && pass "@sage/react-native (stack detected)" || warn "@sage/react-native enabled but RN not detected" ;;
-        flutter) echo "$detected" | grep -q "flutter" && pass "@sage/flutter (stack detected)" || warn "@sage/flutter enabled but Flutter not detected" ;;
-        *) pass "@sage/$ext (enabled)" ;;
+        react) echo "$detected" | grep -q "react" && pass "react (stack detected)" || warn "react enabled but React not detected" ;;
+        nextjs) echo "$detected" | grep -q "nextjs" && pass "nextjs (stack detected)" || warn "nextjs enabled but Next.js not detected" ;;
+        react-native) echo "$detected" | grep -q "react-native" && pass "react-native (stack detected)" || warn "react-native enabled but RN not detected" ;;
+        flutter) echo "$detected" | grep -q "flutter" && pass "flutter (stack detected)" || warn "flutter enabled but Flutter not detected" ;;
+        *) pass "$ext (enabled)" ;;
       esac
     done <<< "$enabled"
   else

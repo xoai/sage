@@ -129,13 +129,13 @@ You don't configure them — they activate when your tech stack is detected.
 
 | If your project uses... | These packs activate |
 |------------------------|---------------------|
-| Any web framework | @sage/web (accessibility, performance, security) |
-| React, Next.js | @sage/react + @sage/nextjs (framework-specific) |
-| Flutter | @sage/flutter (widget architecture, state) |
-| React Native | @sage/react-native (native patterns, performance) |
-| Firebase | @sage/baas + stack pack (security rules, data modeling) |
-| Supabase | @sage/baas + stack pack (RLS, typed queries) |
-| Custom API (Express, etc.) | @sage/api (validation, pagination, auth) |
+| Any web framework | web (accessibility, performance, security) |
+| React, Next.js | react + nextjs (framework-specific) |
+| Flutter | flutter (widget architecture, state) |
+| React Native | react-native (native patterns, performance) |
+| Firebase | baas + stack pack (security rules, data modeling) |
+| Supabase | baas + stack pack (RLS, typed queries) |
+| Custom API (Express, etc.) | api (validation, pagination, auth) |
 
 The agent follows these packs automatically. You don't need to know the details —
 they prevent common mistakes behind the scenes.

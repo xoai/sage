@@ -34,7 +34,7 @@ Ask yourself three questions:
 ## Bundle Structure
 
 ```
-skills/@sage/<discipline>/
+skills/<discipline>/
 ├── bundle.yaml                 # Manifest — integration points, mode depth
 ├── README.md                     # What this bundle does, who it's for
 │
@@ -226,7 +226,7 @@ Save to: `.sage/work/<YYYYMMDD>-<slug>/<artifact-name>.md`
 ### Key Differences from Code Skills
 
 1. **Process steps reference files, not code patterns.** Instead of "read
-   `.sage/skills/@sage/nextjs/patterns/...`," skills say "read
+   `.sage/skills/nextjs/patterns/...`," skills say "read
    `references/outcome-statement-format.md`."
 
 2. **Output is a document, not a commit.** Specify the exact file path, the
@@ -244,7 +244,7 @@ Save to: `.sage/work/<YYYYMMDD>-<slug>/<artifact-name>.md`
 
 ```yaml
 ---
-name: "@sage/play-product-management"
+name: "play-product-management"
 description: "Product management methodology: JTBD, opportunity mapping, PRDs"
 version: "0.4.0"
 type: bundle

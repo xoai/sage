@@ -43,7 +43,7 @@ These rules apply to EVERY response. No exceptions.
 
 1. **State first.** Before ANY substantial response, read `.sage/progress.md`. If work is in progress, acknowledge it and propose resuming.
 
-2. **Skills before assumptions.** If a Sage skill is relevant to the current task, read and follow it. Do not rely on general training when a specific skill exists. Sage skills are in `sage/skills/@sage/` — they are tested, refined processes that produce better outcomes.
+2. **Skills before assumptions.** If a Sage skill is relevant to the current task, read and follow it. Do not rely on general training when a specific skill exists. Sage skills are in `sage/skills/` — they are tested, refined processes that produce better outcomes.
 
 3. **Use Sage's planning, not your default.** Do NOT generate implementation plans, specs, or task breakdowns using default behavior. Use Sage's planning process — it saves persistent artifacts to `.sage/` that survive across sessions.
 
@@ -85,7 +85,7 @@ Always accept free-form input — these patterns guide, they don't constrain.
 
 ## Available Skills
 
-Sage skills are in `sage/skills/@sage/`. Current skills cover:
+Sage skills are in `sage/skills/`. Current skills cover:
 - **Discovery:** user research, needs analysis, opportunity mapping
 - **Design:** evaluation, briefs, voice & tone, heuristic review
 - **Engineering:** specifications, planning, implementation, review
@@ -120,7 +120,7 @@ for wf in "$CORE"/workflows/*.workflow.md; do
     sed '/^---$/,/^---$/d' "$wf" \
       | sed 's|\*\*sage-navigator\*\* skill|**sage-navigator** skill at `sage/core/capabilities/orchestration/sage-navigator/SKILL.md`|g' \
       | sed "s|sage-navigator's intelligence layer|sage-navigator's intelligence layer (\`sage/core/capabilities/orchestration/sage-navigator/SKILL.md\`, section 2)|g" \
-      | sed 's|If relevant Sage skills exist, read and follow them.|If relevant Sage skills exist in `sage/skills/@sage/`, read and follow them.|g' \
+      | sed 's|If relevant Sage skills exist, read and follow them.|If relevant Sage skills exist in `sage/skills/`, read and follow them.|g' \
       | sed '/^$/N;/^\n$/d'
     echo ""
     echo '$ARGUMENTS'

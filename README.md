@@ -49,7 +49,10 @@ and guides you through the right process.
 | `sage init` | Add Sage to the current directory |
 | `sage update` | Regenerate platform files after changes |
 | `sage upgrade` | Update Sage to the latest version |
-| `sage help` | Show available commands |
+| `sage find <query>` | Search community skill catalog |
+| `sage add <registry> <skill>` | Install a community skill |
+| `sage remove <skill>` | Remove a skill from project |
+| `sage skills` | List installed skills |
 
 ## What It Looks Like
 
@@ -198,14 +201,22 @@ Everything installable is a **skill**. Skills have types:
 
 ### Official Bundles
 
-- **[@sage/product-management](skills/@sage/product-management/)** — JTBD → opportunity map → user interview → brief
-- **[@sage/ux-design](skills/@sage/ux-design/)** — audit → evaluate → brief → specify → writing
-- **[@sage/skill-builder](skills/@sage/skill-builder/)** — tools for building new Sage skills
+- **[product-management](skills/product-management/)** — JTBD → opportunity map → user interview → brief
+- **[ux-design](skills/ux-design/)** — audit → evaluate → brief → specify → writing
+- **[skill-builder](skills/skill-builder/)** — tools for building new Sage skills
 
 ### Compatibility
 
-Any community Claude Code skill works in Sage. Drop a folder with a `SKILL.md`
-into `skills/@custom/` and it works. Add Sage frontmatter for smarter integration.
+Any community skill works in Sage. Install from the catalog:
+
+```bash
+sage find vue                    # search
+sage add antfu/skills vue        # install
+sage update                      # deploy to platform
+```
+
+Or manually: drop a folder with a `SKILL.md` into `sage/skills/` and
+run `sage update`. Add Sage frontmatter for smarter integration.
 
 ## How Sage Is Built
 
@@ -217,9 +228,7 @@ sage/
 │   │                        #   context management
 │   ├── workflows/           #   canonical process definitions
 │   └── constitution/        #   non-negotiable process rules
-├── skills/@sage/            # 33 official skills
-├── skills/@community/       # Community skills
-├── skills/@custom/          # Your own skills
+├── skills/                  # All skills (built-in + community + custom)
 ├── runtime/platforms/       # Antigravity + Claude Code generators
 ├── develop/                 # For contributors (contracts, validators)
 └── docs/                    # Philosophy and design decisions

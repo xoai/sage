@@ -15,7 +15,7 @@ echo -e "\033[1m── Framework Structure Validation ──\033[0m"
 echo "  Checking required directories..."
 for dir in core core/capabilities core/workflows core/gates core/constitution \
            core/agents core/capabilities/context/context-loader \
-           skills skills/@sage \
+           skills \
            runtime runtime/tools runtime/platforms runtime/cli \
            develop develop/contracts develop/guides develop/templates develop/validators; do
   [ -d "$SAGE_ROOT/$dir" ] && pass "Directory: $dir/" || fail "Missing directory: $dir/"

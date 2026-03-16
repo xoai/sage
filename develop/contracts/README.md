@@ -21,12 +21,12 @@ of the framework — everything else is replaceable.
 
 Sage distinguishes between technology knowledge and discipline processes:
 
-**Domain packs** (`@sage/react`, `@sage/web`) ADD new capabilities —
+**Domain packs** (`react`, `web`) ADD new capabilities —
 patterns, gates, and constitution rules specific to a technology. They activate
 from codebase detection and pull toward the RIGHT side of the workflow
 (implementation, review, verification).
 
-**Playbooks** (`@sage/play-ux-design`, `@sage/play-product-management`) are structured
+**Playbooks** (`play-ux-design`, `play-product-management`) are structured
 discipline-specific processes with their own skills. They WEAVE INTO existing
 workflow phases at defined integration points. They activate by mode depth
 (light for BUILD, full for ARCHITECT) and pull toward the LEFT side of the
