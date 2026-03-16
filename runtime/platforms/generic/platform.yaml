@@ -1,0 +1,19 @@
+---
+name: generic
+description: >
+  Tier 2 adapter that works with any AI coding tool via CLAUDE.md / system prompt
+  injection. No subagents — workflows run sequentially. Covers Cursor, Copilot,
+  Windsurf, Gemini CLI, and any other tool with file-based configuration.
+version: "1.0.0"
+tier: 2
+capabilities:
+  subagents: false
+  parallel-execution: false
+  worktrees: false
+  hooks: false
+  slash-commands: false
+  skill-auto-activation: true
+  file-system-access: true
+command-prefix: "sage"
+install-method: manual-copy
+---

@@ -1,0 +1,27 @@
+{
+  "name": "sage-kit",
+  "version": "1.0.0",
+  "description": "CLI installer for Sage — Framework for Orchestrated, Resilient, Governed Engineering",
+  "license": "MIT",
+  "bin": {
+    "sage-kit": "./src/cli.mjs"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "ai",
+    "development",
+    "framework",
+    "tdd",
+    "code-quality",
+    "claude-code",
+    "agentic",
+    "skills"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sage-framework/sage"
+  }
+}

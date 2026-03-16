@@ -1,0 +1,35 @@
+# Gate Modes Configuration
+#
+# Defines which gates are mandatory, optional, or skipped in each mode.
+# Projects can override this in .sage/config.yaml under gates.
+# Moving a gate FROM mandatory TO skipped is logged as a waiver.
+
+fix:
+  mandatory:
+    - hallucination-check       # Gate 4 — even small fixes can have fake imports
+    - verification              # Gate 5 — prove the fix works
+  optional:
+    - spec-compliance           # Gate 1 — useful if fixing from a ticket spec
+  skipped:
+    - constitution-compliance   # Gate 2 — overkill for hotfixes
+    - code-quality              # Gate 3 — focus on the fix, not style
+
+build:
+  mandatory:
+    - spec-compliance           # Gate 1
+    - constitution-compliance   # Gate 2
+    - code-quality              # Gate 3
+    - hallucination-check       # Gate 4
+    - verification              # Gate 5
+  optional: []                  # Extension gates go here when enabled
+  skipped: []
+
+architect:
+  mandatory:
+    - spec-compliance           # Gate 1
+    - constitution-compliance   # Gate 2
+    - code-quality              # Gate 3
+    - hallucination-check       # Gate 4
+    - verification              # Gate 5
+  optional: []                  # Extension gates + cross-artifact consistency
+  skipped: []

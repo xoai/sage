@@ -1,0 +1,10 @@
+{
+  "plugins": [
+    {
+      "name": "sage",
+      "description": "Sage — Adaptive AI-driven development framework. FIX bugs in minutes, BUILD features in hours, ARCHITECT products in days. TDD enforcement, adversarial code review, constitution governance, and 5 mandatory quality gates.",
+      "version": "1.0.0",
+      "path": "."
+    }
+  ]
+}

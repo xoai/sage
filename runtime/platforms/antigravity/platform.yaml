@@ -1,0 +1,63 @@
+---
+name: antigravity
+description: >
+  Platform adapter for Google Antigravity — agent-first IDE with parallel
+  agent execution, browser integration, and multi-model support.
+  Maps Sage's capabilities to Antigravity's rules/workflows/skills system.
+version: "1.0.0"
+tier: 1
+capabilities:
+  subagents: true
+  parallel-execution: true
+  worktrees: false
+  hooks: false
+  slash-commands: true
+  skill-auto-activation: true
+  file-system-access: true
+  browser-access: true
+  multi-model: true
+  manager-view: true
+supported-models: [gemini-3-pro, claude-sonnet-4.6, claude-opus-4.6, gpt-oss]
+command-prefix: "/"
+install-method: workspace-setup
+supported-os: [linux, macos, windows]
+
+# ── Path mappings ──
+# Where Antigravity expects files vs where Sage stores them
+paths:
+  # Always-on rules (Sage constitution + project conventions)
+  rules-global: "~/.gemini/GEMINI.md"
+  rules-workspace: ".agent/rules/"
+  
+  # Skills (on-demand, agent-triggered)
+  skills-global: "~/.gemini/antigravity/skills/"
+  skills-workspace: ".agent/skills/"
+  
+  # Workflows (user-triggered with /)
+  workflows-global: "~/.gemini/antigravity/global_workflows/"
+  workflows-workspace: ".agent/workflows/"
+  
+  # Sage project state (platform-agnostic, unchanged)
+  sage-state: ".sage/"
+
+# ── Antigravity-specific settings ──
+antigravity:
+  # Recommended terminal execution policy for Sage workflows
+  terminal-policy: "auto"
+  # Agent development mode
+  agent-mode: "agent-assisted"
+  # Sage workflows as slash commands
+  workflows:
+    - name: fix
+      file: fix.md
+      description: "Quick bug fix with Sage workflow"
+    - name: build
+      file: build.md
+      description: "Build a feature with Sage's full pipeline"
+    - name: architect
+      file: architect.md
+      description: "Full system design with Sage"
+    - name: status
+      file: status.md
+      description: "Check Sage project status"
+---

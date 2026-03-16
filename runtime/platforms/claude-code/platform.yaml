@@ -1,0 +1,19 @@
+---
+name: claude-code
+description: >
+  Tier 1 adapter for Claude Code with full subagent support, parallel execution,
+  git worktrees, hooks, and slash commands.
+version: "1.0.0"
+tier: 1
+capabilities:
+  subagents: true
+  parallel-execution: true
+  worktrees: true
+  hooks: true
+  slash-commands: true
+  skill-auto-activation: true
+  file-system-access: true
+command-prefix: "/sage"
+install-method: plugin-marketplace
+supported-os: [linux, macos, windows]
+---

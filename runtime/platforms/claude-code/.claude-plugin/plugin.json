@@ -1,0 +1,53 @@
+{
+  "name": "sage",
+  "version": "1.0.0",
+  "description": "Sage — Framework for Orchestrated, Resilient, Governed Engineering. Adaptive AI-driven development: FIX (minutes), BUILD (hours), ARCHITECT (days).",
+  "commands": [
+    {
+      "name": "sage:fix",
+      "description": "FIX mode — debug and fix a bug with TDD discipline. Light and fast.",
+      "command": "${CLAUDE_PLUGIN_ROOT}/commands/fix.sh"
+    },
+    {
+      "name": "sage:build",
+      "description": "BUILD mode — guided specification + plan + disciplined task-by-task execution.",
+      "command": "${CLAUDE_PLUGIN_ROOT}/commands/build.sh"
+    },
+    {
+      "name": "sage:architect",
+      "description": "ARCHITECT mode — full planning team, architecture, stories, sprint execution.",
+      "command": "${CLAUDE_PLUGIN_ROOT}/commands/architect.sh"
+    },
+    {
+      "name": "sage:review",
+      "description": "Run quality gates on recent changes without a full workflow.",
+      "command": "${CLAUDE_PLUGIN_ROOT}/commands/review.sh"
+    },
+    {
+      "name": "sage:debug",
+      "description": "Systematic 4-phase debugging on a specific issue.",
+      "command": "${CLAUDE_PLUGIN_ROOT}/commands/debug.sh"
+    },
+    {
+      "name": "sage:rescue",
+      "description": "Legacy code rescue — autopsy, characterization tests, incremental refactoring.",
+      "command": "${CLAUDE_PLUGIN_ROOT}/commands/rescue.sh"
+    },
+    {
+      "name": "sage:status",
+      "description": "Show current mode, progress, installed extensions, and module registry.",
+      "command": "${CLAUDE_PLUGIN_ROOT}/commands/status.sh"
+    },
+    {
+      "name": "sage:help",
+      "description": "Show available commands and recommend what to do next based on project state.",
+      "command": "${CLAUDE_PLUGIN_ROOT}/commands/help.sh"
+    }
+  ],
+  "hooks": [
+    {
+      "event": "session-start",
+      "command": "${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh"
+    }
+  ]
+}

@@ -1,0 +1,116 @@
+# Module Registry
+
+**Version:** 1.0.0
+**Status:** Stable
+
+The registry is the framework's inventory. It tracks every installed module —
+skills, workflows, gates, packs, platforms, personas, constitution, and templates.
+
+The registry is auto-generated from the file system. You never edit it manually.
+Running `sage status` or any sage command rebuilds it from what's actually installed.
+
+---
+
+## Registry Structure
+
+```yaml
+# registry.yaml (auto-generated — do not edit manually)
+
+sage-core: "1.0.0"
+platform: claude-code
+mode: build                            # Currently active mode
+
+skills:
+  # name → source → status
+  tdd:
+    source: core/capabilities/execution/tdd
+    version: "1.0.0"
+    status: active                     # active, replaced, disabled
+    modes: [fix, build, architect]
+  my-custom-tdd:
+    source: .sage/skills/my-custom-tdd
+    version: "1.0.0"
+    status: active
+    replaces: tdd                      # This takes priority over the default tdd
+    modes: [fix, build, architect]
+
+workflows:
+  fix:
+    source: core/workflows/fix.workflow.md
+    version: "1.0.0"
+    status: active
+  build:
+    source: core/workflows/build.workflow.md
+    version: "1.0.0"
+    status: active
+
+gates:
+  spec-compliance:
+    source: core/gates/01-spec-compliance.gate.md
+    order: 1
+    status: mandatory                  # mandatory, optional, disabled
+    modes: [build, architect]
+  hallucination-check:
+    source: core/gates/04-hallucination-check.gate.md
+    order: 4
+    status: mandatory
+    modes: [fix, build, architect]
+
+skills:
+  "@sage/web":
+    source: skills/@sage/web
+    version: "1.0.0"
+    status: enabled
+    provides:
+      skills: [component-design, responsive-layout, a11y-check]
+      gates: [accessibility]
+
+agents:
+  developer:
+    source: core/agents/developer.persona.md
+    version: "1.0.0"
+    applies-to: [implement, tdd]
+
+constitutions:
+  effective:
+    tiers:
+      - source: ~/.sage/constitution.md        # org
+      - source: .sage/constitution.md          # project
+      - source: .sage/work/001/context.md  # feature (if active)
+    waivers: 1
+    total-principles: 14
+
+templates:
+  spec-minimal:
+    source: develop/templates/spec/minimal.spec-template.md
+    type: spec
+    variant: minimal
+```
+
+---
+
+## Resolution Order
+
+When the framework needs a module (e.g., skill named "tdd"), it resolves in order:
+
+```
+1. Project overrides    .sage/skills/         → highest priority
+2. Community modules    community/skills/@sage/        → middle
+3. Extension modules    skills/@sage/*/skills/         → middle
+4. Default modules      core/capabilities/      → lowest priority
+```
+
+If multiple modules claim the same name at the same priority level, the registry
+flags a conflict and the project config must resolve it explicitly.
+
+---
+
+## Registry Commands
+
+```
+/sage status           → Show registry summary (modules, mode, active feature)
+/sage modules          → List all installed modules with source and status
+/sage conflicts        → Show any unresolved module name conflicts
+```
+
+The registry rebuilds automatically. No manual maintenance required.
