@@ -10,9 +10,11 @@ research to UX design to shipping code to crafting strategy and beyond.
 Any domain. Any task that demands excellence. Sage grows as far as your
 ambition takes it.
 
-> **Status: v1.0 Public Preview** — Architecture, skills, and workflows are
-> functional. Both Antigravity and Claude Code are fully supported. We're
-> releasing to gather feedback from early adopters.
+- **Understands before building** — the navigator detects missing research, specs, or plans before you waste time building the wrong thing
+- **Focuses the agent, not floods it** — three-layer context loading keeps the AI sharp instead of drowning in instructions
+- **Catches drift automatically** — quality gates verify work at every stage transition without slowing you down
+- **Remembers across sessions** — persistent knowledge via sage-memory (91% recall, sub-3ms search)
+- **34 built-in skills + 2,100+ community skills** — install what you need, contribute what you build
 
 ## Get Started
 
@@ -45,7 +47,7 @@ and guides you through the right process.
 
 | Command | What It Does |
 |---------|-------------|
-| `sage new <name>` | Create a new project with Sage |
+| `sage new <n>` | Create a new project with Sage |
 | `sage init` | Add Sage to the current directory |
 | `sage update` | Regenerate platform files after changes |
 | `sage upgrade` | Update Sage to the latest version |
@@ -97,75 +99,55 @@ stay in control — Sage stays intelligent.
 
 ## Why Sage
 
-Most AI agent frameworks focus on one thing: writing code faster. Sage
-is built on a different belief — that the biggest waste isn't slow coding,
-it's building the wrong thing. Here's what that means in practice:
+### The Navigator — Intelligence That Prevents Waste
 
-**Works across the full spectrum, not just code.** Sage ships 33 skills
-spanning discovery (JTBD analysis, user interviews, opportunity mapping),
-design (UX audit, evaluation, voice & tone, heuristic review), and
-engineering (specs, plans, implementation, review). Other frameworks
-start at "plan the code." Sage starts at "understand the problem."
+Most AI agent frameworks go straight from request to code. Sage's
+navigator thinks first.
 
-**Detects what's missing before you start.** The navigator doesn't just
-route you to a skill — it checks whether the necessary understanding,
-design, and planning have been done. Building without research? Sage
-tells you what 15 minutes of discovery would prevent and lets you
-decide. This is gap detection, not gatekeeping.
+Every request maps to an intent spectrum — UNDERSTAND → ENVISION →
+DELIVER. When multiple intents are present ("redesign this page"),
+the navigator starts from the left: understand the problem before
+designing the solution, design the solution before building it. This
+prevents the most expensive mistake in product work: building the
+wrong thing.
 
-**Understands intent, not just commands.** The UNDERSTAND → ENVISION →
-DELIVER spectrum maps every request to where it falls in the thinking
-process. When multiple intents are present ("redesign this page"), Sage
-starts from understanding and works toward delivery — preventing the
-most expensive mistake in product work.
+The navigator also detects gaps. Building without research? It tells
+you what 15 minutes of discovery would prevent — then lets you decide.
+This is gap detection, not gatekeeping. The navigator suggests the best
+route. You decide where to go.
 
-**Clear interactions at every step.** Numbered options at decision
-points. `[A] Approve` / `[R] Revise` at checkpoints. `[C] Continue`
-at transitions. You always know what to do next. Free-form input
-always works too.
+### The Context Loader — Focus, Not Overload
 
-**Session continuity that actually works.** `.sage/` persists every
-decision, artifact, and progress update. Close your IDE, come back
-tomorrow, type `/sage` — Sage picks up exactly where you left off.
-No lost context. No re-explaining.
+The context window is the scarcest resource in AI agent work. Most
+frameworks dump everything into it — all rules, all skills, all
+instructions — and the agent loses focus in the noise.
 
-**Domain-agnostic by design.** The navigator's principles work for any
-domain — not just software. PM, UX, content strategy, data analysis.
-Install the skills you need, and the same intelligent process applies.
+Sage uses a three-layer loading strategy. The process constitution is
+always-on (~200 words) — just enough to ground every interaction. The
+navigator and skills load on-demand when the current task needs them.
+Reference material is never pre-loaded — it's read only when actively
+used. What you DON'T load matters as much as what you do.
+
+This isn't just efficient — it changes how the agent thinks. A focused
+agent with the right 500 tokens of context outperforms a distracted
+agent with 50,000 tokens of everything.
+
+### Quality Gates — Reliability Without Friction
+
+AI agents silently drift from the plan. They skip steps, hallucinate
+requirements, and produce output that looks right but isn't. Most
+frameworks have no answer for this.
+
+Sage runs quality gates at every stage transition. Deterministic checks:
+does the implementation match the spec? Are tests passing? Were
+checkpoints honored? Gates catch drift early — before it compounds into
+wasted work. They run automatically. The user doesn't manage them, just
+benefits from the safety net.
+
+The principle: quality should be verified, not hoped for. And
+verification should be invisible until it catches something.
 
 ## How Sage Works
-
-### The Navigator
-
-Sage's intelligence lives in the **sage-navigator** — a process navigator
-that activates on every substantial task. It does three things:
-
-1. **Reads the room.** Checks project state, maps your request to
-   an intent (understand → envision → deliver), and assesses scope.
-
-2. **Detects gaps.** Finds what's missing — research, specs, plans —
-   and recommends filling them when the value justifies the time.
-
-3. **Guides the process.** Proposes a path with clear options, runs
-   the appropriate skills, and bridges each step to the next.
-
-The navigator is not a gatekeeper. It suggests the best route. You
-decide where to go.
-
-### The Spectrum
-
-Every request maps to an intent spectrum:
-
-```
-UNDERSTAND              ENVISION               DELIVER
-(why, who, what)        (how it should work)   (make it real)
-
-Research & Discovery    Design & Definition     Planning & Execution
-```
-
-When multiple intents are present, Sage starts from the left and works
-rightward. Understanding before envisioning. Envisioning before delivering.
-This prevents the most common mistake: building the wrong thing.
 
 ### Workflows
 
@@ -189,85 +171,67 @@ Sage communicates clearly at every step:
 
 Free-form input always works. These patterns guide, they don't constrain.
 
+### Session Continuity
+
+Close your IDE, come back tomorrow, type `/sage` — Sage picks up exactly
+where you left off. Every decision, artifact, and progress update persists
+in `.sage/`. With sage-memory configured, the agent also retains what it
+learned about your codebase, architecture decisions, and conventions
+across sessions.
+
 ## Skills
 
-Everything installable is a **skill**. Skills have types:
+### Philosophy
 
-| Type | What It Does | Examples |
-|------|-------------|---------|
-| `knowledge` | Technology-specific patterns and judgment | react, nextjs, web |
-| `process` | Methodology with steps and references | jtbd, prd, ux-writing |
-| `composite` | Composes skills for a full stack | stack-nextjs-supabase |
-| `bundle` | Metapackage that installs related skills | product-management, ux-design |
+Skills are Sage's knowledge architecture — a principled way to put LLMs
+in the best position to do excellent work.
 
-### Official Bundles
+Every skill uses **progressive disclosure**: a short description triggers
+activation, SKILL.md provides the full process, and reference files offer
+depth when needed. This mirrors how experts work — you don't recite the
+entire textbook before solving a problem. You know what you know, and you
+reach for references when the situation demands it.
+
+Skills are designed to **maximize LLM capabilities**. Clear structure
+(frontmatter, process steps, quality criteria) gives the agent
+unambiguous guidance. Domain vocabulary in the right places improves
+reasoning. Reference material separated from instructions keeps the
+agent focused on the task, not on parsing a wall of text.
+
+### Relationships
+
+Skills relate to each other in three ways:
+
+- **Complement** (default) — cover different concerns for the same area.
+  `react` and `react-testing` work side by side without conflict.
+- **Extend** — add stricter or modified patterns on top of a base skill.
+  A community `react-strict` extends `react` with tighter rules.
+- **Replace** — a complete alternative. Deactivates the other skill.
+
+The default is peaceful coexistence. The ecosystem grows without
+conflicts — adding a community skill doesn't break what's already
+working.
+
+### Built-in Bundles
 
 - **[product-management](skills/product-management/)** — JTBD → opportunity map → user interview → brief
 - **[ux-design](skills/ux-design/)** — audit → evaluate → brief → specify → writing
 - **[skill-builder](skills/skill-builder/)** — tools for building new Sage skills
+- **[memory](skills/memory/)** — persistent knowledge across sessions via sage-memory
 
-### Compatibility
+### Ecosystem
 
-Any community skill works in Sage. Install from the catalog:
+2,100+ community skills from 68 registries, installable with one command:
 
 ```bash
-sage find vue                    # search
+sage find vue                    # search the catalog
 sage add antfu/skills vue        # install
-sage update                      # deploy to platform
 ```
 
-Or manually: drop a folder with a `SKILL.md` into `sage/skills/` and
-run `sage update`. Add Sage frontmatter for smarter integration.
-
-## How Sage Is Built
-
-```
-sage/
-├── core/                    # The engine (platform-agnostic)
-│   ├── capabilities/        #   elicitation, planning, execution,
-│   │                        #   review, debugging, orchestration,
-│   │                        #   context management
-│   ├── workflows/           #   canonical process definitions
-│   └── constitution/        #   non-negotiable process rules
-├── skills/                  # All skills (built-in + community + custom)
-├── runtime/platforms/       # Antigravity + Claude Code generators
-├── develop/                 # For contributors (contracts, validators)
-└── docs/                    # Philosophy and design decisions
-```
-
-### Design Principles
-
-**Lean context, sharp focus.** The context window is the most precious
-resource in AI agent work. Sage uses a three-layer loading strategy:
-the process constitution is always-on (~200 words), the navigator and
-skills are loaded on-demand when the current task needs them, and skill
-reference material is never pre-loaded. This keeps the agent focused
-instead of drowning in instructions. Platform generators follow this
-strategy — what gets inlined vs referenced is a deliberate decision,
-not an accident. See [context-loader](core/capabilities/context/context-loader/)
-for the full strategy.
-
-**Session continuity.** Every decision, artifact, and progress update
-persists in `.sage/`. The session-bridge capability ensures the agent
-can resume exactly where it left off — even after the IDE closes, the
-model changes, or days pass between sessions. State is the project's
-memory, not the agent's.
-
-**Proportional process.** Sage calibrates rigor to scope. A CSS fix
-gets fixed — no brief, no spec, no ceremony. A full product redesign
-gets the complete pipeline: research → design → brief → spec → plan →
-phased build. The navigator reads signals (task size, greenfield vs
-existing code, user urgency) and recommends accordingly. When the user
-says "just do it," Sage accepts gracefully and proceeds.
-
-**Quality without friction.** Quality gates verify work at each stage
-without becoming bottlenecks. They're deterministic checks (does the
-implementation match the spec? are tests passing? were checkpoints
-honored?) that catch drift early. Gates run automatically at stage
-transitions — the user doesn't manage them, they just benefit from
-the safety net.
-
-See [docs/philosophy/](docs/philosophy/) for the full design rationale.
+Contributing is deliberately simple. Drop a folder with a `SKILL.md`
+into `sage/skills/` and it works. Add Sage frontmatter (type, tags,
+relationships) for smarter integration. The bar is low by design — the
+framework makes simple skills useful and rewards deeper investment.
 
 ## Project State
 
