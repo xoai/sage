@@ -54,6 +54,12 @@ and `.sage/work/` to know what artifacts already exist.
 - **Fresh project?** Move on to intent.
 - **Artifacts exist but nothing active?** Note the context, move on.
 
+### Memory
+
+If sage-memory is available, search for context relevant to the user's
+request before assessing intent. Report what you found and how it informs
+your approach. Skip if memory is not configured — degrade gracefully.
+
 ### Intent
 
 Map the user's request to the spectrum:
@@ -230,6 +236,8 @@ location:
 - Project-level knowledge → `.sage/docs/skill-prefix-description.md`
 - Initiative work → `.sage/work/YYYYMMDD-slug/` (brief.md, spec.md, plan.md)
 - Update `.sage/progress.md` after each significant step
+- If sage-memory is available, store key findings worth remembering
+  across sessions (architecture decisions, conventions, insights)
 
 ### Bridging to Next
 

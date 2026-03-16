@@ -49,6 +49,7 @@ and guides you through the right process.
 | `sage init` | Add Sage to the current directory |
 | `sage update` | Regenerate platform files after changes |
 | `sage upgrade` | Update Sage to the latest version |
+| `sage learn [path]` | Learn a codebase or module |
 | `sage find <query>` | Search community skill catalog |
 | `sage add <registry> <skill>` | Install a community skill |
 | `sage remove <skill>` | Remove a skill from project |

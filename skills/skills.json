@@ -131,6 +131,10 @@
     "web": {
       "source": "built-in",
       "version": "1.0.0"
+    },
+    "memory": {
+      "source": "built-in",
+      "version": "1.0.0"
     }
   }
 }

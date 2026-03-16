@@ -2,6 +2,47 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [1.0.2] — Memory & Persistent Knowledge
+
+### Memory Skill (new built-in skill)
+- **Three-layer memory architecture** — Layer 1: automatic recall
+  (search memory at session start), Layer 2: automatic remember
+  (store findings during any workflow), Layer 3: deliberate learning
+  (user-triggered codebase scan via `sage learn`).
+- **Quality-first design** — skill teaches the agent WHEN and WHY to
+  use memory, not just how. Principles: specific titles with domain
+  vocabulary, one insight per memory, store rationale not just facts,
+  search before store to avoid duplicates.
+- **Knowledge reports** — `sage learn` produces two outputs: focused
+  memory entries (agent-searchable, persistent) and a human-readable
+  knowledge report saved to `.sage/docs/memory-{name}.md` with insights,
+  diagrams, and recommendations.
+- **Reference docs** — good vs bad memory examples with explanations
+  (`memory-patterns.md`), knowledge report guide with complete examples
+  for code modules and UX systems (`knowledge-report.md`).
+
+### `sage learn` Command
+- **`sage learn`** — broad scan of whole project. Agent reads structure,
+  config, architecture, identifies patterns and conventions, stores
+  10-20 focused memories, generates knowledge report.
+- **`sage learn <path>`** — deep dive into a specific module, service,
+  or feature. Traces dependencies, analyzes data flow, assesses quality,
+  stores 5-10 memories with diagrams.
+
+### Navigator Integration
+- **Memory in Read the Room** — navigator searches memory for relevant
+  context before assessing the user's request. Reports what it found
+  and how it informs the approach.
+- **Memory during execution** — navigator stores key findings after
+  completing significant work. Architecture decisions, conventions,
+  debugging insights persist across sessions.
+- **Graceful degradation** — if sage-memory MCP server is not configured,
+  Sage works normally without cross-session persistence.
+
+### Stats
+- 34 built-in skills (33 + memory)
+- Works with sage-memory MCP server (91% recall, sub-3ms search)
+
 ## [1.0.1] — Skill Management Improvements
 
 ### Improved Search Experience

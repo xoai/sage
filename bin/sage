@@ -518,6 +518,57 @@ sage_skills() {
 }
 
 # ═══════════════════════════════════════════════════════════════
+# COMMAND: learn
+# ═══════════════════════════════════════════════════════════════
+sage_learn() {
+  local target="${1:-.}"
+
+  echo ""
+  echo -e "  ${BOLD}Sage — Learn${RESET}"
+  echo ""
+
+  # Check if we're in a Sage project
+  if [ ! -d "sage/skills" ] && [ ! -d ".sage" ]; then
+    echo -e "  ${RED}❌ No Sage project found here.${RESET}"
+    echo "  Run this from a Sage project directory."
+    exit 1
+  fi
+
+  if [ "$target" = "." ]; then
+    echo -e "  ${CYAN}Broad scan:${RESET} learning the whole project"
+  else
+    if [ ! -e "$target" ]; then
+      echo -e "  ${RED}❌ Target not found: $target${RESET}"
+      exit 1
+    fi
+    echo -e "  ${CYAN}Deep dive:${RESET} $target"
+  fi
+
+  echo ""
+  echo "  This command works inside your AI agent (Claude Code, Antigravity)."
+  echo "  Open this project in your IDE, then tell the agent:"
+  echo ""
+
+  if [ "$target" = "." ]; then
+    echo -e "    ${BOLD}\"Learn this project. Do a broad scan and store${RESET}"
+    echo -e "    ${BOLD} what you learn in memory.\"${RESET}"
+  else
+    echo -e "    ${BOLD}\"Learn $target. Do a deep dive and store${RESET}"
+    echo -e "    ${BOLD} what you learn in memory.\"${RESET}"
+  fi
+
+  echo ""
+  echo "  The agent will follow the memory skill\'s learn workflow:"
+  echo "    1. Scan structure and key files"
+  echo "    2. Identify patterns, conventions, architecture"
+  echo "    3. Store focused memories in sage-memory"
+  echo "    4. Generate knowledge report → .sage/docs/memory-{name}.md"
+  echo ""
+  echo -e "  ${DIM}Requires sage-memory MCP server. Setup: https://github.com/xoai/sage-memory${RESET}"
+  echo ""
+}
+
+# ═══════════════════════════════════════════════════════════════
 # COMMAND: help
 # ═══════════════════════════════════════════════════════════════
 sage_help() {
@@ -525,10 +576,11 @@ sage_help() {
   echo -e "${BOLD}Sage${RESET} — An intelligent skills framework for AI agents"
   echo ""
   echo "Project commands:"
-  echo "  sage new <name>                  Create a new project with Sage"
+  echo "  sage new <n>                  Create a new project with Sage"
   echo "  sage init                        Add Sage to the current directory"
   echo "  sage update                      Regenerate platform files"
   echo "  sage upgrade                     Update Sage to the latest version"
+  echo "  sage learn [path]                Learn a codebase or module"
   echo ""
   echo "Skill management:"
   echo "  sage find <query>                Search community skill catalog"
@@ -541,9 +593,10 @@ sage_help() {
   echo ""
   echo "Examples:"
   echo "  sage new my-app                  # Create project with Sage"
+  echo "  sage learn                       # Broad scan of whole project"
+  echo "  sage learn src/billing/          # Deep dive into a module"
   echo "  sage find vue                    # Search for Vue skills"
   echo "  sage add antfu/skills vue        # Install Vue skill"
-  echo "  sage skills                      # List what\'s installed"
   echo ""
 }
 
@@ -558,6 +611,7 @@ case "$COMMAND" in
   init)             sage_init ;;
   update)           sage_update ;;
   upgrade)          sage_upgrade ;;
+  learn)            sage_learn "$@" ;;
   find)             sage_find "$@" ;;
   add)              sage_add "$@" ;;
   remove)           sage_remove "$@" ;;
