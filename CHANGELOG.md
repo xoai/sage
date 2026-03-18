@@ -39,9 +39,41 @@ All notable changes to Sage will be documented in this file.
 - **Graceful degradation** — if sage-memory MCP server is not configured,
   Sage works normally without cross-session persistence.
 
+### Ontology Skill (new built-in skill)
+- **Typed knowledge graph** on sage-memory. Entities (Task, Person,
+  Project, Event, Document) and relations (blocks, assigned_to,
+  depends_on) stored as independent memory entries — searchable by
+  BM25, zero file I/O, zero consistency risk.
+- **One write per relation** — no bidirectional updates, no half-links.
+  Creating a relation = 1 MCP call. Deleting = 1 MCP call.
+- **Planning as graph transformation** — model plans as validated
+  sequences of entity/relation operations before committing.
+- **Extendable types** — store schema extensions in memory for
+  project-specific entity types.
+- **Structural validator** — `graph_check.py` (284 lines, zero deps)
+  checks cycles, cardinality, dangling references.
+
+### Self-Learning Skill (new built-in skill)
+- **Learn from mistakes** — captures agent errors, user corrections,
+  and non-obvious behavior so they're not repeated. Five learning types:
+  gotcha, correction, convention, api-drift, error-fix.
+- **Prevention rules** — every learning includes a forward-looking
+  instruction that changes future behavior, not just a record of what
+  happened. Prevention rules surface during recall, not incident history.
+- **Automatic recall** — searches past learnings before starting tasks
+  to avoid known pitfalls. Reports prevention rules, not incident logs.
+- **Review workflow** — `sage review` curates the learning database:
+  inventory, cluster, stale check, consolidate, promote.
+- **Promotion ladder** — learnings escalate from project → global →
+  team files as they prove broadly applicable.
+- **Ontology integration** — optional cross-referencing with ontology
+  entities via edge tags for targeted recall.
+
 ### Stats
-- 34 built-in skills (33 + memory)
-- Works with sage-memory MCP server (91% recall, sub-3ms search)
+- 36 built-in skills (33 original + memory + ontology + self-learning)
+- Three complementary sage-memory skills: prose knowledge (memory),
+  structured relationships (ontology), behavioral improvement
+  (self-learning)
 
 ## [1.0.1] — Skill Management Improvements
 

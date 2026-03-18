@@ -13,8 +13,8 @@ ambition takes it.
 - **Understands before building** — the navigator detects missing research, specs, or plans before you waste time building the wrong thing
 - **Focuses the agent, not floods it** — three-layer context loading keeps the AI sharp instead of drowning in instructions
 - **Catches drift automatically** — quality gates verify work at every stage transition without slowing you down
-- **Remembers across sessions** — persistent knowledge via sage-memory (91% recall, sub-3ms search)
-- **34 built-in skills + 2,100+ community skills** — install what you need, contribute what you build
+- **Grows sharper as you work** — three layers of persistent intelligence learn your codebase, avoid past mistakes, and track relationships automatically
+- **36 built-in skills + 2,100+ community skills** — install what you need, contribute what you build
 
 ## Get Started
 
@@ -146,6 +146,33 @@ benefits from the safety net.
 
 The principle: quality should be verified, not hoped for. And
 verification should be invisible until it catches something.
+
+### Three Layers of Persistent Intelligence
+
+AI agents forget everything between sessions. Every time you open
+your editor, your agent starts from scratch — re-reading files,
+re-discovering patterns, re-learning your codebase's quirks.
+
+Sage solves this with three complementary skills on a single
+lightweight backend ([sage-memory](https://github.com/xoai/sage-memory)
+— local SQLite, 91% recall, sub-3ms search):
+
+- **Memory** — prose knowledge. Architecture decisions, conventions,
+  domain insights, research findings. The agent remembers what it
+  learned about your codebase.
+- **Self-learning** — mistakes and prevention rules. When the agent
+  gets corrected or discovers a gotcha, it stores a forward-looking
+  rule so the same mistake never happens twice.
+- **Ontology** — structured relationships. Typed entities (tasks,
+  people, projects) and relations (blocks, depends on, assigned to)
+  form a knowledge graph the agent can query and traverse.
+
+Each works standalone. Together they compound: the agent understands
+your codebase (memory), avoids past mistakes (self-learning), and
+tracks structured relationships between things (ontology). The more
+you use Sage, the sharper it gets — not because you configured
+anything, but because the skills capture knowledge automatically
+as you work.
 
 ## How Sage Works
 

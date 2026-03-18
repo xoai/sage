@@ -135,6 +135,14 @@
     "memory": {
       "source": "built-in",
       "version": "1.0.0"
+    },
+    "ontology": {
+      "source": "built-in",
+      "version": "1.0.0"
+    },
+    "self-learning": {
+      "source": "built-in",
+      "version": "1.0.0"
     }
   }
 }

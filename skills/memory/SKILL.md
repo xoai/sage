@@ -221,6 +221,23 @@ rejected for complexity" is an insight. Store insights.
 architecture changed), update or delete old memories. Stale memories are
 worse than no memories — they cause confident wrong answers.
 
+## Complementary Skills
+
+Memory works alongside two other sage-memory skills. All three share
+the same backend but serve different purposes:
+
+- **memory** (this skill) → prose knowledge: architecture, conventions,
+  domain insights, research findings
+- **self-learning** → agent mistakes and meta-knowledge: what went wrong,
+  what to avoid, prevention rules that change future behavior
+- **ontology** → structured facts and relationships: typed entities
+  (Task, Person, Project), relations (blocks, assigned_to, depends_on),
+  graph queries
+
+Each works standalone. Together they give the agent comprehensive
+cross-session intelligence: understanding (memory), behavioral
+improvement (self-learning), and structured relationships (ontology).
+
 ## Failure Modes
 
 **Memory not available.** sage-memory MCP server not configured. Degrade
