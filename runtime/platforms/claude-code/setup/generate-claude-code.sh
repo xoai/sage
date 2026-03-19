@@ -69,12 +69,13 @@ Use slash commands for direct access to workflows:
 
 | Command | What It Does |
 |---------|-------------|
-| `/project:sage` | **Start here.** Reads project state, assesses intent, guides the process |
-| `/project:build` | Feature development: scope → spec → plan → implement |
-| `/project:fix` | Quick debug → test → fix → verify |
-| `/project:architect` | System design: deep elicitation → architecture → phased build |
-| `/project:status` | Check current project state |
-| `/project:review` | Review an artifact — evaluates completeness, consistency, quality |
+| `/sage` | **Start here.** Reads project state, assesses intent, guides the process |
+| `/build` | Feature development: scope → spec → plan → implement |
+| `/fix` | Quick debug → test → fix → verify |
+| `/architect` | System design: deep elicitation → architecture → phased build |
+| `/status` | Check current project state |
+| `/review` | Review an artifact — evaluates completeness, consistency, quality |
+| `/learn` | Learn a codebase or module — stores knowledge for future sessions |
 
 ## How to Communicate
 
@@ -127,7 +128,7 @@ for wf in "$CORE"/workflows/*.workflow.md; do
     echo '$ARGUMENTS'
   } > "$CLAUDE_DIR/commands/${basename_wf}.md"
 
-  echo "  ✓ ${basename_wf}.md → /project:${basename_wf}"
+  echo "  ✓ ${basename_wf}.md → /${basename_wf}"
 done
 
 # ═══════════════════════════════════════════════════════════════
@@ -188,6 +189,6 @@ echo "  .sage/               → project state directory"
 echo ""
 echo "Next steps:"
 echo "  1. Open this project in Claude Code"
-echo "  2. Type /project:sage and describe what you want to build"
-echo "  3. Type /project:status to check project state"
+echo "  2. Type /sage and describe what you want to build"
+echo "  3. Type /status to check project state"
 echo ""

@@ -151,6 +151,7 @@ Use inside your IDE (Claude Code, Antigravity):
 | `/architect` | System design: deep elicitation → architecture → phased build |
 | `/status` | Check current project state |
 | `/review` | Review an artifact — evaluates completeness, consistency, quality |
+| `/learn` | Learn a codebase or module — stores knowledge for future sessions |
 
 ### Interaction Patterns
 

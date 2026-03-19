@@ -2,7 +2,7 @@
 
 All notable changes to Sage will be documented in this file.
 
-## [1.0.3] — Quality Criteria, Self-Review & Review Workflow
+## [1.0.3] — Quality, Review & Memory Enforcement
 
 ### Review Workflow (new)
 - **`/review`** — dedicated workflow for evaluating Sage artifacts.
@@ -32,6 +32,24 @@ All notable changes to Sage will be documented in this file.
   review (high-stakes, long sessions, cross-domain transitions) vs
   self-review (incremental work, short sessions) vs no review (quick
   fixes). Smart recommendations, not blanket policy.
+
+### Memory Enforcement
+- **Navigator enforces memory** — recall is now a concrete process step
+  in Read the Room, not a suggestion. One search, results categorized
+  into knowledge, structure (ontology tag), and warnings (learning tag).
+  Graceful degradation if sage-memory is not configured.
+- **Navigator enforces store** — after significant work, the navigator
+  evaluates what to store with proportional judgment and appropriate tags.
+- **Unified knowledge facets** — memory, ontology, and self-learning are
+  three facets of one knowledge system, distinguished by tags, not
+  separate storage backends. One search returns all three.
+- **`sage setup memory`** — prints platform-specific MCP config for
+  sage-memory. Copy-paste setup, zero guesswork.
+- **`sage init` detects memory** — shows setup hint when sage-memory
+  is not configured.
+- **`/learn` workflow** — deliberate knowledge capture. Broad scan
+  (`sage learn`) or deep dive (`sage learn <path>`). Stores focused
+  memories and generates knowledge report.
 
 ### Documentation
 - **Skill authoring guide** — quality criteria and self-review documented

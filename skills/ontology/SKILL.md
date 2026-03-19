@@ -20,6 +20,12 @@ Typed knowledge graph on sage-memory. Entities and relations stored as
 separate memory entries — searchable by BM25, zero file I/O, zero
 consistency risk.
 
+**Part of the unified knowledge system.** Ontology is a facet of the
+memory skill — it stores through sage-memory with the `ontology` tag.
+During recall, ontology entries surface alongside regular knowledge and
+self-learning entries, giving the agent structural context (what depends
+on what, who owns what) in addition to prose understanding.
+
 **Prerequisite:** sage-memory MCP tools (`memory_store`, `memory_search`,
 `memory_update`, `memory_delete`). If unavailable, degrade gracefully.
 

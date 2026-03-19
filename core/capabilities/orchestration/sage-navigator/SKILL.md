@@ -56,9 +56,22 @@ and `.sage/work/` to know what artifacts already exist.
 
 ### Memory
 
-If sage-memory is available, search for context relevant to the user's
-request before assessing intent. Report what you found and how it informs
-your approach. Skip if memory is not configured — degrade gracefully.
+Search for context relevant to the user's request. This step runs
+BEFORE assessing intent — recalled knowledge changes the assessment.
+
+```
+1. Call memory_search with a query describing the task or area
+2. If results found, categorize:
+   - Knowledge (general entries) — facts, architecture, conventions
+   - Structure (tagged "ontology") — entity relationships, dependencies
+   - Warnings (tagged "learning") — past mistakes, corrections, gotchas
+3. Synthesize briefly: "I recall [key context]. This informs my approach."
+4. If memory_search fails or no MCP configured:
+   - Note: "Operating without persistent memory this session."
+   - Continue normally — memory enhances but is not required.
+```
+
+Be transparent about what you recalled and how it shapes your thinking.
 
 ### Intent
 
@@ -237,7 +250,13 @@ location:
 - Initiative work → `.sage/work/YYYYMMDD-slug/` (brief.md, spec.md, plan.md)
 - Update `.sage/progress.md` after each significant step
 - If sage-memory is available, store key findings worth remembering
-  across sessions (architecture decisions, conventions, insights)
+  across sessions. Evaluate proportionally — a JTBD analysis produces
+  3-5 findings worth storing, a CSS fix probably doesn't. For each
+  finding, use appropriate tags:
+  - Domain tags always (e.g., `billing`, `auth`, `frontend`)
+  - Add `ontology` tag when storing entity relationships or dependencies
+  - Add `learning` tag when storing mistakes, corrections, or gotchas
+  - If memory_store fails, note it and continue — don't block the task
 
 ### Bridging to Next
 

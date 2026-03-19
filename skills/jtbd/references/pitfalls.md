@@ -1,125 +1,97 @@
-# Common Pitfalls in JTBD Analysis
+# Common Pitfalls
 
-## Purpose
+## Contents
+- Confusing jobs with solutions
+- Supply-side thinking
+- Generic jobs
+- Ignoring emotional/social jobs
+- Defining competition by product category
+- Ignoring anxiety and habit
+- Fabricating JTBD without research
+- Treating all pains as equal
+- No job performer defined
+- Missing the struggling moment
+- Wrong level of abstraction
+- Troubleshooting
 
-Mistakes that both human analysts and LLMs consistently make when conducting
-JTBD analysis. Check this list during quality review (Step 5) to catch
-problems before they reach stakeholders.
+---
 
 ## Confusing Jobs with Solutions
 
 **Symptom:** "Use Slack to communicate," "Build a dashboard," "Implement AI analytics."
 
-**Root cause in LLMs:** Training data is dominated by product descriptions and
-feature announcements. The LLM defaults to solution language because that's
-what it's seen most.
+**Fix:** Apply "5 Whys." "I need Slack" → Why? → "To get quick answers" → Why? → "To avoid project delays." The job is "get timely answers to unblock work." Quick test: would this statement make sense 20 years ago?
 
-**Fix:** Apply the "5 Whys." "I need Slack" → Why? → "To get quick answers" →
-Why? → "To avoid project delays." The job is "get timely answers to unblock
-work." Quick test: would this statement make sense 20 years ago?
+## Supply-Side Thinking
 
-## Generic Outcomes
+**Symptom:** The analysis reads like a product brief — features, capabilities, technical specifications. Language like "Our platform provides..." or "Users need a mobile app."
 
-**Symptom:** "Save time," "Improve efficiency," "Better collaboration" appear
-in every analysis regardless of domain.
+**Fix:** Run every statement through the supply-side test: would an engineer write this, or would a customer say it? "AI-powered analytics dashboard" is supply-side. "Spot at-risk accounts before they churn" is demand-side. If you're describing your product, you're not describing the customer's struggle.
 
-**Root cause in LLMs:** Without grounding in specific performer context, LLMs
-generate plausible-sounding but undifferentiated outcomes. These are the JTBD
-equivalent of lorem ipsum.
+## Generic Jobs
 
-**Fix:** Every outcome must pass the specificity test: could this statement
-appear in an analysis of a DIFFERENT product for DIFFERENT performers? If yes,
-it's too generic. "Minimize the time it takes to identify a blocked task
-across distributed team members" is specific. "Save time on project management"
-is generic.
+**Symptom:** "Be more productive," "Save time," "Improve efficiency."
 
-## Ignoring Emotional and Social Jobs
+**Fix:** Ask "How?" to move down. "Save time" → "Reduce time spent generating monthly reports." If it applies to every product in every industry, it's too broad.
 
-**Symptom:** Only functional tasks documented. Analysis reads like a process
-map with no human dimension.
+## Ignoring Emotional/Social Jobs
 
-**Root cause in LLMs:** Training data contains far more functional content than
-emotional or social content. LLMs skip these dimensions unless explicitly
-prompted.
+**Symptom:** Only functional tasks documented.
 
-**Fix:** Always ask: "How would the performer feel if this job went perfectly?"
-and "Who notices when this job goes well or badly?" Don't fabricate emotional
-jobs — they must come from research or be flagged as assumptions.
+**Fix:** Ask in interviews: "How would it feel if this got easier?" and "Who notices when this goes well or badly?" Don't fabricate — these must come from research. Solve functional first, then layer emotional/social.
 
-## Fabricating Without Flagging
+## Defining Competition by Product Category
 
-**Symptom:** Analysis reads as confidently validated but is built entirely
-from internal assumptions.
+**Symptom:** Competitive analysis lists only same-category products. "Our competitors are Asana, Monday, and Jira."
 
-**Root cause in LLMs:** LLMs present information with uniform confidence.
-They don't naturally distinguish "I'm confident about this because the user
-provided research data" from "I'm generating plausible content from training
-data patterns."
+**Fix:** Competition is defined by customers, not product categories. Ask what they used *before* and what they'd use *instead*. A PM tool might compete with WhatsApp groups, spreadsheets, weekly meetings, and "just remembering." Customers define competition by what serves their progress. When they start using one solution, they stop using another — it's a zero-sum game. Also watch for compensatory behaviors — customers using products in unintended ways signal unmet jobs.
 
-**Fix:** Every analysis must state its evidence basis. If built from research,
-cite the source (interviews, surveys, tickets). If built from assumptions,
-label every section: "Hypothesized — needs validation." The quality check step
-must explicitly verify evidence grounding.
+## Ignoring Anxiety and Habit
+
+**Symptom:** Analysis captures pains and gains thoroughly but doesn't address what prevents people from switching. Product team launches a better solution and wonders why adoption is slow.
+
+**Fix:** Analyze all four forces. Push and pull drive change; anxiety and habit block it. People switch only when (Push + Pull) > (Anxiety + Habit). In practice, reducing anxiety often unlocks more demand than adding features. Casper disrupted mattresses with 100-day returns, not better foam. SNHU grew to 130,000 online students by simplifying the application, not improving course content.
+
+## Fabricating JTBD Without Research
+
+**Symptom:** Template filled from internal assumptions only.
+
+**Fix:** Talk to 8–12 performers. At minimum, interview customer-facing teams (support, sales, CS) as proxies. If no research was done, label the output "hypothesized — needs validation." See [research-methods.md](research-methods.md) for interview approaches.
 
 ## Treating All Pains as Equal
 
-**Symptom:** 15-20 pains listed with no ranking or differentiation.
+**Symptom:** 15–20 pains listed with no ranking.
 
-**Root cause in LLMs:** LLMs are trained on list-making, not prioritization.
-Generating a comprehensive list feels complete; ranking requires judgment that
-the LLM avoids.
-
-**Fix:** Force ranking. Apply the forcing question: "If we solved only ONE
-pain, which would most drive someone to switch from their current solution?"
-For precision, use opportunity scoring on desired outcome statements.
+**Fix:** Rank on intensity × frequency. For precision, use opportunity scoring: Importance + max(Importance − Satisfaction, 0). Ask the forcing question: "If we solved only one pain, which would most drive someone to switch?"
 
 ## No Job Performer Defined
 
-**Symptom:** Analysis discusses "users" without specifying who. Or conflates
-the end user with the buyer.
+**Symptom:** Analysis discusses "users" without specifying who. Or conflates end user with buyer.
 
-**Root cause:** In LLM training data, "users" is the default term. The
-distinction between performer, buyer, and approver is rarely made in the
-blog posts and articles that dominate training data.
+**Fix:** Name the performer by role and context. Then map other roles. If you design for the buyer's needs but neglect the performer's, you get shelfware — purchased but not used.
 
-**Fix:** Name the performer by role and context before any analysis begins.
-Then explicitly distinguish buyer and approver. If you design for the buyer's
-needs but neglect the performer's, you get shelfware — purchased but not used.
+## Missing the Struggling Moment
 
-## Missing Circumstances
+**Symptom:** Circumstances are listed but there's no specific triggering event. "Teams are distributed" is a circumstance. Without a struggling moment, there's no demand — just a condition.
 
-**Symptom:** Jobs stated in a vacuum: "manage a project" with no context.
+**Fix:** Find the event that sparked action. "I realized I was staying 2 hours late every Friday just to compile status reports" is a struggling moment. Ask: "What happened that made you think 'today I need to change this'?" If performers can't point to a moment, the struggle may not be acute enough to drive switching.
 
-**Fix:** Identify 3-5 circumstances: time constraints, environment, available
-resources, emotional state, who else is involved. Circumstances turn a generic
-job into an actionable design target. "Manage a project" is a job. "Coordinate
-a distributed team across 3 time zones during a deadline crunch" is a
-designable problem.
+## Wrong Level of Abstraction
 
-## Wrong Abstraction Level
+**Symptom:** Job is either an aspiration ("live a fulfilling life") or a UI task ("click submit").
 
-**Symptom:** Job is either an aspiration ("live a fulfilling life") or a UI
-task ("click submit").
+**Fix:** Match level to goal. Strategy → big job. Feature design → little job. UX → micro-job. Use "Why?" / "How?" to navigate.
 
-**Fix:** Match the level to your goal. Strategy decisions → big job. Feature
-decisions → little job. UX decisions → micro-job. Navigate with "Why?" (up)
-and "How?" (down).
+---
 
 ## Troubleshooting
 
-**"Everything looks correct but isn't useful."** Check specificity. Are pains
-stated with numbers and consequences? Are circumstances specific enough to
-constrain the solution space?
+**"Everything looks correct but isn't useful."** Check specificity. Are pains stated with numbers and consequences? Are circumstances specific enough to constrain the solution space?
 
-**"Too many jobs, can't focus."** Zoom out — group micro-jobs under a single
-big job. Pick one based on strategic fit and unmet need intensity.
+**"Too many jobs, can't focus."** Zoom out — group micro-jobs under a single big job. Pick one based on strategic fit and unmet need intensity.
 
-**"Stakeholders disagree on the main job."** Go back to the job performer.
-Once you agree on WHO, the job usually clarifies.
+**"Stakeholders disagree on the main job."** Go back to job performer. Once you agree on *who*, the job usually clarifies.
 
-**"Customer asks for features, not jobs."** Normal. For every feature request,
-ask "What would that help you accomplish?" three times.
+**"Customer asks for features, not jobs."** Normal. For every feature request, ask "What would that help you accomplish?" three times.
 
-**"No budget for research."** Mine support tickets and NPS comments. Interview
-internal customer-facing teams. Analyze competitor reviews. Label output as
-hypothesized. See research-methods.md for proxy approaches.
+**"No budget for research."** Mine support tickets and NPS comments. Interview internal customer-facing teams. Analyze competitor reviews on G2/Capterra. Label output as hypothesized.

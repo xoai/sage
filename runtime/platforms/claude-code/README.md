@@ -22,11 +22,11 @@ your-project/
 ├── CLAUDE.md                    # Always-on project instructions
 ├── .claude/
 │   └── commands/                # Slash commands
-│       ├── sage.md              # /project:sage — intelligent entry point
-│       ├── build.md             # /project:build — feature development
-│       ├── fix.md               # /project:fix — debug and patch
-│       ├── architect.md         # /project:architect — system design
-│       └── status.md            # /project:status — project state
+│       ├── sage.md              # /sage — intelligent entry point
+│       ├── build.md             # /build — feature development
+│       ├── fix.md               # /fix — debug and patch
+│       ├── architect.md         # /architect — system design
+│       └── status.md            # /status — project state
 ├── .sage/                       # Project state (platform-agnostic)
 │   ├── progress.md
 │   ├── journal.md
@@ -51,15 +51,15 @@ session. It contains:
 
 ### Commands = Slash Shortcuts
 
-Type `/project:` in Claude Code to see available commands:
+Type `/` in Claude Code to see available commands:
 
 | Command | What Happens |
 |---------|-------------|
-| `/project:sage` | **Start here.** Navigator reads state, assesses intent, guides process |
-| `/project:build` | Feature development with scope assessment and checkpoints |
-| `/project:fix` | Debug → test → fix → verify |
-| `/project:architect` | Deep elicitation → architecture → milestone plan |
-| `/project:status` | Show current project state |
+| `/sage` | **Start here.** Navigator reads state, assesses intent, guides process |
+| `/build` | Feature development with scope assessment and checkpoints |
+| `/fix` | Debug → test → fix → verify |
+| `/architect` | Deep elicitation → architecture → milestone plan |
+| `/status` | Show current project state |
 
 Commands are markdown files in `.claude/commands/`. They provide the
 prompt context for each workflow.

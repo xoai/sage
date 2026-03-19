@@ -1,274 +1,197 @@
 ---
-name: jtbd
-description: >
-  Produces a structured Jobs-to-be-Done analysis: job performer, main job,
-  job process map, pains/gains, and desired outcome statements. Use when the
-  user mentions jobs to be done, JTBD, customer jobs, unmet needs, pains and
-  gains, switch interviews, outcome-driven innovation, desired outcomes, or
-  asks why customers hire or fire a product. Also triggers when the user wants
-  to understand what job a product solves, conduct customer discovery,
+name: jobs-to-be-done
+description: >-
+  Systematically uncovers customer jobs, pains, and gains using the
+  Jobs-to-be-Done framework. Produces structured JTBD analyses with job
+  performer definitions, job process maps, pains/gains, and desired outcome
+  statements. Use when the user mentions jobs to be done, JTBD, customer
+  jobs, unmet needs, pains and gains, value proposition canvas, switch
+  interviews, outcome-driven innovation, desired outcomes, or asks why
+  customers hire or fire a product. Also triggers when the user wants to
+  understand what job a product solves, conduct customer discovery,
   reposition a product around needs, define unmet needs for a roadmap,
   analyze competitors through a jobs lens, or create messaging grounded in
   customer objectives. Do NOT use for general market sizing, feature
   prioritization without a customer-needs lens, or persona creation based
   on demographics alone.
-version: "1.1.0"
-modes: [fix, build, architect]
+metadata:
+  version: 1.3.0
+  category: product-management
 ---
 
-<!-- sage-metadata
-cost-tier: sonnet
-activation: auto
-tags: [product-management, jtbd, customer-jobs, discovery, needs]
-inputs: [product-context]
-outputs: [jtbd-analysis]
-requires: []
--->
+# Jobs-to-be-Done
 
-# Jobs-to-be-Done Analysis
+Produce a structured JTBD analysis: job performer, main job, circumstances, job process map, pains/gains, and (optionally) desired outcome statements.
 
-Produce a structured JTBD analysis grounded in canonical methodology from
-Ulwick, Christensen, Moesta, Kalbach, and Klement. The output is a document
-deliverable — not code.
+## Workflow
 
-**Deliverable type:** document
+Copy this checklist and track progress:
 
-## Mode Behaviors
+```
+JTBD Analysis Progress:
+- [ ] Step 0: Check product context
+- [ ] Step 1: Define job performer and context
+- [ ] Step 2: Formulate the main job statement
+- [ ] Step 3: Map the job process
+- [ ] Step 4: Capture needs (pains/gains)
+- [ ] Step 5: Quality check
+- [ ] Step 6: Prioritize and identify implications
+```
 
-**FIX (update):** Update specific claims in an existing JTBD analysis with new
-evidence — new interview data, updated survey results, changed metrics, or
-corrected assumptions. Don't re-run the full process. Locate the claim, update
-it, adjust confidence level, and note what changed and why. Minutes, not hours.
+### Step 0: Check product context
 
-**BUILD (light):** Quick job framing. Run Steps 0-2 (context, job performer,
-main job) and a lightweight Step 4 (top 3-5 pains/gains, no formal desired
-outcome statements). Skip the full job process map (Step 3) and opportunity
-scoring (Step 5-6). Produces a focused analysis sufficient to ground a PRD
-or guide a quick prioritization decision. 15-20 minutes.
+Before starting the analysis, read [context.md](context.md).
 
-**ARCHITECT (full):** Complete 6-step process. Full job process map, all desired
-outcome statements with opportunity scoring, validation needs identified,
-strategic implications documented. The comprehensive analysis that grounds
-a product strategy. 45-60 minutes.
+- **If context.md has no `[TODO]` markers**: All sections are filled in. Use this context to ground the entire analysis — it defines the product, segment, known insights, and scope. Proceed to Step 1.
+- **If context.md has `[TODO]` markers in some sections**: Those sections are not yet filled in. Before proceeding, ask the user to provide the missing information. Present all missing sections in a single message — don't ask one at a time.
+- **If context.md is entirely unfilled or the file doesn't exist**: Ask the user to provide product context before starting. Specifically, request: (1) what the product does and what stage it's at, (2) who they believe the target job performer is, (3) what they already know from customer feedback or research, and (4) what decision this analysis should inform. Gather everything in one exchange.
 
-## When to Use
+After context is established, verify each section is specific enough to ground the analysis. A product description of "B2B SaaS" alone is too thin — it should say what the product does, for whom, and what stage it's at. If any section is present but too vague to be useful, ask the user to elaborate on those specific sections before proceeding.
 
-- User asks for a JTBD analysis, customer jobs analysis, or needs discovery
-- Product team needs to understand what job their product is hired for
-- Roadmap prioritization needs customer-grounded evidence
-- Competitive analysis needs a jobs lens (not feature comparison)
-- Repositioning or messaging work needs customer motivation framing
+### Step 1: Define job performer and context
 
-## Process
+If context.md provided a target segment and existing knowledge, use that as a starting point — refine and deepen it, don't repeat it. If working assumptions were listed, treat them as hypotheses to pressure-test throughout the analysis, not facts to build on.
 
-### Step 0: Establish Product Context
+Identify who executes the job. Distinguish from the buyer — they have different needs.
 
-Read `templates/jtbd-context-template.md`.
+**Capture:**
+- **Job performer**: Role and context (not demographics). "Project lead managing a distributed team of 8–12 engineers" — not "35-year-old male." Demographics correlate with buying but don't cause it.
+- **Buyer/Approver**: Who makes and authorizes the purchase decision
+- **Audience**: Who consumes the output of the job
+- **The struggling moment**: What specific event or frustration triggered the desire for change? Without a struggling moment, there's no demand. "I realized I was sleeping on the recliner every night because our mattress was so bad" is a struggling moment. "People need better mattresses" is a supply-side assumption.
+- **Circumstances**: When, where, and under what constraints the job arises. Jobs without context aren't actionable. "Get breakfast on the go while late for work" is specific enough to design for; "get breakfast" is not.
+- **Current solutions hired**: What do they use today? Competition is defined by customers, not product categories — it includes any solution that serves the same progress. A project management tool might compete with WhatsApp groups, spreadsheets, and weekly meetings, not just other PM software. Include workarounds, manual processes, and doing nothing. Note **compensatory behaviors** — when customers use products in unintended ways, it signals unmet jobs.
 
-If the user has not provided product context, ask for it in ONE message:
-1. What the product does, who it's for, what stage it's at
-2. Who they believe the target job performer is
-3. What they already know from customer feedback or research
-4. What decision this analysis should inform
+If the user hasn't done research, recommend methods from [references/research-methods.md](references/research-methods.md).
 
-If context is provided but thin (e.g., "B2B SaaS" with no specifics), ask
-the user to elaborate on the gaps before proceeding. A vague context produces
-a generic analysis — the most common failure mode.
+### Step 2: Formulate the main job statement
 
-### Step 1: Define Job Performer and Context
+A job can be framed as a task to accomplish (Ulwick: "restore blood flow in a blocked artery") or as a transformation the performer seeks (Klement: "become someone who can grow my company beyond 5 employees"). Both are valid — task framing works well for functional analysis; transformation framing reveals deeper emotional motivations and helps with messaging. Use whichever fits the situation, or both.
 
-**Read first:** `references/jtbd-methodology.md` (Core Concepts section)
+**Format: verb + object + clarifier**
 
-Identify who executes the job. Distinguish from the buyer.
+- Good: "Coordinate work across a cross-functional team to deliver a project on time"
+- Bad: "Use Slack to communicate" (contains solution), "Be more productive" (too vague, no end state), "Quickly manage finances" (adjective is a need, not part of the job)
 
-Capture:
-- **Job performer:** Role and context (not demographics)
-- **Buyer/Approver:** Who makes and authorizes the purchase decision
-- **Audience:** Who consumes the output of the job
-- **Circumstances:** When, where, and under what constraints the job arises.
-  Jobs without circumstances aren't actionable.
-- **Current solutions hired:** What do they use today? Include non-obvious
-  alternatives — spreadsheets, workarounds, manual processes, doing nothing.
+A well-formed job is solution-agnostic, stable over time, and has a clear "done" state.
 
-If the user hasn't done research, recommend methods from
-`references/research-methods.md` and offer to proceed with hypothesized data
-(clearly labeled).
+Use "Why?" to move up in abstraction, "How?" to move down:
+- **Aspiration**: "Be financially secure" — too broad for product scope
+- **Big job**: "Plan long-term retirement savings" — good for product strategy
+- **Little job**: "Evaluate investment fund performance" — good for a feature
+- **Micro-job**: "Compare two fund fact sheets" — good for UX
 
-### Step 2: Formulate the Main Job Statement
+Also capture **related jobs** (adjacent objectives) and **emotional/social jobs** (how the performer wants to feel and be perceived). Formulation rules: see [references/quality-checks.md](references/quality-checks.md).
 
-**Read first:** `references/formulation-rules.md` (Job Statement Rules)
+### Step 3: Map the job process
 
-Format: **verb + object + contextual clarifier**
-
-Good: "Coordinate work across a cross-functional team to deliver a project on time"
-Bad: "Use Slack to communicate" (solution embedded)
-
-Apply the level check: use "Why?" to move up in abstraction, "How?" to move
-down. Match the level to the decision the analysis informs — strategy needs
-big jobs, feature design needs little jobs.
-
-Also capture:
-- **Related jobs** (adjacent objectives during the main job)
-- **Emotional jobs** (how the performer wants to feel or avoid feeling)
-- **Social jobs** (how they want to be perceived, and by whom)
-
-### Step 3: Map the Job Process
-
-Break the main job into stages using the universal scaffold:
+Break the main job into stages. Use this universal scaffold and adapt:
 
 1. **Define** — Plan objectives and approach
 2. **Locate** — Gather inputs, information, materials
 3. **Prepare** — Set up and organize
-4. **Confirm** — Ensure everything is ready
-5. **Execute** — Perform the core activity
-6. **Monitor** — Check progress and quality
-7. **Modify** — Adjust when something changes
-8. **Conclude** — Finish, wrap up, hand off
+4. **Execute** — Perform the core activity
+5. **Monitor** — Check progress and quality
+6. **Modify** — Adjust when something changes
+7. **Conclude** — Finish and wrap up
+8. **Share** — Communicate results or hand off
 
-Adapt labels to the specific job. Keep labels as single-word verbs where
-possible. For each stage, note what the performer is trying to accomplish
-and where friction exists. The map organizes where to probe for needs in
-Step 4.
+For each stage, note what the performer is trying to accomplish and where friction exists. The map organizes where to probe for needs in Step 4.
 
-### Step 4: Capture Needs
+### Step 4: Capture needs
 
-Walk through each stage of the job map and capture what goes wrong and what
-ideal looks like.
+Walk through each stage of the job map and capture what goes wrong and what ideal looks like.
 
-**Default approach: Pains and Gains**
+**Default: Pains and Gains** (from the Value Proposition Canvas)
 
-Use for most analyses — accessible, workshop-friendly, sufficient for early
-discovery and roadmap input.
+Use this for most analyses — it's accessible, workshop-friendly, and sufficient for early discovery and roadmap input.
 
-- **Pains:** Challenges (obstacles), costliness (be specific — "3 hours/week"),
-  common mistakes, unresolved problems with current solutions
-- **Gains:** Expectations (exceeding current), savings (measurable),
-  adoption factors, life improvements
+- **Pains**: Challenges, costliness (be specific — "3 hours/week"), common mistakes, unresolved problems
+- **Gains**: Expectations, savings (measurable), adoption factors, life improvement
 
-**For higher rigor: Desired Outcome Statements**
+Use `template.md` for the full fill-in structure. See `examples/sample.md` for worked examples.
 
-**Read first:** `references/formulation-rules.md` (Desired Outcome Statement Rules)
+**Also analyze: The Four Forces of Progress** (from Moesta)
 
-Use when needs must be quantitatively prioritizable — roadmap trade-offs,
-surveys, competitive scoring.
+Pains and gains capture what's wrong and what's desired, but they miss what *blocks people from switching*. The four forces determine whether someone actually acts:
+
+1. **Push** — Frustration with the current situation (drives change)
+2. **Pull** — Magnetism of a new, better solution (drives change)
+3. **Anxiety** — Fear and uncertainty about the new solution (blocks change)
+4. **Habit** — Comfort and inertia of the current way (blocks change)
+
+People switch only when (Push + Pull) > (Anxiety + Habit). In practice, reducing anxiety often unlocks more demand than adding features. Casper disrupted mattresses not by building a better mattress, but by eliminating the anxiety of buying one (100-day returns, no showroom pressure, bed-in-a-box delivery).
+
+For each force, probe functional, emotional, and social dimensions. See [references/forces-and-timeline.md](references/forces-and-timeline.md) for detail and interview questions.
+
+**For higher rigor: Desired Outcome Statements** (from Ulwick's ODI)
+
+Use when needs must be quantitatively prioritizable — roadmap trade-offs, surveys, competitive scoring.
 
 Format: **direction + measure + object + clarifier**
 - "Minimize the time it takes to identify a blocked task"
 - "Reduce the likelihood of missing a cascading impact when a deadline changes"
 
-Attach outcomes to job map stages. A thorough pass yields 50-150; a
-lightweight pass yields 15-30.
+Attach outcomes to job map stages. A thorough pass yields 50–150; a lightweight pass yields 15–30. See [references/quality-checks.md](references/quality-checks.md) for formulation rules.
 
-### Step 5: Quality Check
+### Step 5: Quality check
 
-**Read first:** `references/pitfalls.md`
+Before presenting results, validate against this checklist. If issues are found, fix and re-check.
 
-Before presenting results, validate against the overall analysis checklist
-from `references/formulation-rules.md`. If issues are found, fix and re-check.
-
-Critical checks:
-- Job performer defined and distinguished from buyer
-- Main job follows format, no embedded solutions
-- Pains are specific (numbers, frequencies, consequences) — not "tools are bad"
-- No statement confuses a job with a solution
-- Needs are prioritized, not just listed
-- Analysis labeled as "validated" or "hypothesized — needs validation"
-
-### Step 6: Prioritize and Identify Implications
-
-Rank pains by intensity (acute + frequent → highest priority). Separate
-must-have gains from nice-to-haves.
-
-If using desired outcome statements, apply opportunity scoring:
 ```
-Opportunity = Importance + max(Importance - Satisfaction, 0)
+Quality Validation:
+- [ ] Job performer is defined and distinguished from buyer
+- [ ] Main job follows verb + object + clarifier, no embedded solutions
+- [ ] Emotional/social jobs are separate from functional jobs
+- [ ] A struggling moment is identified — not just generic circumstances
+- [ ] Current solutions documented including workarounds and non-obvious competitors
+- [ ] Pains are specific (numbers, frequencies, consequences) — not "tools are bad"
+- [ ] Gains are measurable or observable — not "better UX"
+- [ ] No statement confuses a job with a solution (supply-side test: would an engineer write this, or a customer?)
+- [ ] Forces of progress analyzed — especially anxiety and habit blocking the switch
+- [ ] Needs are prioritized, not just listed
+- [ ] Analysis is consistent with scope and constraints from context.md (if provided)
+- [ ] Working assumptions from context.md are explicitly confirmed, challenged, or refined
 ```
-Scores above 12 = significant. Above 15 = critical.
 
-Check whether different performer segments have different unmet needs.
+If the analysis was built from assumptions rather than research, flag this explicitly. See [references/pitfalls.md](references/pitfalls.md) for common mistakes.
 
-Surface implications for:
-- **Product strategy:** What to build/improve based on top unmet needs
-- **Messaging:** How to speak about the product in job terms, not features
-- **Competitive positioning:** Where current solutions fall short on
-  highest-opportunity outcomes
-- **Validation needs:** Which assumptions still need quantitative confirmation
+### Step 6: Prioritize and identify implications
 
-## Output
+Rank pains by intensity (acute + frequent → highest priority). Separate must-have gains from nice-to-haves. Identify which forces of progress represent the biggest levers — often, reducing anxiety or breaking habit unlocks more demand than amplifying push or pull.
 
-Save to `.sage/docs/jtbd-analysis.md` using the template
-from `templates/jtbd-analysis-template.md`. See `examples/jtbd-sample.md`
-for a worked example.
+If using desired outcome statements, apply **opportunity scoring**: Opportunity = Importance + max(Importance − Satisfaction, 0). Scores above 12 are significant; above 15 are critical.
 
-Update `.sage/journal.md`: append a change log entry recording what was
-produced, key findings, confidence level, and recommended next steps.
-Update the "Current Artifacts" section to list the new file as Active.
+Check whether different performer segments have different unmet needs. Then surface implications for product strategy, messaging, and competitive positioning. For go-to-market implications, map findings to the **buying timeline** (First Thought → Passive Looking → Active Looking → Deciding → Onboarding → Ongoing Use) — see [references/forces-and-timeline.md](references/forces-and-timeline.md).
 
-Present to user: "Here's the JTBD analysis. The top 3 unmet needs are [X, Y, Z].
-Want to refine any section, or should we use this to inform [the next step]?"
+Frame value in terms of progress, not just outcomes. Progress is continuous — customers evaluate whether things are getting better at every touchpoint, not just at the end. A product that delivers an ongoing feeling of progress retains customers; one that delivers only a final outcome gets churned.
 
-## Rules
+---
 
-**MUST:**
-- MUST read `references/jtbd-methodology.md` before starting any analysis
-- MUST distinguish job performer from buyer — designing for the wrong person
-  cascades through the entire analysis
-- MUST validate every job statement against formulation rules — no embedded
-  solutions, no adjectives-as-needs, no compound statements
-- MUST label the analysis as "validated" (based on research) or "hypothesized —
-  needs validation" (based on assumptions)
-- MUST prioritize needs, not just list them — an unprioritized list is not
-  actionable
+## Key Principles
 
-**SHOULD:**
-- SHOULD use both Pains/Gains AND Desired Outcome Statements when the analysis
-  informs roadmap decisions — Pains/Gains for accessibility, outcomes for precision
-- SHOULD capture the four forces (push, pull, anxiety, habit) when analyzing
-  switching behavior or competitive positioning
-- SHOULD include the buying timeline when the analysis informs go-to-market
-  strategy or messaging
-- SHOULD ask the user to provide or validate circumstances — don't invent
-  them from assumptions
+These are reminders, not explanations — apply them as quality filters throughout the workflow.
 
-**MAY:**
-- MAY skip Desired Outcome Statements for early-stage discovery where
-  Pains/Gains provide sufficient clarity
-- MAY use a lighter job map (Define, Execute, Monitor, Conclude) for simple
-  consumer jobs where the full 8-stage map is overkill
-- MAY recommend specific research methods from `references/research-methods.md`
-  when the user has access to customers
+- **Separate jobs from solutions.** "Communicate with my team" is a job. "Use Slack" is a solution.
+- **Demand-side, not supply-side.** Describe the customer's struggle and desired progress, not your product's features. If an engineer would write the statement, it's supply-side. If a customer would say it, it's demand-side.
+- **The struggling moment is the seed.** Without a specific struggling moment, there's no demand. People don't buy when they're comfortable — they buy when something in their life stops working.
+- **Functional first, then emotional.** Solve the functional job before layering emotional/social dimensions.
+- **Jobs are stable; solutions change.** If the job statement wouldn't make sense 50 years ago, it probably contains an embedded solution.
+- **Competition is defined by customers.** They use progress as their criterion, not product categories. When someone starts using a solution for a job, they stop using something else — it's a zero-sum game.
+- **People convince themselves; you convince them of nothing.** Reduce anxiety and break habit to unlock demand. Adding features often increases anxiety rather than reducing it.
+- **Depth over breadth.** A thorough analysis of one well-defined job beats a shallow pass on five vague ones.
 
-## Failure Modes
+---
 
-- **User provides no product context:** Don't proceed. Ask for context first.
-  A JTBD analysis without grounding produces generic output.
-- **User wants JTBD for "all users":** Push back. "All users" is not a job
-  performer. Ask who specifically performs the job and in what circumstances.
-- **Analysis produces only generic outcomes:** The context is too thin or
-  the analysis isn't grounded in specific performer behavior. Add more
-  circumstance detail, or recommend research before continuing.
-- **Stakeholders disagree on the main job:** Go back to job performer
-  definition. Once you agree on WHO, the job usually clarifies.
-- **User wants features, not jobs:** Redirect: "Let's understand what your
-  customers are trying to accomplish first, then we can map features to
-  those jobs. This ensures we build what matters most."
+## References
 
-## Quality Criteria
+**Bundled files** (one level deep — read as needed):
+- [context.md](context.md) — Product and market context (fill in before distributing, or leave for user to provide)
+- [template.md](template.md) — Fill-in template for JTBD analysis
+- [examples/sample.md](examples/sample.md) — Worked examples (good and bad)
+- [references/quality-checks.md](references/quality-checks.md) — Formulation rules and validation criteria
+- [references/forces-and-timeline.md](references/forces-and-timeline.md) — Four Forces of Progress and the buying timeline
+- [references/pitfalls.md](references/pitfalls.md) — Common mistakes and troubleshooting
+- [references/research-methods.md](references/research-methods.md) — Switch interviews, outcome-driven interviews, contextual inquiry
 
-Good JTBD output:
-- Identifies functional, emotional, and social dimensions of jobs
-- Distinguishes the main job from related jobs
-- Uses canonical format: "When [situation], I want to [motivation], so I can [outcome]"
-- Outcome statements are measurable and solution-free
-- Job performer is specific — not "all users" but a defined segment with circumstances
-- Pains and gains are grounded in evidence, not assumptions
-- If only functional jobs were found, the analysis isn't deep enough
-
-## Self-Review
-
-Before presenting your output, check each quality criterion above.
-For each, confirm it's met or note what's missing. Present your
-findings AND your self-assessment:
-
-"Self-review: [X/Y criteria met]. [Note any gaps and why they exist —
-missing context, insufficient research data, etc.]"
+**Theoretical foundations**: Christensen (*Competing Against Luck*), Ulwick (*Jobs to be Done: Theory to Practice*), Kalbach (*The Jobs to be Done Playbook*), Moesta (*Demand-Side Sales 101*), Klement (*When Coffee and Kale Compete*), Osterwalder (*Value Proposition Design*).

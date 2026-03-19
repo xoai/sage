@@ -274,14 +274,29 @@ print_success() {
   fi
   if [ "$PLATFORM" = "claude-code" ] && [ "$PLATFORM" != "both" ]; then
     echo "    1. Open this project in Claude Code"
-    echo -e "    2. Type ${BOLD}/project:sage${RESET} and describe what you want to build"
+    echo -e "    2. Type ${BOLD}/sage${RESET} and describe what you want to build"
     echo ""
-    echo -e "  ${DIM}Shortcuts:  /project:build  /project:fix  /project:architect${RESET}"
+    echo -e "  ${DIM}Shortcuts:  /build  /fix  /architect${RESET}"
   fi
   if [ "$PLATFORM" = "both" ]; then
     echo ""
-    echo -e "  ${DIM}Claude Code: /project:sage  /project:build  /project:fix${RESET}"
+    echo -e "  ${DIM}Claude Code: /sage  /build  /fix${RESET}"
   fi
+
+  # Check for sage-memory
+  local has_memory=false
+  if [ -f "$HOME/.claude.json" ] && grep -q "sage-memory" "$HOME/.claude.json" 2>/dev/null; then
+    has_memory=true
+  fi
+  if [ -f "$target/.claude.json" ] && grep -q "sage-memory" "$target/.claude.json" 2>/dev/null; then
+    has_memory=true
+  fi
+
+  if [ "$has_memory" = false ]; then
+    echo ""
+    echo -e "  ${DIM}Enable persistent memory:  sage setup memory${RESET}"
+  fi
+
   echo ""
 }
 
@@ -518,6 +533,78 @@ sage_skills() {
 }
 
 # ═══════════════════════════════════════════════════════════════
+# COMMAND: setup
+# ═══════════════════════════════════════════════════════════════
+sage_setup() {
+  local component="${1:-}"
+
+  if [ "$component" != "memory" ]; then
+    echo ""
+    echo -e "  ${BOLD}Sage — Setup${RESET}"
+    echo ""
+    echo "  Usage: sage setup memory"
+    echo ""
+    return
+  fi
+
+  echo ""
+  echo -e "  ${BOLD}Sage — Setup Memory${RESET}"
+  echo ""
+  echo "  sage-memory gives your AI agent persistent knowledge across sessions."
+  echo "  It remembers architecture decisions, conventions, debugging insights,"
+  echo "  and project patterns — so the agent never starts from scratch."
+  echo ""
+  echo -e "  ${BOLD}Step 1:${RESET} Add to your MCP config"
+  echo ""
+
+  # Detect platform
+  if [ -d ".claude" ] || [ -f "$HOME/.claude.json" ]; then
+    echo -e "  ${CYAN}Claude Code${RESET} — add to ~/.claude.json:"
+    echo ""
+    echo '  {'
+    echo '    "mcpServers": {'
+    echo '      "memory": {'
+    echo '        "command": "uvx",'
+    echo '        "args": ["sage-memory"]'
+    echo '      }'
+    echo '    }'
+    echo '  }'
+  elif [ -d ".cursor" ]; then
+    echo -e "  ${CYAN}Cursor${RESET} — add to .cursor/mcp.json:"
+    echo ""
+    echo '  {'
+    echo '    "mcpServers": {'
+    echo '      "memory": {'
+    echo '        "command": "uvx",'
+    echo '        "args": ["sage-memory"]'
+    echo '      }'
+    echo '    }'
+    echo '  }'
+  else
+    echo "  Add to your MCP client config:"
+    echo ""
+    echo '  {'
+    echo '    "mcpServers": {'
+    echo '      "memory": {'
+    echo '        "command": "uvx",'
+    echo '        "args": ["sage-memory"]'
+    echo '      }'
+    echo '    }'
+    echo '  }'
+  fi
+
+  echo ""
+  echo -e "  ${BOLD}Step 2:${RESET} Restart your IDE"
+  echo ""
+  echo "  That's it. Sage will automatically search and store knowledge"
+  echo "  as you work. No configuration needed."
+  echo ""
+  echo -e "  ${DIM}Requires uv: curl -LsSf https://astral.sh/uv/install.sh | sh${RESET}"
+  echo -e "  ${DIM}More info: https://github.com/xoai/sage-memory${RESET}"
+  echo ""
+}
+
+# ═══════════════════════════════════════════════════════════════
 # COMMAND: learn
 # ═══════════════════════════════════════════════════════════════
 sage_learn() {
@@ -581,6 +668,7 @@ sage_help() {
   echo "  sage update                      Regenerate platform files"
   echo "  sage upgrade                     Update Sage to the latest version"
   echo "  sage learn [path]                Learn a codebase or module"
+  echo "  sage setup memory                Configure persistent memory"
   echo ""
   echo "Skill management:"
   echo "  sage find <query>                Search community skill catalog"
@@ -612,6 +700,7 @@ case "$COMMAND" in
   update)           sage_update ;;
   upgrade)          sage_upgrade ;;
   learn)            sage_learn "$@" ;;
+  setup)            sage_setup "$@" ;;
   find)             sage_find "$@" ;;
   add)              sage_add "$@" ;;
   remove)           sage_remove "$@" ;;

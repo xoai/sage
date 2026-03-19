@@ -33,21 +33,25 @@ agent should do differently next time. Every learning includes a
 **prevention rule** — a forward-looking instruction that changes future
 behavior, not just a record of what happened.
 
-Learnings persist across sessions via sage-memory and surface
-automatically when relevant.
+**Part of the unified knowledge system.** Self-learning is a facet of
+the memory skill — it stores through sage-memory with the `learning`
+tag. During recall, learning entries surface as warnings alongside
+regular knowledge and ontology entries, alerting the agent to past
+mistakes in the area being worked on.
 
 **Prerequisite:** sage-memory MCP server preferred. If memory tools are
-not available, fall back to file-based storage at `.sage/learnings/`.
-Never block work because storage is unavailable.
+not available, operate without persistence — never block work because
+storage is unavailable.
 
-## How It Differs From the Memory Skill
+## How It Relates to the Memory Skill
 
 The memory skill stores **codebase knowledge** — architecture, patterns,
 conventions, domain insights. Self-learning stores **agent mistakes and
 meta-knowledge** — what went wrong, what was non-obvious, what to avoid.
 
-They share sage-memory as a backend but use tag filtering to stay
-independent. Neither skill depends on the other. Both add value alone.
+They share sage-memory as a backend. Self-learning entries are
+distinguished by the `learning` tag, which the navigator uses to
+surface them as warnings during recall.
 
 ## Recall: Search Before You Work
 

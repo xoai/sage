@@ -75,6 +75,7 @@ Type `/` for direct access to workflows:
 | `/architect` | Design a system — deep elicitation, architecture, milestone planning |
 | `/status` | Check what's been done and what's next |
 | `/review` | Review an artifact with fresh eyes — evaluates completeness, consistency, quality |
+| `/learn` | Learn a codebase or module — stores knowledge for future sessions |
 
 ## How to Communicate
 
