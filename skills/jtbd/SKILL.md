@@ -252,3 +252,23 @@ Want to refine any section, or should we use this to inform [the next step]?"
 - **User wants features, not jobs:** Redirect: "Let's understand what your
   customers are trying to accomplish first, then we can map features to
   those jobs. This ensures we build what matters most."
+
+## Quality Criteria
+
+Good JTBD output:
+- Identifies functional, emotional, and social dimensions of jobs
+- Distinguishes the main job from related jobs
+- Uses canonical format: "When [situation], I want to [motivation], so I can [outcome]"
+- Outcome statements are measurable and solution-free
+- Job performer is specific — not "all users" but a defined segment with circumstances
+- Pains and gains are grounded in evidence, not assumptions
+- If only functional jobs were found, the analysis isn't deep enough
+
+## Self-Review
+
+Before presenting your output, check each quality criterion above.
+For each, confirm it's met or note what's missing. Present your
+findings AND your self-assessment:
+
+"Self-review: [X/Y criteria met]. [Note any gaps and why they exist —
+missing context, insufficient research data, etc.]"

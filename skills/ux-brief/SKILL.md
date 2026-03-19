@@ -237,3 +237,21 @@ Together, they give the plan skill everything needed for task decomposition.
 - **Spec and brief conflict:** Brief takes precedence for visual decisions.
   Spec takes precedence for functional requirements. Note the conflict
   and ask the user to resolve.
+
+## Quality Criteria
+
+Good UX brief output:
+- Every design direction is grounded in evaluation findings
+- "Keep" and "change" decisions are justified with evidence
+- The brief is specific enough that a designer can create mockups
+- Content direction includes tone, messaging hierarchy, and key copy points
+- Success metrics are defined and measurable
+- Can you visualize the end result from reading this brief? If not, it's too vague
+
+## Self-Review
+
+Before presenting your output, check each quality criterion above.
+For each, confirm it's met or note what's missing. Present your
+findings AND your self-assessment:
+
+"Self-review: [X/Y criteria met]. [Note any gaps and why they exist.]"

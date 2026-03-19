@@ -55,6 +55,20 @@ Fix applied:
 
 Update `.sage/progress.md`. Done.
 
+## Quality Criteria
+
+Good fix output:
+- Root cause identified and explained, not just symptoms addressed
+- The fix doesn't introduce new issues — regression scope considered
+- Tests verify the fix AND prevent recurrence
+- If the bug has related patterns elsewhere, those are flagged
+- The fix is minimal — no unrelated refactoring mixed in
+
+## Self-Review
+
+Before marking a fix complete, check each criterion above. Is this
+the root cause, or just the first thing that stopped the error?
+
 ## Rules
 
 - Test first: write a failing test before writing the fix.

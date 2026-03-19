@@ -2,6 +2,46 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [1.0.3] — Quality Criteria, Self-Review & Review Workflow
+
+### Review Workflow (new)
+- **`/review`** — dedicated workflow for evaluating Sage artifacts.
+  Works same-session or fresh-session. Evaluates against three lenses:
+  completeness, consistency, and quality. Uses the producing skill's
+  quality criteria as the evaluation framework.
+- **Fresh-session review** — recommended for high-stakes deliverables.
+  Combined with sage-memory, provides independent perspective WITH
+  project context.
+
+### Quality Criteria & Self-Review
+- **Quality criteria in skills** — 6 skills enriched with domain-specific,
+  checkable quality standards: jtbd, prd, ux-audit, ux-brief,
+  ux-evaluate, ux-specify.
+- **Quality criteria in workflows** — 3 workflows enriched: build,
+  architect, fix. Each defines what good output looks like.
+- **Self-review step** — skills instruct the agent to check its own
+  output against quality criteria before presenting it. Transparent
+  self-assessment builds user trust.
+
+### Navigator Improvements
+- **Transition announcements** — navigator explains what's changing and
+  why when switching between skills or phases. Natural language, not
+  mechanical labels. Users can redirect because they understand what's
+  about to happen.
+- **Review judgment** — navigator evaluates when to recommend fresh
+  review (high-stakes, long sessions, cross-domain transitions) vs
+  self-review (incremental work, short sessions) vs no review (quick
+  fixes). Smart recommendations, not blanket policy.
+
+### Documentation
+- **Skill authoring guide** — quality criteria and self-review documented
+  as standard sections with examples and writing principles.
+- **Skill contract** — quality criteria added as SHOULD requirement.
+- **Design philosophy** — rationale for quality criteria in skills and
+  the dedicated review workflow.
+- **Skill philosophy** — why quality criteria close the loop between
+  process compliance and output quality.
+
 ## [1.0.2] — Memory & Persistent Knowledge
 
 ### Memory Skill (new built-in skill)

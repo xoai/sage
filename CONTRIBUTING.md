@@ -15,6 +15,8 @@ process, then `develop/contracts/skill.contract.md` for the formal contract.
 - Encodes judgment, not documentation (MCP provides docs; skills provide opinions)
 - Includes anti-patterns with explanations (why the obvious approach is wrong)
 - Uses MUST/SHOULD/MAY degrees of freedom (not everything is a hard rule)
+- Defines quality criteria — what good output looks like for this domain
+- Includes self-review instructions so the agent checks its own work
 - Stays under token budget (200-400 lines for patterns, 100-200 for anti-patterns)
 
 **Needed skills:** Vue/Nuxt, SvelteKit, Django, Go, Laravel, Rails, .NET,

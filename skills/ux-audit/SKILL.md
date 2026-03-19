@@ -216,3 +216,22 @@ Show the document to the user:
   audit — "Hero cycles through 3 images on a 5s interval."
 - **Design system is very inconsistent:** That's a valid finding. Document the
   inconsistencies — they're input to the evaluation skill.
+
+## Quality Criteria
+
+Good UX audit output:
+- Covers all heuristic categories — not just visual issues
+- Findings cite specific elements, not vague impressions
+- Severity is assigned to every finding (critical, major, minor)
+- At least mobile and desktop breakpoints are checked
+- Accessibility observations are included (contrast, text size, keyboard)
+- Visual hierarchy is identified — what draws the eye first, second, third
+- Screenshots or specific element references support each finding
+
+## Self-Review
+
+Before presenting your output, check each quality criterion above.
+For each, confirm it's met or note what's missing. Present your
+findings AND your self-assessment:
+
+"Self-review: [X/Y criteria met]. [Note any gaps and why they exist.]"

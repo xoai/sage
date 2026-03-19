@@ -1213,3 +1213,43 @@ Medium tasks get one suggestion ("a quick spec would help"). Large tasks
 get the full analysis ("here's the discovery → design → delivery path").
 The user always has the right to decline. Sage always has the obligation
 to suggest what's right.
+
+## Why Quality Criteria in Skills
+
+**The problem:** Skills tell the agent what to DO but not what GOOD looks
+like. The agent follows steps and produces output with no way to self-assess.
+Quality gates catch structural problems (does it match the spec?) but don't
+catch domain-specific quality issues (are the JTBD outcomes solution-free?
+are trade-offs named in the architecture?).
+
+**Our answer:** Every skill defines quality criteria — specific, checkable
+standards for what good output looks like in that domain. The agent checks
+its own output against these criteria before presenting it. Self-review
+is built into the skill process, not bolted on after.
+
+This works because quality criteria are domain-specific knowledge — exactly
+what skills are designed to carry. A JTBD skill knows that good outcomes
+are measurable and solution-free. An architect skill knows that good designs
+name trade-offs explicitly. Encoding this into the skill makes every
+invocation better, not just reviewed ones.
+
+## Why a Dedicated Review Workflow
+
+**The problem:** Same-session self-review has inherent blind spots. The agent
+that produced the work is the least qualified to find its own assumptions.
+But BMAD-style forced handoffs (new persona, new session for every phase)
+create context loss and user overhead.
+
+**Our answer:** A `/review` workflow that works in both modes — same-session
+(convenient, some blind spots) and fresh-session (independent, recommended
+for high-stakes deliverables). The navigator recommends fresh review when
+the stakes justify it.
+
+Fresh-session review combined with sage-memory gives the best of both worlds:
+independent perspective (the reviewer wasn't involved in production) WITH
+context (memory provides architecture decisions, conventions, and domain
+knowledge without the bias of having done the work).
+
+The review workflow reads quality criteria from the producing skill, making
+evaluation specific and domain-appropriate — not just "does this look good?"
+but "does this meet the standards this domain requires?"

@@ -4,17 +4,46 @@
 
 Think clearly. Work thoroughly. Deliver excellence.
 
-Sage equips AI agents with skills that truly understand what's needed,
-choose the right approach, and produce outstanding results — from user
-research to UX design to shipping code to crafting strategy and beyond.
-Any domain. Any task that demands excellence. Sage grows as far as your
-ambition takes it.
+Sage is a skills framework that makes AI agents think before they act,
+stay focused under complexity, and deliver outcomes you can trust.
+Built for product and engineering teams, open to any domain.
 
-- **Understands before building** — the navigator detects missing research, specs, or plans before you waste time building the wrong thing
-- **Focuses the agent, not floods it** — three-layer context loading keeps the AI sharp instead of drowning in instructions
-- **Catches drift automatically** — quality gates verify work at every stage transition without slowing you down
-- **Grows sharper as you work** — three layers of persistent intelligence learn your codebase, avoid past mistakes, and track relationships automatically
-- **36 built-in skills + 2,100+ community skills** — install what you need, contribute what you build
+- **Think first, build second** — prevents the most expensive mistake: solving the wrong problem
+- **Focus over noise** — loads only what the task needs, producing sharper reasoning
+- **Reliable by design** — quality gates catch drift at every stage, automatically
+- **Gets smarter over time** — persistent memory turns every session into accumulated wisdom
+- **Grows with its ecosystem** — built-in skills for product, design, and engineering, extensible with a growing community catalog, easy to contribute
+
+## Why Sage
+
+### The Navigator
+
+Most AI frameworks skip from request to implementation. Sage's navigator
+thinks first — mapping every request to an intent spectrum (UNDERSTAND →
+ENVISION → DELIVER) and detecting what's missing before work begins.
+Building without research? It tells you what 15 minutes of discovery
+would prevent, then lets you decide. Gap detection, not gatekeeping.
+The belief: an AI agent's job isn't to execute fast — it's to arrive at
+the right outcome.
+
+### The Context Loader
+
+Most frameworks dump all instructions into the context window and hope
+for the best. Sage loads deliberately: the process constitution is
+always-on (~200 words), the navigator and skills load on-demand, and
+reference material is never pre-loaded — read only when actively needed.
+What you don't load matters as much as what you do. A focused agent with
+the right 500 tokens outperforms a distracted agent with 50,000 tokens
+of everything.
+
+### The Quality Gates
+
+AI agents drift silently — skipping steps, hallucinating requirements,
+producing output that looks right but isn't. Sage runs deterministic
+gates at every stage transition: does the implementation match the spec?
+Were checkpoints honored? Gates catch drift early, automatically, before
+it compounds. Quality should be verified, not hoped for — and
+verification should be invisible until it catches something.
 
 ## Get Started
 
@@ -24,7 +53,16 @@ ambition takes it.
 curl -fsSL https://raw.githubusercontent.com/xoai/sage/main/install.sh | bash
 ```
 
-Works on macOS, Linux, and Windows (via WSL or Git Bash).
+Works on macOS and Linux. On Windows, use
+[Git Bash](https://git-scm.com/downloads/win) or WSL:
+
+```bash
+# Windows — open Git Bash, then:
+curl -fsSL https://raw.githubusercontent.com/xoai/sage/main/install.sh | bash
+```
+
+All `sage` commands run in bash. On Windows, use Git Bash or WSL
+for both installation and daily use.
 
 ### Create a Project
 
@@ -43,7 +81,9 @@ That's it. Open your project in your IDE, type `/sage`, and describe
 what you want to build. Sage reads your project, assesses the task,
 and guides you through the right process.
 
-### Commands
+### CLI Commands
+
+Run in your terminal:
 
 | Command | What It Does |
 |---------|-------------|
@@ -97,88 +137,11 @@ Recommended next: Create a brief defining redesign goals (~10 min)
 Every step: clear options, saved artifacts, recommended next step. You
 stay in control — Sage stays intelligent.
 
-## Why Sage
-
-### The Navigator — Intelligence That Prevents Waste
-
-Most AI agent frameworks go straight from request to code. Sage's
-navigator thinks first.
-
-Every request maps to an intent spectrum — UNDERSTAND → ENVISION →
-DELIVER. When multiple intents are present ("redesign this page"),
-the navigator starts from the left: understand the problem before
-designing the solution, design the solution before building it. This
-prevents the most expensive mistake in product work: building the
-wrong thing.
-
-The navigator also detects gaps. Building without research? It tells
-you what 15 minutes of discovery would prevent — then lets you decide.
-This is gap detection, not gatekeeping. The navigator suggests the best
-route. You decide where to go.
-
-### The Context Loader — Focus, Not Overload
-
-The context window is the scarcest resource in AI agent work. Most
-frameworks dump everything into it — all rules, all skills, all
-instructions — and the agent loses focus in the noise.
-
-Sage uses a three-layer loading strategy. The process constitution is
-always-on (~200 words) — just enough to ground every interaction. The
-navigator and skills load on-demand when the current task needs them.
-Reference material is never pre-loaded — it's read only when actively
-used. What you DON'T load matters as much as what you do.
-
-This isn't just efficient — it changes how the agent thinks. A focused
-agent with the right 500 tokens of context outperforms a distracted
-agent with 50,000 tokens of everything.
-
-### Quality Gates — Reliability Without Friction
-
-AI agents silently drift from the plan. They skip steps, hallucinate
-requirements, and produce output that looks right but isn't. Most
-frameworks have no answer for this.
-
-Sage runs quality gates at every stage transition. Deterministic checks:
-does the implementation match the spec? Are tests passing? Were
-checkpoints honored? Gates catch drift early — before it compounds into
-wasted work. They run automatically. The user doesn't manage them, just
-benefits from the safety net.
-
-The principle: quality should be verified, not hoped for. And
-verification should be invisible until it catches something.
-
-### Three Layers of Persistent Intelligence
-
-AI agents forget everything between sessions. Every time you open
-your editor, your agent starts from scratch — re-reading files,
-re-discovering patterns, re-learning your codebase's quirks.
-
-Sage solves this with three complementary skills on a single
-lightweight backend ([sage-memory](https://github.com/xoai/sage-memory)
-— local SQLite, 91% recall, sub-3ms search):
-
-- **Memory** — prose knowledge. Architecture decisions, conventions,
-  domain insights, research findings. The agent remembers what it
-  learned about your codebase.
-- **Self-learning** — mistakes and prevention rules. When the agent
-  gets corrected or discovers a gotcha, it stores a forward-looking
-  rule so the same mistake never happens twice.
-- **Ontology** — structured relationships. Typed entities (tasks,
-  people, projects) and relations (blocks, depends on, assigned to)
-  form a knowledge graph the agent can query and traverse.
-
-Each works standalone. Together they compound: the agent understands
-your codebase (memory), avoids past mistakes (self-learning), and
-tracks structured relationships between things (ontology). The more
-you use Sage, the sharper it gets — not because you configured
-anything, but because the skills capture knowledge automatically
-as you work.
-
 ## How Sage Works
 
-### Workflows
+### Slash Commands
 
-Type `/` in your IDE for direct access:
+Use inside your IDE (Claude Code, Antigravity):
 
 | Command | What It Does |
 |---------|-------------|
@@ -187,6 +150,7 @@ Type `/` in your IDE for direct access:
 | `/fix` | Quick debug → test → fix → verify |
 | `/architect` | System design: deep elicitation → architecture → phased build |
 | `/status` | Check current project state |
+| `/review` | Review an artifact — evaluates completeness, consistency, quality |
 
 ### Interaction Patterns
 
@@ -243,12 +207,12 @@ working.
 
 - **[product-management](skills/product-management/)** — JTBD → opportunity map → user interview → brief
 - **[ux-design](skills/ux-design/)** — audit → evaluate → brief → specify → writing
+- **[memory](skills/memory/)** — persistent knowledge, typed ontology, and self-learning from mistakes
 - **[skill-builder](skills/skill-builder/)** — tools for building new Sage skills
-- **[memory](skills/memory/)** — persistent knowledge across sessions via sage-memory
 
 ### Ecosystem
 
-2,100+ community skills from 68 registries, installable with one command:
+Community skills from dozens of registries, installable with one command:
 
 ```bash
 sage find vue                    # search the catalog

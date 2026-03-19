@@ -94,6 +94,22 @@ Run full test suite. Review against spec. Check for missed edge cases.
 
 Update `.sage/progress.md`. Recommend what's next.
 
+## Quality Criteria
+
+Good build output:
+- Implementation matches the spec — no undocumented deviations
+- Tests exist for new functionality and pass
+- Edge cases from the spec are handled, not just happy paths
+- Code follows project conventions (naming, structure, patterns)
+- No unrelated changes mixed in — scope discipline maintained
+- Plan checkboxes reflect actual completion status
+
+## Self-Review
+
+Before presenting completed work, check each criterion above. Note
+what's covered and what gaps exist. Present your self-assessment
+alongside the implementation summary.
+
 ## Rules
 
 - Test first, always.

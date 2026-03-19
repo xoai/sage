@@ -441,3 +441,83 @@ Before submitting your skill as a PR:
 - [ ] `SKILL.md manifest` correctly declares layer dependencies
 - [ ] No contradictions with dependency packs
 - [ ] README explains what the skill does in 2-3 sentences
+
+## Quality Criteria Section (Required)
+
+Every skill should include a **Quality Criteria** section that defines
+what good output looks like for that domain. This is the most impactful
+section you can write — it shapes how the agent evaluates its own work
+and how the `/review` workflow evaluates artifacts.
+
+### Why This Matters
+
+Without quality criteria, the agent has no way to self-check. It
+produces output and hopes it's good. With criteria, the agent can
+verify: "Did I find emotional jobs, not just functional ones?" "Did I
+name the trade-offs explicitly?" This is the difference between an
+agent that follows steps and an agent that produces excellent work.
+
+### Writing Good Criteria
+
+Each criterion should be:
+- **Specific** — not "be thorough" but "cover all three breakpoints
+  (mobile, tablet, desktop)"
+- **Checkable** — the agent can verify pass/fail, not just "try harder"
+- **Domain-appropriate** — criteria for a UX audit are different from
+  criteria for an architecture design
+- **Honest about depth** — "if only functional jobs were found, the
+  analysis isn't deep enough" sets a quality bar, not just a checklist
+
+### Example (from JTBD skill)
+
+```
+## Quality Criteria
+
+Good JTBD output:
+- Identifies functional, emotional, and social dimensions of jobs
+- Distinguishes the main job from related jobs
+- Uses canonical format: "When [situation], I want to [motivation],
+  so I can [outcome]"
+- Outcome statements are measurable and solution-free
+- Job performer is specific — not "all users" but a defined segment
+- If only functional jobs were found, the analysis isn't deep enough
+```
+
+### Example (from architect workflow)
+
+```
+## Quality Criteria
+
+Good architecture output:
+- Trade-offs are named explicitly — if there are no trade-offs,
+  the thinking isn't deep enough
+- Failure modes are addressed for every integration point
+- System boundaries are clear — what's in scope, what's external
+- The architecture can be explained in one paragraph to a
+  non-technical stakeholder
+```
+
+## Self-Review Section (Required)
+
+Immediately after Quality Criteria, include a **Self-Review** section
+that instructs the agent to check its own work before presenting it.
+
+```
+## Self-Review
+
+Before presenting your output, check each quality criterion above.
+For each, confirm it's met or note what's missing. Present your
+findings AND your self-assessment:
+
+"Self-review: [X/Y criteria met]. [Note any gaps and why.]"
+```
+
+This creates transparency — the user sees both the work and the
+agent's honest assessment of that work. It also feeds the `/review`
+workflow, which uses these same criteria for independent evaluation.
+
+### Submission Checklist Addition
+
+- [ ] Quality Criteria section defines specific, checkable standards
+- [ ] Self-Review section instructs the agent to check against criteria
+- [ ] Criteria are domain-appropriate (not generic)

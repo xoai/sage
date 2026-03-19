@@ -74,6 +74,7 @@ Use slash commands for direct access to workflows:
 | `/project:fix` | Quick debug → test → fix → verify |
 | `/project:architect` | System design: deep elicitation → architecture → phased build |
 | `/project:status` | Check current project state |
+| `/project:review` | Review an artifact — evaluates completeness, consistency, quality |
 
 ## How to Communicate
 

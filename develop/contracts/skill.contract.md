@@ -221,6 +221,9 @@ Every skill MUST NOT:
 2. **Hard-code file paths**. Use document types ("the spec", "the plan") not paths.
    The context loader resolves types to actual paths.
 3. **Call gates directly**. Quality gates are orchestrated by workflows, not skills.
+4. **Skip quality criteria**. Skills SHOULD define what good output looks like
+   and include self-review instructions. Without these, the agent cannot
+   self-check and the `/review` workflow has no evaluation framework.
 4. **Modify other skills**. Skills are isolated. If Skill A needs Skill B's output, it
    declares `requires: [skill-b]` and reads Skill B's output through the context system.
 

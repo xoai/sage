@@ -282,3 +282,26 @@ The model was informed by ESLint's config composition and Linux's driver model.
 skills by name, not by type. Flat namespacing with `@scope/` prefixes provides
 identity without hierarchy. Two levels (``, ``, `@username/`)
 is enough.
+
+### Why Quality Criteria and Self-Review
+
+Skills tell the agent WHAT to do (process steps) and WHAT NOT to do
+(constraints, failure modes). Quality criteria add a third dimension:
+WHAT GOOD LOOKS LIKE. This closes the loop — the agent can verify its
+own output against specific, checkable standards before presenting it.
+
+Without quality criteria, the agent follows steps and hopes the output
+is good. With criteria, the agent can self-check: "Did I find emotional
+jobs? Did I name the trade-offs? Are my acceptance criteria testable?"
+This is the difference between process compliance and output quality.
+
+Self-review makes the agent transparent. Instead of presenting output
+as if it's perfect, the agent says: "7/8 criteria met. I couldn't verify
+X because Y." The user knows where to focus their attention. Trust is
+built through honesty, not through confidence.
+
+Quality criteria also power the `/review` workflow. When an independent
+agent reviews an artifact, it uses the producing skill's criteria as the
+evaluation framework. This makes review specific and actionable — not
+just "does this look good?" but "does this meet the standards that this
+domain requires?"

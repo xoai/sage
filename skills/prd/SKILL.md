@@ -292,3 +292,22 @@ to refine any section?"
   customer need does this address?" If they can point to a pain or outcome,
   add it with the trace. If they can't, add it to the open questions or
   out-of-scope with a note: "Needs customer validation before inclusion."
+
+## Quality Criteria
+
+Good PRD output:
+- Every requirement traces back to a JTBD outcome or validated insight
+- Requirements are solution-free — describe the need, not the implementation
+- MoSCoW prioritization is honest — not everything is Must-have
+- Acceptance criteria are testable — you can verify pass/fail
+- Edge cases and error states are addressed, not just happy paths
+- Ungrounded requirements (no research backing) are flagged explicitly
+- The document is complete enough that an engineer can estimate scope
+
+## Self-Review
+
+Before presenting your output, check each quality criterion above.
+For each, confirm it's met or note what's missing. Present your
+findings AND your self-assessment:
+
+"Self-review: [X/Y criteria met]. [Note any gaps and why they exist.]"

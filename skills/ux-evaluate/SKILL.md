@@ -222,3 +222,21 @@ classifications are proposals — the user decides.
 - **User wants to change everything:** Caution them: "Changing everything
   at once risks losing what works. Suggest phasing: SHOULD IMPROVE items
   first, MAY CHANGE items in a second pass." Respect their final decision.
+
+## Quality Criteria
+
+Good UX evaluation output:
+- Every dimension is classified (MUST KEEP / SHOULD IMPROVE / MAY CHANGE)
+- Classifications are justified with evidence — benchmark data, conventions, principles
+- MUST KEEP items cite specific brand or usability reasons
+- SHOULD IMPROVE items cite category benchmarks or established conventions
+- Competitor analysis is specific — names, observations, patterns
+- The evaluation would hold up if challenged by a stakeholder
+
+## Self-Review
+
+Before presenting your output, check each quality criterion above.
+For each, confirm it's met or note what's missing. Present your
+findings AND your self-assessment:
+
+"Self-review: [X/Y criteria met]. [Note any gaps and why they exist.]"

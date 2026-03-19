@@ -81,6 +81,22 @@ Milestone [N] complete: [summary]
 [P] Pause — save state for next session
 ```
 
+## Quality Criteria
+
+Good architecture output:
+- Trade-offs are named explicitly — if there are no trade-offs, the thinking isn't deep enough
+- Failure modes are addressed for every integration point
+- The design handles the next 3x scale, not just today's requirements
+- System boundaries are clear — what's in scope, what's external
+- Each milestone is independently deployable and valuable
+- The architecture can be explained in one paragraph to a non-technical stakeholder
+
+## Self-Review
+
+Before presenting architecture decisions, check each criterion above.
+Challenge your own assumptions — what would a skeptical senior engineer
+question? Present your self-assessment alongside the design.
+
 ## Rules
 
 - Architecture decisions must be documented with rationale, not just chosen.

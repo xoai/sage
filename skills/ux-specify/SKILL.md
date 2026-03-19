@@ -100,3 +100,22 @@ A structured document appended to or linked from the main specification:
 - `five-planes.md` — Garrett's five planes framework
 - `usability-principles.md` — Krug's laws and Norman's principles
 - `error-and-recovery-design.md` — Norman's error taxonomy and design checklist
+
+## Quality Criteria
+
+Good UX specification output:
+- Every journey step has a corresponding requirement
+- Every pain point has a designed mitigation
+- Error states are inventoried completely, not just happy paths
+- Accessibility requirements are specific to this feature
+- UX acceptance criteria are testable — you can verify pass/fail
+- Transition moments (entering and leaving the feature) are designed
+- The emotional arc is considered — copy and interaction tone match context
+
+## Self-Review
+
+Before presenting your output, check each quality criterion above.
+For each, confirm it's met or note what's missing. Present your
+findings AND your self-assessment:
+
+"Self-review: [X/Y criteria met]. [Note any gaps and why they exist.]"

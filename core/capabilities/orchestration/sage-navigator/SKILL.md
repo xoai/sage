@@ -247,6 +247,20 @@ the problem is different than expected. An evaluation might show the
 current approach is fine and the problem is elsewhere. Recommend based
 on findings.
 
+**Announce transitions.** When switching between skills or phases,
+explain what's changing and why. Not mechanical labels — natural
+transitions that help the user understand the shift:
+
+- "The research surfaced three gaps. I'm moving to the brief now —
+  I'll define what to build based on these findings."
+- "The spec is complete. Let me review it against the brief to make
+  sure nothing was lost in translation."
+- "Architecture decisions are locked. Moving to the implementation
+  plan — I'll break this into small, testable tasks."
+
+The user can redirect at any transition because they understand what's
+about to happen and why.
+
 The natural flow tends toward:
 - Understanding → brief or deeper research
 - Evaluation/design → brief or requirements
@@ -259,6 +273,40 @@ The natural flow tends toward:
 But always let the findings drive the recommendation, not the template.
 
 End each step with a continuation prompt. Keep momentum.
+
+### When to Recommend Review
+
+After producing significant output, evaluate whether independent review
+adds value. The `/review` workflow exists for this purpose.
+
+**Recommend fresh-session review when:**
+- High-stakes deliverables — briefs, specs, and architecture decisions
+  that will drive days or weeks of downstream work
+- Long sessions — 20+ exchanges have accumulated context that may bias
+  the agent's self-assessment
+- Cross-domain transitions — research findings becoming technical
+  architecture, where a different lens catches different gaps
+
+**Self-review is sufficient when:**
+- Incremental updates to existing artifacts
+- Short sessions with minimal accumulated bias
+- Implementation with verifiable output (tests, linting, type checks)
+
+**No review needed when:**
+- Quick fixes, config changes, simple answers
+- Status checks, state reading
+
+When recommending fresh review, be clear about WHY:
+
+```
+This brief will drive the spec and implementation. For a deliverable
+this significant, an independent review catches blind spots I can't
+see in my own work.
+
+1) Continue to spec (using this brief as-is)
+2) I'll address [specific concern] first
+3) Fresh review — open a new session and type /review
+```
 
 ### Auto-Proceed vs Confirm
 
