@@ -39,9 +39,32 @@ warn about hazards. The user decides where to go.
 
 ## 1. Read the Room
 
-Before doing anything, orient yourself. This is one fluid moment — not
-three separate phases. Understand where we are, what the user wants,
-and how big it is.
+Before doing anything, orient yourself. Run the pre-flight, then
+assess the situation.
+
+### Pre-Flight: Memory Recall
+
+**This step runs FIRST, every time.** Search for knowledge from
+previous sessions before reading files or assessing intent.
+
+```
+sage_memory_search(query: "<describe the user's task or area>", limit: 5)
+```
+
+If the tool responds with results, categorize by tags:
+- **Knowledge** (no special tag) — architecture, conventions, domain logic
+- **Structure** (`ontology` tag) — entity relationships, dependencies
+- **Warnings** (`learning` tag) — past mistakes, corrections, gotchas
+
+If no MCP → check `.sage-memory/` folder (read filenames, open relevant ones).
+If neither available → continue without memory.
+
+**Report what you found.** "I recall from previous sessions: [key context].
+This informs my approach because [why it matters]." If nothing found,
+say nothing about memory — just proceed.
+
+For detailed guidance on search quality and memory patterns, read the
+memory skill at `skills/memory/SKILL.md`.
 
 ### State
 
@@ -53,37 +76,6 @@ and `.sage/work/` to know what artifacts already exist.
   the new. Don't silently abandon work.
 - **Fresh project?** Move on to intent.
 - **Artifacts exist but nothing active?** Note the context, move on.
-
-### Memory
-
-Search for context BEFORE assessing intent. Recalled knowledge changes
-the assessment.
-
-**Step 1: Try MCP, then file fallback.**
-
-Call the MCP tool first:
-```
-sage_memory_search(query: "<describe the user's task or area>", limit: 5)
-```
-
-If the tool responds → sage-memory is working. Use results.
-If the tool errors or is not found → check `.sage-memory/` folder:
-1. Read the directory listing (filenames are titles)
-2. Identify relevant filenames for the current task
-3. Read only those files
-
-If neither is available → say "No persistent memory configured.
-Run `sage setup memory` for the best experience." Continue normally.
-**Step 2: Categorize results by tags.**
-
-- Knowledge (no special tag) — architecture, conventions, domain logic
-- Structure (`ontology` tag) — entity relationships, dependencies
-- Warnings (`learning` tag) — past mistakes, corrections, gotchas
-
-**Step 3: Report briefly.**
-
-"I recall from previous sessions: [key context]. This informs my
-approach because [how it changes what you'd do]."
 
 ### Intent
 
@@ -125,23 +117,46 @@ If intent is genuinely unclear, ask one focused question. Don't guess.
 
 ### Scope
 
-How much process does the task need?
+How much process does the task need? Check concrete signals — don't
+guess based on how the request sounds.
 
-**Lightweight** (minutes, single skill): "Fix this CSS bug." "Analyze
-our users." "Write microcopy for this button." Clear request, single
-skill or small change. → Run the skill directly.
+**Lightweight** (minutes, run skill directly):
+- Single file change or small edit
+- Clear, specific request with no ambiguity
+- Fix, tweak, adjust, clarify — words that imply small change
+- No new APIs, data models, or user-facing flows
 
-**Standard** (hours, short workflow): "Add dark mode." "Redesign this
-section." "Create a content strategy." Feature-sized work.
-→ Brief (optional) → Spec → Plan → Build.
+**Standard** (hours, spec → plan → build) — trigger when **any 2** apply:
+- Touches more than 3 files
+- Involves a new API endpoint or data model change
+- Requires coordination between multiple modules or services
+- Has user-facing behavior changes (new UI, changed flow)
+- Would take more than 30 minutes to implement
+- User says "feature," "add," "implement," "create" (not "fix" or "tweak")
+- ADRs are being created — this signals architectural decisions that
+  benefit from a spec to organize the implementation
 
-**Comprehensive** (days, full pipeline): "Redesign the entire product."
-"Build a new app." "Overhaul our onboarding."
-→ Discovery → Design → Brief → Spec → Plan → Phased build.
+**Comprehensive** (days, full pipeline: discovery → design → spec → plan → phased build) — trigger when **any 2** apply:
+- New subsystem, service, or major module
+- Changes to core architecture patterns
+- Multiple user-facing flows affected
+- Involves external integrations (APIs, third-party services)
+- Multi-day effort (agent can estimate from codebase context)
+- User says "redesign," "overhaul," "new system," "rebuild"
+- Cross-team impact or multiple stakeholders involved
 
-Read the signals: number of components involved, greenfield vs existing
-code, exploring vs specific requirements, "quick fix" vs "let's think
-about this."
+**When in doubt, recommend one level up.** It's cheaper to skip a spec
+you didn't need than to rework a feature that needed one. Present the
+recommendation with the reasoning — the user can always choose lighter:
+
+```
+This looks like Standard scope — it touches the API layer, adds a new
+data model, and changes the checkout flow. I recommend:
+
+1) Spec → Plan → Build (~2h total, prevents rework)
+2) Skip spec, go straight to build (faster, higher risk)
+3) Something else
+```
 
 
 
@@ -261,24 +276,39 @@ location:
 - Project-level knowledge → `.sage/docs/skill-prefix-description.md`
 - Initiative work → `.sage/work/YYYYMMDD-slug/` (brief.md, spec.md, plan.md)
 - Update `.sage/progress.md` after each significant step
-- If sage-memory MCP tools responded during the Memory step earlier,
-  store key findings by calling `sage_memory_store` directly:
-  ```
-  sage_memory_store(
-    content: "detailed finding — what, why, implications",
-    title: "Short specific title (5-15 words)",
-    tags: ["domain-tag", "area-tag"],
-    scope: "project"
-  )
-  ```
-  Evaluate proportionally — a JTBD analysis produces 3-5 findings worth
-  storing, a CSS fix probably doesn't. Use appropriate tags:
-  - Domain tags always (e.g., `billing`, `auth`, `frontend`)
-  - Add `ontology` tag for entity relationships or dependencies
-  - Add `learning` tag for mistakes, corrections, or gotchas
-  If `sage_memory_store` is not available, fall back to creating a file
-  in `.sage-memory/` using the format in the memory skill. If neither
-  works, note it and continue — don't block the task.
+
+### Post-Flight: Memory Store
+
+**This step runs after EVERY significant workflow step.** Evaluate
+whether findings from this step should persist across sessions.
+
+Ask: "Did I learn anything that would help in a future session?"
+
+If yes, call `sage_memory_store` for each finding:
+```
+sage_memory_store(
+  content: "detailed finding — what, why, implications",
+  title: "Short specific title (5-15 words)",
+  tags: ["domain-tag", "area-tag"],
+  scope: "project"
+)
+```
+
+If no MCP → create a file in `.sage-memory/` using the format in the
+memory skill. If neither works → continue, don't block the task.
+
+**Tagging convention:**
+- Domain tags always (e.g., `billing`, `auth`, `frontend`)
+- Add `ontology` tag for entity relationships or dependencies
+- Add `learning` tag for mistakes, corrections, or gotchas
+
+**Proportional:** A JTBD analysis produces 3-5 findings worth storing.
+A CSS fix probably stores nothing. A debugging session stores the root
+cause. An architecture decision stores the rationale and trade-offs.
+
+For guidance on what makes a good memory, read `skills/memory/SKILL.md`.
+For self-learning patterns (storing mistakes), read
+`skills/self-learning/SKILL.md`.
 
 ### Bridging to Next
 

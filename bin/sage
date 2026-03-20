@@ -417,12 +417,12 @@ sage_update() {
   fi
 
   echo ""
-  echo -e "  ${BOLD}Sage — Update Platform Files${RESET}"
+  echo -e "  ${BOLD}Sage — Update Project${RESET}"
   echo ""
   echo -e "  Project: ${CYAN}$(basename "$target")${RESET}"
   echo ""
 
-  # Detect which platforms are already configured
+  # Detect platform
   PLATFORM=""
   [ -f "$target/GEMINI.md" ] || [ -d "$target/.agent" ] && PLATFORM="antigravity"
   if [ -f "$target/CLAUDE.md" ] && head -1 "$target/CLAUDE.md" 2>/dev/null | grep -q "Sage"; then
@@ -440,9 +440,96 @@ sage_update() {
     echo -e "  ${GREEN}Platform:${RESET} $PLATFORM"
   fi
 
+  # Detect community skills before updating
+  local community_skills=""
+  if [ -f "$target/sage/skills/skills.json" ]; then
+    community_skills=$(python3 -c "
+import json, sys
+try:
+  d = json.load(open('$target/sage/skills/skills.json'))
+  cs = [k for k, v in d.get('skills', {}).items() if v.get('source') != 'built-in']
+  print(' '.join(cs))
+except: pass
+" 2>/dev/null)
+  fi
+
+  # Show what will happen
+  echo ""
+  echo "  This will:"
+  if [ -d "$target/sage" ]; then
+    echo -e "    ${CYAN}↻${RESET} Update sage/ framework to latest version"
+  fi
+  if [ "$PLATFORM" = "antigravity" ] || [ "$PLATFORM" = "both" ]; then
+    echo -e "    ${CYAN}↻${RESET} Regenerate GEMINI.md and .agent/"
+  fi
+  if [ "$PLATFORM" = "claude-code" ] || [ "$PLATFORM" = "both" ]; then
+    echo -e "    ${CYAN}↻${RESET} Regenerate CLAUDE.md and .claude/commands/"
+  fi
+  echo -e "    ${GREEN}✓${RESET} Preserve .sage/ project state (untouched)"
+  if [ -n "$community_skills" ]; then
+    echo -e "    ${GREEN}✓${RESET} Preserve community skills: $community_skills"
+  fi
+
+  echo ""
+  if [ -t 0 ]; then
+    printf "  [A] Proceed  |  [C] Cancel: "
+    read -r confirm
+    if [ "$confirm" != "A" ] && [ "$confirm" != "a" ] && [ "$confirm" != "" ]; then
+      echo "  Cancelled."
+      echo ""
+      return
+    fi
+  fi
+
+  echo ""
+
+  # Backup community skills
+  local backup_dir=""
+  if [ -n "$community_skills" ]; then
+    backup_dir=$(mktemp -d)
+    for skill_name in $community_skills; do
+      if [ -d "$target/sage/skills/$skill_name" ]; then
+        cp -a "$target/sage/skills/$skill_name" "$backup_dir/"
+      fi
+    done
+  fi
+
+  # Update sage/ framework
+  if [ -d "$target/sage" ]; then
+    rm -rf "$target/sage"
+    cp -a "$SAGE_FRAMEWORK" "$target/sage"
+    echo -e "  ${GREEN}✓${RESET} sage/ updated"
+  fi
+
+  # Restore community skills
+  if [ -n "$community_skills" ] && [ -n "$backup_dir" ]; then
+    for skill_name in $community_skills; do
+      if [ -d "$backup_dir/$skill_name" ]; then
+        cp -a "$backup_dir/$skill_name" "$target/sage/skills/"
+      fi
+    done
+    rm -rf "$backup_dir"
+
+    # Re-register community skills in skills.json
+    python3 -c "
+import json, sys
+try:
+  with open('$target/sage/skills/skills.json') as f:
+    d = json.load(f)
+  for s in '$community_skills'.split():
+    if s not in d.get('skills', {}):
+      d.setdefault('skills', {})[s] = {'source': 'community', 'added': '$(date +%Y-%m-%d)'}
+  with open('$target/sage/skills/skills.json', 'w') as f:
+    json.dump(d, f, indent=2)
+except: pass
+" 2>/dev/null
+
+    echo -e "  ${GREEN}✓${RESET} Community skills preserved: $community_skills"
+  fi
+
+  # Regenerate platform files
   DETECTED_STACK=""
   detect_stack "$target"
-
   run_generators "$target"
 
   echo ""
