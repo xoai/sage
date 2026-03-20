@@ -563,7 +563,7 @@ sage_setup() {
     echo ""
     echo '  {'
     echo '    "mcpServers": {'
-    echo '      "memory": {'
+    echo '      "sage-memory": {'
     echo '        "command": "uvx",'
     echo '        "args": ["sage-memory"]'
     echo '      }'
@@ -574,7 +574,7 @@ sage_setup() {
     echo ""
     echo '  {'
     echo '    "mcpServers": {'
-    echo '      "memory": {'
+    echo '      "sage-memory": {'
     echo '        "command": "uvx",'
     echo '        "args": ["sage-memory"]'
     echo '      }'
@@ -585,7 +585,7 @@ sage_setup() {
     echo ""
     echo '  {'
     echo '    "mcpServers": {'
-    echo '      "memory": {'
+    echo '      "sage-memory": {'
     echo '        "command": "uvx",'
     echo '        "args": ["sage-memory"]'
     echo '      }'

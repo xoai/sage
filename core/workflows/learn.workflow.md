@@ -49,10 +49,20 @@ area from previous sessions. I'll focus on what's new or missing."
 
 ## Step 4: Store Knowledge
 
-Store focused memories using sage-memory. Each memory should be one
-clear insight with a specific title and domain vocabulary.
+Store each finding by calling the `sage_memory_store` MCP tool directly.
+Each call stores
+one focused insight:
 
-For broad scans, aim for 10-20 entries covering:
+```
+sage_memory_store(
+  content: "detailed finding — what, why, implications",
+  title: "Short specific title (5-15 words)",
+  tags: ["domain-tag", "area-tag"],
+  scope: "project"
+)
+```
+
+For broad scans, aim for 10-20 calls covering:
 - Tech stack and framework choices
 - Project structure and organization
 - Key architectural patterns
@@ -60,7 +70,7 @@ For broad scans, aim for 10-20 entries covering:
 - Domain concepts and business logic
 - Notable dependencies and integrations
 
-For deep dives, aim for 5-10 entries covering:
+For deep dives, aim for 5-10 calls covering:
 - Module purpose and role in the system
 - Key components and their responsibilities
 - Data flow and integration points
@@ -72,8 +82,10 @@ Tag entries appropriately:
 - `ontology` tag for entity relationships and dependencies
 - `learning` tag for gotchas or non-obvious behavior discovered
 
-If sage-memory is not available, note findings in the knowledge report
-(Step 5) — the report becomes the primary knowledge artifact.
+If `sage_memory_store` is not available, fall back to `.sage-memory/`
+files. For each finding, create a file using the format defined in the
+memory skill's Storage Priority section. Filename = kebab-case title.
+
 
 ## Step 5: Generate Knowledge Report
 

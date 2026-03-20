@@ -28,7 +28,12 @@ If the user specifies an artifact, proceed directly.
 
 ## Step 2: Gather Context
 
-Search sage-memory for context related to this artifact and its domain.
+Search for prior knowledge by calling the MCP tool:
+```
+sage_memory_search(query: "<artifact topic and domain>", limit: 5)
+```
+If the tool is not available, proceed without memory context.
+
 Read the artifact fully.
 
 Identify which skill or workflow produced this artifact — check for

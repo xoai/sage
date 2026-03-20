@@ -8,8 +8,8 @@ Entities and relations are **separate entries**. A relation is not
 embedded inside its endpoints — it's an independent memory entry with
 its own tags. This means:
 
-- Creating a relation = 1 `memory_store` call (not 2 updates)
-- Deleting a relation = 1 `memory_delete` call (not 2 updates)
+- Creating a relation = 1 `sage_memory_store` call (not 2 updates)
+- Deleting a relation = 1 `sage_memory_delete` call (not 2 updates)
 - No half-links, no consistency risk, no repair needed
 - Relations are independently searchable by type, by endpoint, or
   by natural language
@@ -17,7 +17,7 @@ its own tags. This means:
 ## Entity Format
 
 ```
-memory_store:
+sage_memory_store:
   title:   "[{Type}:{id}] {descriptive title}"
   content: JSON string (see below)
   tags:    ["ontology", "entity", "{type_lower}", ...domain_tags]
@@ -68,7 +68,7 @@ tags:    ["ontology", "entity", "project", "billing", "migration"]
 ## Relation Format
 
 ```
-memory_store:
+sage_memory_store:
   title:   "[Rel:{rel_type}] {source_label} → {target_label}"
   content: JSON string (see below)
   tags:    ["ontology", "rel", "{rel_type}", "edge:{from_id}", "edge:{to_id}"]
@@ -126,10 +126,10 @@ tags:    ["ontology", "rel", "assigned_to", "edge:task_a1b2", "edge:pers_e5f6"]
 ### Entity lookup
 
 ```
-memory_search: query="task_a1b2", tags=["ontology","entity"]            → exact ID (FTS5-safe)
-memory_search: "Fix payment timeout"                                     → by content
-memory_search: query="open tasks", tags=["ontology","entity","task"]     → by type
-memory_search: query="Alice Chen", tags=["ontology","entity","person"]   → person by name
+sage_memory_search: query="task_a1b2", tags=["ontology","entity"]            → exact ID (FTS5-safe)
+sage_memory_search: "Fix payment timeout"                                     → by content
+sage_memory_search: query="open tasks", tags=["ontology","entity","task"]     → by type
+sage_memory_search: query="Alice Chen", tags=["ontology","entity","person"]   → person by name
 ```
 
 **FTS5 safety:** Always search by bare entity ID + tag filter, never
@@ -140,23 +140,23 @@ readability in sage-memory's list view — not for query use.
 ### Relation lookup
 
 ```
-memory_search: tags=["ontology","rel","edge:task_a1b2"]               → all relations for entity
-memory_search: tags=["ontology","rel","blocks","edge:task_a1b2"]      → blocks involving entity
-memory_search: tags=["ontology","rel","has_task","edge:proj_c9d0"]    → tasks in project
-memory_search: tags=["ontology","rel","assigned_to","edge:pers_e5f6"] → assignments to person
+sage_memory_search: tags=["ontology","rel","edge:task_a1b2"]               → all relations for entity
+sage_memory_search: tags=["ontology","rel","blocks","edge:task_a1b2"]      → blocks involving entity
+sage_memory_search: tags=["ontology","rel","has_task","edge:proj_c9d0"]    → tasks in project
+sage_memory_search: tags=["ontology","rel","assigned_to","edge:pers_e5f6"] → assignments to person
 ```
 
 ### Traversal: "What tasks does project X have?"
 
 ```
-Step 1: memory_search tags=["ontology","rel","has_task","edge:proj_c9d0"]
+Step 1: sage_memory_search tags=["ontology","rel","has_task","edge:proj_c9d0"]
   → returns: [Rel:has_task] Billing v2 → Fix payment timeout
              [Rel:has_task] Billing v2 → Migrate Stripe SDK
   → parse content → to_id = task_a1b2, task_x9y8
 
 Step 2 (if full details needed):
-  memory_search: query="task_a1b2", tags=["ontology","entity"]
-  memory_search: query="task_x9y8", tags=["ontology","entity"]
+  sage_memory_search: query="task_a1b2", tags=["ontology","entity"]
+  sage_memory_search: query="task_x9y8", tags=["ontology","entity"]
 ```
 
 Often step 1 alone is sufficient — the relation title contains
@@ -165,7 +165,7 @@ human-readable labels for both endpoints.
 ### Traversal: "What blocks task X?"
 
 ```
-memory_search: tags=["ontology","rel","blocks","edge:task_f3a4"]
+sage_memory_search: tags=["ontology","rel","blocks","edge:task_f3a4"]
   → returns all blocks relations involving task_f3a4
   → filter: where to_id == "task_f3a4" (incoming blocks)
   → from_id values are the blockers
@@ -188,7 +188,7 @@ If yes → reject. If no → proceed.
 
 **4. Store:**
 ```
-memory_store:
+sage_memory_store:
   title: "[Rel:blocks] Fix payment timeout → Deploy checkout page"
   content: {"from_id":"task_a1b2","from_type":"Task","rel":"blocks","to_id":"task_f3a4","to_type":"Task"}
   tags: ["ontology","rel","blocks","edge:task_a1b2","edge:task_f3a4"]
@@ -199,9 +199,9 @@ One call. Done.
 ## Deleting a Relation
 
 ```
-memory_search: query="task_a1b2 blocks task_f3a4", tags=["ontology","rel","blocks"]
+sage_memory_search: query="task_a1b2 blocks task_f3a4", tags=["ontology","rel","blocks"]
   → find the entry
-memory_delete: {id}
+sage_memory_delete: {id}
 ```
 
 One search + one delete. No other entities to update.
@@ -209,10 +209,10 @@ One search + one delete. No other entities to update.
 ## Deleting an Entity
 
 ```
-memory_search: tags=["ontology","rel","edge:task_a1b2"]
+sage_memory_search: tags=["ontology","rel","edge:task_a1b2"]
   → find all relations involving this entity
-memory_delete each relation
-memory_delete the entity
+sage_memory_delete each relation
+sage_memory_delete the entity
 ```
 
 ## Performance

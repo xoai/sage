@@ -96,7 +96,7 @@ Unknown relation types pass validation — they're only checked if
 a spec exists. Document custom relations in a `[Schema:*]` entry:
 
 ```
-memory_store:
+sage_memory_store:
   title: "[Schema:mentors] Custom relation type"
   content: '{"rel":"mentors","from_types":["Person"],"to_types":["Person"],"cardinality":"many_to_many","acyclic":false}'
   tags: ["ontology", "schema"]
@@ -107,7 +107,7 @@ memory_store:
 Store a schema extension entry:
 
 ```
-memory_store:
+sage_memory_store:
   title: "[Schema:Sprint] Custom entity type"
   content: '{"type":"Sprint","required":["name","start","end"],"enums":{"status":["planning","active","closed"]}}'
   tags: ["ontology", "schema"]

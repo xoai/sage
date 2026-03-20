@@ -56,22 +56,34 @@ and `.sage/work/` to know what artifacts already exist.
 
 ### Memory
 
-Search for context relevant to the user's request. This step runs
-BEFORE assessing intent — recalled knowledge changes the assessment.
+Search for context BEFORE assessing intent. Recalled knowledge changes
+the assessment.
 
+**Step 1: Try MCP, then file fallback.**
+
+Call the MCP tool first:
 ```
-1. Call memory_search with a query describing the task or area
-2. If results found, categorize:
-   - Knowledge (general entries) — facts, architecture, conventions
-   - Structure (tagged "ontology") — entity relationships, dependencies
-   - Warnings (tagged "learning") — past mistakes, corrections, gotchas
-3. Synthesize briefly: "I recall [key context]. This informs my approach."
-4. If memory_search fails or no MCP configured:
-   - Note: "Operating without persistent memory this session."
-   - Continue normally — memory enhances but is not required.
+sage_memory_search(query: "<describe the user's task or area>", limit: 5)
 ```
 
-Be transparent about what you recalled and how it shapes your thinking.
+If the tool responds → sage-memory is working. Use results.
+If the tool errors or is not found → check `.sage-memory/` folder:
+1. Read the directory listing (filenames are titles)
+2. Identify relevant filenames for the current task
+3. Read only those files
+
+If neither is available → say "No persistent memory configured.
+Run `sage setup memory` for the best experience." Continue normally.
+**Step 2: Categorize results by tags.**
+
+- Knowledge (no special tag) — architecture, conventions, domain logic
+- Structure (`ontology` tag) — entity relationships, dependencies
+- Warnings (`learning` tag) — past mistakes, corrections, gotchas
+
+**Step 3: Report briefly.**
+
+"I recall from previous sessions: [key context]. This informs my
+approach because [how it changes what you'd do]."
 
 ### Intent
 
@@ -249,14 +261,24 @@ location:
 - Project-level knowledge → `.sage/docs/skill-prefix-description.md`
 - Initiative work → `.sage/work/YYYYMMDD-slug/` (brief.md, spec.md, plan.md)
 - Update `.sage/progress.md` after each significant step
-- If sage-memory is available, store key findings worth remembering
-  across sessions. Evaluate proportionally — a JTBD analysis produces
-  3-5 findings worth storing, a CSS fix probably doesn't. For each
-  finding, use appropriate tags:
+- If sage-memory MCP tools responded during the Memory step earlier,
+  store key findings by calling `sage_memory_store` directly:
+  ```
+  sage_memory_store(
+    content: "detailed finding — what, why, implications",
+    title: "Short specific title (5-15 words)",
+    tags: ["domain-tag", "area-tag"],
+    scope: "project"
+  )
+  ```
+  Evaluate proportionally — a JTBD analysis produces 3-5 findings worth
+  storing, a CSS fix probably doesn't. Use appropriate tags:
   - Domain tags always (e.g., `billing`, `auth`, `frontend`)
-  - Add `ontology` tag when storing entity relationships or dependencies
-  - Add `learning` tag when storing mistakes, corrections, or gotchas
-  - If memory_store fails, note it and continue — don't block the task
+  - Add `ontology` tag for entity relationships or dependencies
+  - Add `learning` tag for mistakes, corrections, or gotchas
+  If `sage_memory_store` is not available, fall back to creating a file
+  in `.sage-memory/` using the format in the memory skill. If neither
+  works, note it and continue — don't block the task.
 
 ### Bridging to Next
 

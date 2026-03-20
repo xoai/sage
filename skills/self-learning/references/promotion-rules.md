@@ -74,7 +74,7 @@ this" or "good to know for future projects."
 
 2. **Store at global scope:**
    ```
-   memory_store:
+   sage_memory_store:
      title: "[LRN:gotcha] Express body parser must be skipped for Stripe webhook verification"
      content: "<rephrased, context-independent version>"
      tags: ["self-learning", "gotcha", "stripe", "webhooks", "express"]

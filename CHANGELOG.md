@@ -33,6 +33,21 @@ All notable changes to Sage will be documented in this file.
   self-review (incremental work, short sessions) vs no review (quick
   fixes). Smart recommendations, not blanket policy.
 
+### MCP Tool Enforcement (critical fix)
+- **Explicit MCP tool calls** — all memory instructions now show exact
+  `sage_memory_store(...)` and `sage_memory_search(...)` call syntax with parameters.
+  Prevents agents from falling back to file-based memory or Claude Code's
+  built-in memory system.
+- **File fallback** — when MCP is not available, falls back to
+  `.sage-memory/` files in project root. One file per entry, title as
+  filename, tags in frontmatter.
+- **MCP connection verification** — navigator's memory step calls
+  `sage_memory_search` and checks for response. Reports clearly if sage-memory
+  is not configured.
+- **Config key renamed** — `sage setup memory` now uses `"sage-memory"`
+  as the MCP config key instead of `"memory"` to avoid collision with
+  Claude Code's built-in memory concept.
+
 ### Memory Enforcement
 - **Navigator enforces memory** — recall is now a concrete process step
   in Read the Room, not a suggestion. One search, results categorized

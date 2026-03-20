@@ -26,8 +26,8 @@ During recall, ontology entries surface alongside regular knowledge and
 self-learning entries, giving the agent structural context (what depends
 on what, who owns what) in addition to prose understanding.
 
-**Prerequisite:** sage-memory MCP tools (`memory_store`, `memory_search`,
-`memory_update`, `memory_delete`). If unavailable, degrade gracefully.
+**Prerequisite:** sage-memory MCP tools (`sage_memory_store`, `sage_memory_search`,
+`sage_memory_update`, `sage_memory_delete`). If unavailable, degrade gracefully.
 
 ## Core Model
 
@@ -49,7 +49,7 @@ consistency risk.
 ### Entity
 
 ```
-memory_store:
+sage_memory_store:
   title: "[Task:task_a1b2] Fix payment timeout in checkout flow"
   content: '{"id":"task_a1b2","type":"Task","properties":{"title":"Fix payment timeout","status":"open","priority":"high"}}'
   tags: ["ontology", "entity", "task", "billing", "payments"]
@@ -59,7 +59,7 @@ memory_store:
 ### Relation
 
 ```
-memory_store:
+sage_memory_store:
   title: "[Rel:blocks] Fix payment timeout → Deploy checkout page"
   content: '{"from_id":"task_a1b2","from_type":"Task","rel":"blocks","to_id":"task_f3a4","to_type":"Task"}'
   tags: ["ontology", "rel", "blocks", "edge:task_a1b2", "edge:task_f3a4"]
@@ -81,7 +81,7 @@ At session start (or first ontology trigger), probe whether a graph
 exists:
 
 ```
-memory_search: tags=["ontology"], limit=5
+sage_memory_search: tags=["ontology"], limit=5
 ```
 
 **Results found:** A graph exists. Note the types and domains visible
@@ -102,14 +102,14 @@ normally. Same principle as the memory skill's "empty first session."
 
 1. Generate ID: `f"{type.lower()[:4]}_{uuid4().hex[:8]}"`
 2. Validate: check required properties, enum values (see Validation)
-3. `memory_store` with encoding above
+3. `sage_memory_store` with encoding above
 
 ### Search
 
 ```
-memory_search: "open tasks billing"                                     ← natural language
-memory_search: query="task_a1b2", tags=["ontology", "entity"]           ← exact ID
-memory_search: query="tasks in billing", tags=["ontology", "entity", "task"]  ← typed
+sage_memory_search: "open tasks billing"                                     ← natural language
+sage_memory_search: query="task_a1b2", tags=["ontology", "entity"]           ← exact ID
+sage_memory_search: query="tasks in billing", tags=["ontology", "entity", "task"]  ← typed
 ```
 
 **FTS5 safety:** Entity IDs (`task_a1b2`) are plain alphanumeric
@@ -122,40 +122,40 @@ titles for human readability only, not for query use.
 
 1. Validate: check type compatibility, cardinality (see Validation)
 2. For `blocks` / `depends_on`: check no cycle (see Validation)
-3. Single `memory_store` with relation encoding
+3. Single `sage_memory_store` with relation encoding
 
 One MCP call. No second entity to update. No half-link risk.
 
 ### Find relations
 
 ```
-memory_search: tags=["ontology", "rel", "edge:task_a1b2"]          ← all relations for entity
-memory_search: tags=["ontology", "rel", "blocks", "edge:task_a1b2"] ← blocks from/to entity
-memory_search: tags=["ontology", "rel", "blocks"]                   ← all blocks relations
+sage_memory_search: tags=["ontology", "rel", "edge:task_a1b2"]          ← all relations for entity
+sage_memory_search: tags=["ontology", "rel", "blocks", "edge:task_a1b2"] ← blocks from/to entity
+sage_memory_search: tags=["ontology", "rel", "blocks"]                   ← all blocks relations
 ```
 
 ### Traverse
 
 "What tasks does project X have?"
 
-1. `memory_search: tags=["ontology", "rel", "has_task", "edge:proj_e5f6"]`
+1. `sage_memory_search: tags=["ontology", "rel", "has_task", "edge:proj_e5f6"]`
    → returns relation entries with to_id for each task
 2. If full task details needed:
-   `memory_search: query="{to_id}", tags=["ontology", "entity", "task"]`
+   `sage_memory_search: query="{to_id}", tags=["ontology", "entity", "task"]`
 
 For display-only: relation titles contain human-readable labels,
 often sufficient without fetching the target entity.
 
 ### Delete relation
 
-`memory_delete` the relation entry. Done. No second entity to clean up.
+`sage_memory_delete` the relation entry. Done. No second entity to clean up.
 
 ### Delete entity
 
-1. `memory_search: tags=["ontology", "rel", "edge:{entity_id}"]`
+1. `sage_memory_search: tags=["ontology", "rel", "edge:{entity_id}"]`
    → find all relations involving this entity
-2. `memory_delete` each relation
-3. `memory_delete` the entity
+2. `sage_memory_delete` each relation
+3. `sage_memory_delete` the entity
 
 ## Validation
 
@@ -217,10 +217,10 @@ echo '{"entities":[...],"relations":[...]}' | python3 scripts/graph_check.py --c
 
 Run full consistency check across all ontology entries:
 
-1. `memory_search: tags=["ontology"]` — pull all entries
+1. `sage_memory_search: tags=["ontology"]` — pull all entries
 2. Pipe to `python3 scripts/graph_check.py --check all`
 3. Review errors. Repair: delete broken relations, fix missing
-   properties via `memory_update`.
+   properties via `sage_memory_update`.
 
 ## Planning as Graph Transformation
 
@@ -236,7 +236,7 @@ Plan: "Set up feature project with tasks"
 5. RELATE has_task: Project → Task2
 6. RELATE blocks: Task1 → Task2
 7. VALIDATE: no cycles ✓, cardinality ✓
-8. COMMIT: 3 memory_store (entities) + 3 memory_store (relations)
+8. COMMIT: 3 sage_memory_store (entities) + 3 sage_memory_store (relations)
 ```
 
 Six MCP calls total. In v0.2's bidirectional design, the same plan
@@ -248,7 +248,7 @@ The core types (Task, Person, Project, Event, Document) cover most
 needs. To add a custom type, store a schema extension:
 
 ```
-memory_store:
+sage_memory_store:
   title: "[Schema:Experiment] Custom entity type"
   content: '{"type":"Experiment","required":["hypothesis","status"],"enums":{"status":["planned","running","concluded"]}}'
   tags: ["ontology", "schema"]

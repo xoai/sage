@@ -21,7 +21,7 @@ Six steps, in order. Each step builds on the previous one.
 Pull all learnings and build a picture of the collection.
 
 ```
-memory_search: query="LRN", filter_tags=["self-learning"], limit=50
+sage_memory_search: query="LRN", filter_tags=["self-learning"], limit=50
 ```
 
 Group results by:
@@ -102,8 +102,8 @@ Potentially stale:
 
 **Actions:** For each stale candidate:
 - If still valid → keep as-is
-- If partially valid → `memory_update` with current information
-- If fully obsolete → `memory_delete`
+- If partially valid → `sage_memory_update` with current information
+- If fully obsolete → `sage_memory_delete`
 
 Always confirm with the user before deleting.
 
@@ -123,8 +123,8 @@ entry.
 2. Extract the unique insights from each
 3. Write a single comprehensive learning that covers all of them
 4. Include a prevention rule that addresses the full scope
-5. `memory_store` the consolidated entry
-6. `memory_delete` the individual entries (with user confirmation)
+5. `sage_memory_store` the consolidated entry
+6. `sage_memory_delete` the individual entries (with user confirmation)
 
 **Example consolidation:**
 
@@ -223,7 +223,7 @@ For a fast check before a task (not a full review):
 No consolidation, no promotion, no report. Just a quick scan.
 
 ```
-memory_search: query="<task domain>", filter_tags=["self-learning"], limit=10
+sage_memory_search: query="<task domain>", filter_tags=["self-learning"], limit=10
 ```
 
 Report: "Found 3 relevant learnings. Key prevention rules: (1) skip

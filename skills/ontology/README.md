@@ -63,7 +63,7 @@ Everything lives in sage-memory. Ontology uses a consistent encoding convention 
 **Entities** store properties:
 
 ```
-memory_store:
+sage_memory_store:
   title: "[Task:task_a1b2] Fix payment timeout in checkout flow"
   content: '{"id":"task_a1b2","type":"Task","properties":{"title":"Fix payment timeout","status":"open","priority":"high"}}'
   tags: ["ontology", "entity", "task", "billing"]
@@ -72,7 +72,7 @@ memory_store:
 **Relations** store edges between entities:
 
 ```
-memory_store:
+sage_memory_store:
   title: "[Rel:blocks] Fix payment timeout → Deploy checkout page"
   content: '{"from_id":"task_a1b2","from_type":"Task","rel":"blocks","to_id":"task_f3a4","to_type":"Task"}'
   tags: ["ontology", "rel", "blocks", "edge:task_a1b2", "edge:task_f3a4"]
@@ -99,7 +99,7 @@ tags=["ontology", "rel", "blocks", "edge:task_a1b2"]  → blocks involving task_
 
 ### Validation is layered
 
-**Agent-inline (every write, 0ms):** Required properties, enum values, cardinality constraints. The agent checks these before calling `memory_store`. No script, no subprocess. Covers ~90% of validation.
+**Agent-inline (every write, 0ms):** Required properties, enum values, cardinality constraints. The agent checks these before calling `sage_memory_store`. No script, no subprocess. Covers ~90% of validation.
 
 **Agent-traced (structural, 0ms):** For small dependency subgraphs (< 20 edges), the agent traces cycles manually by following relation chains. No script needed.
 
@@ -107,7 +107,7 @@ tags=["ontology", "rel", "blocks", "edge:task_a1b2"]  → blocks involving task_
 
 ## Setup
 
-ontology is a skill that works alongside sage-memory. You need sage-memory configured as an MCP server — ontology uses its tools (`memory_store`, `memory_search`, `memory_update`, `memory_delete`) for all persistence.
+ontology is a skill that works alongside sage-memory. You need sage-memory configured as an MCP server — ontology uses its tools (`sage_memory_store`, `sage_memory_search`, `sage_memory_update`, `sage_memory_delete`) for all persistence.
 
 Add the ontology skill to your agent's skill directory:
 
@@ -185,11 +185,11 @@ ontology/
 
 **Bare ID search, bracket titles.** Entity titles use brackets for human readability (`[Task:task_a1b2] Fix payment timeout`), but search uses bare entity IDs with tag filters (`query="task_a1b2", tags=["ontology","entity"]`). FTS5 treats brackets as special syntax — searching by bracket title throws a syntax error. The bare ID is a plain alphanumeric token that FTS5 handles natively.
 
-**Agent-inline validation over script validation.** The validation script adds ~90ms of Python subprocess startup overhead per invocation. Since 90% of validation is simple property/enum/cardinality checks, the agent does these inline before calling `memory_store` — zero overhead. The script exists for structural checks (cycle detection across large graphs) that the agent can't trace manually.
+**Agent-inline validation over script validation.** The validation script adds ~90ms of Python subprocess startup overhead per invocation. Since 90% of validation is simple property/enum/cardinality checks, the agent does these inline before calling `sage_memory_store` — zero overhead. The script exists for structural checks (cycle detection across large graphs) that the agent can't trace manually.
 
 **Five core types, not fourteen.** The original ontology defined 14 entity types. Most projects use 3-4. Shipping fewer types with an extension mechanism (`[Schema:*]` entries) keeps the schema lean and the SKILL.md short while allowing any project to add what it needs.
 
-**Session bootstrap probe.** At session start, the agent runs `memory_search: tags=["ontology"], limit=5`. If results come back, a graph exists and the agent adapts. If nothing, it proceeds normally. The graph shouldn't announce itself when it doesn't exist.
+**Session bootstrap probe.** At session start, the agent runs `sage_memory_search: tags=["ontology"], limit=5`. If results come back, a graph exists and the agent adapts. If nothing, it proceeds normally. The graph shouldn't announce itself when it doesn't exist.
 
 ## What Ontology Is Not
 

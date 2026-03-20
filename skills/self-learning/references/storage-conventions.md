@@ -10,7 +10,7 @@ regular memories, and useful when recalled.
 
 Titles follow the format: `[LRN:<type>] <specific description>`
 
-- The `[LRN:<type>]` prefix makes learnings identifiable in memory_list
+- The `[LRN:<type>]` prefix makes learnings identifiable in sage_memory_list
   and distinguishes them from codebase knowledge.
 - The description is 5-15 words, specific and searchable.
 - Use the project's actual vocabulary — class names, library names,
@@ -72,7 +72,7 @@ the only part reported to the user.
 
 **Full example:**
 ```
-memory_store:
+sage_memory_store:
   title: "[LRN:gotcha] Express body parser must be skipped for Stripe webhooks"
   content: >
     What happened: Webhook signature verification failed with 400
@@ -110,7 +110,7 @@ that uses the same library/tool, it should be global.
 
 **Recall at task start:**
 ```
-memory_search:
+sage_memory_search:
   query: "<task-relevant keywords>"
   filter_tags: ["self-learning"]
   limit: 5
@@ -118,7 +118,7 @@ memory_search:
 
 **Find all learnings of a type:**
 ```
-memory_search:
+sage_memory_search:
   query: "<domain keywords>"
   filter_tags: ["self-learning", "gotcha"]
   limit: 10
@@ -126,7 +126,7 @@ memory_search:
 
 **Search before store (dedup check):**
 ```
-memory_search:
+sage_memory_search:
   query: "<key terms from the new learning>"
   filter_tags: ["self-learning"]
   limit: 5
@@ -134,14 +134,14 @@ memory_search:
 
 **List all learnings (browsing):**
 ```
-memory_list:
+sage_memory_list:
   tags: ["self-learning"]
 ```
 
-Note: `memory_search` uses `filter_tags` for hard WHERE filtering
+Note: `sage_memory_search` uses `filter_tags` for hard WHERE filtering
 (sage-memory v0.3+). This excludes non-learning entries entirely.
-`memory_list` uses `tags` which already hard-filters. The older `tags`
-parameter on `memory_search` is a soft boost — do not use it for
+`sage_memory_list` uses `tags` which already hard-filters. The older `tags`
+parameter on `sage_memory_search` is a soft boost — do not use it for
 namespace isolation.
 
 ## File-Based Storage (Fallback)
@@ -205,6 +205,6 @@ first and read relevant sections.
 ### Migration to sage-memory
 
 When sage-memory becomes available, the skill can migrate file-based
-learnings by reading each entry and calling `memory_store` with the
+learnings by reading each entry and calling `sage_memory_store` with the
 parsed title, content, tags, and scope. sage-memory's SHA-256 dedup
 prevents duplicates if migration runs multiple times.

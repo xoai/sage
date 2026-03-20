@@ -17,7 +17,7 @@ When capturing a learning, if you know the relevant ontology entity ID
 add `edge:{entity_id}` to the learning's tags:
 
 ```
-memory_store:
+sage_memory_store:
   title: "[LRN:gotcha] ReportBuilder N+1 query causes timeout"
   content: "..."
   tags: ["self-learning", "gotcha", "database", "edge:task_a1b2"]
@@ -29,7 +29,7 @@ memory_store:
 If the ontology skill is active, search for the relevant entity:
 
 ```
-memory_search: query="payment timeout", tags=["ontology", "entity", "task"]
+sage_memory_search: query="payment timeout", tags=["ontology", "entity", "task"]
 → [Task:task_a1b2] Fix payment timeout in checkout flow
 ```
 
@@ -44,7 +44,7 @@ keyword search instead of graph traversal. Both work.
 During recall, if you know the current task's ontology ID, use it:
 
 ```
-memory_search: filter_tags=["self-learning", "edge:task_a1b2"]
+sage_memory_search: filter_tags=["self-learning", "edge:task_a1b2"]
 ```
 
 This returns only learnings directly linked to that task — higher
@@ -80,7 +80,7 @@ causes), they can be modeled as ontology entities.
 Pre-register the Learning type for future use:
 
 ```
-memory_store:
+sage_memory_store:
   title: "[Schema:Learning] Custom entity type for self-learning"
   content: '{"type":"Learning","required":["title","type","prevention"],"enums":{"type":["gotcha","correction","convention","api-drift","error-fix"],"status":["active","stale","superseded","promoted"]}}'
   tags: ["ontology", "schema"]

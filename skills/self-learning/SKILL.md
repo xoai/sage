@@ -66,7 +66,7 @@ happens alongside (not inside) the memory skill's recall.
 **How to search:**
 
 ```
-memory_search: query="<task-relevant terms>", filter_tags=["self-learning"]
+sage_memory_search: query="<task-relevant terms>", filter_tags=["self-learning"]
 ```
 
 Always include `filter_tags: ["self-learning"]` to retrieve only learnings,
@@ -78,7 +78,7 @@ from results entirely.
 you know the current task's entity ID, search by edge tag for precision:
 
 ```
-memory_search: filter_tags=["self-learning", "edge:task_a1b2"]
+sage_memory_search: filter_tags=["self-learning", "edge:task_a1b2"]
 ```
 
 This finds learnings specifically linked to that task — more precise than
@@ -145,7 +145,7 @@ for patterns that apply across all projects.
 
 **Full example with prevention rule:**
 ```
-memory_store:
+sage_memory_store:
   title: "[LRN:gotcha] Stripe webhook requires raw body before JSON parsing"
   content: >
     What happened: Webhook signature verification failed with 400
@@ -182,10 +182,10 @@ pattern that isn't documented.
 Before creating a new learning, search for similar existing ones:
 
 ```
-memory_search: query="<key terms from the learning>", filter_tags=["self-learning"]
+sage_memory_search: query="<key terms from the learning>", filter_tags=["self-learning"]
 ```
 
-If a similar learning exists, **update it** (`memory_update`) rather than
+If a similar learning exists, **update it** (`sage_memory_update`) rather than
 creating a near-duplicate. Enrich the existing entry with new context.
 
 If 3+ similar learnings exist across different projects, this is a
@@ -226,15 +226,14 @@ rephrased, context-independent version at `scope: "global"`.
 a shared file in the repo. **Read** `references/team-sharing.md` for
 export format.
 
-## Fallback: File-Based Storage
+## Storage Fallback
 
-If sage-memory MCP tools are not available, store learnings as structured
-markdown in `.sage/learnings/`. **Read** `references/storage-conventions.md`
-§ Fallback Format for the file structure.
+**Try MCP first:** call `sage_memory_store` with the `learning` tag.
 
-The fallback uses the same content conventions (title prefix, type, what
-happened / why / fix / prevention) so learnings can be migrated to
-sage-memory later.
+**If MCP is not available,** fall back to `.sage-memory/` files using
+the format defined in the memory skill. Use `type: learning` in the
+frontmatter.
+
 
 ## Quality Principles
 

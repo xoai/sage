@@ -32,13 +32,13 @@ message, required investigation.
 
 **Search before store:**
 ```
-memory_search: query="stripe webhook signature", filter_tags=["self-learning"]
+sage_memory_search: query="stripe webhook signature", filter_tags=["self-learning"]
 → No results
 ```
 
 **Capture:**
 ```
-memory_store:
+sage_memory_store:
   title: "[LRN:gotcha] Stripe webhook requires raw body before JSON parsing"
   content: >
     What happened: Webhook signature verification failed with 400
@@ -65,7 +65,7 @@ push events."
 
 **Agent recalls at task start:**
 ```
-memory_search: query="webhook handler", filter_tags=["self-learning"]
+sage_memory_search: query="webhook handler", filter_tags=["self-learning"]
 → Found: [LRN:gotcha] Stripe webhook requires raw body before JSON parsing
 ```
 
@@ -100,13 +100,13 @@ The user asks: "Install the new analytics package."
 
 **Search before store:**
 ```
-memory_search: query="pnpm npm package manager", filter_tags=["self-learning"]
+sage_memory_search: query="pnpm npm package manager", filter_tags=["self-learning"]
 → No results
 ```
 
 **Capture:**
 ```
-memory_store:
+sage_memory_store:
   title: "[LRN:correction] This project uses pnpm workspaces not npm"
   content: >
     What happened: Ran `npm install analytics-sdk`.
@@ -126,7 +126,7 @@ New session, same project. User asks: "Add the stripe package."
 
 **Agent recalls at task start:**
 ```
-memory_search: query="install package", filter_tags=["self-learning"]
+sage_memory_search: query="install package", filter_tags=["self-learning"]
 → Found: [LRN:correction] This project uses pnpm workspaces not npm
 ```
 
@@ -138,7 +138,7 @@ The agent encounters the same pattern in a different project. Before
 running `npm install`, it searches global learnings:
 
 ```
-memory_search: query="package manager detection", filter_tags=["self-learning"]
+sage_memory_search: query="package manager detection", filter_tags=["self-learning"]
 → Found: [LRN:correction] This project uses pnpm workspaces not npm
 ```
 
@@ -147,7 +147,7 @@ assuming npm) applies to ANY project, not just the original one.
 
 **Promote to global:**
 ```
-memory_store:
+sage_memory_store:
   title: "[LRN:correction] Check lock file before assuming package manager"
   content: >
     What happened: Used npm in a pnpm project.
@@ -191,7 +191,7 @@ training data.
 
 **Capture:**
 ```
-memory_store:
+sage_memory_store:
   title: "[LRN:api-drift] OpenAI SDK v1.x: use tools param not functions"
   content: >
     What happened: Used `functions` parameter in chat.completions.create().
@@ -214,7 +214,7 @@ Different project. User asks: "Integrate OpenAI with tool use."
 
 **Agent recalls:**
 ```
-memory_search: query="openai function tool calling", filter_tags=["self-learning"]
+sage_memory_search: query="openai function tool calling", filter_tags=["self-learning"]
 → Found: [LRN:api-drift] OpenAI SDK v1.x: use tools param not functions
 ```
 
@@ -287,7 +287,7 @@ ReportBuilder causes the timeout.
 
 **Capture with ontology link:**
 ```
-memory_store:
+sage_memory_store:
   title: "[LRN:gotcha] ReportBuilder N+1 query causes payment timeout"
   content: >
     What happened: /api/reports endpoint timed out at ~30s for users
@@ -309,7 +309,7 @@ The `edge:task_a1b2` tag links this learning to the ontology task. Now:
 
 **Any future work on task_a1b2 automatically surfaces this learning:**
 ```
-memory_search: filter_tags=["self-learning", "edge:task_a1b2"]
+sage_memory_search: filter_tags=["self-learning", "edge:task_a1b2"]
 → Found: [LRN:gotcha] ReportBuilder N+1 query causes payment timeout
 ```
 

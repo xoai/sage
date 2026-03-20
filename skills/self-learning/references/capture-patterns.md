@@ -204,7 +204,7 @@ single-occurrence trivial errors.
 
 When search-before-store finds a similar learning:
 
-1. `memory_search` with key terms + `filter_tags: ["self-learning"]`
-2. If found: read its content, add new context, `memory_update`
+1. `sage_memory_search` with key terms + `filter_tags: ["self-learning"]`
+2. If found: read its content, add new context, `sage_memory_update`
 3. If not found: create new entry
 4. If 3+ similar found: recurring pattern — consider scope promotion

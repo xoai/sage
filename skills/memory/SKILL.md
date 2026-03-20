@@ -25,9 +25,50 @@ requires: []
 Make knowledge persistent across sessions. Three layers — two automatic,
 one user-triggered.
 
-**Prerequisite:** sage-memory MCP server configured. If memory tools are
-not available, degrade gracefully — proceed without memory, never block
-work.
+## Storage Priority
+
+This skill uses two storage backends in priority order:
+
+**1. sage-memory MCP (preferred)** — tools: `sage_memory_store`,
+`sage_memory_search`, `sage_memory_update`, `sage_memory_delete`,
+`sage_memory_list`. Fast BM25 search, 91% recall. Best experience.
+Setup: run `sage setup memory` in your terminal.
+
+**2. File fallback** — if MCP tools are not available, use
+`.sage-memory/` files in the project root. One markdown file per entry,
+title as filename, tags in frontmatter. Works everywhere, limited search.
+
+Use only the MCP tools or the `.sage-memory/` file format below.
+
+### File Fallback Format
+
+When MCP is not available, store entries as individual files:
+
+```
+.sage-memory/
+├── payment-saga-orchestration.md
+├── jwt-auth-refresh-tokens.md
+├── connection-pool-leak-saga.md
+└── ...
+```
+
+Each file:
+```markdown
+---
+tags: [billing, architecture, saga]
+type: knowledge
+created: 2026-03-20
+---
+
+The billing service uses a saga pattern for multi-step payment
+processing. PaymentOrchestrator coordinates between StripeGateway,
+LedgerService, and NotificationService.
+```
+
+**Filename** = kebab-case title (the most important retrieval key).
+**type** = `knowledge` (default), `ontology`, or `learning`.
+**Recall** = read the `.sage-memory/` directory listing (filenames are
+titles), identify relevant ones by name, read only those files.
 
 ## Layer 1: Automatic Recall
 
@@ -47,14 +88,26 @@ This happens inside the navigator's "Read the Room" phase.
 
 ### How to Search
 
-Use `memory_search` with natural language queries. Use domain vocabulary
-that matches how memories were written.
+**Try MCP first.** Call the `sage_memory_search` tool directly:
 
 ```
-memory_search: "billing service architecture patterns"
-memory_search: "authentication decisions JWT sessions"
-memory_search: "user research findings onboarding"
+sage_memory_search(
+  query: "billing service architecture patterns",
+  limit: 5
+)
 ```
+
+More examples:
+```
+sage_memory_search(query: "authentication decisions JWT sessions", limit: 5)
+sage_memory_search(query: "checkout timeout debugging", tags: ["billing"], limit: 5)
+```
+
+**If MCP is not available,** fall back to `.sage-memory/` files:
+1. Read the directory listing of `.sage-memory/` (filenames are titles)
+2. Identify filenames relevant to the current task
+3. Read only those files for full content
+
 
 ### Reporting What You Found
 
@@ -106,6 +159,37 @@ not what can be re-read from source code.
 
 ### How to Store
 
+**Try MCP first.** Call the `sage_memory_store` tool directly:
+
+```
+sage_memory_store(
+  content: "The billing service uses a saga pattern for multi-step payment
+  processing. PaymentOrchestrator coordinates between StripeGateway,
+  LedgerService, and NotificationService. Failures trigger compensating
+  transactions defined in saga_rollback_handlers.",
+  title: "Payment saga orchestration via PaymentOrchestrator with 3 services",
+  tags: ["billing", "saga", "payments", "architecture"],
+  scope: "project"
+)
+```
+
+**If MCP is not available,** create a file in `.sage-memory/`:
+
+```
+File: .sage-memory/payment-saga-orchestration.md
+
+---
+tags: [billing, saga, payments, architecture]
+type: knowledge
+created: 2026-03-20
+---
+
+The billing service uses a saga pattern for multi-step payment
+processing. PaymentOrchestrator coordinates between StripeGateway,
+LedgerService, and NotificationService.
+```
+
+
 Write memories that retrieve well. sage-memory uses BM25 keyword search
 with 91% recall on LLM-authored content — but only if the content uses
 consistent domain vocabulary.
@@ -142,7 +226,7 @@ Store at natural completion points, not continuously:
 **Deduplication.** sage-memory deduplicates by content hash. Don't worry
 about storing something twice — the system handles it. But do check:
 before storing, briefly search to see if similar knowledge exists. If it
-does, consider updating the existing entry (`memory_update`) rather than
+does, consider updating the existing entry (`sage_memory_update`) rather than
 creating a near-duplicate.
 
 ## Layer 3: Deliberate Learning (`sage learn`)
