@@ -8,160 +8,226 @@ description: >
   Trigger on "remember that X is Y", "what do I know about", "link X to Y",
   "show dependencies", "what blocks X", entity CRUD, cross-skill data
   access, or any request involving structured relationships between things.
-  Also trigger when the memory skill is active and the agent needs typed
-  structure beyond flat prose.
-version: "1.0.0"
+version: "1.2.0"
 type: process
 ---
 
 # Ontology
 
-Typed knowledge graph on sage-memory. Entities and relations stored as
-separate memory entries — searchable by BM25, zero file I/O, zero
-consistency risk.
+Typed knowledge graph. Entities stored as memories, relationships stored
+as edges — searchable, traversable, persistent.
 
-**Part of the unified knowledge system.** Ontology is a facet of the
-memory skill — it stores through sage-memory with the `ontology` tag.
-During recall, ontology entries surface alongside regular knowledge and
-self-learning entries, giving the agent structural context (what depends
-on what, who owns what) in addition to prose understanding.
+**Part of the unified knowledge system.** Ontology entries surface
+alongside regular knowledge and self-learning entries during recall.
 
-**Prerequisite:** sage-memory MCP tools (`sage_memory_store`, `sage_memory_search`,
-`sage_memory_update`, `sage_memory_delete`). If unavailable, degrade gracefully.
+## Capabilities by Backend
+
+| Capability | MCP | Files |
+|------------|-----|-------|
+| Create entities | ✅ `sage_memory_store` | ✅ `.sage-memory/ont-*.md` files |
+| Search entities | ✅ BM25 + tag filter | ⚠️ filename scan + read |
+| Update entities | ✅ `sage_memory_update` | ✅ edit file |
+| Delete entities | ✅ CASCADE removes edges | ✅ delete file + clean relations |
+| Create relations | ✅ `sage_memory_link` | ✅ `relations:` in entity file |
+| Multi-hop traversal | ✅ `sage_memory_graph` | ❌ not available |
+| Cycle detection | ✅ built into graph tool | ⚠️ manual trace |
+| Browse by type | ✅ `sage_memory_list` | ✅ scan `ont-` files |
+
+**How to detect backend:** At session start, call `sage_memory_set_project`
+with the project root path. If it responds, use MCP. If not, use
+`.sage-memory/` files.
 
 ## Core Model
 
-Two kinds of memory entries:
+**Entities** hold properties. **Relations** connect two entities with a
+typed, directed edge.
 
 ```
-Entity:   [Task:task_a1b2]  "Fix payment timeout"    → the node
-Relation: [Rel:blocks]      "task_a1b2 → task_f3a4"  → the edge
+Entity:   [Task:task_a1b2] "Fix payment timeout"
+Relation: task_a1b2 —blocks→ task_f3a4
 ```
 
-Entities hold properties. Relations are independent entries linking
-two entities. One write per relation — no bidirectional update, no
-consistency risk.
+## Entity Operations
 
-## Encoding
+### Create Entity
 
-**Read:** `references/encoding.md` for full format and examples.
-
-### Entity
-
+**With MCP:**
 ```
-sage_memory_store:
-  title: "[Task:task_a1b2] Fix payment timeout in checkout flow"
-  content: '{"id":"task_a1b2","type":"Task","properties":{"title":"Fix payment timeout","status":"open","priority":"high"}}'
-  tags: ["ontology", "entity", "task", "billing", "payments"]
+sage_memory_store(
+  title: "[Task:task_a1b2] Fix payment timeout in checkout flow",
+  content: '{"id":"task_a1b2","type":"Task","properties":{"title":"Fix payment timeout","status":"open","priority":"high"}}',
+  tags: ["ontology", "entity", "task", "billing", "checkout"],
   scope: "project"
+)
 ```
 
-### Relation
-
+**With files:**
 ```
-sage_memory_store:
-  title: "[Rel:blocks] Fix payment timeout → Deploy checkout page"
-  content: '{"from_id":"task_a1b2","from_type":"Task","rel":"blocks","to_id":"task_f3a4","to_type":"Task"}'
-  tags: ["ontology", "rel", "blocks", "edge:task_a1b2", "edge:task_f3a4"]
-  scope: "project"
-```
+File: .sage-memory/ont-task-a1b2-fix-payment-timeout.md
 
-### ID format
+---
+tags: [ontology, entity, task, billing, checkout]
+type: ontology
+scope: project
+entity_id: task_a1b2
+entity_type: Task
+created: 2026-03-20
+---
 
-`{type_prefix}_{8_hex}` — prefix = first 4 lowercase chars of type.
-
-```
-Task → task_a1b2c3d4    Person → pers_e5f6a7b8
-Project → proj_c9d0e1f2  Event → even_a3b4c5d6
+{"id":"task_a1b2","type":"Task","properties":{"title":"Fix payment timeout","status":"open","priority":"high"}}
 ```
 
-## Session Bootstrap
+**Filename convention:** `ont-{type}-{id}-{short-description}.md`
 
-At session start (or first ontology trigger), probe whether a graph
-exists:
+**ID format:** `{type_prefix}_{8_hex}` — e.g., `task_a1b2c3d4`,
+`pers_e5f6a7b8`, `proj_c9d0e1f2`
 
+### Search Entities
+
+**With MCP:**
 ```
-sage_memory_search: tags=["ontology"], limit=5
-```
-
-**Results found:** A graph exists. Note the types and domains visible
-in the results. Use this context to inform subsequent operations —
-you know the graph's vocabulary and shape without loading everything.
-
-**No results:** No graph yet. This is normal for a new project.
-Proceed without graph context. The graph grows organically as the
-agent creates entities during work.
-
-**Don't announce this probe.** If the graph exists, use its context
-naturally. If it doesn't, say nothing about ontology — just work
-normally. Same principle as the memory skill's "empty first session."
-
-## Operations
-
-### Create entity
-
-1. Generate ID: `f"{type.lower()[:4]}_{uuid4().hex[:8]}"`
-2. Validate: check required properties, enum values (see Validation)
-3. `sage_memory_store` with encoding above
-
-### Search
-
-```
-sage_memory_search: "open tasks billing"                                     ← natural language
-sage_memory_search: query="task_a1b2", tags=["ontology", "entity"]           ← exact ID
-sage_memory_search: query="tasks in billing", tags=["ontology", "entity", "task"]  ← typed
+sage_memory_search(query: "task_a1b2", filter_tags: ["ontology", "entity"])
+sage_memory_search(query: "open tasks billing", filter_tags: ["ontology", "entity", "task"])
 ```
 
-**FTS5 safety:** Entity IDs (`task_a1b2`) are plain alphanumeric
-tokens — always safe to search. Never search for the bracket title
-directly (`[Task:task_a1b2]`) as brackets are FTS5 special characters.
-Search by the bare ID with entity tags instead. Brackets exist in
-titles for human readability only, not for query use.
+**FTS5 safety:** Search by bare entity ID, never by bracket title.
 
-### Create relation
+**With files:** Scan `.sage-memory/` for `ont-` prefixed files. Filter
+by type: `ont-task-*` for tasks, `ont-pers-*` for persons. Read matching
+files to check properties.
 
-1. Validate: check type compatibility, cardinality (see Validation)
-2. For `blocks` / `depends_on`: check no cycle (see Validation)
-3. Single `sage_memory_store` with relation encoding
+### Browse All Entities
 
-One MCP call. No second entity to update. No half-link risk.
+**With MCP:** `sage_memory_list(tags: ["ontology", "entity", "task"])`
 
-### Find relations
+**With files:** List all `ont-task-*.md` files in `.sage-memory/`.
+
+### Delete Entity
+
+**With MCP:** `sage_memory_delete(id: "<entity_memory_id>")` — CASCADE
+automatically removes all edges.
+
+**With files:** Delete the entity file. Then scan other `ont-*.md` files
+for `relations:` entries referencing this entity's ID and remove them.
+
+## Relation Operations
+
+### Create Relation
+
+**With MCP:**
+```
+sage_memory_link(
+  source_id: "<source_memory_id>",
+  target_id: "<target_memory_id>",
+  relation: "blocks",
+  properties: {"reason": "payment flow must complete first"}
+)
+```
+
+One call. Validation before creating:
+1. Check type compatibility (see schema reference)
+2. Check cardinality (many_to_one → replace existing if found)
+3. For `blocks`/`depends_on` → cycle check via `sage_memory_graph`
+
+**With files:** Add a `relations:` section to the source entity's file:
 
 ```
-sage_memory_search: tags=["ontology", "rel", "edge:task_a1b2"]          ← all relations for entity
-sage_memory_search: tags=["ontology", "rel", "blocks", "edge:task_a1b2"] ← blocks from/to entity
-sage_memory_search: tags=["ontology", "rel", "blocks"]                   ← all blocks relations
+File: .sage-memory/ont-task-a1b2-fix-payment-timeout.md
+
+---
+tags: [ontology, entity, task, billing, checkout]
+type: ontology
+scope: project
+entity_id: task_a1b2
+entity_type: Task
+created: 2026-03-20
+relations:
+  - rel: blocks
+    target: task_f3a4
+    target_type: Task
+  - rel: assigned_to
+    target: pers_e5f6
+    target_type: Person
+---
+
+{"id":"task_a1b2","type":"Task","properties":{"title":"Fix payment timeout","status":"open","priority":"high"}}
 ```
 
-### Traverse
+Relations live inside the source entity's frontmatter. This is
+denormalized but avoids separate relation files and works without a
+database. To find what blocks task_f3a4, scan all `ont-task-*.md` files
+for `relations:` entries with `target: task_f3a4`.
 
-"What tasks does project X have?"
+### Delete Relation
 
-1. `sage_memory_search: tags=["ontology", "rel", "has_task", "edge:proj_e5f6"]`
-   → returns relation entries with to_id for each task
-2. If full task details needed:
-   `sage_memory_search: query="{to_id}", tags=["ontology", "entity", "task"]`
+**With MCP:**
+```
+sage_memory_link(
+  source_id: "<source_id>", target_id: "<target_id>",
+  relation: "blocks", delete: true
+)
+```
 
-For display-only: relation titles contain human-readable labels,
-often sufficient without fetching the target entity.
+**With files:** Edit the source entity file — remove the relation entry
+from the `relations:` list.
 
-### Delete relation
+### Cycle Check
 
-`sage_memory_delete` the relation entry. Done. No second entity to clean up.
+**With MCP:**
+```
+sage_memory_graph(
+  id: "<target_memory_id>",
+  relation: "blocks",
+  direction: "outbound",
+  depth: 5
+)
+```
+If source_id appears in results → cycle → reject.
 
-### Delete entity
+**With files:** Manually trace the chain. Read target's file → check its
+`relations:` for outbound `blocks` → follow to next entity → repeat.
+If you return to the source, it's a cycle. Practical for graphs under
+20 edges of that type.
 
-1. `sage_memory_search: tags=["ontology", "rel", "edge:{entity_id}"]`
-   → find all relations involving this entity
-2. `sage_memory_delete` each relation
-3. `sage_memory_delete` the entity
+## Graph Traversal (MCP only)
 
-## Validation
+### What tasks does project X have?
+```
+sage_memory_graph(id: "<project_id>", relation: "has_task", direction: "outbound", depth: 1)
+```
 
-### Agent-inline (every write, no script)
+### What blocks task X, and what blocks those?
+```
+sage_memory_graph(id: "<task_id>", relation: "blocks", direction: "inbound", depth: 2)
+```
 
-**Required properties:**
+### Full neighborhood
+```
+sage_memory_graph(id: "<entity_id>", direction: "both", depth: 1)
+```
+
+**With files:** Multi-hop traversal is not available. Use single-hop
+lookups by scanning `relations:` in entity files. For tasks in a project,
+scan all `ont-task-*.md` files for `relations:` entries like
+`{rel: part_of, target: <project_id>}`.
+
+## Planning as Graph Transformation
+
+```
+Plan: "Set up feature project with tasks"
+
+1. CREATE Project → sage_memory_store (or file)
+2. CREATE Task1 → sage_memory_store (or file)
+3. CREATE Task2 → sage_memory_store (or file)
+4. RELATE has_task: Project → Task1 → sage_memory_link (or add to file)
+5. RELATE has_task: Project → Task2 → sage_memory_link (or add to file)
+6. RELATE blocks: Task1 → Task2 → sage_memory_link (after cycle check)
+7. VALIDATE: no cycles ✓, cardinality ✓
+```
+
+## Validation Rules
+
+### Required Properties
 
 | Type | Required |
 |------|----------|
@@ -171,113 +237,47 @@ often sufficient without fetching the target entity.
 | Event | title, start |
 | Document | title |
 
-**Enum values:**
+### Relation Types
 
-| Field | Allowed |
-|-------|---------|
-| Task.status | open, in_progress, blocked, done, cancelled |
-| Task.priority | low, medium, high, urgent |
-| Project.status | planning, active, paused, completed, archived |
-
-**Relation type rules:**
-
-| Relation | From → To | Cardinality |
-|----------|-----------|-------------|
-| has_owner | Project,Task → Person | many_to_one |
-| has_task | Project → Task | one_to_many |
-| assigned_to | Task → Person | many_to_one |
-| blocks | Task → Task | many_to_many, **acyclic** |
-| part_of | Task,Document → Project | many_to_one |
-| depends_on | Task,Project → Task,Project | many_to_many, **acyclic** |
-
-**Cardinality check:** For `many_to_one`, before storing a relation,
-search for existing relations of the same type from the same source.
-If one exists, replace it — don't create a duplicate.
+| Relation | From → To | Cardinality | Acyclic |
+|----------|-----------|-------------|---------|
+| has_owner | Project,Task → Person | many_to_one | no |
+| has_task | Project → Task | one_to_many | no |
+| assigned_to | Task → Person | many_to_one | no |
+| blocks | Task → Task | many_to_many | **yes** |
+| part_of | Task,Document → Project | many_to_one | no |
+| depends_on | Task,Project → Task,Project | many_to_many | **yes** |
 
 **Credential safety:** Never store `password`, `secret`, `token`,
-`api_key` as properties. Use `secret_ref` pointing to external storage.
+`api_key` as properties.
 
-On validation failure: inform the user, suggest correction, don't store.
+### Extending Types
 
-### Cycle check (before `blocks` / `depends_on` only)
+Store a schema extension for custom types (works with both backends):
 
-**Small graph (< 20 edges of that type):** Trace manually. Follow
-the chain from target: does it lead back to source? If yes, reject.
-
-**Larger graph:** Pull all relation entries of that type from memory,
-pipe to the checker script:
-
-```bash
-echo '{"entities":[...],"relations":[...]}' | python3 scripts/graph_check.py --check cycles
+**With MCP:**
 ```
-
-**Read:** `scripts/graph_check.py` header for input format.
-
-### Audit (on demand)
-
-Run full consistency check across all ontology entries:
-
-1. `sage_memory_search: tags=["ontology"]` — pull all entries
-2. Pipe to `python3 scripts/graph_check.py --check all`
-3. Review errors. Repair: delete broken relations, fix missing
-   properties via `sage_memory_update`.
-
-## Planning as Graph Transformation
-
-Model plans as a sequence of validated graph operations:
-
-```
-Plan: "Set up feature project with tasks"
-
-1. CREATE Project { name: "Dark mode", status: "planning" }
-2. CREATE Task { title: "Audit color tokens", status: "open" }
-3. CREATE Task { title: "Update theme config", status: "open" }
-4. RELATE has_task: Project → Task1
-5. RELATE has_task: Project → Task2
-6. RELATE blocks: Task1 → Task2
-7. VALIDATE: no cycles ✓, cardinality ✓
-8. COMMIT: 3 sage_memory_store (entities) + 3 sage_memory_store (relations)
-```
-
-Six MCP calls total. In v0.2's bidirectional design, the same plan
-would take 12 calls (3 entities + 3 relations × 3 updates each).
-
-## Extending Types
-
-The core types (Task, Person, Project, Event, Document) cover most
-needs. To add a custom type, store a schema extension:
-
-```
-sage_memory_store:
-  title: "[Schema:Experiment] Custom entity type"
-  content: '{"type":"Experiment","required":["hypothesis","status"],"enums":{"status":["planned","running","concluded"]}}'
+sage_memory_store(
+  title: "[Schema:Sprint] Custom entity type",
+  content: '{"type":"Sprint","required":["name","start","end"]}',
   tags: ["ontology", "schema"]
+)
 ```
 
-The agent searches for `tags=["ontology","schema"]` when encountering
-an unknown type and applies those validation rules.
-
-## Skill Contract
-
-Skills using ontology should declare in their SKILL.md:
-
-```yaml
-ontology:
-  reads: [Task, Project]
-  writes: [Task]
+**With files:**
 ```
+File: .sage-memory/ont-schema-sprint.md
 
-This enables cross-skill coordination through the graph.
+---
+tags: [ontology, schema]
+type: ontology
+---
 
-## Complementary to Memory Skill
-
-- **Memory skill** → prose insights ("billing uses sagas because...")
-- **Ontology** → structured facts (Task X blocks Task Y, owned by Z)
-
-Use both. They serve different retrieval needs.
+{"type":"Sprint","required":["name","start","end"],"enums":{"status":["planning","active","closed"]}}
+```
 
 ## References
 
 - `references/encoding.md` — Full format, examples, search patterns
 - `references/schema.md` — All types, relations, constraints
-- `scripts/graph_check.py` — In-memory structural validator
+- `scripts/graph_check.py` — Structural validator
