@@ -2,6 +2,10 @@
 name: fix
 version: "1.0.0"
 mode: fix
+produces: ["Root cause diagnosis", "Reproducing test", "Minimal patch"]
+checkpoints: 1
+scope: "Single session"
+user-role: "Confirm root cause, approve fix"
 ---
 
 # Fix Workflow
@@ -15,7 +19,7 @@ steps to reproduce. If the user already provided details, confirm
 your understanding before proceeding.
 
 ```
-Here's what I understand:
+Sage: Here's what I understand:
 - [Problem summary]
 - [Expected vs actual behavior]
 
@@ -28,10 +32,10 @@ Read the relevant code. Identify the root cause — not just the symptom.
 If multiple potential causes exist:
 
 ```
-I found two possible causes:
+Sage: I found two possible causes:
 
-1) [Cause A] — in [file:line] — [why this might be it]
-2) [Cause B] — in [file:line] — [why this might be it]
+[1] [Cause A] — in [file:line] — [why this might be it]
+[2] [Cause B] — in [file:line] — [why this might be it]
 
 Which should I investigate first?
 ```
@@ -44,7 +48,7 @@ test passes. Run the full test suite to check for regressions.
 ## Step 4: Verify and Close
 
 ```
-Fix applied:
+Sage: Fix applied.
 - Root cause: [what was wrong]
 - Change: [what was changed, in which files]
 - Tests: [passing/failing]

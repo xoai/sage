@@ -68,7 +68,7 @@ done
 echo ""
 echo "## Sage Context (auto-injected)"
 echo ""
-echo "Project status: $STATUS | Feature: $FEATURE | Phase: $PHASE"
+echo "Sage: Project status — $STATUS | Feature: $FEATURE | Phase: $PHASE"
 
 if [ -n "$NEXT" ] && [ "$NEXT" != "Describe what you want to build — Sage will guide you" ]; then
   echo "Next: $NEXT"

@@ -2,6 +2,10 @@
 name: sage
 version: "1.0.0"
 mode: sage
+produces: ["Routes to the right workflow based on intent and scope"]
+checkpoints: 0
+scope: "Entry point — scope depends on selected workflow"
+user-role: "Describe what you want to do"
 ---
 
 # Sage Workflow
@@ -21,10 +25,12 @@ The navigator will:
 ## Quick Reference
 
 If you already know what you want, use a specific workflow:
-- **build** — feature development (spec → plan → implement)
-- **fix** — debug and patch
-- **architect** — system design from scratch
-- **status** — check current project state
+- **/build** — feature development (brief → spec → plan → implement)
+- **/fix** — debug and patch (diagnose → test → fix → verify)
+- **/architect** — system design (ADRs → spec → milestone plan → phased build)
+- **/review** — independent artifact evaluation
+- **/learn** — codebase knowledge capture
+- **/status** — check current project state
 
 ## Rules
 

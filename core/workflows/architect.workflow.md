@@ -2,6 +2,10 @@
 name: architect
 version: "1.0.0"
 mode: architect
+produces: ["Architecture Decision Records", "System spec", "Milestone plan"]
+checkpoints: 3
+scope: "Multi-session"
+user-role: "Review and approve design decisions at each gate"
 ---
 
 # Architect Workflow
@@ -30,11 +34,11 @@ If Sage has relevant UNDERSTAND skills (research, analysis), recommend
 them here:
 
 ```
-Before designing the architecture, I recommend:
+Sage recommends understanding the context before designing:
 
-1) Start with research — understand user needs first (~15 min)
-2) Skip research — go straight to architecture design
-3) Something else
+[1] Start with research — understand user needs first
+[2] Skip research — go straight to architecture design
+[3] Something else
 ```
 
 ## Step 3: Architecture Design
@@ -59,6 +63,8 @@ updated: YYYY-MM-DD
 
 🔒 **CHECKPOINT:**
 ```
+Sage: Architecture design saved. ADRs in .sage/docs/decision-*.md
+
 [A] Approve — continue to planning
 [R] Revise — here's what needs changing
 [Q] Question — I want to understand [specific decision] better
@@ -90,6 +96,8 @@ tasks-done: 0
 
 🔒 **CHECKPOINT:**
 ```
+Sage: Milestone plan saved to .sage/work/YYYYMMDD-slug/plan.md
+
 [A] Approve — start building milestone 1
 [R] Revise — adjust the breakdown
 ```
@@ -108,7 +116,7 @@ implement → test → review → checkpoint before moving to the next.
 
 After each milestone:
 ```
-Milestone [N] complete: [summary]
+Sage: Milestone [N] complete — [summary]
 
 [C] Continue to milestone [N+1]
 [R] Revise — adjust before continuing

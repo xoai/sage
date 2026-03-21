@@ -128,11 +128,11 @@ If not specified, scan `.sage/work/` and `.sage/docs/` for recent
 artifacts. Present them:
 
 ```
-Available for review:
+Sage: Available for review:
 
-1) .sage/work/20260316-checkout/brief.md (updated today)
-2) .sage/work/20260316-checkout/spec.md (updated today)
-3) .sage/docs/ux-audit-homepage.md (updated yesterday)
+[1] .sage/work/20260316-checkout/brief.md (updated today)
+[2] .sage/work/20260316-checkout/spec.md (updated today)
+[3] .sage/docs/ux-audit-homepage.md (updated yesterday)
 
 Which artifact should I review?
 ```
@@ -153,7 +153,7 @@ Before delegating, gather three pieces of information:
 
 ## Step 3: Delegate to Review Sub-Agent
 
-Tell the user: "Delegating to a review sub-agent for independent
+Tell the user: "Sage: Delegating to a review sub-agent for independent
 evaluation. The reviewer gets a fresh context window without my
 reasoning from this session."
 
@@ -197,6 +197,8 @@ PRESENT YOUR REVIEW AS:
 Share the sub-agent's review with the user:
 
 ```
+Sage: Review complete.
+
 [A] Accept findings — proceed with suggested next step
 [R] Revise — I'll address the issues found
 [D] Discuss — let's talk about specific findings

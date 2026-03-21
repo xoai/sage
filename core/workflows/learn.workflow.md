@@ -2,6 +2,10 @@
 name: learn
 version: "1.0.0"
 mode: learn
+produces: ["Knowledge entries in sage-memory", "Docs in .sage/docs/"]
+checkpoints: 0
+scope: "Single session"
+user-role: "Specify what to learn, review findings"
 ---
 
 # Learn Workflow
@@ -15,9 +19,11 @@ If a path is specified, that's the target — deep dive.
 If no path, broad scan of the whole project.
 
 ```
-1) Broad scan — learn the project structure, stack, patterns, conventions
-2) Deep dive — learn a specific module, service, or area
-3) Something else — describe what you want to understand
+Sage: What would you like to learn?
+
+[1] Broad scan — learn the project structure, stack, patterns, conventions
+[2] Deep dive — learn a specific module, service, or area
+[3] Something else — describe what you want to understand
 ```
 
 ## Step 2: Search Existing Knowledge
@@ -25,8 +31,8 @@ If no path, broad scan of the whole project.
 Search sage-memory for any prior knowledge about this project or area.
 Don't re-learn what's already known — build on it.
 
-If prior knowledge exists, summarize: "I already know [X] about this
-area from previous sessions. I'll focus on what's new or missing."
+If prior knowledge exists, summarize: "Sage: I already know [X] about
+this area from previous sessions. I'll focus on what's new or missing."
 
 ## Step 3: Scan and Analyze
 
@@ -100,7 +106,7 @@ Follow the memory skill's `references/knowledge-report.md` guide:
 ## Step 6: Report Summary
 
 ```
-Learning complete: [area name]
+Sage: Learning complete — [area name]
 
 Knowledge stored:
   • [X] memories in sage-memory

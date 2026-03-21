@@ -2,6 +2,10 @@
 name: build
 version: "1.0.0"
 mode: build
+produces: ["Brief (medium+ tasks)", "Spec", "Plan with task checkboxes"]
+checkpoints: 3
+scope: "Single session for medium tasks, multi-session for large"
+user-role: "Review and approve at each gate"
 ---
 
 # Build Workflow
@@ -25,14 +29,14 @@ scope and detect gaps:
 - **Medium** (hours): Recommend a spec first (Step 4).
 - **Large** (days): Recommend brief → spec → plan (Steps 3-5).
 
-Present your assessment using numbered options:
+Present your assessment:
 
 ```
-This looks like a [size] task. I recommend:
+Sage recommends the **build** workflow for this [size] task:
 
-1) [Recommended path with time estimates]
-2) [Lighter alternative]
-3) Something else — describe your preference
+[1] [Recommended path]
+[2] [Lighter alternative]
+[3] Something else — describe your preference
 ```
 
 ## Step 3: Brief (medium/large tasks)
@@ -55,6 +59,8 @@ updated: YYYY-MM-DD
 
 🔒 **CHECKPOINT:**
 ```
+Sage: Brief saved to .sage/work/YYYYMMDD-slug/brief.md
+
 [A] Approve — continue to spec
 [R] Revise — tell me what to change
 ```
@@ -82,6 +88,8 @@ updated: YYYY-MM-DD
 
 🔒 **CHECKPOINT:**
 ```
+Sage: Spec saved to .sage/work/YYYYMMDD-slug/spec.md
+
 [A] Approve — continue to plan
 [R] Revise — tell me what to change
 ```
@@ -111,6 +119,8 @@ tasks-done: 0    # count of checked boxes
 
 🔒 **CHECKPOINT:**
 ```
+Sage: Plan saved to .sage/work/YYYYMMDD-slug/plan.md
+
 [A] Approve — start building
 [R] Revise — tell me what to change
 ```
@@ -134,6 +144,8 @@ Run full test suite. Review against spec. Check for missed edge cases.
 
 🔒 **CHECKPOINT:**
 ```
+Sage: Build complete. [summary of what was built]
+
 [A] Approve — merge/ship
 [R] Revise — here's what needs fixing
 [N] Next — what should we work on next?

@@ -2,6 +2,10 @@
 name: review
 version: "1.0.0"
 mode: review
+produces: ["Review report with strengths, issues, risks, verdict"]
+checkpoints: 1
+scope: "Single session"
+user-role: "Accept findings, revise, or discuss"
 ---
 
 # Review Workflow
@@ -15,11 +19,11 @@ If not specified, scan `.sage/work/` and `.sage/docs/` for recent
 artifacts. Present them:
 
 ```
-Available for review:
+Sage: Available for review:
 
-1) .sage/work/20260316-checkout/brief.md (updated today)
-2) .sage/work/20260316-checkout/spec.md (updated today)
-3) .sage/docs/ux-audit-homepage.md (updated yesterday)
+[1] .sage/work/20260316-checkout/brief.md (updated today)
+[2] .sage/work/20260316-checkout/spec.md (updated today)
+[3] .sage/docs/ux-audit-homepage.md (updated yesterday)
 
 Which artifact should I review? Or describe what you'd like evaluated.
 ```
@@ -41,12 +45,12 @@ skill prefixes in the filename, references in the content, or metadata.
 If the producing skill has quality criteria, load them. These become
 the evaluation framework.
 
-If this is a fresh session, note: "Reviewing with fresh eyes — I wasn't
-involved in producing this work."
+If this is a fresh session, note: "Sage: Reviewing with fresh eyes —
+I wasn't involved in producing this work."
 
-If this is the same session, note: "I produced this work, so my review
-may have blind spots I can't see. For a more independent evaluation,
-consider a fresh session."
+If this is the same session, note: "Sage: I produced this work, so my
+review may have blind spots. For a more independent evaluation,
+consider a fresh session or the /review command."
 
 ## Step 3: Evaluate
 
