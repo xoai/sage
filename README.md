@@ -3,7 +3,7 @@
 **An intelligent skills framework for AI agents.**
 
 <p align="center">
-  <img src="sage-logo.svg" alt="Sage - An intelligent skills framework for AI agents." width="300" />
+  <img src="sage-logo-eagle.svg" alt="Sage - An intelligent skills framework for AI agents." width="150" />
 </p>
 
 <p align="center">Think clearly. Work thoroughly. Deliver excellence.</p>
