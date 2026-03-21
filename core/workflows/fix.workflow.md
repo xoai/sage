@@ -53,9 +53,17 @@ Fix applied:
 [R] Revise — something's not right
 ```
 
-Update `.sage/progress.md`. Done.
+**On approval — Post-Flight:**
+1. Update `.sage/progress.md`
+2. Update `.sage/journal.md` if relevant
+3. Store root cause and fix in memory (tagged `learning`) — this
+   prevents the same bug from being re-investigated in future sessions
 
 ## Quality Criteria
+
+**Communication style:** Diagnostic precision. State root cause clearly,
+explain the chain of causation, and describe the fix in terms of what
+changed and why. Be specific about test coverage.
 
 Good fix output:
 - Root cause identified and explained, not just symptoms addressed

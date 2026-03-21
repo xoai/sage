@@ -219,6 +219,10 @@ Show the document to the user:
 
 ## Quality Criteria
 
+**Communication style:** Evaluator language. Be specific and evidence-based.
+Every finding needs observable evidence and user impact. Thoroughness
+is more valuable than diplomacy.
+
 Good UX audit output:
 - Covers all heuristic categories — not just visual issues
 - Findings cite specific elements, not vague impressions

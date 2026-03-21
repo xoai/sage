@@ -245,6 +245,33 @@ else
 fi
 
 # ═══════════════════════════════════════════════════════════════
+# Session context rule — high-priority orientation on session start
+# ═══════════════════════════════════════════════════════════════
+echo ""
+echo "🔗 Generating session context rule..."
+
+cat > "$AGENT_DIR/rules/sage-session-context.md" << 'SESSEOF'
+# Sage Session Context (High Priority)
+
+**On every session start**, before responding to the user:
+
+1. **Read state.** Scan `.sage/work/` for artifact frontmatter (title,
+   status, phase, tasks-done/tasks-total). Read `.sage/progress.md`
+   for current mode and next step.
+
+2. **Recall memory.** Call `sage_memory_search` with a query relevant
+   to the project or the user's first message. If MCP is not available,
+   check `.sage-memory/` folder. Categorize results by tags: knowledge,
+   structure (ontology), warnings (learning).
+
+3. **Orient briefly.** Report what you found: active work, recalled
+   context, and how it informs your approach.
+
+Then assess intent and proceed with the sage-navigator process.
+SESSEOF
+echo "  ✓ sage-session-context.md"
+
+# ═══════════════════════════════════════════════════════════════
 # Summary
 # ═══════════════════════════════════════════════════════════════
 echo ""

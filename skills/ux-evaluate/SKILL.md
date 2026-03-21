@@ -225,6 +225,10 @@ classifications are proposals — the user decides.
 
 ## Quality Criteria
 
+**Communication style:** Analytical language. Justify classifications
+with evidence — benchmarks, conventions, principles. Evaluations should
+hold up if challenged by a stakeholder.
+
 Good UX evaluation output:
 - Every dimension is classified (MUST KEEP / SHOULD IMPROVE / MAY CHANGE)
 - Classifications are justified with evidence — benchmark data, conventions, principles

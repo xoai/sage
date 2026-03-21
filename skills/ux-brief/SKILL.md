@@ -240,6 +240,10 @@ Together, they give the plan skill everything needed for task decomposition.
 
 ## Quality Criteria
 
+**Communication style:** Design direction language. Be visual and
+concrete — describe what the user will see and experience. Ground
+every direction in evaluation findings.
+
 Good UX brief output:
 - Every design direction is grounded in evaluation findings
 - "Keep" and "change" decisions are justified with evidence

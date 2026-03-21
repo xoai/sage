@@ -2,7 +2,11 @@
 
 **An intelligent skills framework for AI agents.**
 
-Think clearly. Work thoroughly. Deliver excellence.
+<p align="center">
+  <img src="sage-logo.svg" alt="Sage - An intelligent skills framework for AI agents." width="300" />
+</p>
+
+<p align="center">Think clearly. Work thoroughly. Deliver excellence.</p>
 
 Sage is a skills framework that makes AI agents think before they act,
 stay focused under complexity, and deliver outcomes you can trust.

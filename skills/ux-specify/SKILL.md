@@ -103,6 +103,10 @@ A structured document appended to or linked from the main specification:
 
 ## Quality Criteria
 
+**Communication style:** Requirements language. Be precise and testable.
+Every requirement should be verifiable by QA. Describe behavior, not
+implementation.
+
 Good UX specification output:
 - Every journey step has a corresponding requirement
 - Every pain point has a designed mitigation

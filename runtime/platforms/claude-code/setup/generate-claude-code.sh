@@ -117,7 +117,101 @@ for wf in "$CORE"/workflows/*.workflow.md; do
   [ -f "$wf" ] || continue
   basename_wf=$(basename "$wf" .workflow.md)
 
-  # Adapt: strip frontmatter, substitute refs with Claude Code paths, add $ARGUMENTS
+  # Special case: review command uses Task-based sub-agent delegation
+  if [ "$basename_wf" = "review" ]; then
+    cat > "$CLAUDE_DIR/commands/review.md" << 'REVIEWEOF'
+Review an artifact with independent evaluation via sub-agent delegation.
+
+## Step 1: Identify What to Review
+
+If not specified, scan `.sage/work/` and `.sage/docs/` for recent
+artifacts. Present them:
+
+```
+Available for review:
+
+1) .sage/work/20260316-checkout/brief.md (updated today)
+2) .sage/work/20260316-checkout/spec.md (updated today)
+3) .sage/docs/ux-audit-homepage.md (updated yesterday)
+
+Which artifact should I review?
+```
+
+If the user specifies an artifact, proceed directly.
+
+## Step 2: Prepare Review Context
+
+Before delegating, gather three pieces of information:
+
+1. **Artifact path** — the file to review
+2. **Producing skill path** — find which skill or workflow created it.
+   Check filename prefix, content references, or `.sage/journal.md`.
+   The quality criteria are in that skill's `## Quality Criteria` section
+   (look in `sage/skills/[skill]/SKILL.md` or `sage/core/workflows/[workflow].workflow.md`)
+3. **Memory query** — 3-5 keywords describing the artifact's domain
+   (e.g., "billing checkout payment saga")
+
+## Step 3: Delegate to Review Sub-Agent
+
+Tell the user: "Delegating to a review sub-agent for independent
+evaluation. The reviewer gets a fresh context window without my
+reasoning from this session."
+
+Use the Task tool to spawn a sub-agent with this prompt:
+
+```
+You are independently reviewing a Sage project artifact. You were
+NOT involved in producing this work — evaluate it with fresh eyes.
+
+STEPS:
+1. Read the artifact at: [ARTIFACT PATH]
+2. Read the quality criteria from: [SKILL/WORKFLOW PATH],
+   look for the section titled "## Quality Criteria"
+3. Call sage_memory_search(query: "[MEMORY QUERY]", limit: 5)
+   to understand project context. If this tool is not available,
+   check the .sage-memory/ folder for relevant files.
+4. Evaluate the artifact against EACH quality criterion specifically
+5. Check for completeness, consistency, and quality
+
+PRESENT YOUR REVIEW AS:
+
+## Review: [artifact name]
+
+### Strengths
+[Specific observations about what's well-done — not generic praise]
+
+### Issues Found
+[For each: what you observed → why it matters → suggested action]
+
+### Risks
+[Things that aren't wrong but could cause problems downstream]
+
+### Verdict
+✓ Ready to proceed — [minor notes if any]
+⚠ Needs revision — [specific items to address before proceeding]
+✗ Significant gaps — [recommend returning to an earlier step]
+```
+
+## Step 4: Present Findings
+
+Share the sub-agent's review with the user:
+
+```
+[A] Accept findings — proceed with suggested next step
+[R] Revise — I'll address the issues found
+[D] Discuss — let's talk about specific findings
+```
+
+Update `.sage/journal.md` with review completion.
+Run Post-Flight state management.
+
+$ARGUMENTS
+REVIEWEOF
+    echo "  ✓ review.md → /review (Task-delegated)"
+    continue
+  fi
+
+  # Standard: strip frontmatter, substitute refs with Claude Code paths, add $ARGUMENTS
   {
     sed '/^---$/,/^---$/d' "$wf" \
       | sed 's|\*\*sage-navigator\*\* skill|**sage-navigator** skill at `sage/core/capabilities/orchestration/sage-navigator/SKILL.md`|g' \
@@ -176,6 +270,42 @@ CONVEOF
 fi
 
 # ═══════════════════════════════════════════════════════════════
+# Session hook — auto-inject Sage context on session start
+# ═══════════════════════════════════════════════════════════════
+echo ""
+echo "🔗 Setting up session hook..."
+
+mkdir -p "$CLAUDE_DIR/hooks"
+HOOK_SRC="$CORE/../runtime/platforms/claude-code/hooks/sage-session-init.sh"
+
+if [ -f "$HOOK_SRC" ]; then
+  cp "$HOOK_SRC" "$CLAUDE_DIR/hooks/sage-session-init.sh"
+  chmod +x "$CLAUDE_DIR/hooks/sage-session-init.sh"
+  echo "  ✓ sage-session-init.sh"
+fi
+
+# Create or update settings.local.json with hook config
+SETTINGS_LOCAL="$CLAUDE_DIR/settings.local.json"
+cat > "$SETTINGS_LOCAL" << 'HOOKEOF'
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/sage-session-init.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
+HOOKEOF
+echo "  ✓ settings.local.json (session hook)"
+
+# ═══════════════════════════════════════════════════════════════
 # Summary
 # ═══════════════════════════════════════════════════════════════
 echo ""
@@ -185,6 +315,7 @@ echo ""
 CMD_COUNT=$(find "$CLAUDE_DIR/commands" -name "*.md" 2>/dev/null | wc -l)
 echo "  CLAUDE.md            → always-on project instructions"
 echo "  .claude/commands/    → $CMD_COUNT slash commands"
+echo "  .claude/hooks/       → session init hook"
 echo "  .sage/               → project state directory"
 echo ""
 echo "Next steps:"

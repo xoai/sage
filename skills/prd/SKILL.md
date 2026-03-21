@@ -295,6 +295,10 @@ to refine any section?"
 
 ## Quality Criteria
 
+**Communication style:** Product language. Emphasize user impact,
+business value, and measurable outcomes. Requirements should be
+understandable by non-technical stakeholders.
+
 Good PRD output:
 - Every requirement traces back to a JTBD outcome or validated insight
 - Requirements are solution-free — describe the need, not the implementation

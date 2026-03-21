@@ -44,7 +44,18 @@ deployment architecture, security model. Document key trade-offs and
 the reasoning behind each decision.
 
 Save architecture decisions to `.sage/docs/decision-*.md`.
-Save the full design to `.sage/work/YYYYMMDD-slug/spec.md`.
+Save the full design to `.sage/work/YYYYMMDD-slug/spec.md` with frontmatter:
+
+```yaml
+---
+title: "Architecture for [system]"
+status: in-progress
+phase: spec
+priority: high
+created: YYYY-MM-DD
+updated: YYYY-MM-DD
+---
+```
 
 🔒 **CHECKPOINT:**
 ```
@@ -53,13 +64,29 @@ Save the full design to `.sage/work/YYYYMMDD-slug/spec.md`.
 [Q] Question — I want to understand [specific decision] better
 ```
 
+On approval: update spec frontmatter to `status: completed`.
+Run Post-Flight (update journal, store architecture decisions in memory).
+
 ## Step 4: Milestone Plan
 
 Break the build into milestones (not tasks — milestones). Each milestone
 should be deployable and testable independently. Within each milestone,
 create a task plan.
 
-Save to `.sage/work/YYYYMMDD-slug/plan.md`.
+Save to `.sage/work/YYYYMMDD-slug/plan.md` with frontmatter:
+
+```yaml
+---
+title: "Plan for [system]"
+status: in-progress
+phase: plan
+priority: high
+created: YYYY-MM-DD
+updated: YYYY-MM-DD
+tasks-total: 0
+tasks-done: 0
+---
+```
 
 🔒 **CHECKPOINT:**
 ```
@@ -67,10 +94,17 @@ Save to `.sage/work/YYYYMMDD-slug/plan.md`.
 [R] Revise — adjust the breakdown
 ```
 
+On approval: run Post-Flight (update journal, store findings).
+
 ## Step 5: Phased Build
 
 Execute milestone by milestone. Each milestone follows the build workflow:
 implement → test → review → checkpoint before moving to the next.
+
+**After completing each milestone:**
+1. Check off milestone tasks in plan.md
+2. Update `tasks-done` and `updated` in plan.md frontmatter
+3. Run Post-Flight (update journal, store findings in memory)
 
 After each milestone:
 ```
@@ -82,6 +116,11 @@ Milestone [N] complete: [summary]
 ```
 
 ## Quality Criteria
+
+**Communication style:** Systems thinking. Name trade-offs explicitly,
+discuss failure modes, and explain decisions in terms of constraints
+and alternatives considered. Technical stakeholders need precision;
+non-technical stakeholders need a one-paragraph summary.
 
 Good architecture output:
 - Trade-offs are named explicitly — if there are no trade-offs, the thinking isn't deep enough

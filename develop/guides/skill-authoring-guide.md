@@ -521,3 +521,55 @@ workflow, which uses these same criteria for independent evaluation.
 - [ ] Quality Criteria section defines specific, checkable standards
 - [ ] Self-Review section instructs the agent to check against criteria
 - [ ] Criteria are domain-appropriate (not generic)
+
+## Communication Style (Recommended)
+
+Skills should include a **Communication style** note at the top of their
+Quality Criteria section. This tells the agent HOW to communicate, not
+just WHAT to produce. The style should match the domain:
+
+| Domain | Style | Example |
+|--------|-------|---------|
+| Product management | Product language | "Emphasize user impact and business value" |
+| UX design | Design/evaluator language | "Be visual and evidence-based" |
+| Engineering | Technical precision | "Name trade-offs, reference file paths concretely" |
+| Architecture | Systems thinking | "Discuss failure modes, explain constraints" |
+| Debugging | Diagnostic precision | "State root cause, explain chain of causation" |
+
+The communication style is one line — not a separate section. It sets
+the tone for the quality criteria that follow.
+
+## Artifact Frontmatter Convention
+
+When skills produce artifacts saved to `.sage/work/`, those artifacts
+should include YAML frontmatter for state tracking:
+
+```yaml
+---
+title: "Brief description"
+status: in-progress  # pending | in-progress | completed | blocked
+phase: spec          # brief | spec | plan | implement | review
+priority: high       # high | medium | low
+created: YYYY-MM-DD
+updated: YYYY-MM-DD
+---
+```
+
+For plan files, add task tracking:
+
+```yaml
+---
+title: "Plan for [initiative]"
+status: in-progress
+phase: plan
+priority: high
+created: YYYY-MM-DD
+updated: YYYY-MM-DD
+tasks-total: 8
+tasks-done: 3
+---
+```
+
+The navigator reads this frontmatter during the State step to orient
+quickly without reading full documents. Workflows update frontmatter
+during Post-Flight state management.

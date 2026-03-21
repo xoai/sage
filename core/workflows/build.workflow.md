@@ -40,7 +40,18 @@ This looks like a [size] task. I recommend:
 If no brief exists and the task warrants one, define: what to build,
 why, acceptance scenarios, and constraints.
 
-Save to `.sage/work/YYYYMMDD-slug/brief.md`.
+Save to `.sage/work/YYYYMMDD-slug/brief.md` with frontmatter:
+
+```yaml
+---
+title: "Brief description of the initiative"
+status: in-progress
+phase: brief
+priority: high  # high | medium | low
+created: YYYY-MM-DD
+updated: YYYY-MM-DD
+---
+```
 
 🔒 **CHECKPOINT:**
 ```
@@ -48,12 +59,26 @@ Save to `.sage/work/YYYYMMDD-slug/brief.md`.
 [R] Revise — tell me what to change
 ```
 
+On approval: update brief frontmatter to `status: completed`.
+Run Post-Flight (update journal, store findings).
+
 ## Step 4: Spec
 
 Define: components, data model, APIs, key decisions, edge cases.
 Resolve open questions from the brief.
 
-Save to `.sage/work/YYYYMMDD-slug/spec.md`.
+Save to `.sage/work/YYYYMMDD-slug/spec.md` with frontmatter:
+
+```yaml
+---
+title: "Spec for [initiative]"
+status: in-progress
+phase: spec
+priority: high
+created: YYYY-MM-DD
+updated: YYYY-MM-DD
+---
+```
 
 🔒 **CHECKPOINT:**
 ```
@@ -61,12 +86,28 @@ Save to `.sage/work/YYYYMMDD-slug/spec.md`.
 [R] Revise — tell me what to change
 ```
 
+On approval: update spec frontmatter to `status: completed`.
+Run Post-Flight (update journal, store findings).
+
 ## Step 5: Plan
 
 Break into small tasks (2-5 min each). Each task: what to do, done
 criteria, files involved. Checkboxes for tracking.
 
-Save to `.sage/work/YYYYMMDD-slug/plan.md`.
+Save to `.sage/work/YYYYMMDD-slug/plan.md` with frontmatter:
+
+```yaml
+---
+title: "Plan for [initiative]"
+status: in-progress
+phase: plan
+priority: high
+created: YYYY-MM-DD
+updated: YYYY-MM-DD
+tasks-total: 0   # count of checkboxes
+tasks-done: 0    # count of checked boxes
+---
+```
 
 🔒 **CHECKPOINT:**
 ```
@@ -74,10 +115,16 @@ Save to `.sage/work/YYYYMMDD-slug/plan.md`.
 [R] Revise — tell me what to change
 ```
 
+On approval: run Post-Flight (update journal, store findings).
+
 ## Step 6: Implement
 
-Per task: test first → code → refactor → run suite → commit →
-check the box in plan.md.
+Per task: test first → code → refactor → run suite → commit.
+
+**After completing each task:**
+1. Check the box in plan.md (`- [ ]` → `- [x]`)
+2. Update `tasks-done` and `updated` in plan.md frontmatter
+3. Run Post-Flight if the task produced significant findings
 
 If relevant Sage skills exist, read and follow them.
 
@@ -92,9 +139,18 @@ Run full test suite. Review against spec. Check for missed edge cases.
 [N] Next — what should we work on next?
 ```
 
-Update `.sage/progress.md`. Recommend what's next.
+**On approval — final state management:**
+1. Update plan.md frontmatter: `status: completed`
+2. Update `.sage/progress.md` with completion
+3. Update `.sage/journal.md` with final status for all artifacts
+4. Store key findings in memory (architecture, conventions, insights)
+5. Recommend what's next
 
 ## Quality Criteria
+
+**Communication style:** Engineering precision. Emphasize trade-offs,
+edge cases, and implementation specifics. Reference file paths, function
+names, and test results concretely.
 
 Good build output:
 - Implementation matches the spec — no undocumented deviations

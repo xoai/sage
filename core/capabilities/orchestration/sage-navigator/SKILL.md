@@ -68,10 +68,19 @@ memory skill at `skills/memory/SKILL.md`.
 
 ### State
 
-Read `.sage/progress.md` (skip if it doesn't exist). Scan `.sage/docs/`
-and `.sage/work/` to know what artifacts already exist.
+Read `.sage/progress.md` (skip if it doesn't exist). Scan `.sage/work/`
+for active initiatives by reading YAML frontmatter from artifact files:
 
-- **Work in progress?** Summarize and offer to resume. If the user's new
+```
+For each directory in .sage/work/*/:
+  Read frontmatter from brief.md, spec.md, or plan.md (whichever exists)
+  Note: title, status, phase, priority, tasks-done/tasks-total
+```
+
+This gives you instant orientation without reading full documents.
+
+- **Work in progress?** (status: in-progress) Summarize the initiative,
+  current phase, and task progress. Offer to resume. If the user's new
   request is different, present both options — continue the old or start
   the new. Don't silently abandon work.
 - **Fresh project?** Move on to intent.
@@ -277,12 +286,38 @@ location:
 - Initiative work → `.sage/work/YYYYMMDD-slug/` (brief.md, spec.md, plan.md)
 - Update `.sage/progress.md` after each significant step
 
-### Post-Flight: Memory Store
+### Post-Flight: State Management
 
-**This step runs after EVERY significant workflow step.** Evaluate
-whether findings from this step should persist across sessions.
+**This step runs after EVERY significant workflow step.** Three duties,
+in order. Do not skip any.
 
-Ask: "Did I learn anything that would help in a future session?"
+**1. Update plan progress.**
+
+If a plan exists at `.sage/work/*/plan.md`:
+- Check off completed tasks (`- [ ]` → `- [x]`)
+- Update `tasks-done` count in frontmatter
+- Update `status` in frontmatter if phase changed
+- Update `updated` date in frontmatter
+
+If a brief or spec was just completed:
+- Set its frontmatter `status` to `completed`
+- Update `updated` date
+
+**2. Update journal.**
+
+If an artifact was created or modified, add or update an entry in
+`.sage/journal.md`:
+
+```markdown
+| Artifact | Status | Path | Updated |
+|----------|--------|------|---------|
+| Billing Brief | completed | .sage/work/20260320-billing/brief.md | 2026-03-20 |
+| Billing Spec | in-progress | .sage/work/20260320-billing/spec.md | 2026-03-21 |
+```
+
+**3. Store findings in memory.**
+
+Evaluate: "Did I learn anything that would help in a future session?"
 
 If yes, call `sage_memory_store` for each finding:
 ```
