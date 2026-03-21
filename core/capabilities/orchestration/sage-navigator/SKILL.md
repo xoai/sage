@@ -87,6 +87,19 @@ This gives you instant orientation without reading full documents.
   Move on to intent.
 - **Artifacts exist but nothing active?** Note the context, move on.
 
+### Routing Context
+
+If you already announced a workflow via Tier 2/3 routing (from the
+always-on instructions in CLAUDE.md or GEMINI.md), the intent and
+scope assessment is done — skip to gap detection in section 2.
+
+If the user typed a slash command (`/build`, `/fix`, etc.), the
+workflow is explicit — proceed directly to the workflow's first step.
+
+Full intent and scope assessment below applies when the navigator
+is activated via `/sage` or for ambiguous requests that need deeper
+classification.
+
 ### Intent
 
 Map the user's request to the spectrum:
@@ -161,7 +174,6 @@ you didn't need than to rework a feature that needed one.
 When recommending a workflow, read its frontmatter (`produces`,
 `checkpoints`, `scope`, `user-role`) and present a **workflow card**:
 
-```
 Sage recommends the **build** workflow:
 
   Produces: Brief, spec, plan with task checkboxes
@@ -172,7 +184,6 @@ Sage recommends the **build** workflow:
   [1] Start build workflow (recommended)
   [2] Lighter — skip brief, go straight to spec
   [3] Something else — describe your preference
-```
 
 The card sets expectations before the user commits. They know what
 artifacts to expect, how many decisions they'll face, and how long
@@ -180,7 +191,6 @@ it takes.
 
 For comprehensive scope, contrast options clearly:
 
-```
 Sage recommends the **architect** workflow:
 
   Produces: ADRs, system spec, milestone plan
@@ -191,7 +201,6 @@ Sage recommends the **architect** workflow:
   [1] Start architect workflow (recommended)
   [2] Lighter — build workflow with a spec, skip ADRs
   [3] Something else — describe your preference
-```
 
 
 
@@ -256,40 +265,34 @@ one for the moment.
 When the user needs to choose a direction. Use 2-4 options, always
 include a free-form escape. Keep options concise.
 
-```
 Sage recommends starting with research before building —
 it typically surfaces requirements that aren't visible from the request alone.
 
 [1] Start with research, then build
 [2] Skip research, go straight to building
 [3] Something else — describe what you have in mind
-```
 
 ### Checkpoints — shortcuts
 
 When Sage has produced a deliverable and needs approval. Keep it fast.
 
-```
 Sage: Brief saved to .sage/work/20260315-homepage-redesign/brief.md
 
 [A] Approve — continue to spec
 [R] Revise — tell me what to change
 [V] View the full brief
-```
 
 ### Continuations — conversational with a nudge
 
 When a step is done and Sage recommends what's next. Lead with a brief
 summary of findings, then suggest the natural next step.
 
-```
 Sage: Research complete. Three key findings emerged —
 the most significant is [brief summary of top finding].
 
 Recommended next: Create a brief grounded in these findings
 
 [C] Continue with brief  |  Or tell me what you'd like to do
-```
 
 **Always accept free-form input.** These patterns guide, they don't
 constrain. If the user types a sentence instead of a number, respond

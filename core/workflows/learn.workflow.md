@@ -18,13 +18,11 @@ understand a module, or build persistent memory for a project area.
 If a path is specified, that's the target — deep dive.
 If no path, broad scan of the whole project.
 
-```
 Sage: What would you like to learn?
 
 [1] Broad scan — learn the project structure, stack, patterns, conventions
 [2] Deep dive — learn a specific module, service, or area
 [3] Something else — describe what you want to understand
-```
 
 ## Step 2: Search Existing Knowledge
 
@@ -105,7 +103,6 @@ Follow the memory skill's `references/knowledge-report.md` guide:
 
 ## Step 6: Report Summary
 
-```
 Sage: Learning complete — [area name]
 
 Knowledge stored:
@@ -116,7 +113,6 @@ Key findings:
   • [Top 3-4 insights, one line each]
 
 [C] Continue — anything else to explore?
-```
 
 ## Rules
 

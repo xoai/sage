@@ -23,7 +23,6 @@ Read and display:
 
 Present concisely:
 
-```
 Sage: Project status
 
   Project: [name]
@@ -37,7 +36,6 @@ Sage: Project status
   Docs: jtbd-momo-qlct.md, decision-auth-provider.md
 
   [C] Continue current work  |  Or tell me what you'd like to do
-```
 
 ## Rules
 

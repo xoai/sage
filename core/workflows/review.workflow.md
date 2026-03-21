@@ -18,7 +18,6 @@ session for maximum objectivity, but also works within an existing session.
 If not specified, scan `.sage/work/` and `.sage/docs/` for recent
 artifacts. Present them:
 
-```
 Sage: Available for review:
 
 [1] .sage/work/20260316-checkout/brief.md (updated today)
@@ -26,7 +25,6 @@ Sage: Available for review:
 [3] .sage/docs/ux-audit-homepage.md (updated yesterday)
 
 Which artifact should I review? Or describe what you'd like evaluated.
-```
 
 If the user specifies an artifact, proceed directly.
 
@@ -105,11 +103,9 @@ Based on the verdict:
 - **Needs revision:** List specific items to address, offer to help
 - **Significant gaps:** Recommend which step to return to and why
 
-```
 [A] Accept findings — proceed with suggested next step
 [R] Revise — I'll address the issues found
 [D] Discuss — let's talk about specific findings
-```
 
 Update `.sage/progress.md` with review completion.
 

@@ -18,13 +18,11 @@ Ask for or identify: what's broken, when it started, error messages,
 steps to reproduce. If the user already provided details, confirm
 your understanding before proceeding.
 
-```
 Sage: Here's what I understand:
 - [Problem summary]
 - [Expected vs actual behavior]
 
 [C] Correct — start debugging  |  Or clarify what I got wrong
-```
 
 ## Step 2: Investigate Root Cause
 
@@ -34,25 +32,21 @@ a fix.
 
 Produce a root cause statement with evidence:
 
-```
 Sage: Root cause identified.
 
   Cause: [what's actually wrong — the source, not the symptom]
   Evidence: [what you observed that confirms this]
   Chain: [how the root cause leads to the visible symptom]
   Confidence: [high / medium / low]
-```
 
 If multiple potential causes exist:
 
-```
 Sage: I found two possible causes:
 
 [1] [Cause A] — in [file:line] — [evidence for this]
 [2] [Cause B] — in [file:line] — [evidence for this]
 
 Which should I investigate first?
-```
 
 **Red flags — STOP and return to investigation if you catch
 yourself thinking:**
@@ -66,7 +60,6 @@ Start with the Minimal Reproduction technique — strip the problem to
 the smallest case that still exhibits the issue.
 
 🔒 **ROOT CAUSE GATE:**
-```
 Sage: Root cause analysis complete.
 
   Cause: [root cause statement]
@@ -76,7 +69,6 @@ Sage: Root cause analysis complete.
 [A] Approve diagnosis — proceed to fix
 [R] Revise — investigate further
 [S] Stuck — try a different approach (activates problem-solving)
-```
 
 Do not proceed to Step 3 until the user confirms the root cause.
 
@@ -96,13 +88,11 @@ code. Verify the test passes.
 4. If any test fails, diagnose and fix before proceeding —
    do NOT present the checkpoint with failing tests
 
-```
 Sage: Verification results:
 
   Test suite: [command that was run]
   Result: [X passed, 0 failed] ← paste actual output
   Regression check: [any related tests that also pass]
-```
 
 **If tests fail after the fix:** Return to Step 2. The root cause
 analysis was incomplete — either the diagnosis was wrong, or the
@@ -110,7 +100,6 @@ fix introduced a new issue.
 
 ## Step 5: Close
 
-```
 Sage: Fix verified.
 - Root cause: [what was wrong]
 - Change: [what was changed, in which files]
@@ -118,7 +107,6 @@ Sage: Fix verified.
 
 [A] Approve — commit and close
 [R] Revise — something's not right
-```
 
 **On approval — Post-Flight:**
 1. Update `.sage/progress.md`

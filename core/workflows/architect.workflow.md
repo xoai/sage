@@ -33,13 +33,11 @@ existing systems to integrate with, non-negotiables.
 If Sage has relevant UNDERSTAND skills (research, analysis), recommend
 them here:
 
-```
 Sage recommends understanding the context before designing:
 
 [1] Start with research — understand user needs first
 [2] Skip research — go straight to architecture design
 [3] Something else
-```
 
 ## Step 3: Architecture Design
 
@@ -95,12 +93,10 @@ tasks-done: 0
 ```
 
 🔒 **CHECKPOINT:**
-```
 Sage: Milestone plan saved to .sage/work/YYYYMMDD-slug/plan.md
 
 [A] Approve — start building milestone 1
 [R] Revise — adjust the breakdown
-```
 
 On approval: run Post-Flight (update journal, store findings).
 
@@ -115,13 +111,11 @@ implement → test → review → checkpoint before moving to the next.
 3. Run Post-Flight (update journal, store findings in memory)
 
 After each milestone:
-```
 Sage: Milestone [N] complete — [summary]
 
 [C] Continue to milestone [N+1]
 [R] Revise — adjust before continuing
 [P] Pause — save state for next session
-```
 
 ## Quality Criteria
 

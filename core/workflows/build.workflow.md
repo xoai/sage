@@ -31,13 +31,11 @@ scope and detect gaps:
 
 Present your assessment:
 
-```
 Sage recommends the **build** workflow for this [size] task:
 
 [1] [Recommended path]
 [2] [Lighter alternative]
 [3] Something else — describe your preference
-```
 
 ## Step 3: Brief (medium/large tasks)
 
@@ -87,12 +85,10 @@ updated: YYYY-MM-DD
 ```
 
 🔒 **CHECKPOINT:**
-```
 Sage: Spec saved to .sage/work/YYYYMMDD-slug/spec.md
 
 [A] Approve — continue to plan
 [R] Revise — tell me what to change
-```
 
 On approval: update spec frontmatter to `status: completed`.
 Run Post-Flight (update journal, store findings).
