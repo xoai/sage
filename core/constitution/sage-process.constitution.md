@@ -46,8 +46,13 @@ a brief takes 5 minutes, fixing built code takes hours.
 
 ## Rule 5: Save State
 
-After completing any significant step, update `.sage/progress.md` so
-the next session can resume seamlessly. Include:
+After completing any significant step, run Post-Flight state management:
+1. Update plan progress — check completed tasks, update frontmatter
+2. Update `.sage/journal.md` with artifact changes
+3. Store findings in memory if they would help future sessions
+4. Update `.sage/progress.md` so the next session can resume seamlessly
+
+Progress should include:
 - Current mode/intent
 - Active initiative (path to work folder)
 - Last completed step
