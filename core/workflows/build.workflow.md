@@ -138,9 +138,34 @@ Per task: test first → code → refactor → run suite → commit.
 
 If relevant Sage skills exist, read and follow them.
 
-## Step 7: Review and Close
+**If stuck during implementation:** Activate the `problem-solving` skill.
+Match the stuck pattern to a technique — complexity spiral → Simplification,
+forced solution → Inversion, works-locally-but-fails → Scale Testing,
+can't isolate → Minimal Reproduction.
 
-Run full test suite. Review against spec. Check for missed edge cases.
+## Step 7: Verify
+
+**Run the verification command. Read the output. THEN report.**
+
+1. Run the project's test suite (full suite, not just new tests)
+2. Read the actual output — don't summarize from memory
+3. Confirm: zero failures, zero errors
+4. If any test fails, fix it before proceeding — do NOT present
+   the completion checkpoint with failing tests
+
+```
+Sage: Verification results:
+
+  Test suite: [command that was run]
+  Result: [X passed, 0 failed] ← paste actual output
+```
+
+**If tests fail:** Diagnose and fix. If the failure persists after
+2 attempts, activate the `problem-solving` skill.
+
+## Step 8: Review and Close
+
+Review against spec. Check for missed edge cases.
 
 🔒 **CHECKPOINT:**
 ```
@@ -166,21 +191,25 @@ names, and test results concretely.
 
 Good build output:
 - Implementation matches the spec — no undocumented deviations
-- Tests exist for new functionality and pass
+- Tests exist for new functionality and pass — output pasted as evidence
 - Edge cases from the spec are handled, not just happy paths
 - Code follows project conventions (naming, structure, patterns)
 - No unrelated changes mixed in — scope discipline maintained
 - Plan checkboxes reflect actual completion status
+- Verification output is from the actual test run, not a summary
 
 ## Self-Review
 
-Before presenting completed work, check each criterion above. Note
-what's covered and what gaps exist. Present your self-assessment
-alongside the implementation summary.
+Before presenting completed work, check each criterion above. Also:
+- Did I paste actual test output, or just claim tests pass?
+- Did I run the FULL suite, or just the new tests?
+- Are there spec requirements I didn't implement or test?
 
 ## Rules
 
 - Test first, always.
+- Verify with evidence: paste test output, don't summarize.
 - Checkpoints are mandatory — never skip human approval.
 - Stay in scope — note improvements, don't add them.
+- If stuck, use problem-solving: don't keep trying the same approach.
 - Save state after every significant step.
