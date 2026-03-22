@@ -237,7 +237,7 @@ Before presenting, validate:
 Save to `.sage/docs/opportunity-map.md` using the
 template from `templates/opportunity-map-template.md`.
 
-Update `.sage/journal.md`: append a change log entry recording pursue/
+Append decisions to `.sage/decisions.md` recording pursue/
 monitor/defer decisions, key rationale, and sequencing. Update the
 "Current Artifacts" section.
 

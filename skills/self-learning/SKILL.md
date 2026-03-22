@@ -86,10 +86,11 @@ keyword search. See `references/ontology-integration.md` for details.
 
 **Reporting what you found:**
 
-When learnings are found, report the **prevention rule**, not the
-incident history. Say: "Before working with Stripe webhooks, verify that
-body parsing middleware is skipped for the webhook route." Not: "Last
-time, the agent made a mistake with Stripe webhooks."
+When learnings are found, report the **WHEN/CHECK/BECAUSE prevention
+rule**, not the incident history. Say: "Before working with Stripe
+webhooks: CHECK that body parsing middleware is skipped for the
+webhook route, BECAUSE parsed JSON breaks signature verification."
+Not: "Last time, the agent made a mistake with Stripe webhooks."
 
 When nothing is found, say nothing. Don't announce empty results.
 
@@ -103,11 +104,17 @@ trigger list and examples.
 
 | Type | Trigger |
 |------|---------|
-| `gotcha` | Non-obvious behavior discovered through debugging |
-| `correction` | User corrected the agent ("No, that's wrong...") |
+| `gotcha` | Non-obvious behavior, OR 3+ approaches logged in scratch.md |
+| `correction` | User corrected the agent ("No, that's wrong...") — MANDATORY |
 | `convention` | Undocumented project/team pattern discovered |
 | `api-drift` | API/library behaves differently than training data |
 | `error-fix` | Recurring error with a known solution |
+
+**Automatic gotcha trigger:** If `.sage/work/[initiative]/scratch.md`
+has 3 or more `approach-N:` entries for the same problem, this is
+automatically a gotcha — store the learning before continuing. The
+scratch file is the external signal; don't rely on self-assessment
+to count your own retries.
 
 ### How to Store
 
@@ -126,10 +133,27 @@ Quick reference:
 1. **What happened** — the symptom or situation
 2. **Why it was wrong** — root cause or misconception
 3. **What's correct** — the right approach
-4. **Prevention rule** — what to check *before* this happens again
+4. **Prevention rule** — structured WHEN/CHECK/BECAUSE format:
+
+```
+WHEN: [specific context — what triggers the check]
+CHECK: [specific action — what to verify before proceeding]
+BECAUSE: [what goes wrong if you don't]
+```
 
 The prevention rule is the most important part. It transforms the
-learning from an incident log into a behavioral instruction.
+learning from an incident log into a behavioral instruction that
+fires automatically in future sessions.
+
+**Prevention Rule Quality Checklist** — before storing, verify:
+- **Specific?** Does it name the exact thing to check? ("Check
+  Supabase version in package.json" not "be careful with APIs")
+- **Pre-condition?** Is it a check that runs BEFORE the action,
+  not advice about the action itself?
+- **Standalone?** Could a different agent, with zero context about
+  this mistake, follow this rule and avoid the problem?
+
+If any criterion fails, rewrite the rule until all three pass.
 
 **Tags:** Always `["self-learning", "<type>", ...domain keywords]`
 ```
@@ -143,7 +167,12 @@ entity, add `edge:{entity_id}` to tags for targeted recall.
 **Scope:** `project` for project-specific learnings (default). `global`
 for patterns that apply across all projects.
 
-**Full example with prevention rule:**
+**Cross-agent sharing:** All agents on the same project share
+project-scoped sage-memory. A learning stored by a review sub-agent
+is visible to the build agent in the next session. Use consistent
+tags so cross-agent recall works.
+
+**Full example with WHEN/CHECK/BECAUSE:**
 ```
 sage_memory_store:
   title: "[LRN:gotcha] Stripe webhook requires raw body before JSON parsing"
@@ -155,13 +184,22 @@ sage_memory_store:
     misleading — suggests wrong secret, not wrong body format.
     What's correct: Use express.raw({type: 'application/json'})
     middleware for the webhook route, before the global body parser.
-    Prevention: Before implementing any webhook handler that verifies
-    signatures (Stripe, GitHub, Twilio), check whether the verification
-    SDK requires the raw request body. If yes, ensure body parsing
-    middleware is skipped or deferred for that route.
+    WHEN: Implementing any webhook handler that verifies signatures
+    CHECK: Does the verification SDK require raw request body? If yes,
+    ensure body parsing middleware is skipped for that route. Check the
+    SDK docs for "raw body" or "signature verification" requirements.
+    BECAUSE: Body parsers replace the raw body with parsed JSON, making
+    signature verification fail with a misleading error message.
   tags: ["self-learning", "gotcha", "stripe", "webhooks", "api"]
   scope: "project"
 ```
+
+**Bad prevention rule vs good:**
+- Bad: "Be careful with Stripe webhooks." → fails all 3 criteria
+- Bad: "Remember to use raw body." → not a pre-condition check
+- Good: "WHEN: Implementing webhook signature verification / CHECK:
+  Does the SDK require raw body? Skip body parser for that route. /
+  BECAUSE: Parsed JSON breaks signature verification."
 
 ### When NOT to Store
 

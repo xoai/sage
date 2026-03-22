@@ -28,8 +28,7 @@ your-project/
 │       ├── architect.md         # /architect — system design
 │       └── status.md            # /status — project state
 ├── .sage/                       # Project state (platform-agnostic)
-│   ├── progress.md
-│   ├── journal.md
+│   ├── decisions.md          # Shared decision log
 │   ├── docs/
 │   └── work/
 └── sage/                        # Framework source
@@ -75,8 +74,7 @@ when referenced. This keeps context clean.
 
 All Sage state lives in `.sage/` — platform-agnostic:
 
-- `.sage/progress.md` — session continuity (what's done, what's next)
-- `.sage/journal.md` — artifact index and change log
+- `.sage/decisions.md` — shared decision log (agent + human)
 - `.sage/docs/` — analyses, voice & tone guides, decision records
 - `.sage/work/` — specs, plans, briefs per initiative
 

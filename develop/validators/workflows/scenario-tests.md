@@ -31,7 +31,7 @@ the scenario. Compare actual behavior against expected.
 | 8 | Gate 4: imports and APIs are real | Quick check |
 | 9 | Gate 5: tests actually pass (already shown) | Evidence provided |
 | 10 | Commits with semantic message | `fix(utils): correct fahrenheit to celsius formula` |
-| 11 | Saves progress | Updates .sage/progress.md |
+| 11 | Saves progress | Appends to .sage/decisions.md |
 
 **Total time:** < 5 minutes
 

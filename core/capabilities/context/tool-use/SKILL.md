@@ -150,7 +150,7 @@ Monitor your context usage. As conversation grows:
 - **Mid conversation (30-60%):** Prefer Layer 1 and Layer 3 (isolated).
   Avoid Layer 2 calls that return large text blocks.
 - **Late in conversation (> 60%):** Layer 1 only. If you need MCP information,
-  use Layer 3 with a tight summary requirement. Re-read `.sage/progress.md`
+  use Layer 3 with a tight summary requirement. Re-read `.sage/decisions.md`
   to avoid losing your place.
 
 ## When NOT to Use Tools

@@ -10,7 +10,7 @@
 #   3. Git availability and status
 #   4. Node.js / Python / package manager availability
 #   5. Extension compatibility with detected stack
-#   6. State file consistency (progress.md ↔ plan files)
+#   6. State consistency (artifact frontmatter ↔ file system)
 #
 # What it does NOT do:
 #   - Analyze code quality (agent's job)
@@ -203,9 +203,14 @@ echo ""
 # ─── 7. State Consistency ────────────────────────────────────────────────
 
 echo "State:"
-if [ -f "$SAGE_DIR/progress.md" ]; then
-  feature=$(grep -oP 'Feature:\s*\K.*' "$SAGE_DIR/progress.md" 2>/dev/null || echo "")
-  plan_path=$(grep -oP 'Plan:\s*\K.*' "$SAGE_DIR/progress.md" 2>/dev/null || echo "")
+# State check via artifact scanning
+feature=""
+plan_path=""
+for dir in "$SAGE_DIR"/work/*/; do
+  [ -d "$dir" ] || continue
+  [ -f "${dir}plan.md" ] && plan_path="${dir}plan.md" && break
+done
+if [ -n "$plan_path" ]; then
 
   if [ -n "$feature" ] && [ "$feature" != "(pending)" ]; then
     pass "Active feature: $feature"
@@ -221,7 +226,7 @@ if [ -f "$SAGE_DIR/progress.md" ]; then
           pass "Plan exists (no tasks yet)"
         fi
       else
-        warn "progress.md points to $plan_path but file not found"
+        warn "artifact points to $plan_path but file not found"
       fi
     fi
   else

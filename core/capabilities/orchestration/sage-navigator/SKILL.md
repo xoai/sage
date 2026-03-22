@@ -68,12 +68,15 @@ memory skill at `skills/memory/SKILL.md`.
 
 ### State
 
-Read `.sage/progress.md` (skip if it doesn't exist). Scan `.sage/work/`
-for active initiatives by reading YAML frontmatter from artifact files:
+Scan `.sage/work/` for active initiatives by reading YAML frontmatter
+from artifact files:
 
 For each directory in `.sage/work/*/`:
   Read frontmatter from brief.md, spec.md, or plan.md (whichever exists).
   Note: title, status, phase.
+
+Read `.sage/decisions.md` for recent context — last 3-5 entries give
+you the reasoning behind current state.
 
 This gives you instant orientation without reading full documents.
 
@@ -84,10 +87,6 @@ This gives you instant orientation without reading full documents.
 - **Fresh project?** Report: "Sage: Fresh project, no work in progress."
   Move on to intent.
 - **Artifacts exist but nothing active?** Note the context, move on.
-- **State mismatch?** If progress.md and `.sage/work/` artifacts disagree
-  (e.g., progress says "spec phase" but a plan already exists), trust the
-  artifacts over progress.md. The file system is the ground truth. Update
-  progress.md to match reality, then report the corrected state.
 
 ### Routing Context
 
@@ -251,7 +250,7 @@ involves multiple components and design decisions. Starting with a spec
 to define the approach before implementing."
 
 If the user explicitly asks to skip the spec, note the risk and
-proceed — but record the skip and rationale in progress.md. Don't
+proceed — but record the skip and rationale in decisions.md. Don't
 offer to skip proactively.
 
 **Comprehensive scope + gaps:** Start from understanding. "This is
@@ -264,7 +263,7 @@ reveal requirements that aren't obvious from the initial request."
 Don't recommend when the task is too small to benefit, when the user has
 explicitly said they want to skip process, or when the recommendation
 would break flow on urgent work. After a user declines two consecutive
-recommendations, reduce frequency — note the preference in progress.md,
+recommendations, reduce frequency — note the preference in decisions.md,
 focus on execution.
 
 
@@ -324,14 +323,24 @@ location:
 
 - Project-level knowledge → `.sage/docs/skill-prefix-description.md`
 - Initiative work → `.sage/work/YYYYMMDD-slug/` (brief.md, spec.md, plan.md)
-- Update `.sage/progress.md` after each significant step
+- Initiative work → `.sage/work/YYYYMMDD-slug/` (brief.md, spec.md, plan.md)
 
 ### Post-Flight: State Management
 
 **This step runs at CHECKPOINTS only — not per-task, not per-file.**
-Three duties, in order. Do not skip any.
 
-**1. Update artifacts.**
+**1. Append to decisions.md.**
+
+If a significant decision was made at this checkpoint, append it to
+`.sage/decisions.md`. The decision is typically part of the checkpoint
+output — write it once, append to decisions.md. Format:
+
+```markdown
+### YYYY-MM-DD — [Decision title]
+[What was decided, why, alternatives considered.]
+```
+
+**2. Update artifact frontmatter.**
 
 If a brief or spec was just completed:
 - Set its frontmatter `status` to `completed`
@@ -341,43 +350,14 @@ If the workflow is closing:
 - Walk through plan.md and check completed tasks in bulk
 - Update plan frontmatter `status` to `completed`
 
-**2. Update journal.**
-
-If an artifact was created or modified, add or update an entry in
-`.sage/journal.md`:
-
-```markdown
-| Artifact | Status | Path | Updated |
-|----------|--------|------|---------|
-| Billing Brief | completed | .sage/work/20260320-billing/brief.md | 2026-03-20 |
-| Billing Spec | in-progress | .sage/work/20260320-billing/spec.md | 2026-03-21 |
-```
-
 **3. Store findings in memory.**
 
-Evaluate: "Did I learn anything that would help in a future session?"
+If sage-memory is available and you learned something worth storing,
+call `sage_memory_store`. If not available, continue — don't block.
 
-If yes, call `sage_memory_store` for each finding:
-```
-sage_memory_store(
-  content: "detailed finding — what, why, implications",
-  title: "Short specific title (5-15 words)",
-  tags: ["domain-tag", "area-tag"],
-  scope: "project"
-)
-```
-
-If no MCP → create a file in `.sage-memory/` using the format in the
-memory skill. If neither works → continue, don't block the task.
-
-**Tagging convention:**
-- Domain tags always (e.g., `billing`, `auth`, `frontend`)
-- Add `ontology` tag for entity relationships or dependencies
-- Add `learning` tag for mistakes, corrections, or gotchas
-
-**Proportional:** A JTBD analysis produces 3-5 findings worth storing.
-A CSS fix probably stores nothing. A debugging session stores the root
-cause. An architecture decision stores the rationale and trade-offs.
+**Proportional:** An architecture decision stores the rationale and
+trade-offs. A debugging session stores the root cause. A CSS fix
+probably stores nothing.
 
 For guidance on what makes a good memory, read `skills/memory/SKILL.md`.
 For self-learning patterns (storing mistakes), read
@@ -461,15 +441,55 @@ delegation adds value when independent context matters:
   Task delegation for this.
 - **Code review of large implementations** — when implementation spans
   5+ files, a sub-agent with fresh eyes catches integration issues.
-  Recommend at the build completion checkpoint: "This implementation
-  touches [N] files. An independent code review would catch integration
-  issues. Shall I delegate to a review sub-agent?"
+- **Quality gates 1-3** — judgment-based gates (spec compliance,
+  constitution, code quality) benefit from adversarial independence.
 
 **Do NOT recommend sub-agents for:**
 - Testing — the current agent can run tests directly
 - State management — overhead for no benefit
 - Small fixes or Tier 1 tasks — startup cost exceeds task cost
 - Implementation — the current agent has the needed context
+
+**Context Package Protocol:** When spawning a sub-agent, assemble a
+structured context package. Never send a generic prompt.
+
+```
+CONTEXT PACKAGE for sub-agent:
+
+1. PERSONA: sage/core/agents/[reviewer|debugger|analyst].persona.md
+   Read this file for your mindset and approach.
+
+2. ARTIFACTS: [specific file paths to read]
+   - .sage/work/YYYYMMDD-slug/spec.md
+   - src/billing/checkout.ts
+   These are the files you're evaluating. Read them fully.
+
+3. DECISIONS: [last 5 entries from .sage/decisions.md]
+   Context for why things were built this way.
+
+4. LEARNINGS: [sage_memory_search results for this domain]
+   Previous mistakes and prevention rules for this area.
+
+5. TASK: [specific description with acceptance criteria]
+   Review the checkout implementation against the spec.
+   Focus on: error handling, edge cases, spec compliance.
+   Flag: security issues, missing tests, hallucinated imports.
+
+6. RETURN: [what to produce and where to save]
+   Produce: review findings as structured text
+   Save to: .sage/work/YYYYMMDD-slug/review-findings.md
+   Include: gate pass/fail for each criterion
+```
+
+The delegating agent assembles this package BEFORE spawning. The
+sub-agent receives a focused, context-rich prompt — not "review this
+file."
+
+**Sub-agent memory sharing:** Sub-agents share project-scoped
+sage-memory. If a review sub-agent discovers a convention violation,
+it stores a learning that the build agent finds in the next session.
+Include `sage_memory_search` access in the sub-agent context when
+sage-memory is available.
 
 ### Auto-Proceed vs Confirm
 
@@ -516,6 +536,7 @@ process won't apply, but I'll still save state and maintain checkpoints."
 4. **Graceful refusal.** When the user declines, acknowledge without
    judgment and proceed. Note the skip for future context.
 
-5. **State continuity.** Every step updates progress.md. A user can
-   close their IDE, come back tomorrow, and pick up exactly where
-   they left off.
+5. **State continuity.** Artifacts in `.sage/work/` and decisions in
+   `.sage/decisions.md` persist across sessions. A user can close
+   their IDE, come back tomorrow, type a slash command, and the
+   agent picks up from the right phase automatically.

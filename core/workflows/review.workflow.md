@@ -111,7 +111,7 @@ Based on the verdict:
 [R] Revise — I'll address the issues found
 [D] Discuss — let's talk about specific findings
 
-Update `.sage/progress.md` with review completion.
+Append review findings to `.sage/decisions.md`.
 
 ## Rules
 

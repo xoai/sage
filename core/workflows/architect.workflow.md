@@ -12,10 +12,24 @@ user-role: "Review and approve design decisions at each gate"
 
 System design for new projects or major redesigns.
 
-## Step 1: Orient
+## Auto-Pickup
 
-Read `.sage/progress.md` and scan `.sage/docs/` for existing research,
-briefs, or decisions. Understanding what exists prevents redundant work.
+Scan `.sage/work/` for architect initiatives with `status: in-progress`.
+
+**Resume from phase based on what exists:**
+- No artifacts → Step 2 (elicitation)
+- Brief exists, no spec/ADRs → "Sage: Resuming [name]. Brief approved.
+  Starting with architecture design." → Step 3
+- Spec/ADRs exist, no plan → "Sage: Resuming [name]. Design approved.
+  Starting with milestone plan." → Step 4
+- Plan exists → "Sage: Resuming [name]. Plan approved. Starting
+  phased build." → Step 5
+
+If not found: start new architecture at Step 2.
+
+Scan `.sage/docs/` for existing research, ADRs, or decisions.
+Read `.sage/decisions.md` for context. Read `handoff` field in
+the most recent artifact if present.
 
 ## Step 2: Deep Elicitation
 
@@ -25,9 +39,6 @@ covering all three rounds.
 
 For comprehensive elicitation process, read
 `sage/core/capabilities/elicitation/deep-elicit/SKILL.md`.
-
-For the elicitation mindset, read
-`sage/core/agents/analyst.persona.md`.
 
 **Round 1 — Vision:** What are you building and why? Who is it for?
 What does success look like?
@@ -72,13 +83,23 @@ updated: YYYY-MM-DD
 🔒 **CHECKPOINT:**
 
 Sage: Architecture design saved. ADRs in .sage/docs/decision-*.md
+Decision: [key architecture decisions]. (append to .sage/decisions.md)
 
-[A] Approve — continue to planning
+[A] Approve — continue to planning in this session
 [R] Revise — here's what needs changing
 [Q] Question — I want to understand [specific decision] better
+[N] New session — type /architect to continue with milestone plan
 
 On approval: update spec frontmatter to `status: completed`.
-Run Post-Flight (update journal, store architecture decisions in memory).
+Write `handoff` field in frontmatter:
+```yaml
+handoff: |
+  Key decisions: [architecture choices and trade-offs]
+  Open questions: [what needs resolution during build]
+  Risks: [cross-cutting concerns, performance, migration]
+  Next agent should: [specific guidance for milestone planning]
+```
+Append architecture decisions to decisions.md (Rule 7).
 
 ## Step 4: Milestone Plan
 
@@ -102,10 +123,13 @@ updated: YYYY-MM-DD
 🔒 **CHECKPOINT:**
 Sage: Milestone plan saved to .sage/work/YYYYMMDD-slug/plan.md
 
-[A] Approve — start building milestone 1
+[A] Approve — start building milestone 1 in this session
 [R] Revise — adjust the breakdown
+[N] New session — type /build to start milestone 1
 
-On approval: update progress.md and journal.md (Rule 7).
+On approval: append plan approach to decisions.md (Rule 7).
+Suggest: "Type /build to start milestone 1, or /review to verify
+the architecture first."
 
 ## Step 5: Phased Build
 
@@ -113,7 +137,7 @@ Execute milestone by milestone. Each milestone follows the build workflow:
 implement → test → review → checkpoint before moving to the next.
 
 **At each milestone completion checkpoint:**
-Update progress.md with milestone status. Update journal.md.
+Append milestone summary to decisions.md. Update artifact frontmatter.
 Store architecture findings in memory.
 
 After each milestone:

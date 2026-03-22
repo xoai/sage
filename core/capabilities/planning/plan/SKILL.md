@@ -260,7 +260,7 @@ optional — use a flat task list if the feature is small enough.
 it checks the box (`- [x]`) and adds the commit hash. If the session dies, the
 plan file shows exactly which tasks are done. No separate save action needed.
 
-Also update `.sage/progress.md` with the pointer to this plan:
+Artifact frontmatter tracks the plan location. No separate pointer needed.
 ```markdown
 # Progress
 

@@ -571,3 +571,42 @@ updated: YYYY-MM-DD
 The navigator reads this frontmatter during the State step to orient
 quickly without reading full documents. State is updated at checkpoints
 (Rule 7), not per-task.
+
+### Handoff Field
+
+When an artifact is completed, the producing agent writes a `handoff`
+field in the frontmatter. This transfers judgment to the next agent:
+
+```yaml
+---
+title: "Spec for budget-alerts"
+status: completed
+phase: spec
+handoff: |
+  Key decisions: REST API, SQLite storage, webhook alerts.
+  Open questions: Slack integration format TBD.
+  Risks: budget table migration needs careful rollback plan.
+  Next agent should: write plan focusing on migration safety.
+---
+```
+
+The next agent reads this during auto-pickup and uses it to focus
+its work.
+
+### Decision Log
+
+Significant decisions are appended to `.sage/decisions.md` at each
+checkpoint (Rule 7). This serves both agents (session context) and
+humans (project history). Format:
+
+```markdown
+### YYYY-MM-DD — [Decision title]
+[What was decided, why, alternatives considered.]
+```
+
+### Cross-Agent Memory
+
+All agents on the same project share project-scoped sage-memory.
+Skills that store learnings should use consistent tags so other
+agents can find them. The `self-learning` tag namespace is reserved
+for prevention rules that fire on domain match.

@@ -10,7 +10,7 @@ Before responding to any substantial request, classify scope and announce
 the workflow. This fires FIRST — before reading state, before activating
 skills, before doing any work.
 
-- Read `.sage/progress.md` and `.sage/work/` for existing context
+- Scan `.sage/work/` frontmatter and read `.sage/decisions.md` for context
 - Classify: Tier 1 (just do it), Tier 2 (announce and proceed),
   Tier 3 (card and choose)
 - For Tier 2/3: announce with "Sage →" before doing anything else
@@ -26,7 +26,7 @@ announcement, uses a slash command, or is genuinely Tier 1.
 
 ## Rule 1: State First
 
-Before any substantial response, read `.sage/progress.md`. If work
+Before any substantial response, scan `.sage/work/` frontmatter. If work
 exists in `.sage/work/`, scan frontmatter for active initiatives.
 Never start fresh when there is existing context. Never regenerate
 artifacts that already exist without acknowledging them.
@@ -100,16 +100,17 @@ wrong, what's correct, prevention rule), tags: `self-learning` + type.
 **Compliance:** Every user correction is followed by a sage_memory_store
 call with `self-learning` tag before continuing with the fix.
 
-## Rule 7: Update State at Checkpoints
+## Rule 7: Record Decisions at Checkpoints
 
-State updates happen ONLY at checkpoints — not per-task, not per-file.
-At each checkpoint:
-1. Update `.sage/progress.md` with current mode, feature, phase, next step
-2. Update `.sage/journal.md` if artifacts were created or changed
-3. Store significant findings in memory
+At each checkpoint, append significant decisions to
+`.sage/decisions.md` — what was decided, why, and what alternatives
+were considered. This serves both agents (session context) and
+humans (project history).
 
-Plan.md is a guide (what to do next), not a tracking database. The file
-system — what artifacts exist and their frontmatter status — is the
-source of truth.
+Update artifact frontmatter (status, phase) when artifacts are
+completed or change phase. The file system — what artifacts exist
+in `.sage/work/` and their frontmatter — is the source of truth
+for state. decisions.md is the source of truth for reasoning.
 
-**Compliance:** progress.md is current after each checkpoint.
+**Compliance:** decisions.md has a new entry after each checkpoint
+that involved a decision.

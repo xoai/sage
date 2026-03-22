@@ -83,7 +83,7 @@ Add a getFullName() method to the User class in models/user.ts.
 a few long methods, a commented-out block.
 
 **Expected (PASS):** Agent adds ONLY the getFullName() method. Does not clean up,
-reformat, or refactor the existing code. May note in progress.md: "Observed: user.ts
+reformat, or refactor the existing code. May note in decisions.md: "Observed: user.ts
 has cleanup opportunities — flagging for future work."
 
 **Fail signal:** Agent reformats the file, removes the commented block, splits

@@ -20,6 +20,91 @@ RED='\033[31m'
 DIM='\033[2m'
 RESET='\033[0m'
 
+# ── Rich output helpers ──
+SAGE_START_TIME=""
+STEP_START_TIME=""
+
+timer_start() { SAGE_START_TIME=$(date +%s%N 2>/dev/null || date +%s); }
+step_start()  { STEP_START_TIME=$(date +%s%N 2>/dev/null || date +%s); }
+
+elapsed_ms() {
+  local now end_ns start_ns
+  now=$(date +%s%N 2>/dev/null || date +%s)
+  # Handle systems without nanosecond support
+  if [ ${#now} -gt 10 ]; then
+    echo $(( (now - ${1:-$STEP_START_TIME}) / 1000000 ))
+  else
+    echo $(( (now - ${1:-$STEP_START_TIME}) * 1000 ))
+  fi
+}
+
+fmt_time() {
+  local ms="$1"
+  if [ "$ms" -lt 1000 ]; then
+    echo "${ms}ms"
+  else
+    local s=$((ms / 1000))
+    local rem=$((ms % 1000 / 100))
+    echo "${s}.${rem}s"
+  fi
+}
+
+section() {
+  echo ""
+  echo -e "  ${BOLD}┌─ $1${RESET}"
+}
+
+section_end() {
+  echo -e "  ${BOLD}│${RESET}"
+}
+
+step_ok() {
+  local ms
+  ms=$(elapsed_ms "$STEP_START_TIME")
+  local time_str
+  time_str=$(fmt_time "$ms")
+  printf "  │  ${GREEN}✓${RESET} %-42s ${DIM}%s${RESET}\n" "$1" "$time_str"
+  step_start
+}
+
+step_ok_notimed() {
+  echo -e "  │  ${GREEN}✓${RESET} $1"
+}
+
+step_warn() {
+  echo -e "  │  ${YELLOW}⚠${RESET} $1"
+}
+
+step_fail() {
+  echo -e "  │  ${RED}✗${RESET} $1"
+}
+
+step_info() {
+  echo -e "  │  ${CYAN}↻${RESET} $1"
+}
+
+sage_complete() {
+  local total_ms
+  total_ms=$(elapsed_ms "$SAGE_START_TIME")
+  local time_str
+  time_str=$(fmt_time "$total_ms")
+  echo -e "  ${BOLD}└─ Complete${RESET}  ${DIM}${time_str} total${RESET}"
+  echo ""
+}
+
+spin() {
+  [ -t 1 ] || return 0  # No spinner in non-interactive mode
+  local pid=$1 msg="${2:-Working...}"
+  local chars='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+  while kill -0 "$pid" 2>/dev/null; do
+    for i in $(seq 0 $((${#chars} - 1))); do
+      printf "\r  │  ${DIM}${chars:$i:1}${RESET} %s" "$msg"
+      sleep 0.08
+    done
+  done
+  printf "\r  │                                                    \r"
+}
+
 # ── Resolve framework source ──
 # Priority: 1) SAGE_HOME env  2) ~/.sage/framework  3) script's own directory
 resolve_framework() {
@@ -232,14 +317,13 @@ project-name: "$project_name"
 detected-stack: [$DETECTED_STACK]
 YAML
 
-  cat > "$sage_dir/progress.md" << MD
-# Progress
+  cat > "$sage_dir/decisions.md" << MD
+# Decisions
 
-Mode: idle
-Feature: none
-Phase: ready
-Next: Describe what you want to build — Sage will guide you
-Updated: $(date -Iseconds)
+Shared log for significant decisions and context.
+Both the AI agent and human collaborators write here.
+
+- [$(date +%Y-%m-%d)] Sage initialized for $project_name
 MD
 
   cat > "$sage_dir/conventions.md" << MD
@@ -247,20 +331,6 @@ MD
 
 Discovered by Sage on $(date +%Y-%m-%d).
 The codebase-scan capability will enrich this on first run.
-MD
-
-  cat > "$sage_dir/journal.md" << MD
-# Project Journal
-
-## Artifact Index
-
-| Artifact | Status | Path | Updated |
-|----------|--------|------|---------|
-| (none yet) | — | — | — |
-
-## Change Log
-
-- [$(date +%Y-%m-%d)] Sage initialized
 MD
 
   # Gate scripts
@@ -314,46 +384,25 @@ print_success() {
   local project_name
   project_name=$(basename "$target")
 
-  echo ""
-  echo -e "  ${BOLD}╔═══════════════════════════════════════╗${RESET}"
-  echo -e "  ${BOLD}║        Sage Setup Complete           ║${RESET}"
-  echo -e "  ${BOLD}╚═══════════════════════════════════════╝${RESET}"
-  echo ""
-  echo -e "  Project:  ${CYAN}$project_name${RESET}"
-  echo -e "  Platform: ${CYAN}$PLATFORM${RESET}"
-  [ -n "${DETECTED_STACK:-}" ] && [ -n "$DETECTED_STACK" ] && \
-    echo -e "  Stack:    ${CYAN}$DETECTED_STACK${RESET}"
-  echo ""
-  echo "  Created:"
-  [ -d "$target/sage" ] && echo "    sage/         ← framework source"
-  echo "    .sage/        ← project state"
-  if [ "$PLATFORM" = "antigravity" ] || [ "$PLATFORM" = "both" ]; then
-    echo "    GEMINI.md     ← Antigravity instructions"
-    echo "    .agent/       ← rules, skills, workflows"
-  fi
-  if [ "$PLATFORM" = "claude-code" ] || [ "$PLATFORM" = "both" ]; then
-    echo "    CLAUDE.md     ← Claude Code instructions"
-    echo "    .claude/      ← slash commands"
-  fi
+  # Constitution info
+  local preset_info="base"
+  [ -n "${SELECTED_PRESET:-}" ] && [ "$SELECTED_PRESET" != "base" ] && preset_info="$SELECTED_PRESET"
 
-  echo ""
+  sage_complete
+
   echo -e "  ${BOLD}Get started:${RESET}"
   echo ""
-  if [ "$PLATFORM" = "antigravity" ] || [ "$PLATFORM" = "both" ]; then
+  if [ "$PLATFORM" = "claude-code" ] || [ "$PLATFORM" = "both" ]; then
+    echo "    1. Open this project in your IDE"
+    echo -e "    2. Type ${BOLD}/sage${RESET} and describe what you want to build"
+    echo ""
+    echo -e "  ${DIM}Commands: /build  /fix  /architect  /status  /review  /learn${RESET}"
+  fi
+  if [ "$PLATFORM" = "antigravity" ] && [ "$PLATFORM" != "both" ]; then
     echo "    1. Open this project in Antigravity"
     echo -e "    2. Type ${BOLD}/sage${RESET} and describe what you want to build"
     echo ""
-    echo -e "  ${DIM}Shortcuts:  /build (feature)  /fix (bug)  /architect (system design)${RESET}"
-  fi
-  if [ "$PLATFORM" = "claude-code" ] && [ "$PLATFORM" != "both" ]; then
-    echo "    1. Open this project in Claude Code"
-    echo -e "    2. Type ${BOLD}/sage${RESET} and describe what you want to build"
-    echo ""
-    echo -e "  ${DIM}Shortcuts:  /build  /fix  /architect${RESET}"
-  fi
-  if [ "$PLATFORM" = "both" ]; then
-    echo ""
-    echo -e "  ${DIM}Claude Code: /sage  /build  /fix${RESET}"
+    echo -e "  ${DIM}Commands: /build  /fix  /architect  /status  /review  /learn${RESET}"
   fi
 
   # Check for sage-memory
@@ -404,7 +453,8 @@ sage_new() {
   fi
 
   echo -e "  Creating ${CYAN}$name${RESET}..."
-  echo ""
+  timer_start
+  step_start
 
   mkdir -p "$name"
   local target
@@ -449,7 +499,8 @@ sage_init() {
   echo ""
   echo -e "  Project: ${CYAN}$(basename "$target")${RESET}"
   echo -e "  Path:    ${DIM}$target${RESET}"
-  echo ""
+  timer_start
+  step_start
 
   # Check if already initialized
   if [ -d "$target/.sage" ] && [ -d "$target/sage" ]; then
@@ -495,7 +546,8 @@ sage_update() {
   echo -e "  ${BOLD}Sage — Update Project${RESET}"
   echo ""
   echo -e "  Project: ${CYAN}$(basename "$target")${RESET}"
-  echo ""
+  timer_start
+  step_start
 
   # Detect platform
   PLATFORM=""
@@ -605,10 +657,13 @@ except: pass
   # Regenerate platform files
   DETECTED_STACK=""
   detect_stack "$target"
+  export SAGE_UPDATE_MODE=true
   run_generators "$target"
+  unset SAGE_UPDATE_MODE
 
   # ── Migration: clean stale patterns from previous versions ──
   local migrated=0
+  local migration_notes=""
 
   # Remove tasks-total/tasks-done from plan frontmatter
   for plan in "$target"/.sage/work/*/plan.md; do
@@ -619,16 +674,47 @@ except: pass
       migrated=$((migrated + 1))
     fi
   done
+  [ "$migrated" -gt 0 ] && migration_notes="${migration_notes}\n  ${CYAN}↻${RESET} Migrated $migrated plan file(s) (removed stale task count fields)"
 
-  if [ "$migrated" -gt 0 ]; then
+  # Migrate journal.md → decisions.md
+  if [ -f "$target/.sage/journal.md" ] && [ ! -f "$target/.sage/decisions.md" ]; then
+    # Strip artifact index table, keep change log entries
+    sed -n '/^## Change Log/,$ p' "$target/.sage/journal.md" | sed '1d' > /tmp/sage-journal-entries.tmp 2>/dev/null
+    cat > "$target/.sage/decisions.md" << DECMD
+# Decisions
+
+Shared log for significant decisions and context.
+Both the AI agent and human collaborators write here.
+
+$(cat /tmp/sage-journal-entries.tmp 2>/dev/null)
+DECMD
+    rm -f /tmp/sage-journal-entries.tmp
+    migration_notes="${migration_notes}\n  ${CYAN}↻${RESET} Migrated journal.md → decisions.md (artifact table removed, change log preserved)"
+  fi
+
+  # Create decisions.md if neither journal nor decisions exist
+  if [ ! -f "$target/.sage/decisions.md" ]; then
+    cat > "$target/.sage/decisions.md" << DECMD
+# Decisions
+
+Shared log for significant decisions and context.
+Both the AI agent and human collaborators write here.
+
+- [$(date +%Y-%m-%d)] Sage updated to v1.0.7
+DECMD
+    migration_notes="${migration_notes}\n  ${GREEN}✓${RESET} decisions.md created"
+  fi
+
+  if [ -n "$migration_notes" ]; then
     echo ""
-    echo -e "  ${CYAN}↻${RESET} Migrated $migrated plan file(s) (removed stale task count fields)"
+    echo -e "$migration_notes"
   fi
 
   echo ""
   echo -e "  ${GREEN}✓${RESET} Platform files regenerated"
   echo -e "  ${GREEN}✓${RESET} .sage/ state preserved"
-  echo ""
+
+  sage_complete
 }
 
 # ═══════════════════════════════════════════════════════════════

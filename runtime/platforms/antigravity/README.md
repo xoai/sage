@@ -40,8 +40,7 @@ your-project/
 │       ├── architect.md         # /architect — system design
 │       └── status.md            # /status — check project state
 ├── .sage/                      # Sage project state (platform-agnostic)
-│   ├── progress.md
-│   ├── journal.md
+│   ├── decisions.md          # Shared decision log
 │   ├── docs/
 │   └── work/
 └── sage/                       # Sage framework source
@@ -92,7 +91,7 @@ Type `/` in Antigravity for direct access to common workflows:
 | `/fix` | Quick debug → test → fix → verify → commit |
 | `/build` | Scan → elicit → specify → plan → implement → review |
 | `/architect` | Deep elicitation → architecture → milestone plan → phased build |
-| `/status` | Show current project state from `.sage/progress.md` |
+| `/status` | Show current project state from `.sage/work/` frontmatter |
 
 These are shortcuts. The navigator handles everything else automatically.
 
@@ -101,8 +100,7 @@ These are shortcuts. The navigator handles everything else automatically.
 All Sage state lives in `.sage/` — this is platform-agnostic. Whether you
 use Claude Code or Antigravity, the project state is the same:
 
-- `.sage/progress.md` — what was done, what's next (session continuity)
-- `.sage/journal.md` — artifact index and change log
+- `.sage/decisions.md` — shared decision log (agent + human)
 - `.sage/docs/` — JTBD analyses, voice & tone guides, decision records
 - `.sage/work/` — specs, plans, PRDs per feature
 

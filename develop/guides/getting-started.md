@@ -161,5 +161,5 @@ Sage is designed for Claude Code but the skills and packs are standard markdown.
 Adapters for Cursor, Codex, and others are in `runtime/platforms/`.
 
 **Q: How do I resume after closing my terminal?**
-Just open the project again. The agent reads `.sage/progress.md` and picks up where
+Just open the project again. The agent scans `.sage/work/` artifacts and picks up where
 you left off. All progress is saved in the plan file checkboxes.

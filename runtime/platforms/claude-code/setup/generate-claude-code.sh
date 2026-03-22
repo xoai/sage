@@ -93,6 +93,11 @@ funnel before making changes. Starting with research.
 **Compliance:** Every substantial response starts with "Sage →", uses a
 slash command, or is genuinely Tier 1.
 
+**Memory recall (Standard+ tasks):** Before starting work on any Tier 2
+or Tier 3 task, search sage-memory for relevant self-learning entries:
+`sage_memory_search(query: "[domain keywords]", filter_tags: ["self-learning"], limit: 5)`
+If sage-memory is not available, continue without search.
+
 ### Workflow Gates (enforced for both slash commands and free input)
 
 After announcing a workflow, read and follow the command file at
@@ -120,9 +125,9 @@ DO NOT design before elicitation is complete.
 
 ### Rule 1: State First
 
-Before any substantial response, read `.sage/progress.md`. If work exists
-in `.sage/work/`, scan frontmatter (status, phase) for active initiatives.
-Never start fresh when there is existing context.
+Before any substantial response, scan `.sage/work/` frontmatter
+(status, phase) for active initiatives. Read `.sage/decisions.md`
+for recent context. Never start fresh when there is existing context.
 
 **Compliance:** Active work is acknowledged before new work begins.
 
@@ -176,16 +181,20 @@ proceeding. This is automatic, not optional.
 **Compliance:** Every user correction is followed by a sage_memory_store
 call with self-learning tag before continuing.
 
-### Rule 7: Update State at Checkpoints
+### Rule 7: Record Decisions at Checkpoints
 
-State updates happen ONLY at checkpoints — not per-task, not per-file.
-At each checkpoint: update progress.md, update journal.md if artifacts
-changed, store significant findings in memory.
+At each checkpoint, append significant decisions to
+`.sage/decisions.md` — what was decided, why, and what alternatives
+were considered. This serves agents (session context) and humans
+(project history). Update artifact frontmatter (status, phase)
+when artifacts are completed.
 
-Plan.md is a guide (what to do next), not a tracking database. The file
-system — what artifacts exist — is the source of truth.
+The file system — what artifacts exist in `.sage/work/` and their
+frontmatter — is the source of truth for state. decisions.md is
+the source of truth for reasoning and context.
 
-**Compliance:** progress.md is current after each checkpoint.
+**Compliance:** decisions.md has a new entry after each checkpoint
+that involved a decision.
 
 __CONSTITUTION_PLACEHOLDER__
 
@@ -246,10 +255,10 @@ Custom skills can be added to `sage/skills/@custom/`.
 ## Project State
 
 All Sage state lives in `.sage/`:
-- `progress.md` — checkpoint log (what's done, what's next)
-- `journal.md` — artifact index and change log
-- `docs/` — project-level knowledge (analyses, decisions, guides)
+- `decisions.md` — shared decision log (agent + human)
+- `docs/` — project-level knowledge (analyses, ADRs, guides)
 - `work/` — per-initiative deliverables with YAML frontmatter
+- `gates/` — quality gate scripts and activation config
 CLAUDEEOF
 
 # ── Dynamic constitution merging ──
@@ -341,6 +350,7 @@ for wf in "$CORE"/workflows/*.workflow.md; do
   case "$basename_wf" in
     build)
       PREAMBLE='RULES (apply to every step — non-negotiable):
+- PERSONA: Read sage/core/agents/developer.persona.md for your mindset.
 - Announce: "Sage → build workflow." before starting work
 - Standard+ scope: MUST write spec before implementing. DO NOT skip.
 - Save ALL artifacts to .sage/work/ or .sage/docs/ — never inline-only
@@ -354,6 +364,7 @@ for wf in "$CORE"/workflows/*.workflow.md; do
       ;;
     fix)
       PREAMBLE='RULES (apply to every step — non-negotiable):
+- PERSONA: Read sage/core/agents/debugger.persona.md for your mindset.
 - Announce: "Sage → fix workflow." before starting work
 - MUST complete root cause investigation before ANY fix attempt
 - Present root cause gate with [A] / [R] / [S] — wait for response
@@ -366,6 +377,7 @@ for wf in "$CORE"/workflows/*.workflow.md; do
       ;;
     architect)
       PREAMBLE='RULES (apply to every step — non-negotiable):
+- PERSONA: Read sage/core/agents/architect.persona.md for your mindset.
 - Announce: "Sage → architect workflow." before starting work
 - MUST complete all 3 elicitation rounds before designing
 - Save ADRs to .sage/docs/decision-*.md, spec to .sage/work/
@@ -410,9 +422,9 @@ Sage's intelligent entry point. Assess the project and guide the user.
 
 ## Step 1: Read State
 
-Read `.sage/progress.md` and scan `.sage/work/` for active initiatives
-(read frontmatter: title, status, phase). Scan `.sage/docs/` for
-project-level artifacts.
+Scan `.sage/work/` for active initiatives (read frontmatter: title,
+status, phase). Scan `.sage/docs/` for project-level artifacts.
+Read `.sage/decisions.md` for recent context.
 
 ## Step 2: Present Status and Options
 
@@ -462,6 +474,7 @@ SAGEEOF
   if [ "$basename_wf" = "review" ]; then
     cat > "$CLAUDE_DIR/commands/review.md" << 'REVIEWEOF'
 RULES (apply to every step — non-negotiable):
+- PERSONA: Read sage/core/agents/reviewer.persona.md for your mindset.
 - Announce: "Sage → review workflow." before starting work
 - Present artifact list with [1] [2] [3] bracket notation
 - Present findings with [A] Accept / [R] Revise / [D] Discuss
@@ -491,7 +504,7 @@ Before delegating, gather three pieces of information:
 
 1. **Artifact path** — the file to review
 2. **Producing skill path** — find which skill or workflow created it.
-   Check filename prefix, content references, or `.sage/journal.md`.
+   Check filename prefix, content references, or `.sage/decisions.md`.
    The quality criteria are in that skill's `## Quality Criteria` section
    (look in `sage/skills/[skill]/SKILL.md` or `sage/core/workflows/[workflow].workflow.md`)
 3. **Memory query** — 3-5 keywords describing the artifact's domain
@@ -551,7 +564,7 @@ Share the sub-agent's review with the user:
 [R] Revise — I'll address the issues found
 [D] Discuss — let's talk about specific findings
 
-Update `.sage/journal.md` with review completion.
+Append review findings to `.sage/decisions.md`.
 Run Post-Flight state management.
 
 $ARGUMENTS
@@ -585,29 +598,14 @@ if [ -d "$PROJECT_SAGE" ]; then
 else
   mkdir -p "$PROJECT_SAGE/work" "$PROJECT_SAGE/docs"
 
-  cat > "$PROJECT_SAGE/progress.md" << PROGEOF
-# Progress
+  cat > "$PROJECT_SAGE/decisions.md" << 'DECEOF'
+# Decisions
 
-Mode: idle
-Feature: none
-Phase: ready
-Next: Describe what you want to build — Sage will guide you
-Updated: $(date -Iseconds)
-PROGEOF
-
-  cat > "$PROJECT_SAGE/journal.md" << 'JRNEOF'
-# Project Journal
-
-## Artifact Index
-
-| Artifact | Status | Path | Updated |
-|----------|--------|------|---------|
-| (none yet) | — | — | — |
-
-## Change Log
+Shared log for significant decisions and context.
+Both the AI agent and human collaborators write here.
 
 - [init] Sage initialized
-JRNEOF
+DECEOF
 
   cat > "$PROJECT_SAGE/conventions.md" << 'CONVEOF'
 # Project Conventions
@@ -661,10 +659,11 @@ if [ -f "$HOOK_SRC" ]; then
   echo "  ✓ sage-session-init.sh"
 fi
 
-# Create or update settings.local.json with hook config
+# Create or update settings.local.json with hook config (atomic write)
 SETTINGS_LOCAL="$CLAUDE_DIR/settings.local.json"
 mkdir -p "$CLAUDE_DIR"
-cat > "$SETTINGS_LOCAL" << 'HOOKEOF'
+TEMP_SETTINGS=$(mktemp "${SETTINGS_LOCAL}.XXXXXX" 2>/dev/null || echo "${SETTINGS_LOCAL}.tmp")
+cat > "$TEMP_SETTINGS" << 'HOOKEOF'
 {
   "hooks": {
     "SessionStart": [
@@ -681,7 +680,21 @@ cat > "$SETTINGS_LOCAL" << 'HOOKEOF'
   }
 }
 HOOKEOF
-echo "  ✓ settings.local.json (session hook)"
+
+if mv "$TEMP_SETTINGS" "$SETTINGS_LOCAL" 2>/dev/null; then
+  echo "  ✓ settings.local.json (session hook)"
+else
+  echo "  ✗ Could not write settings.local.json: check permissions"
+  echo "    The session hook won't activate until this is fixed."
+  echo "    Try: sage update (to retry)"
+  rm -f "$TEMP_SETTINGS" 2>/dev/null
+fi
+
+# IDE restart warning (only during update, not init)
+if [ "${SAGE_UPDATE_MODE:-}" = "true" ]; then
+  echo ""
+  echo -e "  \033[33m⚠ Restart your IDE to pick up updated hook configuration.\033[0m"
+fi
 
 # ═══════════════════════════════════════════════════════════════
 # Summary

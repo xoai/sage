@@ -162,7 +162,7 @@ crash (close the terminal mid-task, or let context compact).
 **Test:** Start a new session.
 
 **Verify:**
-- `.sage/progress.md` shows tasks 1-3 complete, task 4 in progress or not started
+- `.sage/work/` frontmatter shows tasks 1-3 complete, task 4 in progress or not started
 - Agent resumes from task 3 or 4 (depending on when crash happened)
 - Git history shows commits for tasks 1-3
 - Agent does NOT re-implement completed tasks

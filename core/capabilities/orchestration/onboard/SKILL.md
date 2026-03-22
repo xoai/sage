@@ -175,10 +175,10 @@ a new project (establish them as the first code is written).
 .sage/
 ├── config.yaml           # Project configuration
 ├── conventions.md         # Discovered or established patterns
-├── progress.md            # Current state pointer
-├── journal.md             # Project journal (artifact index + change log)
+├── decisions.md           # Shared decision log (agent + human)
 ├── docs/                  # Project-level knowledge (flat, skill-prefixed)
-└── work/                  # Per-initiative (YYYYMMDD-slug/ subfolders)
+├── work/                  # Per-initiative (YYYYMMDD-slug/ subfolders)
+└── gates/                 # Quality gate scripts and config
 ```
 
 ### .sage/config.yaml
@@ -198,15 +198,15 @@ constitution:
   preset: startup  # or enterprise, opensource
 ```
 
-### .sage/progress.md
+### .sage/decisions.md
 ```markdown
-# Progress
+# Decisions
 
-Mode: idle
-Feature: none
-Phase: ready
-Next: "Tell me what to build, or say 'sage help' for guidance"
-Updated: <timestamp>
+Shared log for significant decisions and context.
+Both the AI agent and human collaborators write here.
+
+### YYYY-MM-DD — [Decision title]
+[What was decided, why, alternatives considered.]
 ```
 
 ### .sage/conventions.md
@@ -230,30 +230,6 @@ Update this file as conventions evolve.
 - State management: <detected or TBD>
 - Data fetching: <detected or TBD>
 - Error handling: <detected or TBD>
-```
-
-### .sage/journal.md
-```markdown
-# Project Journal
-
-## Current Artifacts
-
-### Active (being worked on)
-
-### Reference (done, still relevant)
-- `.sage/config.yaml` — Project configuration
-- `.sage/conventions.md` — Discovered project conventions
-
-### Archived (superseded or no longer relevant)
-
----
-
-## Change Log
-
-### <date> — Project initialized
-**Produced:** .sage/ directory with config, conventions, progress tracker
-**Key:** Sage installed. Detected stack: [stack]. Packs: [packs].
-**Next:** Start building — describe what you want to create.
 ```
 
 ### Generate CLAUDE.md

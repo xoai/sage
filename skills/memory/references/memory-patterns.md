@@ -111,7 +111,7 @@ Content: "Started implementing the billing module today. Need to finish
 the payment form and connect to Stripe."
 ```
 Why this fails: this is task progress, not knowledge. It belongs in
-`.sage/progress.md`, not in memory. It becomes stale the moment the task
+`.sage/decisions.md`, not in memory. It becomes stale the moment the task
 completes.
 
 ## When NOT to Store
@@ -124,6 +124,6 @@ Ask: "If I deleted this memory, would it change how I approach a future task?"
 Concrete test cases where the answer is NO:
 - File exports and function signatures (re-readable)
 - Package versions (check package.json)
-- Current task status (use .sage/progress.md)
+- Current task status (use .sage/work/ frontmatter)
 - Things the user explicitly told you this session (they know)
 - Generic best practices not specific to this project

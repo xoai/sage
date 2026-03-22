@@ -12,13 +12,32 @@ user-role: "Review and approve at each gate"
 
 Feature development guided by Sage.
 
-## Step 1: Orient
+## Auto-Pickup
 
-Read `.sage/progress.md`. If work is in progress for this feature,
-resume from where you left off — do NOT re-elicit or re-plan.
+BEFORE ANYTHING: Scan `.sage/work/` for existing initiatives.
 
-Scan `.sage/docs/` and `.sage/work/` for relevant artifacts (briefs,
-specs, plans, research).
+If the user named a specific initiative, find its directory.
+If not, look for ONE with `status: in-progress` in frontmatter.
+
+**Resume from phase based on what exists:**
+- No artifacts exist → Step 2 (scope assessment)
+- Brief exists, no spec → "Sage: Resuming [name]. Brief approved.
+  Starting with spec." → Step 4
+- Spec exists, no plan → "Sage: Resuming [name]. Spec approved.
+  Starting with plan." → Step 5
+- Plan exists, not all completed → "Sage: Resuming [name]. Plan
+  approved. Starting build-loop." → Step 6
+- All status: completed → "Sage: [name] is complete." → offer
+  next steps or new initiative
+
+**Multiple in-progress:** Present list:
+[1] Continue [initiative A] — [phase]
+[2] Continue [initiative B] — [phase]
+[3] Start something new
+
+Read `.sage/decisions.md` for recent context. Read the `handoff`
+field in the most recent artifact's frontmatter if present — it
+contains the previous agent's judgment about what to focus on.
 
 ## Step 2: Assess Scope
 
@@ -51,7 +70,7 @@ Present your assessment:
 Starting with [first required step].
 
 If the user wants to skip a required step, note the risk and proceed —
-but record the skip and rationale in progress.md.
+but record the skip and rationale in decisions.md.
 
 ## Step 3: Brief (Standard with unclear scope, or Comprehensive)
 
@@ -86,12 +105,14 @@ updated: YYYY-MM-DD
 🔒 **CHECKPOINT:**
 
 Sage: Brief saved to .sage/work/YYYYMMDD-slug/brief.md
+Decision: [key scope decisions]. (append to .sage/decisions.md)
 
-[A] Approve — continue to spec
+[A] Approve — continue to spec in this session
 [R] Revise — tell me what to change
+[N] New session — type /build to continue with spec
 
 On approval: update brief frontmatter to `status: completed`.
-Run Post-Flight (update journal, store findings).
+Append decision to decisions.md (Rule 7).
 
 ## Step 4: Spec
 
@@ -116,12 +137,22 @@ updated: YYYY-MM-DD
 
 🔒 **CHECKPOINT:**
 Sage: Spec saved to .sage/work/YYYYMMDD-slug/spec.md
+Decision: [key technical decisions]. (append to .sage/decisions.md)
 
-[A] Approve — continue to plan
+[A] Approve — continue to plan in this session
 [R] Revise — tell me what to change
+[N] New session — type /build to continue with planning
 
 On approval: update spec frontmatter to `status: completed`.
-Run Post-Flight (update journal, store findings).
+Write `handoff` field in frontmatter:
+```yaml
+handoff: |
+  Key decisions: [summary of choices made]
+  Open questions: [what's unresolved]
+  Risks: [what to watch for during implementation]
+  Next agent should: [specific guidance for planning phase]
+```
+Append decision to decisions.md (Rule 7).
 
 ## Step 5: Plan
 
@@ -148,10 +179,11 @@ updated: YYYY-MM-DD
 
 Sage: Plan saved to .sage/work/YYYYMMDD-slug/plan.md
 
-[A] Approve — start building
+[A] Approve — start building in this session
 [R] Revise — tell me what to change
+[N] New session — type /build to start implementation
 
-On approval: run Post-Flight (update journal, store findings).
+On approval: append plan approach to decisions.md (Rule 7).
 
 ## Step 6: Implement
 
@@ -166,9 +198,6 @@ It provides:
 - Inter-task checkpoints every 1-3 tasks
 - Escalation on repeated failure (3x → ask human)
 - Context budget awareness (suggest new session if full)
-
-For implementation discipline, the developer persona at
-`sage/core/agents/developer.persona.md` applies.
 
 If the build-loop cannot be loaded, follow these minimum rules:
 implement one task at a time, write tests before code, run full
@@ -207,18 +236,21 @@ Review against spec. Check for missed edge cases.
 🔒 **CHECKPOINT:**
 
 Sage: Build complete. [summary of what was built]
+Decision: [key implementation decisions]. (append to .sage/decisions.md)
 
 [A] Approve — merge/ship
 [R] Revise — here's what needs fixing
-[N] Next — what should we work on next?
+[V] Verify — type /review for independent verification
 
-**On approval — checkpoint state update (Rule 7):**
+**On approval — checkpoint state (Rule 7):**
 1. Walk through plan.md and check completed tasks in bulk
 2. Update plan.md frontmatter: `status: completed`
-3. Update `.sage/progress.md` with completion
-4. Update `.sage/journal.md` with final status for all artifacts
-5. Store key findings in memory (architecture, conventions, insights)
-6. Recommend what's next
+3. Append completion summary to `.sage/decisions.md`
+4. Write `handoff` field in plan.md frontmatter with key decisions,
+   open questions, and risks for the next agent
+5. Store key findings in memory if sage-memory available
+6. Suggest: "Type /review for independent verification, or describe
+   what to build next."
 
 ## Quality Criteria
 
@@ -249,6 +281,6 @@ Before presenting completed work, check each criterion above. Also:
 - Checkpoints mandatory (Rule 4). Present [A]/[R] and wait.
 - Verify with evidence (Rule 5). Paste actual test output.
 - Capture corrections (Rule 6). Store as self-learning.
-- State at checkpoints (Rule 7). Update progress.md.
+- Record decisions at checkpoints (Rule 7). Append to decisions.md.
 - Stay in scope — note improvements, don't add them.
 - If stuck, use problem-solving skill. Don't retry the same approach.

@@ -203,7 +203,7 @@ Before presenting, validate:
 Save to `.sage/docs/ux-writing-voice-and-tone.md`
 This is a project-level reference used by all future work — developers
 writing microcopy during implementation, designers creating mockups, PMs
-writing PRD copy. Update `.sage/journal.md`.
+writing PRD copy. Append to `.sage/decisions.md`.
 
 **Microcopy set (BUILD or ARCHITECT):**
 Save to `.sage/work/<YYYYMMDD>-<slug>/microcopy.md`

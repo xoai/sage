@@ -87,7 +87,17 @@ at the completion checkpoint (Rule 7).
 
 **If a gate fails:**
 - **Minor issue (1 gate, fixable):** Fix it, re-run that gate, continue.
-- **Major issue (multiple gates, design problem):** Stop and report:
+- **Major issue (multiple gates, design problem):** Stop and report.
+  When changing approach, log it in the initiative's scratch notes:
+
+  Append to `.sage/work/[initiative]/scratch.md`:
+  ```
+  approach-[N]: [what was tried] — [why it failed]
+  ```
+
+  If scratch.md has 3+ approaches for the same task, this is a
+  `gotcha` trigger — the self-learning skill MUST store the finding
+  with WHEN/CHECK/BECAUSE format before continuing.
 
 **Sage:** Task [N] failed quality gates:
 Gate 3: Security — SQL injection risk in [file]
@@ -148,7 +158,7 @@ Based on human's choice:
 - **Keep working:** Note what needs to change, update plan
 - **Discard:** Revert and clean up
 
-Update `.sage/progress.md`:
+Update `.sage/decisions.md` if significant:
 ```markdown
 # Progress
 

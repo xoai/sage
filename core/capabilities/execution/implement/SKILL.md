@@ -95,7 +95,7 @@ In the plan file (`.sage/work/<feature>/plan.md`):
 **Why this matters:** If the session ends unexpectedly — terminal closed, context
 window full, connection dropped — the plan file on disk shows exactly which tasks
 are done. The next session reads the plan file, sees the checkboxes, and resumes
-from the right place. This works even if progress.md is stale.
+from the right place. This works because artifacts are the source of truth.
 
 ### Step 6: Commit
 

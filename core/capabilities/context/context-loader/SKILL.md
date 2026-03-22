@@ -55,7 +55,8 @@ file at the moment it's needed, not before.
 | Workflow details | When a workflow is triggered | "Follow the [X] workflow" |
 | Domain skills (jtbd, ux-audit...) | When navigator selects them | "Read and follow [skill] SKILL.md" |
 | Skill references (patterns, templates) | When the skill needs them | Skill's own instructions say when |
-| `.sage/progress.md` | Session start, after each step | Constitution rule 1 handles this |
+| `.sage/work/` frontmatter | Session start | Constitution rule 1 handles this |
+| `.sage/decisions.md` | Session start, checkpoints | Rule 7 handles this |
 | `.sage/work/*/brief.md`, `spec.md`... | When working on that initiative | Navigator/workflow references them |
 
 **Key principle:** generators should REFERENCE these by path, not

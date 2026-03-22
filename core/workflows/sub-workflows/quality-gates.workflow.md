@@ -130,11 +130,38 @@ Skipped: none
 
 ## Performance
 
-On Tier 1 platforms (sub-agent support):
-- Gates 1-3 can run as separate reviewer sub-agents (adversarial review)
-- Gates 4-5 run in the main session (need code execution)
+### Parallel Dispatch (Tier 1 platforms with Task tool)
 
-On Tier 2 platforms:
-- All gates run sequentially in the same session
-- Adversarial prompting still applies (the agent reviews its own work
-  with explicit instructions to be skeptical)
+On platforms supporting sub-agents (Claude Code Task tool), Gates 1-3
+(judgment-based) can run in parallel with Gates 4-5 (script-based):
+
+**Main agent dispatches Gates 1-3 to reviewer sub-agent:**
+
+Use the Sub-Agent Delegation Protocol from the navigator. The context
+package for gate review:
+```
+PERSONA: sage/core/agents/reviewer.persona.md
+ARTIFACTS: [implementation files] + [spec file]
+DECISIONS: [last 3 from decisions.md]
+LEARNINGS: [sage_memory_search for this domain]
+TASK: Run Gates 1-3 (spec compliance, constitution, code quality).
+  For each gate: PASS or FAIL with specific findings.
+  Be adversarial — do not trust the implementing agent's claims.
+RETURN: Structured findings per gate to stdout.
+```
+
+**Main agent runs Gates 4-5 concurrently:**
+- Gate 4: `bash .sage/gates/scripts/sage-hallucination-check.sh`
+- Gate 5: `bash .sage/gates/scripts/sage-verify.sh`
+
+**Merge results:** After both complete, combine findings. Any FAIL
+from either path = gate failure. Present unified result to user.
+
+**Fallback:** If Task tool is unavailable or sub-agent fails to
+spawn, run all gates sequentially in the main session.
+
+### Sequential Execution (Tier 2 platforms)
+
+All gates run sequentially in the same session. Adversarial prompting
+still applies — the agent reviews its own work with explicit
+instructions to be skeptical of its own output.

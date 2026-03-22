@@ -67,7 +67,7 @@ Before committing any change, ask:
 4. "Is this required by the constitution?" — If yes, it's in scope even if not in the task.
 
 If the answer to all four is "no," you're scope creeping. Revert the change.
-If you believe the change is truly important, note it in `.sage/progress.md`
+If you believe the change is truly important, note it in `.sage/decisions.md`
 under a "Future Work" section and move on.
 
 ## When Scope SHOULD Expand
@@ -84,7 +84,7 @@ legitimate — but the response is NOT to silently expand scope:
 ## Failure Modes
 
 - **Agent wants to "clean up" existing code:** Redirect. "I noticed [X] could be
-  improved. I've noted it in progress.md for future work. Continuing with current task."
+  improved. I've noted it in decisions.md for future work. Continuing with current task."
 - **Dependency requires additional work:** Legitimate. Flag it, ask human, update plan if approved.
 - **Constitution requires something not in plan:** Legitimate. Constitution overrides
   the plan. Implement the constitution requirement and note why.

@@ -2,6 +2,77 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [1.0.7] — State, Learning & Coordination
+
+### State Model Redesign
+- **progress.md eliminated.** State is now derived from artifact
+  frontmatter scanning — always current because artifacts ARE the
+  work product. No separate state file to keep in sync.
+- **journal.md → decisions.md.** Replaced artifact index table
+  (never updated) with a shared decision log where both the agent
+  and human write. Agent appends decisions at checkpoints; humans
+  add context anytime. One meaningful write replaces three
+  housekeeping updates.
+- **`/status` computes from artifacts.** Status workflow fully
+  rewritten to scan `.sage/work/` frontmatter and present state.
+  Always correct because computed at read time.
+- **Session hook rewritten.** Scans artifacts + reads recent
+  decisions. Zero dependency on progress.md.
+- **Migration.** `sage update` migrates journal.md → decisions.md
+  (strips artifact table, preserves change log). Leaves progress.md
+  untouched — just stops reading it.
+
+### Slash Command UX
+- **Auto-pickup.** Every slash command scans `.sage/work/` on
+  startup and resumes from the right phase. `/build` with an
+  existing spec starts at planning, not scope assessment.
+- **Checkpoints suggest next slash command.** Every phase-transition
+  checkpoint includes `[N] New session — type /build to continue`.
+  Guides users to the reliable slash command path organically.
+- **Persona loading in preambles.** `/build` loads developer,
+  `/fix` loads debugger, `/architect` loads architect, `/review`
+  loads reviewer. One consistent instruction per command.
+
+### Self-Learning Improvements
+- **WHEN/CHECK/BECAUSE format.** Prevention rules now use a
+  structured template that makes vague rules structurally impossible.
+  Quality checklist: specific? pre-condition? standalone?
+- **Rule 0 memory search.** CLAUDE.md/GEMINI.md Rule 0 now
+  instructs: before any Standard+ task, search sage-memory for
+  self-learning entries with specific function call syntax.
+- **Scratch counter for approach tracking.** Build-loop and fix
+  workflow log approaches to scratch.md. 3+ approaches = automatic
+  gotcha trigger based on file content (external signal), not
+  self-assessment.
+
+### Multi-Agent Coordination
+- **Sub-Agent Delegation Protocol.** Structured context package:
+  persona + artifacts + decisions + learnings + task + return format.
+  Replaces generic sub-agent prompts with project-aware delegation.
+- **Agent handoff protocol.** Completed artifacts get a `handoff`
+  frontmatter field with key decisions, open questions, risks, and
+  guidance for the next agent. Auto-pickup reads this field.
+- **Parallel gate dispatch.** On platforms with Task tool, Gates 1-3
+  (judgment-based) dispatch to a reviewer sub-agent while Gates 4-5
+  (scripts) run concurrently. Merge results before presenting.
+- **Cross-agent memory sharing.** All agents share project-scoped
+  sage-memory. Documented in self-learning skill and delegation
+  protocol.
+
+### IDE Integration
+- **Atomic write for settings.local.json.** Uses temp file + mv
+  to avoid transient 404 errors from file watcher during update.
+- **IDE restart messaging.** `sage update` shows "⚠ Restart your
+  IDE to pick up updated hook configuration."
+- **Error handling.** Write failures show clear message with
+  remediation steps instead of cryptic errors.
+
+### Terminal UX
+- **Rich output helpers.** Section borders, step timing, green/red/
+  yellow indicators, braille spinner for long operations.
+- **Structured output for all commands.** `sage init`, `sage update`,
+  and `sage new` show organized sections with elapsed time.
+
 ## [1.0.6] — Make It Real
 
 ### Capability Compatibility Audit

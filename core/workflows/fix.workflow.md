@@ -12,6 +12,20 @@ user-role: "Confirm root cause, approve fix"
 
 Diagnose, then fix. Never the reverse.
 
+## Auto-Pickup
+
+Scan `.sage/work/` for fix-related directories with `status: in-progress`.
+
+If found: read the root cause analysis and current phase.
+- Investigation in progress → resume at Step 2
+- Fix applied, not verified → resume at Step 4 (verify)
+- Report: "Sage: Resuming fix for [problem]. [Phase]."
+
+If not found: start new investigation at Step 1.
+
+Read `.sage/decisions.md` for context — previous root cause analyses
+and fix patterns may be relevant.
+
 ## Step 1: Understand the Problem
 
 Ask for or identify: what's broken, when it started, error messages,
@@ -38,8 +52,16 @@ a fix.
 For systematic debugging methodology, read
 `sage/core/capabilities/debugging/systematic-debug/SKILL.md`.
 
-For the investigator mindset, read
-`sage/core/agents/debugger.persona.md`.
+**Track investigation approaches.** When changing hypothesis or
+investigation direction, log it:
+
+Append to `.sage/work/[fix-initiative]/scratch.md`:
+```
+approach-[N]: [hypothesis tried] — [what the evidence showed]
+```
+
+If scratch.md has 3+ approaches, this is a `gotcha` trigger — store
+the finding via self-learning with WHEN/CHECK/BECAUSE format.
 
 Produce a root cause statement with evidence:
 
@@ -77,9 +99,10 @@ Sage: Root cause analysis complete.
   Evidence: [what confirms it]
   Confidence: [high/medium/low]
 
-[A] Approve diagnosis — proceed to fix
+[A] Approve diagnosis — proceed to fix in this session
 [R] Revise — investigate further
 [S] Stuck — try a different approach (activates problem-solving)
+[N] New session — type /fix to continue with the fix
 
 Do not proceed to Step 3 until the user confirms the root cause.
 
@@ -121,12 +144,14 @@ Sage: Fix verified.
 
 [A] Approve — commit and close
 [R] Revise — something's not right
+[V] Verify — type /review for independent check
 
-**On approval — Post-Flight:**
-1. Update `.sage/progress.md`
-2. Update `.sage/journal.md` if relevant
-3. Store root cause and fix in memory (tagged `learning`) — this
-   prevents the same bug from being re-investigated in future sessions
+**On approval — Post-Flight (Rule 7):**
+1. Append root cause and fix to `.sage/decisions.md`
+2. Update artifact frontmatter if relevant
+3. Store root cause and fix in memory (tagged `self-learning`)
+4. Suggest: "Type /review if this was a complex fix, or describe
+   the next issue."
 
 ## Quality Criteria
 

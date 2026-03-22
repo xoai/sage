@@ -90,6 +90,11 @@ funnel before making changes. Starting with research.
 **Compliance:** Every substantial response starts with "Sage →", uses a
 slash command, or is genuinely Tier 1.
 
+**Memory recall (Standard+ tasks):** Before starting work on any Tier 2
+or Tier 3 task, search sage-memory for relevant self-learning entries:
+`sage_memory_search(query: "[domain keywords]", filter_tags: ["self-learning"], limit: 5)`
+If sage-memory is not available, continue without search.
+
 ### Workflow Gates (enforced for both slash commands and free input)
 
 After announcing a workflow, read and follow the workflow file at
@@ -117,9 +122,9 @@ DO NOT design before elicitation is complete.
 
 ### Rule 1: State First
 
-Before any substantial response, read `.sage/progress.md`. If work exists
-in `.sage/work/`, scan frontmatter (status, phase) for active initiatives.
-Never start fresh when there is existing context.
+Before any substantial response, scan `.sage/work/` frontmatter
+(status, phase) for active initiatives. Read `.sage/decisions.md`
+for recent context. Never start fresh when there is existing context.
 
 **Compliance:** Active work is acknowledged before new work begins.
 
@@ -175,14 +180,20 @@ call with self-learning tag before continuing.
 
 ### Rule 7: Update State at Checkpoints
 
-State updates happen ONLY at checkpoints — not per-task, not per-file.
-At each checkpoint: update progress.md, update journal.md if artifacts
-changed, store significant findings in memory.
+### Rule 7: Record Decisions at Checkpoints
 
-Plan.md is a guide (what to do next), not a tracking database. The file
-system — what artifacts exist — is the source of truth.
+At each checkpoint, append significant decisions to
+`.sage/decisions.md` — what was decided, why, and what alternatives
+were considered. This serves agents (session context) and humans
+(project history). Update artifact frontmatter (status, phase)
+when artifacts are completed.
 
-**Compliance:** progress.md is current after each checkpoint.
+The file system — what artifacts exist in `.sage/work/` and their
+frontmatter — is the source of truth for state. decisions.md is
+the source of truth for reasoning and context.
+
+**Compliance:** decisions.md has a new entry after each checkpoint
+that involved a decision.
 
 __CONSTITUTION_PLACEHOLDER__
 
@@ -241,10 +252,10 @@ Sage skills in `.agent/skills/` cover:
 ## Project State
 
 All Sage state lives in `.sage/`:
-- `progress.md` — checkpoint log (what's done, what's next)
-- `journal.md` — artifact index and change log
-- `docs/` — project-level knowledge (analyses, decisions, guides)
+- `decisions.md` — shared decision log (agent + human)
+- `docs/` — project-level knowledge (analyses, ADRs, guides)
 - `work/` — per-initiative deliverables with YAML frontmatter
+- `gates/` — quality gate scripts and activation config
 GEMINIEOF
 
 # ── Dynamic constitution merging ──
@@ -410,6 +421,7 @@ for wf in "$CORE"/workflows/*.workflow.md; do
   case "$basename_wf" in
     build)
       PREAMBLE='RULES (apply to every step — non-negotiable):
+- PERSONA: Read sage/core/agents/developer.persona.md for your mindset.
 - Announce: "Sage → build workflow." before starting work
 - Standard+ scope: MUST write spec before implementing. DO NOT skip.
 - Save ALL artifacts to .sage/work/ or .sage/docs/ — never inline-only
@@ -423,6 +435,7 @@ for wf in "$CORE"/workflows/*.workflow.md; do
       ;;
     fix)
       PREAMBLE='RULES (apply to every step — non-negotiable):
+- PERSONA: Read sage/core/agents/debugger.persona.md for your mindset.
 - Announce: "Sage → fix workflow." before starting work
 - MUST complete root cause investigation before ANY fix attempt
 - Present root cause gate with [A] / [R] / [S] — wait for response
@@ -435,6 +448,7 @@ for wf in "$CORE"/workflows/*.workflow.md; do
       ;;
     architect)
       PREAMBLE='RULES (apply to every step — non-negotiable):
+- PERSONA: Read sage/core/agents/architect.persona.md for your mindset.
 - Announce: "Sage → architect workflow." before starting work
 - MUST complete all 3 elicitation rounds before designing
 - Save ADRs to .sage/docs/decision-*.md, spec to .sage/work/
@@ -457,6 +471,7 @@ for wf in "$CORE"/workflows/*.workflow.md; do
       ;;
     review)
       PREAMBLE='RULES (apply to every step — non-negotiable):
+- PERSONA: Read sage/core/agents/reviewer.persona.md for your mindset.
 - Announce: "Sage → review workflow." before starting work
 - Present artifact list with [1] [2] [3] bracket notation
 - Present findings with [A] Accept / [R] Revise / [D] Discuss
@@ -489,9 +504,9 @@ Sage's intelligent entry point. Assess the project and guide the user.
 
 ## Step 1: Read State
 
-Read `.sage/progress.md` and scan `.sage/work/` for active initiatives
-(read frontmatter: title, status, phase). Scan `.sage/docs/` for
-project-level artifacts.
+Read `.sage/work/` for active initiatives (read frontmatter: title,
+status, phase). Scan `.sage/docs/` for project-level artifacts.
+Read `.sage/decisions.md` for recent context.
 
 ## Step 2: Present Status and Options
 
@@ -557,29 +572,14 @@ echo "📊 Checking project state..."
 if [ ! -d "$PROJECT_SAGE" ]; then
   mkdir -p "$PROJECT_SAGE/docs" "$PROJECT_SAGE/work"
 
-  cat > "$PROJECT_SAGE/progress.md" << PROGEOF
-# Progress
+  cat > "$PROJECT_SAGE/decisions.md" << 'DECEOF'
+# Decisions
 
-Mode: idle
-Feature: none
-Phase: ready
-Next: Describe what you want to build — Sage will guide you
-Updated: $(date -Iseconds)
-PROGEOF
-
-  cat > "$PROJECT_SAGE/journal.md" << 'JRNEOF'
-# Project Journal
-
-## Artifact Index
-
-| Artifact | Status | Path | Updated |
-|----------|--------|------|---------|
-| (none yet) | — | — | — |
-
-## Change Log
+Shared log for significant decisions and context.
+Both the AI agent and human collaborators write here.
 
 - [init] Sage initialized
-JRNEOF
+DECEOF
 
   echo "  ✓ .sage/ initialized"
 else
@@ -625,8 +625,7 @@ cat > "$AGENT_DIR/rules/sage-session-context.md" << 'SESSEOF'
 **On every session start**, before responding to the user:
 
 1. **Read state.** Scan `.sage/work/` for artifact frontmatter (title,
-   status, phase, tasks-done/tasks-total). Read `.sage/progress.md`
-   for current mode and next step.
+   status, phase). Read `.sage/decisions.md` for recent context.
 
 2. **Recall memory.** Call `sage_memory_search` with a query relevant
    to the project or the user's first message. If MCP is not available,

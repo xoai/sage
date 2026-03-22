@@ -106,14 +106,14 @@ JSONB columns, request a constitution waiver, or redesign requirements. Which?"
 
 ### SB1: Saves progress after each task
 
-**Test:** Complete 3 tasks in BUILD mode. Check `.sage/progress.md` after each.
+**Test:** Complete 3 tasks in BUILD mode. Check `.sage/decisions.md` after each.
 **Verify:** After task 1: progress shows task 1 complete, next is task 2.
 After task 2: progress shows tasks 1-2 complete. After task 3: updated again.
 Each save includes the "Next action" field.
 
 ### SB2: Recovers from stale progress
 
-**Setup:** progress.md says "Task 3 in progress" but git log shows task 3
+**Setup:** artifact frontmatter says "Task 3 in progress" but git log shows task 3
 was committed, and task 4 was partially started.
-**Verify:** Agent detects the discrepancy, trusts git over progress.md, updates
-progress.md to match actual state, and resumes from the correct position.
+**Verify:** Agent detects the discrepancy, trusts git over artifact frontmatter, updates
+frontmatter to match actual state, and resumes from the correct position.

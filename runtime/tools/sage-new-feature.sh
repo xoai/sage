@@ -12,7 +12,7 @@
 #   1. Determines the next feature number (NNN)
 #   2. Creates .sage/work/NNN-<slug>/ directory
 #   3. Creates a git branch (unless --no-branch)
-#   4. Initializes progress.md pointer
+#   4. Updates decisions.md
 #   5. Prints the feature path for the agent to use
 #
 # What it does NOT do:
@@ -121,18 +121,9 @@ fi
 
 # ─── Initialize Progress Pointer ──────────────────────────────────────────
 
-cat > "$SAGE_DIR/progress.md" << EOF
-# Progress
+echo "- [$(date +%Y-%m-%d)] New feature: $FEATURE_NAME" >> "$SAGE_DIR/decisions.md"
 
-Mode: (pending)
-Feature: ${feature_name}
-Plan: ${feature_dir}/plan.md
-Phase: elicitation
-Next: Define requirements for ${slug}
-Updated: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
-EOF
-
-echo "Progress: $SAGE_DIR/progress.md updated"
+echo "Decisions: $SAGE_DIR/decisions.md updated"
 
 # ─── Output for Agent ─────────────────────────────────────────────────────
 

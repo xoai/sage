@@ -35,7 +35,7 @@ Specific, actionable guidance based on WHERE THEY ARE right now.
 ### Step 1: Read Current State
 
 Check these files in order:
-1. `.sage/progress.md` — what's the current phase?
+1. `.sage/work/` frontmatter — what's the current phase?
 2. `.sage/config.yaml` — is Sage configured?
 3. Active feature directory — is there work in progress?
 
@@ -122,7 +122,7 @@ using knowledge of Sage's workflow, skills, and packs. Examples:
 **MUST (violation = useless help):**
 - MUST NOT dump documentation. Give the ONE thing to do right now.
 - MUST NOT list all features. Answer the specific question or state.
-- MUST read progress.md before responding — context-aware guidance is the whole point.
+- MUST scan .sage/work/ frontmatter before responding — context-aware guidance is the whole point.
 - MUST be concrete: file paths, task numbers, specific actions. Not "continue working on the feature."
 
 **SHOULD (violation = suboptimal experience):**
@@ -131,7 +131,7 @@ using knowledge of Sage's workflow, skills, and packs. Examples:
 
 ## Failure Modes
 
-- **No progress.md or plan.md exists:** The project hasn't started or state
+- **No .sage/work/ artifacts or plan.md exists:** The project hasn't started or state
   was lost. Guide the user to onboard or to start a new initiative. Don't
   guess at state that doesn't exist.
 - **Multiple features in progress:** If plan.md shows unchecked tasks across

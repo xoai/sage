@@ -128,15 +128,6 @@ esac
 
 # ─── Update Progress Pointer ─────────────────────────────────────────────
 
-if [ -f "$SAGE_DIR/progress.md" ]; then
-  # Update the mode in progress.md
-  if grep -q '^Mode:' "$SAGE_DIR/progress.md"; then
-    sed -i "s/^Mode:.*/Mode: $mode/" "$SAGE_DIR/progress.md"
-  fi
-  if grep -q '^Updated:' "$SAGE_DIR/progress.md"; then
-    sed -i "s/^Updated:.*/Updated: $(date -u +"%Y-%m-%dT%H:%M:%SZ")/" "$SAGE_DIR/progress.md"
-  fi
-fi
 
 # ─── Output ───────────────────────────────────────────────────────────────
 

@@ -227,7 +227,7 @@ If issues are found, fix before presenting.
 Save to `.sage/work/<YYYYMMDD>-<slug>/brief.md` using the template from
 `templates/prd-template.md`.
 
-Update `.sage/journal.md`: append a change log entry recording the brief
+Append to `.sage/decisions.md` recording the brief
 scope (which opportunity, how many requirements per priority tier),
 key decisions, and open questions. Update the "Current Artifacts" section
 to list the new file as Active.

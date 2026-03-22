@@ -553,7 +553,7 @@ update instruction in its Output section:
 
 Save to `.sage/docs/analysis.md` using the template.
 
-Update `.sage/journal.md`: append a change log entry recording what was
+Append to `.sage/decisions.md` recording what was
 produced, key findings, and recommended next steps. Update the "Current
 Artifacts" section to list the new file as Active.
 ```

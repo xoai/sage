@@ -1,8 +1,8 @@
 ---
 name: status
-version: "1.0.0"
+version: "1.1.0"
 mode: status
-produces: ["Project state summary"]
+produces: ["Project state summary computed from artifacts"]
 checkpoints: 0
 scope: "Instant"
 user-role: "Read and decide next step"
@@ -10,33 +10,39 @@ user-role: "Read and decide next step"
 
 # Status Workflow
 
-Show current Sage project state.
+Show current Sage project state. Computed from artifacts — always current.
 
 ## Process
 
-Read and display:
+Scan and display:
 
-1. `.sage/progress.md` — current mode, active feature, phase, next step
-2. `.sage/work/` — read frontmatter from artifact files for status and phase
-3. `.sage/docs/` — list project-level artifacts
+1. `.sage/work/` — read frontmatter from artifact files for status and phase
+2. `.sage/docs/` — list project-level artifacts
+3. `.sage/decisions.md` — last 3-5 entries for recent context
+4. `.sage/gates/gate-modes.yaml` — current gate activation config
 
 Present concisely:
 
-Sage: Project status
+**Sage:** Project status for [name]
 
-  Project: [name]
-  Status: [mode] — [feature] — [phase]
-  Next: [what progress.md says is next]
+Active:
+  [initiative-name] [status, phase]
+    brief ✓  spec ✓  plan (in-progress)
+    .sage/work/YYYYMMDD-slug/
 
-  Initiatives:
-    20260315-homepage-redesign/  build workflow  spec ✓  plan in-progress
-    20260310-jtbd-analysis/      completed
+Completed:
+  [initiative-name] [completed]
 
-  Docs: jtbd-momo-qlct.md, decision-auth-provider.md
+Docs: [N] files in .sage/docs/
+Recent decisions: [last 2-3 decision titles]
+Gates: [mode config summary]
 
-  [C] Continue current work  |  Or tell me what you'd like to do
+[1] Continue [initiative] — type /build
+[2] Start something new
 
 ## Rules
 
 - Report what actually exists, not what should exist.
-- If `.sage/progress.md` is missing, say so — don't fabricate state.
+- Compute from artifacts — never read progress.md.
+- If `.sage/work/` is empty, say so. Don't fabricate state.
+- Always suggest the next slash command.

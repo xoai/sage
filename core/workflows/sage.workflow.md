@@ -17,7 +17,7 @@ Sage's intelligent entry point. Start here for any substantial work.
 Read and follow the **sage-navigator** skill.
 
 The navigator will:
-1. Check project state (`.sage/progress.md` and existing artifacts)
+1. Check project state (`.sage/work/` artifacts and `.sage/decisions.md`)
 2. Understand what you're asking for
 3. Assess scope and detect gaps
 4. Recommend the best path — and wait for your approval

@@ -109,10 +109,10 @@ This is why skills should be concise and reference files should be loaded on-dem
 
 ## Session Persistence
 
-The context loader reads from and writes to `.sage/progress.md` for cross-session
+The context loader reads `.sage/work/` frontmatter and `.sage/decisions.md` for cross-session
 continuity. When a new session starts:
 
-1. Load `.sage/progress.md` — what was the last action? what's next?
+1. Scan `.sage/work/` frontmatter — what artifacts exist? what phase?
 2. Load `.sage/decisions.md` — architectural decisions made so far.
 3. Load `.sage/conventions.md` — discovered project conventions.
 4. Restore the active mode, feature, and task position.

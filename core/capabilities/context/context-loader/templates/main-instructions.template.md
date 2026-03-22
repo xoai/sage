@@ -43,7 +43,6 @@ Always accept free-form input — these patterns guide, they don't constrain.
 ## Project State
 
 All Sage state lives in `.sage/`:
-- `progress.md` — session continuity (what's done, what's next)
-- `journal.md` — artifact index and change log
+- `decisions.md` — shared decision log (agent + human)
 - `docs/` — project-level knowledge (analyses, decisions, guides)
 - `work/` — per-initiative deliverables (brief, spec, plan per initiative)

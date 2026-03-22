@@ -152,7 +152,7 @@ not what can be re-read from source code.
 
 **SHOULD NOT store:**
 - Anything re-readable from source code ("this file exports 3 functions")
-- Temporary task state (that's for `.sage/progress.md`)
+- Temporary task state (that's for `.sage/work/` frontmatter)
 - Obvious patterns ("uses React with TypeScript")
 - Trivial fixes ("fixed a typo in line 42")
 - User preferences or style (that's for global scope, not project)

@@ -155,7 +155,7 @@ The ONLY way to skip TDD is an explicit human override:
 Human: "skip-tdd for this change"
 ```
 
-The waiver is logged in `.sage/progress.md` with reason and scope.
+The waiver is logged in `.sage/decisions.md` with reason and scope.
 The resulting code is flagged as untested technical debt for follow-up.
 The agent MUST NOT suggest or encourage waivers.
 

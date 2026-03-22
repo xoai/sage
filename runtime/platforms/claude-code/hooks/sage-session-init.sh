@@ -2,7 +2,7 @@
 # ═══════════════════════════════════════════════════════════════
 # Sage Session Init Hook for Claude Code
 # Fires on: startup, resume, clear, compact
-# Reads .sage/ state and outputs structured context for the agent
+# Reads .sage/ artifacts and outputs structured context
 # Zero dependencies — bash only
 # ═══════════════════════════════════════════════════════════════
 
@@ -11,29 +11,16 @@ SAGE_DIR=".sage"
 # Exit silently if no Sage project
 [ -d "$SAGE_DIR" ] || exit 0
 
-# ── Read progress ──
-STATUS="idle"
-FEATURE="none"
-PHASE="ready"
-NEXT=""
-if [ -f "$SAGE_DIR/progress.md" ]; then
-  STATUS=$(grep "^Mode:" "$SAGE_DIR/progress.md" 2>/dev/null | head -1 | sed 's/^Mode: *//')
-  FEATURE=$(grep "^Feature:" "$SAGE_DIR/progress.md" 2>/dev/null | head -1 | sed 's/^Feature: *//')
-  PHASE=$(grep "^Phase:" "$SAGE_DIR/progress.md" 2>/dev/null | head -1 | sed 's/^Phase: *//')
-  NEXT=$(grep "^Next:" "$SAGE_DIR/progress.md" 2>/dev/null | head -1 | sed 's/^Next: *//')
-fi
-
 # ── Scan active work via frontmatter ──
 ACTIVE_WORK=""
 WORK_COUNT=0
+IN_PROGRESS=""
 for dir in "$SAGE_DIR"/work/*/; do
   [ -d "$dir" ] || continue
-  # Find the most relevant artifact file
   for artifact in "plan.md" "spec.md" "brief.md"; do
     f="$dir$artifact"
     [ -f "$f" ] || continue
 
-    # Read frontmatter fields
     title=$(sed -n '/^---$/,/^---$/{ /^title:/s/^title: *"*\([^"]*\)"*/\1/p; }' "$f" 2>/dev/null)
     status=$(sed -n '/^---$/,/^---$/{ /^status:/s/^status: *//p; }' "$f" 2>/dev/null)
     phase=$(sed -n '/^---$/,/^---$/{ /^phase:/s/^phase: *//p; }' "$f" 2>/dev/null)
@@ -43,41 +30,50 @@ for dir in "$SAGE_DIR"/work/*/; do
 
     ACTIVE_WORK="$ACTIVE_WORK  - $title [$status, $phase] — $f\n"
     WORK_COUNT=$((WORK_COUNT + 1))
-    break  # One artifact per initiative is enough
+    [ "$status" = "in-progress" ] && IN_PROGRESS="$title"
+    break
   done
 done
 
-# ── Scan recent docs ──
-RECENT_DOCS=""
+# ── Scan docs ──
 DOC_COUNT=0
 for doc in "$SAGE_DIR"/docs/*.md; do
   [ -f "$doc" ] || continue
   DOC_COUNT=$((DOC_COUNT + 1))
-  name=$(basename "$doc" .md)
-  RECENT_DOCS="$RECENT_DOCS  - $name — $doc\n"
 done
+
+# ── Read recent decisions ──
+RECENT_DECISIONS=""
+if [ -f "$SAGE_DIR/decisions.md" ]; then
+  RECENT_DECISIONS=$(grep "^### " "$SAGE_DIR/decisions.md" 2>/dev/null | tail -3)
+fi
 
 # ── Output structured context ──
 echo ""
 echo "## Sage Context (auto-injected)"
 echo ""
-echo "Sage: Project status — $STATUS | Feature: $FEATURE | Phase: $PHASE"
-
-if [ -n "$NEXT" ] && [ "$NEXT" != "Describe what you want to build — Sage will guide you" ]; then
-  echo "Next: $NEXT"
-fi
 
 if [ "$WORK_COUNT" -gt 0 ]; then
+  if [ -n "$IN_PROGRESS" ]; then
+    echo "Sage: $IN_PROGRESS is in progress."
+  fi
   echo ""
   echo "Active work ($WORK_COUNT):"
   printf "$ACTIVE_WORK"
+else
+  echo "Sage: No active work. Ready for a new task."
 fi
 
 if [ "$DOC_COUNT" -gt 0 ]; then
   echo "Project docs: $DOC_COUNT files in .sage/docs/"
 fi
 
+if [ -n "$RECENT_DECISIONS" ]; then
+  echo ""
+  echo "Recent decisions:"
+  echo "$RECENT_DECISIONS"
+fi
+
 echo ""
-echo "Sage navigator: sage/core/capabilities/orchestration/sage-navigator/SKILL.md"
-echo "Run Pre-Flight memory recall before assessing intent."
+echo "Use /sage, /build, /fix, /architect, /status, /review, or /learn."
 echo ""

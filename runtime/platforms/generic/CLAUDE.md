@@ -42,17 +42,17 @@ When the user asks you to do something, determine the appropriate mode:
 
 ## Session Continuity and State Persistence
 
-**The plan file is the source of truth for progress**, not progress.md.
+**The plan file is the source of truth for progress**, not a separate state file.
 
 At session start:
-1. Read `.sage/progress.md` to find the active feature and plan file path
+1. Scan `.sage/work/` frontmatter to find the active feature and plan
 2. Read the plan file — count `[x]` (done) vs `[ ]` (remaining) checkboxes
 3. Resume from the first unchecked task
 
 After completing each task:
 1. Check the task's checkbox in the plan file: `- [ ]` → `- [x]`
 2. Add `✅ DONE (commit: <hash>)` after the task name
-3. Update `.sage/progress.md` as a lightweight pointer
+3. Append significant decisions to `.sage/decisions.md`
 
 This means if the session dies unexpectedly, the plan file on disk shows
 exactly which tasks are done. No progress is lost.
@@ -62,7 +62,7 @@ exactly which tasks are done. No progress is lost.
 | File | Purpose | Truth Level |
 |------|---------|-------------|
 | `.sage/work/<n>/plan.md` | Task checkboxes — REAL progress | Ground truth |
-| `.sage/progress.md` | Pointer to active feature and plan | May be stale |
+| `.sage/decisions.md` | Decision log (agent + human) | Append-only |
 | `.sage/conventions.md` | Discovered project patterns | Append-only |
 | `.sage/decisions.md` | Architectural decisions | Append-only |
 
