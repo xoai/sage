@@ -21,36 +21,37 @@ outputs: [session-state]
 
 Maintain continuity across sessions using the plan file as the source of truth.
 
-**Core Principle:** State persistence is a side effect of doing the work, not a
-separate action that can be forgotten. Checking a task's checkbox in the plan
-file IS saving progress. If the session dies unexpectedly, the plan file on
-disk shows exactly where things stand.
+**Core Principle:** The file system is the source of truth. What artifacts
+exist in `.sage/work/` and their frontmatter status tells you where things
+stand. progress.md is a pointer that helps find the active work quickly.
+State updates happen at checkpoints (Rule 7), not per-task.
 
 ## State Architecture
 
 Two levels of state, each with a different purpose:
 
-### Ground Truth: The Plan File
+### Ground Truth: Artifacts in .sage/work/
 
-`.sage/work/<feature>/plan.md` contains:
-- Task checkboxes: `[x]` = done, `[ ]` = not done, `🔄` = in progress, `🚫` = blocked
-- Gate results in the Gate Log table
-- Completion markers with commit hashes
+`.sage/work/<feature>/` contains artifacts with YAML frontmatter:
+- `brief.md`, `spec.md`, `plan.md` — each with `status` and `phase`
+- Status field: `pending`, `in-progress`, `completed`, `blocked`
+- The EXISTENCE of artifacts and their frontmatter status IS the state
 
-**This is always accurate** because it's updated by the `implement` skill as a
-natural part of completing each task. No separate "save" action needed.
+**This is always accurate** because artifacts are created and updated
+as part of the workflow. No separate "save" action needed.
 
 ### Quick Pointer: progress.md
 
 `.sage/progress.md` contains:
 - Current mode (fix/build/architect)
 - Active feature name
-- Path to the active plan file
+- Path to the active work directory
 - Last known phase
 - Brief notes
 
-**This may be stale** if the session ended abruptly. That's OK — the plan file
-is the real state. progress.md just helps the next session find it quickly.
+**This may be stale** if the session ended abruptly. That's OK — the
+artifacts are the real state. progress.md just helps the next session
+find them quickly. If they disagree, trust the artifacts.
 
 ## Loading (Start of Session)
 
@@ -75,38 +76,29 @@ archived). If you need to understand WHY the project is in its current state,
 read the last 2-3 change log entries — they capture recent decisions and
 direction changes.
 
-### Step 2: Read the plan file for ground truth
+### Step 2: Read artifacts for ground truth
 
-Open the plan file. Count checkboxes:
-- How many `[x]` tasks? (completed)
-- Any `🔄 IN PROGRESS` tasks? (interrupted mid-task)
-- Any `🚫 BLOCKED` tasks? (needs human input)
-- How many `[ ]` tasks remain?
-- Check the Gate Log for any failed gates that need re-running
+Scan `.sage/work/` for active initiatives. Read frontmatter from
+brief.md, spec.md, or plan.md (whichever exists). Note title, status,
+phase. If a plan exists, scan the task checkboxes to understand how
+far implementation progressed.
 
 ### Step 3: Verify against the codebase
 
-If a task is marked `[x]` in the plan but the code doesn't exist (maybe the
-commit was lost), trust the codebase over the plan. Mark the task back to `[ ]`.
-
-If a task is NOT checked but the code exists (maybe the plan update was lost),
-trust the codebase. Check the box and add the commit hash.
+If artifacts and the codebase disagree (e.g., plan says "spec phase"
+but implementation files exist), trust the codebase. The file system
+is the ultimate source of truth. Update artifacts to match reality.
 
 ### Step 4: Report to human
 
-```
-Resuming feature 003-jwt-auth.
-Progress: 4 of 7 tasks complete.
-Task 5 was in progress when the last session ended.
-Next: Complete task 5 (add token refresh endpoint), then tasks 6-7.
-```
+**Sage:** Resuming [feature name]. [Phase] phase.
+[Summary of what exists and what's next.]
 
-## Saving (Between Tasks)
+## Saving (At Checkpoints)
 
-The `implement` skill updates the plan file after each task. Session-bridge
-adds a lightweight progress.md update:
+State updates happen ONLY at checkpoints (Rule 7), not per-task:
 
-### After each task completion:
+### At each checkpoint:
 
 Update progress.md (brief — just the pointer):
 ```markdown
@@ -114,10 +106,9 @@ Update progress.md (brief — just the pointer):
 
 Mode: build
 Feature: 003-jwt-auth
-Plan: .sage/work/003-jwt-auth/plan.md
+Work: .sage/work/003-jwt-auth/
 Phase: implementation
-Last completed: Task 4 — JWT validation middleware
-Next: Task 5 — Token refresh endpoint
+Next: Continue implementing from plan
 Updated: 2025-03-13T14:22:00Z
 ```
 
@@ -148,13 +139,13 @@ All route handlers throw typed errors; the middleware formats the response.
 
 If the session is ending gracefully (human says "stop", "done for now", etc.):
 
-1. Update the plan file with current task status (if mid-task, mark `🔄 IN PROGRESS`)
-2. Update progress.md with the pointer
-3. Report: "Progress saved. [N] of [M] tasks complete. Next session: [what to do]."
+1. Update progress.md with current phase and next steps
+2. Update journal.md if artifacts were created or changed
+3. Report: "**Sage:** Progress saved. Next session: [what to do]."
 
-**If the session ends abruptly** (no graceful shutdown): the plan file already
-has the correct state from the last completed task. The in-progress task won't
-be checked off, which is correct — it needs to be resumed or restarted.
+**If the session ends abruptly** (no graceful shutdown): the artifacts
+in `.sage/work/` and their frontmatter status reflect the real state.
+The next session reads them to orient.
 
 ## FIX Mode State
 
@@ -165,38 +156,34 @@ FIX mode typically doesn't have a plan file. For FIX mode:
 
 ## Recovery: Stale or Missing State
 
-**progress.md is missing:** Scan `.sage/work/` for plan files with
-unchecked tasks. The most recently modified one is likely the active feature.
+**progress.md is missing:** Scan `.sage/work/` for artifact directories.
+Read frontmatter from the most recently modified artifacts. Report what
+you find.
 
-**progress.md points to a completed plan:** All tasks checked. Report
-"Previous feature [name] is complete. Ready for a new task."
+**progress.md points to a completed initiative:** All artifact statuses
+are `completed`. Report: "Previous initiative [name] is complete. Ready
+for a new task."
 
-**Plan file has `🔄 IN PROGRESS` on a task:** The previous session was
-interrupted mid-task. Check if the code was committed. If yes, complete the
-task. If no, resume from the beginning of that task.
-
-**Plan file and codebase disagree:** Always trust the codebase (git log, file
-existence) over the plan file. The codebase is the ultimate source of truth.
-Update the plan file to match reality.
+**Artifacts and codebase disagree:** Always trust the codebase (git log,
+file existence) over artifacts. The codebase is the ultimate source of
+truth. Update artifact frontmatter to match reality.
 
 ## Rules
 
-- The plan file is the ground truth. progress.md is a pointer.
-- Update the plan file AS PART OF completing each task (implement skill handles this).
-- Update progress.md as a quick pointer between tasks and at session end.
+- Artifacts in `.sage/work/` are the ground truth. progress.md is a pointer.
+- Update state at checkpoints only (Rule 7), not per-task.
 - Keep progress.md under 20 lines. It's a pointer, not a journal.
-- Append to decisions.md and conventions.md — never overwrite.
+- Append to journal.md and conventions.md — never overwrite.
 - If state is ambiguous, verify against the codebase (git log, file system).
 
 ## Failure Modes
 
-- **progress.md missing:** Scan `.sage/work/` for plan files with unchecked
-  tasks. The most recently modified one is likely active. Report what you find.
-- **progress.md points to nonexistent plan:** The feature directory may have been
-  deleted or renamed. List available features and ask the human which to resume.
-- **Plan file and codebase disagree:** Trust the codebase. Update the plan to match.
-  If a checked task's code is gone, uncheck it. If unchecked task's code exists, check it.
-- **Session interrupted mid-task (🔄 marker):** Check if the code was committed.
-  If committed, complete the task (check box, add hash). If not, restart the task.
-- **Multiple features have unchecked tasks:** Ask the human which to resume.
-  Don't guess — the wrong choice wastes a session.
+- **progress.md missing:** Scan `.sage/work/` for artifact directories.
+  The most recently modified one is likely active. Report what you find.
+- **progress.md points to nonexistent work:** The feature directory may have
+  been deleted or renamed. List available features and ask the human.
+- **Artifacts and codebase disagree:** Trust the codebase. Update artifacts
+  to match. If spec says "in-progress" but implementation is complete,
+  update the spec status.
+- **Multiple initiatives have in-progress artifacts:** Ask the human which
+  to resume. Don't guess — the wrong choice wastes a session.

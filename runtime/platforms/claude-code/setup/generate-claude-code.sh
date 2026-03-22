@@ -187,14 +187,7 @@ system — what artifacts exist — is the source of truth.
 
 **Compliance:** progress.md is current after each checkpoint.
 
-## Engineering Principles (base constitution)
-
-These apply to all code written in this project:
-1. Tests before code — every behavior has a test before implementation
-2. No silent failures — errors handled, logged, or propagated
-3. Secrets never in code — use env vars or secret managers
-4. Dependencies explicit — declared with pinned versions
-5. Changes reversible — migrations reversible, deployments rollbackable
+__CONSTITUTION_PLACEHOLDER__
 
 ## Learning Triggers
 
@@ -258,6 +251,76 @@ All Sage state lives in `.sage/`:
 - `docs/` — project-level knowledge (analyses, decisions, guides)
 - `work/` — per-initiative deliverables with YAML frontmatter
 CLAUDEEOF
+
+# ── Dynamic constitution merging ──
+CONST_SECTION="## Engineering Principles
+
+Base (all projects):
+1. Tests before code — every behavior has a test before implementation
+2. No silent failures — errors handled, logged, or propagated
+3. Secrets never in code — use env vars or secret managers
+4. Dependencies explicit — declared with pinned versions
+5. Changes reversible — migrations reversible, deployments rollbackable"
+
+PRINCIPLE_NUM=5
+
+# Read preset if .sage/constitution.md exists
+CONST_FILE="$PROJECT_SAGE/constitution.md"
+if [ -f "$CONST_FILE" ]; then
+  PRESET=$(sed -n '/^---$/,/^---$/{ /^extends:/s/^extends: *//p; }' "$CONST_FILE" 2>/dev/null)
+  if [ -n "$PRESET" ] && [ "$PRESET" != "base" ] && [ "$PRESET" != "none" ]; then
+    PRESET_FILE="$CORE/constitution/presets/${PRESET}.constitution.md"
+    if [ -f "$PRESET_FILE" ]; then
+      # Extract principles (lines starting with numbers after ## Additions)
+      PRESET_PRINCIPLES=$(sed -n '/^## Additions/,$ { /^[0-9]/p; }' "$PRESET_FILE")
+      if [ -n "$PRESET_PRINCIPLES" ]; then
+        CONST_SECTION="$CONST_SECTION
+
+${PRESET} preset:"
+        while IFS= read -r line; do
+          if [ -n "$line" ]; then
+            PRINCIPLE_NUM=$((PRINCIPLE_NUM + 1))
+            # Replace the original number with sequential numbering
+            CLEAN=$(echo "$line" | sed 's/^[0-9]*\. *//')
+            CONST_SECTION="$CONST_SECTION
+${PRINCIPLE_NUM}. ${CLEAN}"
+          fi
+        done <<< "$PRESET_PRINCIPLES"
+      fi
+    fi
+  fi
+
+  # Extract project additions (content after frontmatter and ## Project Additions)
+  PROJECT_ADDITIONS=$(sed -n '/^## Project Additions/,$ { /^## Project/d; /^$/d; /^(/d; p; }' "$CONST_FILE" 2>/dev/null)
+  if [ -n "$PROJECT_ADDITIONS" ]; then
+    CONST_SECTION="$CONST_SECTION
+
+Project additions:"
+    while IFS= read -r line; do
+      if [ -n "$line" ]; then
+        PRINCIPLE_NUM=$((PRINCIPLE_NUM + 1))
+        CONST_SECTION="$CONST_SECTION
+${PRINCIPLE_NUM}. ${line}"
+      fi
+    done <<< "$PROJECT_ADDITIONS"
+  fi
+fi
+
+# Replace placeholder in CLAUDE.md
+# Use a temp file since sed with multi-line replacement is tricky
+python3 -c "
+import sys
+with open('$SAGE_ROOT/CLAUDE.md', 'r') as f:
+    content = f.read()
+replacement = '''$CONST_SECTION'''
+content = content.replace('__CONSTITUTION_PLACEHOLDER__', replacement)
+with open('$SAGE_ROOT/CLAUDE.md', 'w') as f:
+    f.write(content)
+" 2>/dev/null || {
+  # Fallback: simple sed if python3 not available
+  sed -i "s|__CONSTITUTION_PLACEHOLDER__|## Engineering Principles\n\nBase (all projects):\n1. Tests before code\n2. No silent failures\n3. Secrets never in code\n4. Dependencies explicit\n5. Changes reversible|" "$SAGE_ROOT/CLAUDE.md" 2>/dev/null
+}
+
 echo "  ✓ CLAUDE.md"
 
 # ═══════════════════════════════════════════════════════════════
@@ -554,6 +617,33 @@ The codebase-scan capability will enrich this automatically.
 CONVEOF
 
   echo "  ✓ .sage/ initialized"
+fi
+
+# ═══════════════════════════════════════════════════════════════
+# Gate scripts and config — deterministic verification
+# ═══════════════════════════════════════════════════════════════
+echo ""
+echo "🔒 Deploying gate scripts..."
+
+mkdir -p "$PROJECT_SAGE/gates/scripts"
+GATE_SCRIPTS="$CORE/gates/scripts"
+
+if [ -d "$GATE_SCRIPTS" ]; then
+  for script in "$GATE_SCRIPTS"/*.sh; do
+    [ -f "$script" ] || continue
+    cp "$script" "$PROJECT_SAGE/gates/scripts/"
+    chmod +x "$PROJECT_SAGE/gates/scripts/$(basename "$script")"
+    echo "  ✓ $(basename "$script")"
+  done
+else
+  echo "  ⚠ Gate scripts not found at $GATE_SCRIPTS"
+fi
+
+# Deploy gate activation config
+GATE_CONFIG="$CORE/gates/_config/gate-modes.yaml"
+if [ -f "$GATE_CONFIG" ]; then
+  cp "$GATE_CONFIG" "$PROJECT_SAGE/gates/gate-modes.yaml"
+  echo "  ✓ gate-modes.yaml"
 fi
 
 # ═══════════════════════════════════════════════════════════════

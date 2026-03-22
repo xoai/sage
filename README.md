@@ -30,24 +30,28 @@ would prevent, then lets you decide. Gap detection, not gatekeeping.
 The belief: an AI agent's job isn't to execute fast — it's to arrive at
 the right outcome.
 
-### The Context Loader
+### Hybrid Loading
 
 Most frameworks dump all instructions into the context window and hope
-for the best. Sage loads deliberately: the process constitution is
-always-on (~200 words), the navigator and skills load on-demand, and
-reference material is never pre-loaded — read only when actively needed.
-What you don't load matters as much as what you do. A focused agent with
-the right 500 tokens outperforms a distracted agent with 50,000 tokens
-of everything.
+for the best. Sage loads in two layers: the **eager layer** (process
+rules, workflow gates, engineering principles — ~200 lines, always in
+context) enforces what must never be skipped. The **lazy layer**
+(capabilities like TDD discipline, systematic debugging, build-loop
+orchestration — loaded when the workflow step needs them) adds depth
+without bloating context. A focused agent with the right 500 tokens
+outperforms a distracted agent with 50,000 tokens of everything.
 
 ### The Quality Gates
 
-AI agents drift silently — skipping steps, hallucinating requirements,
-producing output that looks right but isn't. Sage runs deterministic
-gates at every stage transition: does the implementation match the spec?
-Were checkpoints honored? Gates catch drift early, automatically, before
-it compounds. Quality should be verified, not hoped for — and
-verification should be invisible until it catches something.
+AI agents drift silently — skipping steps, hallucinating imports,
+claiming "tests pass" without running them. Sage runs **deterministic
+verification scripts** that don't rely on the agent's self-assessment:
+`sage-verify.sh` runs your test suite, `sage-hallucination-check.sh`
+verifies imports exist, `sage-spec-check.sh` confirms deliverables
+match the plan. Scripts run first; agent review runs second. The script
+says tests fail → gate fails, regardless of what the agent thinks.
+Five gates sequence after every implementation: spec compliance,
+constitution compliance, code quality, hallucination check, verification.
 
 ## Get Started
 
@@ -78,8 +82,26 @@ sage new my-app
 
 ```bash
 cd your-project
-sage init
+sage init                        # interactive — asks for platform and preset
+sage init --preset startup       # non-interactive with preset
+sage init --preset enterprise    # auth, audit trails, postmortems
 ```
+
+Available presets: `base` (default), `startup`, `enterprise`, `opensource`.
+Presets add engineering principles on top of the universal base (TDD, no
+secrets, explicit deps). Choose during init or configure later in
+`.sage/constitution.md`.
+
+### Upgrade an Existing Project
+
+```bash
+sage update    # regenerates platform files, preserves .sage/ state
+sage upgrade   # pulls latest Sage framework from GitHub
+```
+
+`sage update` regenerates CLAUDE.md, commands, workflows, and gate
+scripts while preserving your project state (progress, journal, work
+artifacts). It also migrates stale patterns from previous versions.
 
 That's it. Open your project in your IDE, type `/sage`, and describe
 what you want to build. Sage reads your project, assesses the task,

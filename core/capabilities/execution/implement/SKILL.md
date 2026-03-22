@@ -116,7 +116,7 @@ Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
 - MUST NOT skip TDD. The `tdd` skill is mandatory and has no exceptions.
 - MUST NOT expand scope. The `scope-guard` skill is active. Do what the task says.
 - MUST NOT guess at unclear requirements. Ask the human.
-- MUST update the plan file checkbox after completing each task.
+- MUST update plan checkboxes in bulk at the completion checkpoint (Rule 7).
 
 **SHOULD (violation = suboptimal but working):**
 - SHOULD follow existing project conventions over personal preference.

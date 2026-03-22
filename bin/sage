@@ -160,6 +160,59 @@ copy_framework() {
   fi
 }
 
+select_preset() {
+  local target="$1"
+  SELECTED_PRESET=""
+
+  # Check for --preset flag (set by CLI parser)
+  if [ -n "${PRESET_FLAG:-}" ]; then
+    case "$PRESET_FLAG" in
+      base|startup|enterprise|opensource|none)
+        SELECTED_PRESET="$PRESET_FLAG"
+        echo -e "  ${GREEN}Preset:${RESET} $SELECTED_PRESET"
+        return
+        ;;
+      *)
+        echo -e "  ${YELLOW}Unknown preset: $PRESET_FLAG. Using base.${RESET}"
+        SELECTED_PRESET="base"
+        return
+        ;;
+    esac
+  fi
+
+  # Check if constitution already exists (re-init)
+  if [ -f "$target/.sage/constitution.md" ]; then
+    local existing
+    existing=$(sed -n '/^extends:/s/^extends: *//p' "$target/.sage/constitution.md" 2>/dev/null)
+    if [ -n "$existing" ]; then
+      SELECTED_PRESET="$existing"
+      echo -e "  ${GREEN}Preset:${RESET} $existing (from existing constitution)"
+      return
+    fi
+  fi
+
+  # Ask interactively
+  if [ -t 0 ]; then
+    local choice
+    choice=$(ask_choice "Select a constitution preset:" \
+      "base — universal engineering principles (default)" \
+      "startup — ship fast, monolith first, one way to do things" \
+      "enterprise — auth everywhere, audit trails, postmortems" \
+      "opensource — docs mirror code, semver contract, contributor-friendly" \
+      "none — base only, no preset")
+    case "$choice" in
+      2) SELECTED_PRESET="startup" ;;
+      3) SELECTED_PRESET="enterprise" ;;
+      4) SELECTED_PRESET="opensource" ;;
+      5) SELECTED_PRESET="base" ;;
+      *) SELECTED_PRESET="base" ;;
+    esac
+  else
+    SELECTED_PRESET="base"
+  fi
+  echo -e "  ${GREEN}Preset:${RESET} $SELECTED_PRESET"
+}
+
 create_sage_state() {
   local target="$1"
   local project_name
@@ -216,6 +269,26 @@ MD
     cp "$script" "$sage_dir/gates/scripts/"
     chmod +x "$sage_dir/gates/scripts/$(basename "$script")"
   done
+
+  # Gate activation config
+  local gate_config="$SAGE_FRAMEWORK/core/gates/_config/gate-modes.yaml"
+  if [ -f "$gate_config" ]; then
+    cp "$gate_config" "$sage_dir/gates/gate-modes.yaml"
+  fi
+
+  # Constitution
+  if [ -n "${SELECTED_PRESET:-}" ] && [ "$SELECTED_PRESET" != "base" ] && [ "$SELECTED_PRESET" != "none" ]; then
+    cat > "$sage_dir/constitution.md" << CONSTMD
+---
+name: "$project_name"
+extends: $SELECTED_PRESET
+---
+
+## Project Additions
+
+(Add project-specific principles here)
+CONSTMD
+  fi
 
   echo -e "  ${GREEN}✓${RESET} .sage/ initialized"
 }
@@ -347,6 +420,7 @@ sage_new() {
 
   detect_stack "$target"
   select_platform "$target"
+  select_preset "$target"
   create_sage_state "$target"
   run_generators "$target"
   print_success "$target"
@@ -396,6 +470,7 @@ sage_init() {
   copy_framework "$target"
   detect_stack "$target"
   select_platform "$target"
+  select_preset "$target"
   create_sage_state "$target"
   run_generators "$target"
   print_success "$target"
@@ -531,6 +606,24 @@ except: pass
   DETECTED_STACK=""
   detect_stack "$target"
   run_generators "$target"
+
+  # ── Migration: clean stale patterns from previous versions ──
+  local migrated=0
+
+  # Remove tasks-total/tasks-done from plan frontmatter
+  for plan in "$target"/.sage/work/*/plan.md; do
+    [ -f "$plan" ] || continue
+    if grep -q "tasks-total\|tasks-done" "$plan" 2>/dev/null; then
+      sed -i.bak '/^tasks-total:/d; /^tasks-done:/d' "$plan"
+      rm -f "${plan}.bak"
+      migrated=$((migrated + 1))
+    fi
+  done
+
+  if [ "$migrated" -gt 0 ]; then
+    echo ""
+    echo -e "  ${CYAN}↻${RESET} Migrated $migrated plan file(s) (removed stale task count fields)"
+  fi
 
   echo ""
   echo -e "  ${GREEN}✓${RESET} Platform files regenerated"
@@ -780,6 +873,24 @@ sage_help() {
 # ═══════════════════════════════════════════════════════════════
 COMMAND="${1:-}"
 shift 2>/dev/null || true
+
+# Parse --preset flag from remaining args
+PRESET_FLAG=""
+REMAINING_ARGS=()
+for arg in "$@"; do
+  case "$arg" in
+    --preset=*) PRESET_FLAG="${arg#--preset=}" ;;
+    --preset)   PRESET_FLAG="__NEXT__" ;;
+    *)
+      if [ "$PRESET_FLAG" = "__NEXT__" ]; then
+        PRESET_FLAG="$arg"
+      else
+        REMAINING_ARGS+=("$arg")
+      fi
+      ;;
+  esac
+done
+set -- "${REMAINING_ARGS[@]}" 2>/dev/null || true
 
 case "$COMMAND" in
   new)              sage_new "$@" ;;

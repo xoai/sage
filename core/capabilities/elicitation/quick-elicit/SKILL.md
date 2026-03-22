@@ -16,7 +16,7 @@ activation: auto
 tags: [elicitation, specification, planning, requirements]
 inputs: [codebase]
 outputs: [spec]
-requires: [codebase-scan]
+requires: []
 -->
 
 # Quick Elicit
@@ -43,11 +43,15 @@ Do NOT use when:
 
 ### Pre-Elicit: Infer What You Can
 
-Before asking anything, use `codebase-scan` to understand:
+Before asking anything, scan the relevant codebase area to understand:
 - What tech stack is in use?
 - What patterns exist in the codebase?
 - What does the area being changed look like?
 - What conventions are established?
+
+If a `codebase-scan` has been run previously, use its output. Otherwise,
+scan the relevant files directly (read project config, entry points,
+and the area being changed).
 
 This determines WHAT TO ASK. Don't ask about things you can already see.
 
@@ -79,7 +83,7 @@ Ask up to THREE questions, adapting based on what you inferred from the codebase
    Boundaries prevent scope creep and gold-plating.
 
 2. **"What existing code does this touch? Any concerns?"**
-   Skip if codebase-scan already identified the impact area clearly.
+   Skip if the codebase scan already identified the impact area clearly.
 
 3. **"Any security, performance, or compatibility constraints?"**
    Skip if the change is purely internal with no user-facing impact.

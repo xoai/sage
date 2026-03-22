@@ -49,15 +49,11 @@ If NO plan exists → error: "No approved plan found. Run the plan skill first."
 
 ### Step 2: Show Status and Start
 
-```
-📋 Plan: [feature name]
-   Tasks: [done]/[total] complete
-   Next: Task [N] — [task name]
-   Estimated: ~[time] remaining
+**Sage:** Plan: [feature name]
+Tasks: [total] tasks in plan. Next: Task [N] — [task name].
 
-   Starting Task [N]. I'll commit after each task and check quality.
-   Say "pause" anytime to stop between tasks.
-```
+Starting Task [N]. I'll commit after each task and check quality.
+Say "pause" anytime to stop between tasks.
 
 ### Step 3: Execute Task
 
@@ -80,50 +76,43 @@ drifts beyond the task spec.
 
 After each task, run the quality gate sub-workflow:
 
-```
 Gate 1: spec-review    → Does implementation match the task spec?
 Gate 2: constitution   → Does it violate any project principles?
 Gate 3: quality-review → Clean code, security, maintainability?
 Gate 4: hallucination  → All imports, APIs, versions real and correct?
 Gate 5: verification   → Tests pass? Feature works as expected?
-```
 
-Record results in the plan's Gate Log table.
-
-**If gates pass:** Update plan (check the box, add commit hash), move to next task.
+**If gates pass:** Move to next task. Plan checkboxes updated in bulk
+at the completion checkpoint (Rule 7).
 
 **If a gate fails:**
 - **Minor issue (1 gate, fixable):** Fix it, re-run that gate, continue.
 - **Major issue (multiple gates, design problem):** Stop and report:
-  ```
-  ⚠️ Task [N] failed quality gates:
-     Gate 3: Security — SQL injection risk in [file]
-     Gate 5: Verification — test_user_create fails
 
-     I can fix these, but wanted to flag them first.
-     Fix and continue, or discuss?
-  ```
+**Sage:** Task [N] failed quality gates:
+Gate 3: Security — SQL injection risk in [file]
+Gate 5: Verification — test_user_create fails
+
+[1] Fix and continue
+[2] Discuss the approach
+
 - **Repeated failure (3x on same gate):** Escalate to human:
-  ```
-  🛑 Task [N] has failed Gate [X] three times.
-     The task spec may be ambiguous or contradictory.
 
-     Issue: [specific problem]
-     Options:
-     1. Revise the task spec and retry
-     2. Skip this task and continue with others
-     3. Pause and discuss the approach
-  ```
+**Sage:** Task [N] has failed Gate [X] three times.
+The task spec may be ambiguous or contradictory.
+
+Issue: [specific problem]
+
+[1] Revise the task spec and retry
+[2] Skip this task and continue with others
+[3] Pause and discuss the approach
 
 ### Step 5: Inter-Task Checkpoint
 
 After every task (or every 3 tasks for long plans), show brief progress:
 
-```
-✅ Task [N] complete. [done]/[total] tasks finished.
-   Next: Task [N+1] — [name]
-   Continuing... (say "pause" to stop)
-```
+**Sage:** Task [N] complete. Continuing to Task [N+1] — [name].
+Say "pause" to stop.
 
 For tasks marked `[P]` (parallelizable), note: "Tasks [N] and [M] can run
 in parallel. Running sequentially on this platform." (On Tier 1, dispatch both.)
@@ -137,18 +126,17 @@ After all tasks complete:
 3. Check for any TODO/FIXME markers that shouldn't be there
 
 Present the result:
-```
-✅ Implementation complete!
 
-   Feature: [name]
-   Tasks: [total]/[total] complete
-   Tests: [count] passing
-   Commits: [count]
+**Sage:** Implementation complete.
 
-   Quality: All 5 gates passed on final review.
+Feature: [name]
+Tests: [count] passing
+Commits: [count]
+Quality: All 5 gates passed on final review.
 
-   Ready to merge, create a PR, or need changes?
-```
+[A] Approve — merge/ship
+[R] Revise — needs changes
+[P] PR — create a pull request
 
 🔒 **MANDATORY CHECKPOINT:** Wait for human decision.
 
@@ -188,7 +176,7 @@ Updated: <timestamp>
 - MUST NOT skip quality gates. They are mandatory, not suggestions.
 - MUST NOT implement multiple tasks without committing between them.
 - MUST NOT continue past a mandatory checkpoint without human approval.
-- MUST update the plan file after completing each task.
+- MUST update plan checkboxes in bulk at the completion checkpoint (Rule 7).
 - MUST commit current work immediately if the user says "pause" or "stop."
 
 **SHOULD (violation = suboptimal experience):**

@@ -16,7 +16,7 @@ activation: auto
 tags: [planning, decomposition, tasks, implementation]
 inputs: [spec, codebase-context, constitution]
 outputs: [plan, tasks]
-requires: [codebase-scan]
+requires: []
 -->
 
 # Plan

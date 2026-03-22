@@ -3,7 +3,7 @@ name: spec-review
 description: >
   Adversarial review verifying implementation matches its specification —
   checks completeness (nothing missing) and precision (nothing extra).
-  Distrusts the implementer's self-report. Use after each task implementation,
+  Distrusts the implementer's self-report. Use after implementation,
   or when the user says "check against spec", "does this match requirements",
   or "verify the implementation".
 version: "1.0.0"

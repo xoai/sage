@@ -2,6 +2,59 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [1.0.6] — Make It Real
+
+### Capability Compatibility Audit
+- **14 capability files audited and fixed** for v1.0.5 compatibility.
+  Removed all per-task state tracking references, unfenced interaction
+  blocks, softened hard dependencies on codebase-scan.
+- **build-loop** — checkpoint-only plan updates, unfenced status and
+  failure interaction blocks, bracket notation for escalation options.
+- **session-bridge** — state architecture rewritten: artifacts as
+  ground truth (not plan checkboxes), progress.md as pointer,
+  checkpoint-only saving, recovery logic updated.
+- **implement** — checkpoint-only plan updates.
+- **quick-elicit** — codebase-scan made optional with graceful fallback.
+- **plan** — codebase-scan dependency removed.
+- **spec-review, quality-gates** — per-task language softened.
+
+### Gate Bash Scripts Wired
+- **Deterministic verification deployed** — `sage-spec-check.sh`,
+  `sage-hallucination-check.sh`, `sage-verify.sh` copied to
+  `.sage/gates/scripts/` during init. The only enforcement that
+  doesn't rely on agent self-assessment.
+- **quality-gates v1.1.0** — gates invoke scripts FIRST (deterministic),
+  agent review SECOND (judgment). Script failure = gate failure
+  regardless of agent opinion.
+- **gate-modes.yaml deployed** — configurable gate activation per
+  workflow mode (build: all mandatory, fix: reduced set). Users can
+  customize which gates run.
+
+### `sage update` with Migration
+- **Stale pattern migration** — `sage update` removes `tasks-total`
+  and `tasks-done` from plan frontmatter automatically. Reports
+  how many files were migrated.
+- Update already preserved .sage/ state and community skills.
+
+### Constitution Preset Selection
+- **Interactive preset selection** during `sage init` — base, startup,
+  enterprise, opensource, or none.
+- **`--preset` flag** — `sage init --preset enterprise` for
+  non-interactive use.
+- **Dynamic constitution merging** in generators — base principles +
+  preset principles + project additions merged into CLAUDE.md /
+  GEMINI.md. Stored in `.sage/constitution.md`.
+- **Enterprise preset** adds 7 principles (auth, audit trails, input
+  validation, service layers, reproducible deploys, migration plans,
+  postmortems).
+- **Startup preset** adds 4 principles (ship small, one way, logs
+  over dashboards, monolith first).
+
+### README Updated
+- Hybrid loading architecture explained (eager vs lazy layers).
+- Quality gates section updated with deterministic script verification.
+- Get Started section includes presets, `sage update`, and `sage upgrade`.
+
 ## [1.0.5] — Intelligent Copilot
 
 ### Constitution Rewrite
