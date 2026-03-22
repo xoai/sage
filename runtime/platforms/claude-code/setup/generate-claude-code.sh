@@ -48,47 +48,78 @@ check — an observable signal the rule was followed.
 
 ### Rule 0: Route Every Request
 
-Before responding to any substantial request, classify scope and announce.
+Before responding, route using this three-layer chain:
 
-**Tier 1 — Just do it.** No announcement, no workflow.
-- Single file change, no design decisions, no behavior changes visible
-  to other team members. Quick question or explanation.
+**Layer 1 — Keyword routing (check FIRST, deterministic):**
+build/implement/create/add/develop/ship/code/feature → /build
+fix/bug/broken/error/crash/failing/debug/issue → /fix
+architect/redesign/system design/migrate/rewrite → /architect
+understand/research/interview/discover/user needs/jobs to be done → /research
+design/wireframe/brief/UX/PRD/prototype/mockup → /design
+audit/evaluate/assess/analyze/measure/funnel/usability → /analyze
 
-**Tier 2 — Announce and proceed.** One-line transition, start working.
-- Task needs multiple steps or creates artifacts in `.sage/`
-- Format: **Sage → [workflow] workflow.** [Context]. Starting with [step].
-- If `.sage/work/` has existing artifacts for this → continue from there
+If keywords match ONE workflow → go to confirmation.
+If keywords match MULTIPLE → present matched workflows as options.
+If NO match → Layer 2.
 
-**Tier 3 — Card and choose.** Full workflow card with options.
-- New system, major redesign, multi-session effort, or genuine ambiguity
-- Read workflow frontmatter for produces, checkpoints, scope, user-role
+**Layer 2 — Sub-agent classifier (when keywords don't match):**
+If Task tool is available, spawn a classifier sub-agent:
+"Classify this request as UNDERSTAND (/research or /analyze),
+ENVISION (/design or /architect), or DELIVER (/build or /fix)."
+Use the response to select workflow → go to confirmation.
+If Task tool unavailable → Layer 3.
 
-**Scope calibration:** When in doubt, bias toward Standard. A brief takes
-2 minutes. Rework from undocumented decisions takes hours. Any behavior
-change, API change, or team-visible decision → Tier 2 minimum.
+**Layer 3 — In-context classification (fallback):**
+Question / evaluation / "why" → UNDERSTAND → /research or /analyze
+Future / "should" / "let's create" → ENVISION → /design or /architect
+Action / "add" / "implement" → DELIVER → /build or /fix
+Ambiguous → present options from all matching categories.
 
-**Routing examples (free input):**
+**Confirmation (Zone 1 — always, except explicit slash commands):**
 
-"add dark mode to the app"
-→ **Sage → build workflow.** Dark mode touches theming, components, and
-preference storage. Starting with a brief.
+Sage → [workflow]. [One-line rationale].
+
+[1] [Workflow] — [skill → chain → arrows] ([N] steps)
+[2] [Alternative] — [chain] ([N] steps)
+[3] [Alternative] — [chain]
+
+Pick 1-3, type / for commands, or describe what you need.
+
+Skip confirmation ONLY for: explicit slash commands, Tier 1 tasks.
+
+**Tier classification (after routing):**
+
+Tier 1 — Just do it. Single file, no design decisions, quick answer.
+Tier 2 — Announce and proceed. Multiple steps, creates artifacts.
+Tier 3 — Card and choose. Major effort, genuine ambiguity.
+
+Bias toward Standard scope. Any behavior change, API change, or
+team-visible decision → Tier 2 minimum.
+
+**Routing examples:**
+
+"audit our checkout UX"
+→ keyword: "audit" → /analyze
+→ Sage → analyze workflow. Evaluating the checkout experience.
+  [1] Analyze — UX audit → evaluation (2 steps)
+  [2] Research — interview → JTBD → opportunity map (3 steps)
+  [3] Build — spec → plan → implement → verify
+  Pick 1-3, type / for commands, or describe what you need.
 
 "the checkout page is throwing 500 errors"
-→ **Sage → fix workflow.** Investigating 500 errors on checkout. Starting
-with root cause analysis.
-
-"we need to redesign the authentication system"
-→ **Sage recommends the architect workflow.** [present card with options]
-
-"change the button color to blue"
-→ [Tier 1: just change it]
-
-"explain how our billing module works"
-→ [Tier 1: answer directly]
+→ keyword: "error" → /fix
+→ Sage → fix workflow. Investigating 500 errors on checkout.
 
 "improve our onboarding conversion rate"
-→ **Sage → build workflow.** This involves understanding the current
-funnel before making changes. Starting with research.
+→ keywords: "conversion" → /analyze, "improve" → /build (ambiguous)
+→ Sage: This could go two ways:
+  [1] Analyze — UX audit → evaluation (2 steps)
+  [2] Build — spec → plan → implement → verify
+  [3] Research — interview → JTBD → opportunity map (3 steps)
+  Pick 1-3, type / for commands, or describe what you need.
+
+"change the button color to blue"
+→ Tier 1: just change it. No routing needed.
 
 **Compliance:** Every substantial response starts with "Sage →", uses a
 slash command, or is genuinely Tier 1.
@@ -244,34 +275,65 @@ For complex routing, gap detection, or when activated via `/sage`:
 
 - **Sage identity at navigation moments:** "Sage →" for transitions,
   "Sage:" for checkpoints and completions. Silent during execution.
-- **Choices:** [1] [2] [3] bracket notation (never 1) 2) 3))
-- **Actions:** [A] Approve  [R] Revise  [C] Continue
-- **Always accept free-form input** — brackets guide, they don't constrain
 - **Never use code blocks for interaction.** Checkpoints, options, and
   transitions are plain text with bold emphasis. Code blocks for code only.
+
+## Interaction Zones
+
+Every response expecting user input ends with ONE zone footer.
+The footer tells the user exactly what inputs are valid.
+
+**Zone 1 (Choice)** — picking a direction:
+[1] [Option] — [skill → chain] ([N] steps)
+[2] [Alternative] — [chain] ([N] steps)
+Footer: Pick 1-N, type / for commands, or describe what you need.
+
+**Zone 2 (Approval)** — reviewing a deliverable:
+[A] Approve  [R] Revise  [N] New session → /[next] to continue
+Footer: Pick A/R/N, or tell me what to change.
+
+**Zone 3 (Next Step)** — workflow complete, guiding next action:
+  /[command] — [chain] ([context])
+  /[command] — [chain]
+Footer: Type a command, or describe what you want to do next.
+
+**Zone 4 (Open)** — waiting for user to describe something:
+Footer: Describe what you want to work on, or type / to see commands.
+
+Rules:
+- ONE zone per response. Never mix zones.
+- Footer is ALWAYS the last line when input is expected.
+- No footer = informational only, no response expected.
+- Zone 1 shows skill chains with → and step counts (no time estimates).
+- Zone 2 [N] always shows the next slash command inline.
 
 ## Commands
 
 | Command | What It Does |
 |---------|-------------|
-| `/sage` | **Start here.** Reads project state, assesses intent, guides the process |
-| `/build` | Feature development: brief → spec → plan → implement → verify |
-| `/fix` | Diagnose → root cause gate → fix → verify |
-| `/architect` | System design: elicitation → ADRs → spec → milestone plan → phased build |
-| `/status` | Check current project state |
-| `/review` | Independent artifact review — evaluates completeness, consistency, quality |
-| `/learn` | Learn a codebase or module — stores knowledge for future sessions |
+| `/sage` | **Start here.** Routes via keywords → classify → confirm |
+| `/build` | Feature: spec → plan → build-loop → quality gates |
+| `/fix` | Diagnose → scope → fix → verify |
+| `/architect` | Elicit → design → milestone plan → phased build |
+| `/research` | Interview → JTBD → opportunity map |
+| `/design` | Brief → spec → copy (reads research context) |
+| `/analyze` | UX audit → evaluation → findings |
+| `/status` | Compute project state from artifacts |
+| `/review` | Independent evaluation via sub-agent |
+| `/learn` | Codebase scan → memory storage |
 
 ## Available Skills
 
-Sage skills are in `sage/skills/`. Current skills cover:
+Sage skills are in `sage/skills/`. Installed skills are also
+available as /skill-name for direct access (power-user shortcut).
+Current skills cover:
 - **Discovery:** user research, needs analysis, opportunity mapping
 - **Design:** evaluation, briefs, voice & tone, heuristic review
 - **Engineering:** specifications, planning, implementation, review
 - **Problem-solving:** systematic techniques for breaking through when stuck
 - **Knowledge:** persistent memory, ontology, self-learning
 
-Custom skills can be added to `sage/skills/@custom/`.
+Type / in your IDE to see all available commands and skills.
 
 ## Project State
 
@@ -425,6 +487,47 @@ for wf in "$CORE"/workflows/*.workflow.md; do
 - Present findings to user BEFORE storing in memory
 - Checkpoint: [A] Looks correct / [R] Some findings are wrong
 - Choices: present with [1] [2] [3] bracket notation
+- Never use code blocks for interaction (checkpoints, options, status)
+
+'
+      ;;
+    research)
+      PREAMBLE='RULES (apply to every step — non-negotiable):
+- PERSONA: Read sage/core/agents/analyst.persona.md for your mindset.
+- Announce: "Sage → research workflow." before starting work
+- Present scope options with chain visibility (Zone 1)
+- Execute skills in sequence — checkpoint between each skill
+- Present findings BEFORE storing in memory
+- Findings must be specific, evidence-based, and actionable
+- Save all findings to .sage/docs/ with skill-prefix naming
+- Use Zone 2 for findings approval, Zone 3 for next steps
+- Never use code blocks for interaction (checkpoints, options, status)
+
+'
+      ;;
+    design)
+      PREAMBLE='RULES (apply to every step — non-negotiable):
+- PERSONA: Read sage/core/agents/analyst.persona.md for your mindset.
+- Announce: "Sage → design workflow." before starting work
+- Load research context from .sage/docs/ if it exists
+- Present scope options with chain visibility (Zone 1)
+- Save all artifacts to .sage/work/ with frontmatter
+- Checkpoints: Zone 2 with [A] Approve / [R] Revise
+- Write handoff field on completion for the build agent
+- If no research exists and scope is complex, suggest /research first
+- Never use code blocks for interaction (checkpoints, options, status)
+
+'
+      ;;
+    analyze)
+      PREAMBLE='RULES (apply to every step — non-negotiable):
+- PERSONA: Read sage/core/agents/analyst.persona.md for your mindset.
+- Announce: "Sage → analyze workflow." before starting work
+- Present scope options with chain visibility (Zone 1)
+- Classify every finding by severity: Critical / Major / Minor
+- Present findings BEFORE storing — Zone 2 for approval
+- Save all findings to .sage/docs/ with skill-prefix naming
+- Zone 3 for next steps at completion
 - Never use code blocks for interaction (checkpoints, options, status)
 
 '
@@ -705,6 +808,40 @@ if [ -f "$GATE_CONFIG" ]; then
   cp "$GATE_CONFIG" "$PROJECT_SAGE/gates/gate-modes.yaml"
   echo "  ✓ gate-modes.yaml"
 fi
+
+# ═══════════════════════════════════════════════════════════════
+# Skill deployment — register skills as platform slash commands
+# ═══════════════════════════════════════════════════════════════
+echo ""
+echo "🧠 Deploying skills to .claude/skills/..."
+
+SKILL_COUNT=0
+for skill_dir in "$SAGE_DIR/skills"/*/; do
+  [ -d "$skill_dir" ] || continue
+  skill_name=$(basename "$skill_dir")
+  [ -f "$skill_dir/SKILL.md" ] || continue
+
+  # Read description from frontmatter
+  desc=$(sed -n '/^---$/,/^---$/{ /^description:/s/^description: *//p; }' "$skill_dir/SKILL.md" 2>/dev/null)
+  [ -z "$desc" ] && desc="Sage skill: $skill_name"
+  # Truncate long descriptions for frontmatter
+  desc=$(echo "$desc" | head -1 | cut -c1-120)
+
+  # Create loader SKILL.md
+  target_dir="$CLAUDE_DIR/skills/$skill_name"
+  mkdir -p "$target_dir"
+  cat > "$target_dir/SKILL.md" << LOADEREOF
+---
+name: $skill_name
+description: $desc
+---
+Read and follow the full skill at sage/skills/$skill_name/SKILL.md
+LOADEREOF
+
+  SKILL_COUNT=$((SKILL_COUNT + 1))
+done
+
+echo "  ✓ $SKILL_COUNT skills deployed to .claude/skills/"
 
 # ═══════════════════════════════════════════════════════════════
 # Session hook — auto-inject Sage context on session start

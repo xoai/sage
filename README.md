@@ -166,13 +166,16 @@ Use inside your IDE (Claude Code, Antigravity):
 
 | Command | What It Does |
 |---------|-------------|
-| `/sage` | **Start here.** Sage reads your project, presents status with structured options |
-| `/build` | Feature development: brief → spec → plan → build-loop (task-by-task with TDD + quality gates) |
-| `/fix` | Systematic debug: root cause investigation → test → fix → verify |
-| `/architect` | System design: deep elicitation → ADRs → spec → milestone plan → phased build |
-| `/status` | Check current project state |
-| `/review` | Review an artifact — uses sub-agent for independent evaluation |
-| `/learn` | Learn a codebase or module — stores knowledge for future sessions |
+| `/sage` | **Start here.** Routes via keywords → classify → confirm |
+| `/build` | Feature: spec → plan → build-loop → quality gates |
+| `/fix` | Diagnose → scope → fix → verify (escalates large fixes) |
+| `/architect` | Elicit → design → milestone plan → phased build |
+| `/research` | Interview → JTBD → opportunity map |
+| `/design` | Brief → spec → copy (reads research context) |
+| `/analyze` | UX audit → evaluation → findings |
+| `/status` | Compute project state from artifacts |
+| `/review` | Independent evaluation via sub-agent |
+| `/learn` | Codebase scan → memory storage |
 
 ### Interaction Patterns
 
@@ -230,6 +233,31 @@ enterprise (auth everywhere, audit trails, postmortems), or opensource
 
 The generator merges all three tiers into the always-on instructions.
 Lower tiers add constraints but cannot remove inherited ones.
+
+### The Pipeline: UNDERSTAND → ENVISION → DELIVER
+
+Sage organizes work into three phases. Each phase has dedicated
+workflows that chain skills automatically:
+
+```
+UNDERSTAND              ENVISION               DELIVER
+/research  /analyze     /design  /architect    /build  /fix
+```
+
+`/research` chains user-interview → JTBD → opportunity-map.
+`/design` chains ux-brief → ux-specify → ux-writing and reads
+research findings automatically. `/build` chains spec → plan →
+build-loop → quality-gates and reads design specs.
+
+You can enter at any phase. But the further right you start, the
+more you're building on assumptions. Research → Design → Build
+produces better outcomes than Build alone — because each phase
+produces artifacts that inform the next.
+
+Routing is deterministic: keywords match to workflows before any
+LLM judgment. When keywords don't match, a focused sub-agent
+classifier picks the right phase. Every routing decision is
+confirmed with the user before proceeding.
 
 ## Skills
 

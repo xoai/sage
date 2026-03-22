@@ -44,6 +44,11 @@ Read `.sage/decisions.md` for recent context. Read the `handoff`
 field in the most recent artifact's frontmatter if present — it
 contains the previous agent's judgment about what to focus on.
 
+**Upstream context:** Also scan `.sage/docs/` for research and
+analysis artifacts (jtbd-*, ux-audit-*, opportunity-*, ux-evaluate-*).
+If found, announce: "Sage: Found research/analysis context — [list].
+Using as build input." These inform implementation decisions.
+
 ## Step 2: Assess Scope
 
 Classify by structural complexity — not time, not gut feeling.
@@ -123,6 +128,8 @@ Decision: [key scope decisions]. (append to .sage/decisions.md)
 [R] Revise — tell me what to change
 [N] New session — type /build to continue with spec
 
+Pick A/R/N, or tell me what to change.
+
 On approval: update brief frontmatter to `status: completed`.
 Append decision to decisions.md (Rule 7).
 
@@ -154,6 +161,8 @@ Decision: [key technical decisions]. (append to .sage/decisions.md)
 [A] Approve — continue to plan in this session
 [R] Revise — tell me what to change
 [N] New session — type /build to continue with planning
+
+Pick A/R/N, or tell me what to change.
 
 On approval: update spec frontmatter to `status: completed`.
 Write `handoff` field in frontmatter:
@@ -194,6 +203,8 @@ Sage: Plan saved to .sage/work/YYYYMMDD-slug/plan.md
 [A] Approve — start building in this session
 [R] Revise — tell me what to change
 [N] New session — type /build to start implementation
+
+Pick A/R/N, or tell me what to change.
 
 On approval: append plan approach to decisions.md (Rule 7).
 
@@ -254,6 +265,8 @@ Decision: [key implementation decisions]. (append to .sage/decisions.md)
 [R] Revise — here's what needs fixing
 [V] Verify — type /review for independent verification
 
+Pick A/R/V, or tell me what to change.
+
 **On approval — checkpoint state (Rule 7):**
 1. Walk through plan.md and check completed tasks in bulk
 2. Update plan.md frontmatter: `status: completed`
@@ -261,8 +274,15 @@ Decision: [key implementation decisions]. (append to .sage/decisions.md)
 4. Write `handoff` field in plan.md frontmatter with key decisions,
    open questions, and risks for the next agent
 5. Store key findings in memory if sage-memory available
-6. Suggest: "Type /review for independent verification, or describe
-   what to build next."
+
+**Next steps (Zone 3):**
+
+Next steps:
+  /review — independent code evaluation
+  /research — understand users before building more
+  /design — shape the next feature
+
+Type a command, or describe what you want to do next.
 
 ## Quality Criteria
 

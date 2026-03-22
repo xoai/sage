@@ -87,6 +87,8 @@ Sage: Elicitation complete. Brief saved.
 [R] Revise — I want to add or change something
 [N] New session — type /architect to continue with design
 
+Pick A/R/N, or tell me what to change.
+
 ## Step 3: Architecture Design
 
 **File check:** `.sage/work/*/brief.md` MUST exist before designing.
@@ -115,6 +117,8 @@ Decision: [key architecture decisions]. (append to .sage/decisions.md)
 [R] Revise — here's what needs changing
 [Q] Question — I want to understand [specific decision] better
 [N] New session — type /architect to continue with milestone plan
+
+Pick A/R/Q/N, or tell me what to change.
 
 On approval: update spec frontmatter to `status: completed`.
 Write `handoff` field in frontmatter:
@@ -145,9 +149,17 @@ Sage: Milestone plan saved to .sage/work/YYYYMMDD-slug/plan.md
 [R] Revise — adjust the breakdown
 [N] New session — type /build to start milestone 1
 
+Pick A/R/N, or tell me what to change.
+
 On approval: append plan approach to decisions.md (Rule 7).
-Suggest: "Type /build to start milestone 1, or /review to verify
-the architecture first."
+
+**Next steps (Zone 3):**
+
+Next steps:
+  /build  — spec → plan → implement → verify (start milestone 1)
+  /review — independent evaluation of the architecture
+
+Type a command, or describe what you want to do next.
 
 ## Step 5: Phased Build
 

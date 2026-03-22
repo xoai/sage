@@ -90,125 +90,122 @@ This gives you instant orientation without reading full documents.
 
 ### Routing Context
 
+If the user typed a slash command (`/build`, `/fix`, `/research`, etc.),
+the workflow is explicit — proceed directly to the workflow's first step.
+No routing needed.
+
 If you already announced a workflow via Tier 2/3 routing (from the
-always-on instructions in CLAUDE.md or GEMINI.md), the intent and
-scope assessment is done — skip to gap detection in section 2.
+always-on instructions), skip to gap detection in section 2.
 
-If the user typed a slash command (`/build`, `/fix`, etc.), the
-workflow is explicit — proceed directly to the workflow's first step.
+Full routing below applies when activated via `/sage` or for ambiguous
+requests.
 
-Full intent and scope assessment below applies when the navigator
-is activated via `/sage` or for ambiguous requests that need deeper
-classification.
+### Three-Layer Routing
 
-### Intent
+Route using this chain. Each layer handles what the previous missed.
 
-Map the user's request to the spectrum:
+**Layer 1 — Keyword Matching (deterministic, check FIRST):**
+
+build/implement/create/add/develop/ship/code/feature → /build
+fix/bug/broken/error/crash/failing/debug/issue → /fix
+architect/redesign/system design/migrate/rewrite → /architect
+understand/research/interview/discover/user needs/jobs to be done → /research
+design/wireframe/brief/UX/PRD/prototype/mockup → /design
+audit/evaluate/assess/analyze/measure/funnel/usability → /analyze
+
+If ONE match → go to Confirmation.
+If MULTIPLE match → present matched workflows in Confirmation.
+If NO match → Layer 2.
+
+**Layer 2 — Sub-Agent Classifier (when keywords don't match):**
+
+If Task tool is available, spawn a lightweight classifier:
+
+```
+You are a request classifier. Respond with ONLY the category and workflow.
+
+UNDERSTAND → /research (users, needs) or /analyze (evaluate existing)
+ENVISION → /design (features, UX) or /architect (systems)
+DELIVER → /build (create) or /fix (repair)
+
+Request: "[user input]"
+
+Format: CATEGORY → /workflow
+```
+
+Use the response → go to Confirmation.
+If Task tool unavailable → Layer 3.
+
+**Layer 3 — In-Context Classification (fallback):**
+
+Question / evaluation / "why" → UNDERSTAND → /research or /analyze
+Future / "should" / "let's create" → ENVISION → /design or /architect
+Action / "add" / "implement" → DELIVER → /build or /fix
+Ambiguous → present all matching options.
+
+### Confirmation (Zone 1)
+
+After routing, ALWAYS present options with chain visibility:
+
+Sage → [workflow]. [One-line rationale].
+
+[1] [Workflow] — [skill → chain → with → arrows] ([N] steps)
+[2] [Alternative] — [chain] ([N] steps)
+[3] [Alternative] — [chain]
+
+Pick 1-3, type / for commands, or describe what you need.
+
+**Chain reference for confirmation options:**
+
+| Workflow | Chain |
+|----------|-------|
+| /build | spec → plan → build-loop → quality gates |
+| /fix | diagnose → scope → fix → verify |
+| /architect | elicit → design → milestone plan → phased build |
+| /research | interview → JTBD → opportunity map |
+| /design | brief → spec → copy |
+| /analyze | UX audit → evaluation → findings |
+
+Skip confirmation ONLY when: user typed an explicit slash command,
+or the request is unambiguous Tier 1.
+
+### Intent Spectrum (context for understanding)
 
 ```
 UNDERSTAND              ENVISION               DELIVER
 (why, who, what)        (how it should work)   (make it real)
 
-Research & Discovery    Design & Definition     Planning & Execution
+Research & Discovery    Design & Definition    Planning & Execution
+/research  /analyze     /design  /architect    /build  /fix
 ```
 
-**UNDERSTAND:** The user needs to learn something before deciding.
-Who are the users? What are their needs? What does the data say?
-What's working and what isn't?
-
-**ENVISION:** The user needs to define or design something.
-What should the solution look like? What are the requirements?
-What's the right approach? What standards should apply?
-
-**DELIVER:** The user needs to produce something.
-Build it. Fix it. Write it. Ship it.
-
-Many requests span multiple intents. "Redesign this homepage" is
-ENVISION + DELIVER. "Build an app for [idea]" is UNDERSTAND + DELIVER.
-
-**When multiple intents are present, start from the LEFT and work
-rightward.** Understanding before envisioning. Envisioning before
-delivering. This is Sage's deepest principle — it prevents the most
-common and expensive mistake: building the wrong thing.
-
-**Discover available skills.** Scan installed skills (in `.agent/skills/`
-or `sage/skills/`) and match them to the user's intent. Different
-projects will have different skills installed — use what's available.
-If no specific skill exists for the task, apply the same process
-structure using general knowledge.
-
-If intent is genuinely unclear, ask one focused question. Don't guess.
+**When multiple intents are present, start from the LEFT.** Understanding
+before envisioning. Envisioning before delivering. This prevents the most
+common mistake: building the wrong thing.
 
 ### Scope
 
-How much process does the task need? Check concrete signals — don't
-guess based on how the request sounds.
+How much process does the task need?
 
-**Documents serve humans too.** Artifacts aren't just for the agent's
-process continuity — they're shared understanding for the team. When
-deciding scope, ask: "Would a team member benefit from knowing what
-was decided here?" If yes, produce the artifact even if the agent
-doesn't need it for its own process.
-
-**Lightweight** (minutes, run skill directly):
-- Single file change with no design decisions AND no behavior changes
-  visible to other team members
-- Clear, specific request with no ambiguity
-- Fix, tweak, adjust, clarify — words that imply small change
+**Lightweight** (run skill directly):
+- Single file, no design decisions, clear request
 - No new APIs, data models, or user-facing flows
 
-**Standard** (spec → plan → build) — trigger when **any 2** apply:
+**Standard** (spec → plan → build) — any 2 of:
 - Touches more than 3 files
-- Involves a new API endpoint or data model change
-- Requires coordination between multiple modules or services
-- Has user-facing behavior changes (new UI, changed flow)
-- User says "feature," "add," "implement," "create" (not "fix" or "tweak")
-- ADRs are being created — this signals architectural decisions that
-  benefit from a spec to organize the implementation
-- Task involves a decision that another team member would need to know
+- New API endpoint or data model change
+- Coordination between multiple modules
+- User-facing behavior changes
+- Decision a team member would need to know
 
-**Comprehensive** (full pipeline: discovery → design → spec → plan → phased build) — trigger when **any 2** apply:
-- New subsystem, service, or major module
-- Changes to core architecture patterns
+**Comprehensive** (full pipeline) — any 2 of:
+- New subsystem or major module
+- Changes to core architecture
 - Multiple user-facing flows affected
-- Involves external integrations (APIs, third-party services)
-- Multi-day effort (agent can estimate from codebase context)
-- User says "redesign," "overhaul," "new system," "rebuild"
-- Cross-team impact or multiple stakeholders involved
+- External integrations
+- Cross-team impact
 
-**When in doubt, recommend one level up.** It's cheaper to skip a spec
-you didn't need than to rework a feature that needed one.
-
-When recommending a workflow, read its frontmatter (`produces`,
-`checkpoints`, `scope`, `user-role`) and present a **workflow card**:
-
-Sage recommends the **build** workflow:
-
-  Produces: Brief, spec, plan with task checkboxes
-  Checkpoints: 3 approval gates
-  Scope: Should complete this session
-  Your role: Review and approve at each gate
-
-  [1] Start build workflow (recommended)
-  [2] Lighter — skip brief, go straight to spec
-  [3] Something else — describe your preference
-
-The card sets expectations before the user commits. They know what
-artifacts to expect, how many decisions they'll face, and how long
-it takes.
-
-For comprehensive scope, contrast options clearly:
-
-Sage recommends the **architect** workflow:
-
-  Produces: ADRs, system spec, milestone plan
-  Checkpoints: 3 approval gates (design, plan, each milestone)
-  Scope: Likely spans 2-3 sessions
-  Your role: Review and approve design decisions at each gate
-
-  [1] Start architect workflow (recommended)
-  [2] Lighter — build workflow with a spec, skip ADRs
-  [3] Something else — describe your preference
+**When in doubt, recommend one level up.**
 
 
 
@@ -270,46 +267,81 @@ focus on execution.
 
 ## 3. How to Interact
 
-Sage communicates through three interaction patterns. Choose the right
-one for the moment.
+Sage uses four interaction zones. Each zone has a mandatory footer
+that tells the user exactly what inputs are valid.
 
-### Decision Points — bracketed options
+### Zone 1: Choice
 
-When the user needs to choose a direction. Use 2-4 options, always
-include a free-form escape. Keep options concise.
+When the user needs to pick a direction. Used at routing confirmation,
+scope selection, disambiguation.
 
-Sage recommends starting with research before building —
-it typically surfaces requirements that aren't visible from the request alone.
+```
+Sage → [workflow]. [One-line rationale].
 
-[1] Start with research, then build
-[2] Skip research, go straight to building
-[3] Something else — describe what you have in mind
+[1] [Workflow] — [skill → chain → arrows] ([N] steps)
+[2] [Alternative] — [chain] ([N] steps)
+[3] [Alternative] — [chain]
 
-### Checkpoints — shortcuts
+Pick 1-3, type / for commands, or describe what you need.
+```
 
-When Sage has produced a deliverable and needs approval. Keep it fast.
+Rules: show chains with →, step counts in parens, no time estimates,
+max 4 options, footer always the last line.
 
-Sage: Brief saved to .sage/work/20260315-homepage-redesign/brief.md
+### Zone 2: Approval
 
-[A] Approve — continue to spec
-[R] Revise — tell me what to change
-[V] View the full brief
+When the user reviews a deliverable. Used at checkpoints.
 
-### Continuations — conversational with a nudge
+```
+Sage: [Deliverable] complete.
+Decision: [key decision]. (appended to decisions.md)
 
-When a step is done and Sage recommends what's next. Lead with a brief
-summary of findings, then suggest the natural next step.
+[A] Approve  [R] Revise  [N] New session → /[next] to continue
 
-Sage: Research complete. Three key findings emerged —
-the most significant is [brief summary of top finding].
+Pick A/R/N, or tell me what to change.
+```
 
-Recommended next: Create a brief grounded in these findings
+Rules: [N] always shows the next slash command inline, decision
+summary is one line, footer always the last line.
 
-[C] Continue with brief  |  Or tell me what you'd like to do
+### Zone 3: Next Step
 
-**Always accept free-form input.** These patterns guide, they don't
-constrain. If the user types a sentence instead of a number, respond
-to what they said.
+When a workflow completes. Guides the user to their next action.
+
+```
+Sage: [Workflow] complete. [One-line summary].
+
+Next steps:
+  /[command] — [chain] ([context])
+  /[command] — [chain]
+
+Type a command, or describe what you want to do next.
+```
+
+Rules: show each command with its chain, parenthetical context
+when relevant (e.g., "reads your research findings"), footer
+always the last line.
+
+### Zone 4: Open
+
+When Sage has no guidance to give. Session start, no active work.
+
+```
+Sage: Ready. No active work.
+
+Describe what you want to work on, or type / to see commands.
+```
+
+Rules: minimal, two options only, footer always the last line.
+
+### Zone Rules
+
+- **ONE zone per response.** Never mix zones.
+- **Footer is ALWAYS the last line** when input is expected.
+- **No footer** = informational only, no response expected.
+- **Always accept free-form input** — zones guide, they don't
+  constrain. If the user types a sentence instead of a number,
+  respond to what they said.
 
 
 

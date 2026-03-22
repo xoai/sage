@@ -145,7 +145,14 @@ Knowledge stored:
 Key findings:
   • [Top 3-4 insights, one line each]
 
-[C] Continue — anything else to explore?
+[C] Continue — learn another area
+
+Next steps:
+  /build  — spec → plan → implement → verify
+  /research — interview → JTBD → opportunity map
+  /design — brief → spec → copy
+
+Type a command, or describe what you want to do next.
 
 ## Rules
 

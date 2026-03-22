@@ -2,6 +2,75 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [1.0.8] — Intelligent Routing
+
+### Three-Layer Routing
+- **Keyword routing table** in CLAUDE.md/GEMINI.md Rule 0. Deterministic
+  matching checked BEFORE any LLM judgment. Keywords like "audit,"
+  "research," "design" map directly to workflows. Handles 60-70%
+  of requests with zero LLM involvement.
+- **Sub-agent classifier.** When keywords don't match, a focused
+  sub-agent classifies into UNDERSTAND/ENVISION/DELIVER with a
+  single-task prompt (~150 tokens). Independent context window
+  eliminates helpfulness bias.
+- **In-context fallback.** For platforms without sub-agent support,
+  same three-way classification runs in the main agent's context.
+
+### Interaction Zones
+- **Four zones with mandatory footers.** Every response expecting
+  input ends with exactly ONE zone footer telling the user what
+  inputs are valid:
+  - Zone 1 (Choice): `Pick 1-N, type / for commands, or describe what you need.`
+  - Zone 2 (Approval): `Pick A/R/N, or tell me what to change.`
+  - Zone 3 (Next Step): `Type a command, or describe what you want to do next.`
+  - Zone 4 (Open): `Describe what you want to work on, or type / to see commands.`
+- **Chain visibility.** Every Zone 1 option shows the skill chain
+  with → notation and step count. No time estimates.
+- **All 7 workflows updated** with consistent zone footers at every
+  checkpoint and completion.
+
+### Non-Tech Workflows
+- **`/research` workflow.** Chains user-interview → JTBD →
+  opportunity-map. Scope selection (users, opportunity, experience,
+  comprehensive). Findings checkpoint with quality gate. Suggests
+  /design or /build at completion.
+- **`/design` workflow.** Chains ux-brief → ux-specify → ux-writing.
+  Auto-loads research context from `.sage/docs/` when available.
+  Produces specs with handoff field for /build. Suggests /research
+  first when no research context exists for complex designs.
+- **`/analyze` workflow.** Chains ux-audit → ux-evaluate. Severity
+  classification (Critical/Major/Minor) on all findings. Prioritized
+  output. Suggests /design or /fix at completion.
+
+### Skill Deployment
+- **37 skills deployed as platform commands.** During `sage init`,
+  lightweight loader SKILL.md files are created at `.claude/skills/`
+  (CC) or `.agent/skills/` (AG). Each loader is ~50 bytes with
+  frontmatter and a redirect to the full skill.
+- **Every skill is now a slash command** (`/jtbd`, `/ux-audit`, etc.)
+  AND auto-activates from free input via platform skill discovery.
+- **Progressive disclosure preserved.** Only frontmatter loads at
+  startup. Full SKILL.md loads on activation. 37 loaders ≈ 2KB,
+  well under the 16K skill budget.
+
+### Cross-Chain Handoff
+- **Artifacts are the handoff.** `/research` produces findings in
+  `.sage/docs/`. `/design` auto-scans for them and announces:
+  "Found research context — using as design input." `/build`
+  scans for both design specs and research/analysis context.
+- **Every workflow completion uses Zone 3** to suggest the logical
+  next workflow with chain visibility.
+
+### UNDERSTAND → ENVISION → DELIVER Pipeline
+- **10 workflow commands.** `/sage`, `/build`, `/fix`, `/architect`,
+  `/research`, `/design`, `/analyze`, `/status`, `/review`, `/learn`.
+- **Natural flow:** /research → /design → /build → /review. Each
+  phase produces artifacts that inform the next. Users can enter
+  at any point — the artifacts that exist determine the context.
+- **Confirmation with alternatives.** After routing, always present
+  the chosen workflow with 2 alternatives showing chains and step
+  counts. Users confirm before committing.
+
 ## [1.0.7] — State, Learning & Coordination
 
 ### Anti-Rationalization Enforcement (all workflows)

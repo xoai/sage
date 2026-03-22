@@ -104,6 +104,10 @@ Sage: Root cause analysis complete.
 [S] Stuck — try a different approach (activates problem-solving)
 [N] New session — type /fix to continue
 
+Pick A/R/E/N, or tell me what to change.
+
+Pick A/R/S/N, or tell me what to change.
+
 Do not proceed to Step 3 until the user confirms the root cause.
 
 ## Step 3: Scope the Fix
@@ -171,6 +175,10 @@ Sage: Fix scope: [Moderate/Systemic]
 [E] Escalate — type /build or /architect instead
 [N] New session — type /fix to continue
 
+Pick A/R/E/N, or tell me what to change.
+
+Pick A/R/S/N, or tell me what to change.
+
 ## Step 4: Implement Fix
 
 Write a failing test that reproduces the bug. Confirm the test fails
@@ -235,13 +243,21 @@ Decision: [root cause + fix approach]. (append to .sage/decisions.md)
 [R] Revise — something's not right
 [V] Verify — type /review for independent check
 
+Pick A/R/V, or tell me what to change.
+
 **On approval — Post-Flight (Rule 7):**
 1. Append root cause and fix to `.sage/decisions.md`
 2. Update artifact frontmatter if relevant
 3. Store root cause and fix in memory (tagged `self-learning`)
    with WHEN/CHECK/BECAUSE prevention rule
-4. Suggest: "Type /review if this was a complex fix, or describe
-   the next issue."
+4. **Next steps (Zone 3):**
+
+Next steps:
+  /review — independent evaluation of the fix
+  /build  — spec → plan → implement (if the fix revealed a feature need)
+  /analyze — audit related areas for similar issues
+
+Type a command, or describe what you want to do next.
 
 ## Quality Criteria
 
