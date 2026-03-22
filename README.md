@@ -132,36 +132,31 @@ assesses the task, and guides you:
 > /sage
 > Redesign our homepage for better conversion
 
-Sage navigator: Fresh project, no work in progress.
+Sage: Fresh project, no work in progress.
 
 This looks like a comprehensive task — redesign involves understanding
 what's not working before designing what's next.
 
-I recommend starting with research before redesigning — it typically
-surfaces requirements not visible from the initial request.
-
-1) Start with UX audit of current homepage (~15 min), then redesign
-2) Skip research, go straight to redesign
-3) Something else — describe what you have in mind
+[1] Start with UX audit of current homepage, then redesign
+[2] Skip research, go straight to redesign
+[3] Something else — describe what you have in mind
 
 > 1
 
-Starting UX audit. Reading ux-audit skill...
+Sage → build workflow. Starting with UX audit. Reading ux-audit skill...
 
 [Sage runs the audit, saves findings to .sage/docs/ux-audit-homepage.md]
 
-UX audit complete. Key findings:
+Sage: UX audit complete. Key findings:
 - Navigation is clear but CTA is buried below the fold
 - Mobile load time is 4.2s (target: <2s)
 - No social proof visible in first viewport
 
-Recommended next: Create a brief defining redesign goals (~10 min)
-
 [C] Continue with brief  |  Or tell me what you'd like to do
 ```
 
-Every step: clear options, saved artifacts, recommended next step. You
-stay in control — Sage stays intelligent.
+Every step: structured options with `[1] [2] [3]`, saved artifacts,
+recommended next step. You stay in control — Sage stays intelligent.
 
 ## How Sage Works
 
@@ -171,12 +166,12 @@ Use inside your IDE (Claude Code, Antigravity):
 
 | Command | What It Does |
 |---------|-------------|
-| `/sage` | **Start here.** Sage reads your project and guides the process |
-| `/build` | Feature development: spec → plan → implement |
-| `/fix` | Quick debug → test → fix → verify |
-| `/architect` | System design: deep elicitation → architecture → phased build |
+| `/sage` | **Start here.** Sage reads your project, presents status with structured options |
+| `/build` | Feature development: brief → spec → plan → build-loop (task-by-task with TDD + quality gates) |
+| `/fix` | Systematic debug: root cause investigation → test → fix → verify |
+| `/architect` | System design: deep elicitation → ADRs → spec → milestone plan → phased build |
 | `/status` | Check current project state |
-| `/review` | Review an artifact — evaluates completeness, consistency, quality |
+| `/review` | Review an artifact — uses sub-agent for independent evaluation |
 | `/learn` | Learn a codebase or module — stores knowledge for future sessions |
 
 ### Interaction Patterns
@@ -196,6 +191,45 @@ where you left off. Every decision, artifact, and progress update persists
 in `.sage/`. With sage-memory configured, the agent also retains what it
 learned about your codebase, architecture decisions, and conventions
 across sessions.
+
+### Enforcement Model
+
+Sage uses triple reinforcement to ensure agents follow the process:
+
+**1. Eager layer (CLAUDE.md / GEMINI.md)** — always in context. Contains
+the 7 process rules, workflow gates ("DO NOT implement before spec
+approved"), engineering principles, and a self-check loop. This is the
+safety net — even if the agent loads nothing else, the gates prevent
+the worst violations.
+
+**2. Command preambles** — at the top of every slash command file. Each
+workflow gets specific enforcement rules that the agent reads first.
+
+**3. Capabilities** — loaded at the right workflow step. `build-loop`
+orchestrates task-by-task execution with quality gates. `tdd` enforces
+test-first discipline. `systematic-debug` structures root cause
+investigation. These add depth when loaded; the eager layer provides
+enforcement even when they're not.
+
+This matters because agents skip instructions. A single layer of
+enforcement fails when the agent is eager to help. Three independent
+layers mean the agent has to bypass all three to skip the spec.
+
+### Constitution Stack
+
+Sage uses a three-tier constitution model:
+
+**Base** (5 principles, all projects) — TDD, no silent failures, no
+secrets in code, explicit dependencies, reversible changes.
+
+**Preset** (chosen during init) — startup (ship small, monolith first),
+enterprise (auth everywhere, audit trails, postmortems), or opensource
+(docs mirror code, semver contract).
+
+**Project additions** — your own principles in `.sage/constitution.md`.
+
+The generator merges all three tiers into the always-on instructions.
+Lower tiers add constraints but cannot remove inherited ones.
 
 ## Skills
 
@@ -259,9 +293,13 @@ When Sage runs in your project, it manages state in `.sage/`:
 .sage/
 ├── progress.md              # Session continuity — where you left off
 ├── journal.md               # Artifact index + change log
+├── constitution.md          # Preset selection + project principles
 ├── docs/                    # Project knowledge (analyses, decisions, guides)
-└── work/                    # Per-initiative deliverables
-    └── YYYYMMDD-slug/       # brief.md, spec.md, plan.md
+├── work/                    # Per-initiative deliverables
+│   └── YYYYMMDD-slug/       # brief.md, spec.md, plan.md
+└── gates/
+    ├── gate-modes.yaml      # Which gates run per workflow mode
+    └── scripts/             # Deterministic verification scripts
 ```
 
 ## Platforms
