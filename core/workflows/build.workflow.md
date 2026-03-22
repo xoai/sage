@@ -20,26 +20,42 @@ resume from where you left off — do NOT re-elicit or re-plan.
 Scan `.sage/docs/` and `.sage/work/` for relevant artifacts (briefs,
 specs, plans, research).
 
-## Step 2: Assess Scope and Gaps
+## Step 2: Assess Scope
 
-Follow the sage-navigator's intelligence layer to assess
-scope and detect gaps:
+Classify by structural complexity — not time, not gut feeling.
 
-- **Small** (< 30 min): Skip to Step 5, implement directly.
-- **Medium** (hours): Recommend a spec first (Step 4).
-- **Large** (days): Recommend brief → spec → plan (Steps 3-5).
+**Lightweight:** One component, no design decisions, no behavior changes
+visible to other team members. The change is obvious from the request.
+→ Skip to Step 6, implement directly.
+
+**Standard:** Multiple components, OR any design decision, OR
+coordination between modules. DO NOT skip the spec.
+→ MUST write spec (Step 4) → plan (Step 5) → implement (Step 6).
+→ If the task also needs scope definition, write brief first (Step 3).
+
+**Comprehensive:** New subsystem, cross-cutting changes, or multiple
+stakeholder impact.
+→ MUST write brief (Step 3) → spec (Step 4) → plan (Step 5) → implement.
+
+**Complexity signals** (any ONE makes it Standard or above):
+- Touches more than 3 files
+- Involves a new API endpoint or data model change
+- Requires coordination between multiple modules or services
+- Has user-facing behavior changes (new UI, changed flow)
+- Involves a decision a team member would need to know about
+- Multiple layers affected (database + backend + frontend)
 
 Present your assessment:
 
-Sage recommends the **build** workflow for this [size] task:
+**Sage → build workflow.** [Scope] — [what makes it this scope].
+Starting with [first required step].
 
-[1] [Recommended path]
-[2] [Lighter alternative]
-[3] Something else — describe your preference
+If the user wants to skip a required step, note the risk and proceed —
+but record the skip and rationale in progress.md.
 
-## Step 3: Brief (medium/large tasks)
+## Step 3: Brief (Standard with unclear scope, or Comprehensive)
 
-If no brief exists and the task warrants one, define: what to build,
+If scope is unclear or the task is Comprehensive, define: what to build,
 why, acceptance scenarios, and constraints.
 
 Save to `.sage/work/YYYYMMDD-slug/brief.md` with frontmatter:
@@ -56,12 +72,11 @@ updated: YYYY-MM-DD
 ```
 
 🔒 **CHECKPOINT:**
-```
+
 Sage: Brief saved to .sage/work/YYYYMMDD-slug/brief.md
 
 [A] Approve — continue to spec
 [R] Revise — tell me what to change
-```
 
 On approval: update brief frontmatter to `status: completed`.
 Run Post-Flight (update journal, store findings).
@@ -95,8 +110,8 @@ Run Post-Flight (update journal, store findings).
 
 ## Step 5: Plan
 
-Break into small tasks (2-5 min each). Each task: what to do, done
-criteria, files involved. Checkboxes for tracking.
+Break into small, independently testable tasks. Each task: what to do,
+done criteria, files involved. Use checkboxes as a guide.
 
 Save to `.sage/work/YYYYMMDD-slug/plan.md` with frontmatter:
 
@@ -112,12 +127,11 @@ updated: YYYY-MM-DD
 ```
 
 🔒 **CHECKPOINT:**
-```
+
 Sage: Plan saved to .sage/work/YYYYMMDD-slug/plan.md
 
 [A] Approve — start building
 [R] Revise — tell me what to change
-```
 
 On approval: run Post-Flight (update journal, store findings).
 
@@ -145,12 +159,10 @@ can't isolate → Minimal Reproduction.
 4. If any test fails, fix it before proceeding — do NOT present
    the completion checkpoint with failing tests
 
-```
 Sage: Verification results:
 
   Test suite: [command that was run]
   Result: [X passed, 0 failed] ← paste actual output
-```
 
 **If tests fail:** Diagnose and fix. If the failure persists after
 2 attempts, activate the `problem-solving` skill.
@@ -160,13 +172,12 @@ Sage: Verification results:
 Review against spec. Check for missed edge cases.
 
 🔒 **CHECKPOINT:**
-```
+
 Sage: Build complete. [summary of what was built]
 
 [A] Approve — merge/ship
 [R] Revise — here's what needs fixing
 [N] Next — what should we work on next?
-```
 
 **On approval — checkpoint state update (Rule 7):**
 1. Walk through plan.md and check completed tasks in bulk

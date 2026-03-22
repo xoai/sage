@@ -18,6 +18,11 @@ Ask for or identify: what's broken, when it started, error messages,
 steps to reproduce. If the user already provided details, confirm
 your understanding before proceeding.
 
+If the problem description is vague (no error message, no steps to
+reproduce, no specific behavior described), ask for specifics before
+investigating. Don't guess — misdiagnosis from vague reports wastes
+more time than one clarifying question.
+
 Sage: Here's what I understand:
 - [Problem summary]
 - [Expected vs actual behavior]

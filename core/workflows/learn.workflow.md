@@ -3,9 +3,9 @@ name: learn
 version: "1.0.0"
 mode: learn
 produces: ["Knowledge entries in sage-memory", "Docs in .sage/docs/"]
-checkpoints: 0
+checkpoints: 1
 scope: "Single session"
-user-role: "Specify what to learn, review findings"
+user-role: "Specify what to learn, verify findings before storage"
 ---
 
 # Learn Workflow
@@ -51,11 +51,28 @@ this area from previous sessions. I'll focus on what's new or missing."
 4. Identify design patterns, error handling, edge cases
 5. Assess quality — strengths, risks, technical debt
 
-## Step 4: Store Knowledge
+## Step 4: Review Findings
+
+Before storing knowledge, present key findings to the user. Wrong
+knowledge stored in memory persists into future sessions and causes
+confident wrong actions.
+
+Sage: Here's what I found about [area]:
+
+- [Key finding 1]
+- [Key finding 2]
+- [Key finding 3-5]
+
+[A] Looks correct — store in memory
+[R] Some findings are wrong — let me correct them
+
+If the user corrects any findings, update before storing. Store the
+correction as a self-learning entry (Rule 6).
+
+## Step 5: Store Knowledge
 
 Store each finding by calling the `sage_memory_store` MCP tool directly.
-Each call stores
-one focused insight:
+Each call stores one focused insight:
 
 ```
 sage_memory_store(
@@ -91,7 +108,7 @@ files. For each finding, create a file using the format defined in the
 memory skill's Storage Priority section. Filename = kebab-case title.
 
 
-## Step 5: Generate Knowledge Report
+## Step 6: Generate Knowledge Report
 
 Save a human-readable report to `.sage/docs/memory-{name}.md`.
 
@@ -101,7 +118,7 @@ Follow the memory skill's `references/knowledge-report.md` guide:
 - Focus on insights, not inventory
 - Note how many memory entries were stored
 
-## Step 6: Report Summary
+## Step 7: Report Summary
 
 Sage: Learning complete — [area name]
 

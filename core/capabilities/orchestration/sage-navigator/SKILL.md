@@ -241,12 +241,17 @@ second most expensive.
 **Lightweight scope + gaps:** Don't over-process. "Fix the login button
 color" doesn't need a brief even if one doesn't exist. Just do it.
 
-**Standard scope + gaps:** Recommend, explain the value, respect refusal.
-"Before building, a quick spec would help define edge cases. Shall I
-create one, or dive straight in?"
+**Standard scope + gaps:** A spec is required for Standard scope tasks
+(Rule 3). Start with the spec — don't offer to skip it. "This task
+involves multiple components and design decisions. Starting with a spec
+to define the approach before implementing."
 
-**Comprehensive scope + gaps:** Strongly recommend, show the full path.
-"This is significant work. Sage recommends starting from understanding:
+If the user explicitly asks to skip the spec, note the risk and
+proceed — but record the skip and rationale in progress.md. Don't
+offer to skip proactively.
+
+**Comprehensive scope + gaps:** Start from understanding. "This is
+significant work. Sage recommends starting from understanding:
 Research → Evaluate → Brief → Spec → Phased plan. Early steps often
 reveal requirements that aren't obvious from the initial request."
 
@@ -494,8 +499,9 @@ process won't apply, but I'll still save state and maintain checkpoints."
 
 ## Quality Principles
 
-1. **Right thing > fast thing.** If 15 minutes of analysis prevents
-   2 hours of rework, recommend the analysis.
+1. **Right thing > fast thing.** If a brief analysis prevents significant
+   rework downstream, do the analysis. Skipping understanding to start
+   building faster is the most expensive shortcut.
 
 2. **Proportional process.** Small task = light process. Large task =
    full rigor. Never apply comprehensive process to lightweight work.

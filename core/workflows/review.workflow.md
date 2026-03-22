@@ -40,8 +40,9 @@ Read the artifact fully.
 
 Identify which skill or workflow produced this artifact — check for
 skill prefixes in the filename, references in the content, or metadata.
-If the producing skill has quality criteria, load them. These become
-the evaluation framework.
+Load the producing skill's quality criteria — these become the primary
+evaluation framework. If the producing skill cannot be identified,
+use the three general lenses in Step 3.
 
 If this is a fresh session, note: "Sage: Reviewing with fresh eyes —
 I wasn't involved in producing this work."

@@ -20,7 +20,8 @@ briefs, or decisions. Understanding what exists prevents redundant work.
 ## Step 2: Deep Elicitation
 
 This is the most important step. Understand the full picture before
-designing anything. Explore in focused rounds:
+designing anything. DO NOT proceed to design until you have answers
+covering all three rounds.
 
 **Round 1 — Vision:** What are you building and why? Who is it for?
 What does success look like?
@@ -29,6 +30,9 @@ What does success look like?
 existing systems to integrate with, non-negotiables.
 
 **Round 3 — Gaps:** What's still unclear? What assumptions are we making?
+
+Before proceeding to design, verify you have answers from all three
+rounds. If any round is incomplete, ask before proceeding.
 
 If Sage has relevant UNDERSTAND skills (research, analysis), recommend
 them here:
@@ -60,13 +64,12 @@ updated: YYYY-MM-DD
 ```
 
 🔒 **CHECKPOINT:**
-```
+
 Sage: Architecture design saved. ADRs in .sage/docs/decision-*.md
 
 [A] Approve — continue to planning
 [R] Revise — here's what needs changing
 [Q] Question — I want to understand [specific decision] better
-```
 
 On approval: update spec frontmatter to `status: completed`.
 Run Post-Flight (update journal, store architecture decisions in memory).
