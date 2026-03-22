@@ -101,24 +101,43 @@ After announcing a workflow, read and follow the workflow file at
 `.agent/workflows/[workflow].md` for detailed steps and capability
 references. If you cannot load it, these gates are the minimum:
 
-**Build (Standard+ scope):**
-1. Write spec to .sage/work/ → present [A]/[R] → wait for approval
-2. Write plan → present [A]/[R] → wait for approval
-3. Implement (tests before code)
-4. Verify with pasted test output → present [A]/[R]
-DO NOT implement before spec checkpoint is approved.
+**Build (Standard+ scope) — FILE CHECKS:**
+BEFORE implementing, verify BOTH files exist on disk:
+  .sage/work/[initiative]/spec.md — with status: completed
+  .sage/work/[initiative]/plan.md — with status: completed
+If EITHER file is missing → create it first. No exceptions.
 
-**Fix:**
+Do NOT rationalize skipping:
+- "The design is clear from previous discussion" → NOT a spec file
+- "The user described what they want" → NOT a spec file
+- "This is straightforward" → if Standard scope, spec required
+- "Just build it" → write a minimal 5-line spec, get [A]/[R]
+
+Gate sequence:
+1. Spec file to .sage/work/ → present [A]/[R] → wait for approval
+2. Plan file to .sage/work/ → present [A]/[R] → wait for approval
+3. Implement (tests before code, via build-loop)
+4. Verify with PASTED test output → present [A]/[R]
+
+**Fix — SCOPE AFTER ROOT CAUSE:**
 1. Investigate root cause with evidence → present [A]/[R]/[S] → wait
-2. Write failing test → fix → verify with pasted test output
-3. Present [A]/[R] → wait for approval
+2. SCOPE THE FIX after root cause is confirmed:
+   Surgical (1-2 files) → proceed to fix
+   Moderate (3-5 files) → write fix plan first → [A]/[R]
+   Systemic (5+ files, interface changes) → ESCALATE to /build or /architect
+3. Implement fix → verify with PASTED test output → [A]/[R]
 DO NOT fix before root cause is confirmed.
+DO NOT skip fix scoping — a "quick fix" that touches 8 files is a rebuild.
 
-**Architect:**
-1. Complete elicitation (vision, constraints, gaps) — all 3 rounds
-2. Design with ADRs to .sage/docs/ → present [A]/[R] → wait
-3. Milestone plan → present [A]/[R] → phased build
-DO NOT design before elicitation is complete.
+**Architect — FILE CHECKS:**
+1. Complete elicitation (vision, constraints, gaps) — all 3 rounds.
+   Each round produces visible output. brief.md MUST EXIST before design.
+   Do NOT compress rounds. Do NOT skip because "I understand the system."
+2. Design with ADRs to .sage/docs/ → spec.md to .sage/work/ → [A]/[R]
+3. Milestone plan → [A]/[R] → phased build
+   Each milestone follows build workflow gates independently.
+DO NOT design before brief.md exists.
+DO NOT batch-implement milestones without per-milestone checkpoints.
 
 ### Rule 1: State First
 
@@ -160,15 +179,17 @@ Before presenting any completion checkpoint:
 - Implementation matches the spec or plan
 - If tests don't exist or don't pass, the task is NOT done
 
-**Self-check before every checkpoint:**
-- Build: did I write a spec BEFORE implementing? If no → go back.
-- Fix: did I confirm root cause BEFORE fixing? If no → go back.
-- All: do tests exist and pass with pasted output? If no → not done.
+**Self-check before every checkpoint (FILE CHECKS, not self-assessment):**
+- Build: does `.sage/work/*/spec.md` exist? If no → go back and write it.
+- Build: does `.sage/work/*/plan.md` exist? If no → go back and write it.
+- Fix: was root cause presented and approved by user? If no → go back.
+- All: is test output PASTED (not summarized) in this response? If no → run tests.
 - Spec compliance is adversarial — do not trust your own report that
   implementation matches the spec. Verify independently.
-If any gate was missed, complete it before presenting the checkpoint.
+If any check fails, complete it before presenting the checkpoint.
 
-**Compliance:** Every completion checkpoint includes pasted test output.
+**Compliance:** Every completion checkpoint passes all file checks
+and includes pasted test output.
 
 ### Rule 6: Capture Corrections
 
@@ -423,11 +444,13 @@ for wf in "$CORE"/workflows/*.workflow.md; do
       PREAMBLE='RULES (apply to every step — non-negotiable):
 - PERSONA: Read sage/core/agents/developer.persona.md for your mindset.
 - Announce: "Sage → build workflow." before starting work
-- Standard+ scope: MUST write spec before implementing. DO NOT skip.
+- Standard+ scope: spec.md MUST EXIST at .sage/work/ before implementing.
+  "Design is clear" is NOT a spec. "We discussed this" is NOT a spec.
+  A spec is a FILE. No file = no implementation. Write it first.
 - Save ALL artifacts to .sage/work/ or .sage/docs/ — never inline-only
 - Checkpoints: present with [A] Approve / [R] Revise — wait for response
 - Choices: present with [1] [2] [3] bracket notation
-- Verify: paste actual test output before claiming done
+- Verify: PASTE actual test output before claiming done — no summaries
 - Never use code blocks for interaction (checkpoints, options, status)
 - If user corrects your approach, store as self-learning before continuing
 
@@ -438,8 +461,12 @@ for wf in "$CORE"/workflows/*.workflow.md; do
 - PERSONA: Read sage/core/agents/debugger.persona.md for your mindset.
 - Announce: "Sage → fix workflow." before starting work
 - MUST complete root cause investigation before ANY fix attempt
+- AFTER root cause: MUST scope the fix (Surgical/Moderate/Systemic)
+  Moderate+ (3+ files): write fix plan BEFORE implementing
+  Systemic (5+ files, interface changes): ESCALATE to /build or /architect
+  "I know what to change" is NOT a plan file.
 - Present root cause gate with [A] / [R] / [S] — wait for response
-- Verify: paste actual test output before claiming done
+- Verify: PASTE actual test output before claiming done — no summaries
 - Choices: present with [1] [2] [3] bracket notation
 - Never use code blocks for interaction (checkpoints, options, status)
 - If user corrects your approach, store as self-learning before continuing
@@ -450,8 +477,12 @@ for wf in "$CORE"/workflows/*.workflow.md; do
       PREAMBLE='RULES (apply to every step — non-negotiable):
 - PERSONA: Read sage/core/agents/architect.persona.md for your mindset.
 - Announce: "Sage → architect workflow." before starting work
-- MUST complete all 3 elicitation rounds before designing
+- MUST complete all 3 elicitation rounds SEQUENTIALLY before designing.
+  brief.md MUST EXIST at .sage/work/ before any design work.
+  "I understand the system" is NOT a brief. Do NOT compress 3 rounds into 1.
 - Save ADRs to .sage/docs/decision-*.md, spec to .sage/work/
+- Each milestone in phased build follows build workflow gates independently.
+  Do NOT batch-implement milestones without per-milestone checkpoints.
 - Checkpoints: present with [A] Approve / [R] Revise — wait for response
 - Choices: present with [1] [2] [3] bracket notation
 - Never use code blocks for interaction (checkpoints, options, status)

@@ -1,24 +1,26 @@
 ---
 name: fix
-version: "1.1.0"
+version: "1.2.0"
 mode: fix
 produces: ["Root cause diagnosis with evidence", "Reproducing test", "Minimal patch"]
-checkpoints: 2
-scope: "Single session"
-user-role: "Confirm root cause, approve fix"
+checkpoints: 3
+scope: "Single session for surgical, multi-session for systemic"
+user-role: "Confirm root cause, approve fix scope, approve fix"
 ---
 
 # Fix Workflow
 
-Diagnose, then fix. Never the reverse.
+Diagnose, then scope, then fix. Never skip steps.
 
 ## Auto-Pickup
 
 Scan `.sage/work/` for fix-related directories with `status: in-progress`.
+This scan is MANDATORY — check the DISK.
 
 If found: read the root cause analysis and current phase.
 - Investigation in progress → resume at Step 2
-- Fix applied, not verified → resume at Step 4 (verify)
+- Root cause confirmed, no fix plan → resume at Step 3 (scope)
+- Fix applied, not verified → resume at Step 5 (verify)
 - Report: "Sage: Resuming fix for [problem]. [Phase]."
 
 If not found: start new investigation at Step 1.
@@ -89,8 +91,6 @@ yourself thinking:**
 - "Should work now" (without evidence)
 
 **If stuck after 3+ attempts:** Activate the `problem-solving` skill.
-Start with the Minimal Reproduction technique — strip the problem to
-the smallest case that still exhibits the issue.
 
 🔒 **ROOT CAUSE GATE:**
 Sage: Root cause analysis complete.
@@ -99,20 +99,100 @@ Sage: Root cause analysis complete.
   Evidence: [what confirms it]
   Confidence: [high/medium/low]
 
-[A] Approve diagnosis — proceed to fix in this session
+[A] Approve diagnosis — continue to fix scoping
 [R] Revise — investigate further
 [S] Stuck — try a different approach (activates problem-solving)
-[N] New session — type /fix to continue with the fix
+[N] New session — type /fix to continue
 
 Do not proceed to Step 3 until the user confirms the root cause.
 
-## Step 3: Fix
+## Step 3: Scope the Fix
+
+**AFTER root cause is confirmed, BEFORE writing any fix code.**
+
+Classify the fix by structural impact:
+
+**Surgical:** 1-2 files changed, no interface changes, no new
+abstractions. The fix is obvious from the root cause.
+→ Proceed directly to Step 4 (implement fix).
+
+**Moderate:** 3-5 files changed, OR test infrastructure changes,
+OR error handling pattern changes. The fix is clear but touches
+multiple components.
+→ MUST write a fix plan before implementing:
+  Save to `.sage/work/[fix-initiative]/plan.md`:
+  - Files to change and what changes in each
+  - Tests to add or modify
+  - Rollback approach if fix doesn't work
+  Present [A]/[R] → wait for approval.
+
+**Systemic:** 5+ files changed, OR interface/API changes, OR new
+abstractions needed, OR architectural implications. This is no
+longer a fix — it's a redesign.
+→ MUST escalate:
+
+Sage: This fix is systemic — it requires [interface changes /
+new abstractions / architectural changes].
+
+Root cause: [summary]
+Impact: [N files, M interfaces, architectural concern]
+
+[1] Escalate to /build — write spec for the fix as a feature
+[2] Escalate to /architect — the root cause is architectural
+[3] Proceed as fix anyway — I accept the risk of a large unplanned change
+
+If the user chooses [3], write a fix plan (same as Moderate)
+and record the decision in decisions.md.
+
+**Escalation signals** (any ONE makes it Moderate or above):
+- Fix touches more than 2 files
+- Fix changes a function signature or API contract
+- Fix requires a new abstraction (new class, new module, new pattern)
+- Fix changes error handling in a way other code depends on
+- Fix requires database migration
+- You realize "the real fix is to restructure X"
+
+**Anti-downgrade:** Do NOT classify as Surgical to skip the plan.
+If you find yourself thinking "I'll just quickly change these 5
+files," that's Moderate. If you're thinking "the real problem is
+the architecture," that's Systemic. Trust the signals, not your
+optimism about how fast the fix will be.
+
+🔒 **FIX SCOPE GATE (Moderate+ only):**
+Sage: Fix scope: [Moderate/Systemic]
+
+  Files: [list of files to change]
+  Changes: [summary of what changes]
+  Tests: [what tests to add/modify]
+  Risk: [what could go wrong]
+
+[A] Approve plan — start implementing
+[R] Revise — adjust the approach
+[E] Escalate — type /build or /architect instead
+[N] New session — type /fix to continue
+
+## Step 4: Implement Fix
 
 Write a failing test that reproduces the bug. Confirm the test fails
 for the right reason (the root cause, not a setup issue). Fix the
 code. Verify the test passes.
 
-## Step 4: Verify
+**For Moderate+ fixes:** Follow the plan. Check off each file as
+you change it. Do NOT change files not in the plan — if you discover
+additional changes are needed, update the plan first.
+
+**Scope guard during fix:** If the fix starts growing beyond the
+plan, STOP:
+
+Sage: The fix is expanding beyond the plan.
+Originally: [N files, M changes]
+Now: [N+X files, M+Y changes]
+
+[1] Update the plan and continue
+[2] Escalate to /build
+[3] Revert to original plan and accept limitations
+
+## Step 5: Verify
 
 **Run the verification command. Read the output. THEN report.**
 
@@ -135,12 +215,21 @@ Sage: Verification results:
 analysis was incomplete — either the diagnosis was wrong, or the
 fix introduced a new issue.
 
-## Step 5: Close
+## Step 6: Close
+
+**Self-check before presenting (FILE CHECKS):**
+- [ ] Root cause was presented and approved by user (Step 2 gate)
+- [ ] For Moderate+ fixes: plan.md exists in .sage/work/
+- [ ] Test output is PASTED in this response (not summarized)
+- [ ] Fix is contained to planned files (no scope creep)
+If ANY fails → go back. Do NOT present the checkpoint.
 
 Sage: Fix verified.
 - Root cause: [what was wrong]
+- Scope: [Surgical/Moderate/Systemic]
 - Change: [what was changed, in which files]
 - Tests: [X passed, 0 failed — from actual output]
+Decision: [root cause + fix approach]. (append to .sage/decisions.md)
 
 [A] Approve — commit and close
 [R] Revise — something's not right
@@ -150,40 +239,47 @@ Sage: Fix verified.
 1. Append root cause and fix to `.sage/decisions.md`
 2. Update artifact frontmatter if relevant
 3. Store root cause and fix in memory (tagged `self-learning`)
+   with WHEN/CHECK/BECAUSE prevention rule
 4. Suggest: "Type /review if this was a complex fix, or describe
    the next issue."
 
 ## Quality Criteria
 
 **Communication style:** Diagnostic precision. State root cause clearly,
-explain the chain of causation, and describe the fix in terms of what
-changed and why. Be specific about test coverage.
+explain the chain of causation, describe the fix scope assessment,
+and verify with evidence.
 
 Good fix output:
 - Root cause identified with evidence, not just symptoms addressed
-- The cause→symptom chain is explained (how the root cause leads
-  to the visible problem)
+- Fix scope classified honestly (not downgraded to skip the plan)
 - A reproducing test exists before the fix is applied
-- The fix doesn't introduce new issues — verification output is pasted
+- Verification output is pasted (not summarized)
 - If the bug has related patterns elsewhere, those are flagged
 - The fix is minimal — no unrelated refactoring mixed in
 
-## Self-Review
-
-Before presenting the close checkpoint, verify:
-- Is this the ROOT cause, or the first thing that stopped the error?
-- Did I paste actual test output, or just claim tests pass?
-- Would this fix prevent the bug from recurring, or just mask it?
-- Did I check for related patterns elsewhere in the codebase?
-
 ## Rules
 
-- Root cause before fix (Rule 0 gate). DO NOT fix before root cause
+- Root cause before fix (Step 2 gate). DO NOT fix before root cause
   is confirmed with evidence.
+- Scope before implementing (Step 3). Classify impact honestly.
+- For Moderate+ fixes: plan.md MUST EXIST before implementation.
+  "I know what to change" is NOT a plan file.
 - Tests before code (Base Principle 1). Write failing test first.
-- Verify with evidence (Rule 5). Paste actual test output.
+- Verify with evidence (Rule 5). PASTE actual test output.
 - Capture corrections (Rule 6). Store as self-learning.
 - Minimal change: fix the bug, don't refactor the neighborhood.
 - If stuck, use problem-solving skill. Don't retry the same approach.
-- If the fix reveals a larger issue, note it and offer to create
-  a separate task — don't scope-creep a fix into a feature.
+- If the fix reveals a systemic issue, ESCALATE. Do not scope-creep
+  a fix into a rebuild. Offer /build or /architect.
+
+## Failure Modes
+
+- **Agent skips root cause investigation:** Red flags section catches
+  this pattern. The ROOT CAUSE GATE blocks proceeding.
+- **Agent underestimates fix scope:** Escalation signals list catches
+  the most common patterns. Anti-downgrade language blocks "I'll just
+  quickly change these 5 files."
+- **Fix grows during implementation:** Scope guard in Step 4 detects
+  when the fix expands beyond the plan and forces a decision.
+- **Agent claims tests pass without running them:** Self-check
+  requires PASTED output. No paste = checkpoint not ready.

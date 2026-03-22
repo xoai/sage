@@ -57,6 +57,18 @@ Before storing knowledge, present key findings to the user. Wrong
 knowledge stored in memory persists into future sessions and causes
 confident wrong actions.
 
+**Findings quality checklist** — for each finding, verify:
+- **Specific?** Does it name concrete things (files, patterns, tools)?
+  "Uses microservices" is too vague. "Uses gRPC between billing and
+  auth services, REST for public API" is specific.
+- **Insight, not inventory?** Does it tell you something you can't
+  get from `ls`? "Has a src/ directory" is inventory. "All business
+  logic lives in src/domain/, handlers are thin wrappers" is insight.
+- **Actionable?** Would a future agent use this to make a better
+  decision? If not, don't store it.
+
+If a finding fails any criterion, improve it before presenting.
+
 Sage: Here's what I found about [area]:
 
 - [Key finding 1]
@@ -65,6 +77,10 @@ Sage: Here's what I found about [area]:
 
 [A] Looks correct — store in memory
 [R] Some findings are wrong — let me correct them
+
+Do NOT present vague findings and rely on the user to approve them.
+The user may click [A] without scrutiny. The quality gate is YOUR
+responsibility, not the user's.
 
 If the user corrects any findings, update before storing. Store the
 correction as a self-learning entry (Rule 6).

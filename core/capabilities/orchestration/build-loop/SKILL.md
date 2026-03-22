@@ -74,6 +74,14 @@ drifts beyond the task spec.
 
 ### Step 4: Run Quality Gates
 
+Quality gates run after EVERY task. This is NOT optional.
+Do not skip gates because:
+- "The change was small"
+- "I already verified during implementation"
+- "The tests pass, so gates aren't needed"
+- "This is just a refactor"
+Gates run. Every task. No exceptions.
+
 After each task, run the quality gate sub-workflow:
 
 Gate 1: spec-review    → Does implementation match the task spec?

@@ -44,18 +44,26 @@ Check available skills before proceeding with any substantial task.
 
 **Compliance:** Skill is read before producing skill-covered output.
 
-## Rule 3: Document Decisions
+## Rule 3: Spec Before Code (File Check)
 
-Decisions that affect the project must be recorded — for the agent's
-process continuity AND for human collaborators. Specs, plans, ADRs,
-and briefs are saved to `.sage/work/` or `.sage/docs/`.
+Standard+ scope: `.sage/work/[initiative]/spec.md` MUST exist before
+implementation begins. This is a FILE CHECK, not a judgment call.
 
-Even for Tier 2 tasks, produce at minimum a brief record of what was
-decided and why. Artifacts have dual audience: agents (for session
-continuity) and humans (for collaboration and knowledge sharing).
+Check: does the spec file exist on disk? If no → write it first.
 
-**Compliance:** No Standard+ task completes without at least one
-artifact in `.sage/`.
+The following are NOT substitutes for a spec file:
+- "The design is clear from our previous discussion"
+- "The user described exactly what they want"
+- "This is straightforward enough to implement directly"
+- Previous conversations no longer in context
+- Verbal agreements or implicit understanding
+
+A spec is a file the user approves. Even if the user says "just
+build it," write a minimal 5-line spec capturing WHAT you're
+building, present [A]/[R], and get approval before implementing.
+
+**Compliance:** `ls .sage/work/*/spec.md` returns a file before
+any implementation code is written.
 
 ## Rule 4: Checkpoints Are Sacred
 
@@ -69,17 +77,26 @@ Show the work. Wait for explicit approval. Proceed only when confirmed.
 
 **Compliance:** Each approval gate presents work and waits for response.
 
-## Rule 5: Verify Before Claiming Done
+## Rule 5: Verify Before Claiming Done (Checklist)
 
-Before presenting any completion checkpoint, verify quality:
-- Tests exist for new or changed functionality
-- Tests pass — paste actual output, don't summarize
-- Implementation matches the spec or plan
-- If tests don't exist or don't pass, the task is NOT done
+Before presenting any completion checkpoint, run this checklist.
+Every item is an observable condition — not a self-assessment.
 
-This applies universally — build, fix, architect, any workflow.
+For build workflows:
+- [ ] `.sage/work/*/spec.md` exists on disk
+- [ ] `.sage/work/*/plan.md` exists on disk
+- [ ] Test output is PASTED in the response (not summarized)
+- [ ] All plan tasks are addressed
 
-**Compliance:** Every completion checkpoint includes pasted test output.
+For fix workflows:
+- [ ] Root cause statement was presented and approved
+- [ ] Test output is PASTED showing the fix works
+
+If ANY condition fails → stop. Go back. Fix it. Do NOT present
+the checkpoint. Do NOT explain why a step was unnecessary.
+
+**Compliance:** Every completion checkpoint passes all checklist
+items. Missing items mean the checkpoint is not ready.
 
 ## Rule 6: Capture Corrections
 

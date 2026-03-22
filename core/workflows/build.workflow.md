@@ -14,12 +14,11 @@ Feature development guided by Sage.
 
 ## Auto-Pickup
 
-BEFORE ANYTHING: Scan `.sage/work/` for existing initiatives.
+BEFORE ANYTHING: Scan `.sage/work/` for existing artifacts.
+This scan is MANDATORY — do not skip it because you "remember"
+the project state from conversation context. Check the DISK.
 
-If the user named a specific initiative, find its directory.
-If not, look for ONE with `status: in-progress` in frontmatter.
-
-**Resume from phase based on what exists:**
+**Resume from phase based on what EXISTS ON DISK:**
 - No artifacts exist → Step 2 (scope assessment)
 - Brief exists, no spec → "Sage: Resuming [name]. Brief approved.
   Starting with spec." → Step 4
@@ -29,6 +28,12 @@ If not, look for ONE with `status: in-progress` in frontmatter.
   approved. Starting build-loop." → Step 6
 - All status: completed → "Sage: [name] is complete." → offer
   next steps or new initiative
+
+You MUST follow this routing. Do not override it based on:
+- Conversation context ("we discussed this before")
+- User description ("the design is clear")
+- Your own assessment ("this is straightforward")
+The disk is the source of truth. Not your memory.
 
 **Multiple in-progress:** Present list:
 [1] Continue [initiative A] — [phase]
@@ -48,8 +53,9 @@ visible to other team members. The change is obvious from the request.
 → Skip to Step 6, implement directly.
 
 **Standard:** Multiple components, OR any design decision, OR
-coordination between modules. DO NOT skip the spec.
-→ MUST write spec (Step 4) → plan (Step 5) → implement (Step 6).
+coordination between modules. Spec file REQUIRED.
+→ spec.md MUST exist at .sage/work/ before implementation.
+→ plan.md MUST exist at .sage/work/ before implementation.
 → If the task also needs scope definition, write brief first (Step 3).
 
 **Comprehensive:** New subsystem, cross-cutting changes, or multiple
@@ -64,13 +70,19 @@ stakeholder impact.
 - Involves a decision a team member would need to know about
 - Multiple layers affected (database + backend + frontend)
 
+**Anti-downgrade:** When in doubt, classify as Standard, not Lightweight.
+Do NOT downgrade to Lightweight to avoid writing a spec. If you find
+yourself thinking "this is simple enough to skip the spec," that
+thought is the signal to NOT skip the spec.
+
 Present your assessment:
 
 **Sage → build workflow.** [Scope] — [what makes it this scope].
 Starting with [first required step].
 
-If the user wants to skip a required step, note the risk and proceed —
-but record the skip and rationale in decisions.md.
+If the user explicitly asks to skip a required step, write a minimal
+5-line spec anyway (WHAT, WHY, HOW, DONE-WHEN), present [A]/[R], and
+record the skip rationale in decisions.md.
 
 ## Step 3: Brief (Standard with unclear scope, or Comprehensive)
 

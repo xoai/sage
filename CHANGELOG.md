@@ -4,6 +4,61 @@ All notable changes to Sage will be documented in this file.
 
 ## [1.0.7] — State, Learning & Coordination
 
+### Anti-Rationalization Enforcement (all workflows)
+
+Every enforcement rule across all workflows converted from action
+instructions ("MUST do X") to observable conditions ("file MUST
+EXIST on disk"). Named rationalization loopholes explicitly rejected.
+
+**Build workflow:**
+- Rule 3 rewritten as file check: spec.md MUST EXIST at path.
+- Named loopholes: "design is clear," "user described what they want,"
+  "this is straightforward" — each followed by "→ NOT a spec file."
+- Self-check converted to file checks at every checkpoint.
+- Anti-downgrade: "if you're thinking 'simple enough to skip the
+  spec,' that thought is the signal to NOT skip."
+- Quality gates marked mandatory with named skip rationalizations.
+- Auto-pickup: "The disk is the source of truth. Not your memory."
+
+**Fix workflow (v1.2.0) — major rewrite:**
+- **New Step 3: Scope the Fix.** After root cause confirmation,
+  classify: Surgical (1-2 files, proceed), Moderate (3-5 files,
+  write fix plan first), Systemic (5+ files or interface changes,
+  ESCALATE to /build or /architect).
+- **Fix Scope Gate** with [A]/[R]/[E] escalate option.
+- **Scope guard during implementation** — detects when fix grows
+  beyond plan and forces decision: update plan, escalate, or revert.
+- **Escalation signals** (any ONE makes it Moderate+): touches 3+
+  files, changes function signatures, requires new abstractions,
+  changes error handling patterns, requires DB migration.
+- **Anti-downgrade:** "Do NOT classify as Surgical to skip the plan."
+- Fix preamble: "I know what to change" is NOT a plan file.
+
+**Architect workflow (v1.1.0) — hardened:**
+- **Elicitation Gate** with file check: brief.md MUST EXIST before
+  design. Each round produces visible artifact.
+- Named loopholes: "I understand the system" → NOT a brief file.
+  "User described the system clearly" → NOT three-round elicitation.
+- **Do NOT compress** 3 rounds into 1 response.
+- **Design checkpoint** with observable file checks: brief.md,
+  spec.md, and decision-*.md must all exist.
+- **Milestone enforcement:** each milestone MUST follow build
+  workflow gates independently. Do NOT batch-implement.
+
+**Review workflow — hardened:**
+- **Delegation mandatory** when Task tool is available. Self-review
+  is NOT independent review. Named: "I can review this myself" →
+  NOT independent.
+- **Severity classification** in sub-agent prompt: Critical (blocks
+  proceeding), Major (should fix), Minor (can fix later).
+- **Critical findings block approval** — if Critical issues found,
+  [R] Revise is presented before [A] Accept.
+
+**Learn workflow — hardened:**
+- **Findings quality checklist:** Specific? Insight not inventory?
+  Actionable? Agent verifies BEFORE presenting to user.
+- "The quality gate is YOUR responsibility, not the user's."
+
 ### State Model Redesign
 - **progress.md eliminated.** State is now derived from artifact
   frontmatter scanning — always current because artifacts ARE the
