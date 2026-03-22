@@ -555,7 +555,7 @@ updated: YYYY-MM-DD
 ---
 ```
 
-For plan files, add task tracking:
+For plan files, use the same standard fields:
 
 ```yaml
 ---
@@ -565,11 +565,9 @@ phase: plan
 priority: high
 created: YYYY-MM-DD
 updated: YYYY-MM-DD
-tasks-total: 8
-tasks-done: 3
 ---
 ```
 
 The navigator reads this frontmatter during the State step to orient
-quickly without reading full documents. Workflows update frontmatter
-during Post-Flight state management.
+quickly without reading full documents. State is updated at checkpoints
+(Rule 7), not per-task.

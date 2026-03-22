@@ -71,18 +71,16 @@ memory skill at `skills/memory/SKILL.md`.
 Read `.sage/progress.md` (skip if it doesn't exist). Scan `.sage/work/`
 for active initiatives by reading YAML frontmatter from artifact files:
 
-```
-For each directory in .sage/work/*/:
-  Read frontmatter from brief.md, spec.md, or plan.md (whichever exists)
-  Note: title, status, phase, priority, tasks-done/tasks-total
-```
+For each directory in `.sage/work/*/`:
+  Read frontmatter from brief.md, spec.md, or plan.md (whichever exists).
+  Note: title, status, phase.
 
 This gives you instant orientation without reading full documents.
 
 - **Work in progress?** (status: in-progress) Report: "Sage: Resuming
-  [initiative]. [Phase] phase, [N/M] tasks done." Offer to resume. If
-  the user's new request is different, present both options — continue
-  the old or start the new. Don't silently abandon work.
+  [initiative]. [Phase] phase." Offer to resume. If the user's new
+  request is different, present both options — continue the old or start
+  the new. Don't silently abandon work.
 - **Fresh project?** Report: "Sage: Fresh project, no work in progress."
   Move on to intent.
 - **Artifacts exist but nothing active?** Note the context, move on.
@@ -143,23 +141,30 @@ If intent is genuinely unclear, ask one focused question. Don't guess.
 How much process does the task need? Check concrete signals — don't
 guess based on how the request sounds.
 
+**Documents serve humans too.** Artifacts aren't just for the agent's
+process continuity — they're shared understanding for the team. When
+deciding scope, ask: "Would a team member benefit from knowing what
+was decided here?" If yes, produce the artifact even if the agent
+doesn't need it for its own process.
+
 **Lightweight** (minutes, run skill directly):
-- Single file change or small edit
+- Single file change with no design decisions AND no behavior changes
+  visible to other team members
 - Clear, specific request with no ambiguity
 - Fix, tweak, adjust, clarify — words that imply small change
 - No new APIs, data models, or user-facing flows
 
-**Standard** (hours, spec → plan → build) — trigger when **any 2** apply:
+**Standard** (spec → plan → build) — trigger when **any 2** apply:
 - Touches more than 3 files
 - Involves a new API endpoint or data model change
 - Requires coordination between multiple modules or services
 - Has user-facing behavior changes (new UI, changed flow)
-- Would take more than 30 minutes to implement
 - User says "feature," "add," "implement," "create" (not "fix" or "tweak")
 - ADRs are being created — this signals architectural decisions that
   benefit from a spec to organize the implementation
+- Task involves a decision that another team member would need to know
 
-**Comprehensive** (days, full pipeline: discovery → design → spec → plan → phased build) — trigger when **any 2** apply:
+**Comprehensive** (full pipeline: discovery → design → spec → plan → phased build) — trigger when **any 2** apply:
 - New subsystem, service, or major module
 - Changes to core architecture patterns
 - Multiple user-facing flows affected
@@ -314,20 +319,18 @@ location:
 
 ### Post-Flight: State Management
 
-**This step runs after EVERY significant workflow step.** Three duties,
-in order. Do not skip any.
+**This step runs at CHECKPOINTS only — not per-task, not per-file.**
+Three duties, in order. Do not skip any.
 
-**1. Update plan progress.**
-
-If a plan exists at `.sage/work/*/plan.md`:
-- Check off completed tasks (`- [ ]` → `- [x]`)
-- Update `tasks-done` count in frontmatter
-- Update `status` in frontmatter if phase changed
-- Update `updated` date in frontmatter
+**1. Update artifacts.**
 
 If a brief or spec was just completed:
 - Set its frontmatter `status` to `completed`
 - Update `updated` date
+
+If the workflow is closing:
+- Walk through plan.md and check completed tasks in bulk
+- Update plan frontmatter `status` to `completed`
 
 **2. Update journal.**
 
@@ -430,7 +433,6 @@ adds value. The `/review` workflow exists for this purpose.
 
 When recommending fresh review, be clear about WHY:
 
-```
 Sage: This brief will drive the spec and implementation. For a
 deliverable this significant, an independent review catches blind
 spots I can't see in my own work.
@@ -438,7 +440,27 @@ spots I can't see in my own work.
 [1] Continue to spec (using this brief as-is)
 [2] I'll address [specific concern] first
 [3] Fresh review — open a new session and type /review
-```
+
+### Sub-Agent Delegation
+
+On platforms that support sub-agents (Claude Code Task tool),
+delegation adds value when independent context matters:
+
+**Recommend sub-agent delegation for:**
+- **Artifact review** — fresh context catches blind spots the producing
+  agent can't see. The `/review` command on Claude Code already uses
+  Task delegation for this.
+- **Code review of large implementations** — when implementation spans
+  5+ files, a sub-agent with fresh eyes catches integration issues.
+  Recommend at the build completion checkpoint: "This implementation
+  touches [N] files. An independent code review would catch integration
+  issues. Shall I delegate to a review sub-agent?"
+
+**Do NOT recommend sub-agents for:**
+- Testing — the current agent can run tests directly
+- State management — overhead for no benefit
+- Small fixes or Tier 1 tasks — startup cost exceeds task cost
+- Implementation — the current agent has the needed context
 
 ### Auto-Proceed vs Confirm
 

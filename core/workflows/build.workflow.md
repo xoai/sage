@@ -2,7 +2,7 @@
 name: build
 version: "1.0.0"
 mode: build
-produces: ["Brief (medium+ tasks)", "Spec", "Plan with task checkboxes"]
+produces: ["Brief (medium+ tasks)", "Spec", "Implementation plan"]
 checkpoints: 3
 scope: "Single session for medium tasks, multi-session for large"
 user-role: "Review and approve at each gate"
@@ -108,8 +108,6 @@ phase: plan
 priority: high
 created: YYYY-MM-DD
 updated: YYYY-MM-DD
-tasks-total: 0   # count of checkboxes
-tasks-done: 0    # count of checked boxes
 ---
 ```
 
@@ -127,10 +125,8 @@ On approval: run Post-Flight (update journal, store findings).
 
 Per task: test first → code → refactor → run suite → commit.
 
-**After completing each task:**
-1. Check the box in plan.md (`- [ ]` → `- [x]`)
-2. Update `tasks-done` and `updated` in plan.md frontmatter
-3. Run Post-Flight if the task produced significant findings
+Implement tasks following the plan. Focus on quality — tests for each
+change, verify before moving on.
 
 If relevant Sage skills exist, read and follow them.
 
@@ -172,12 +168,13 @@ Sage: Build complete. [summary of what was built]
 [N] Next — what should we work on next?
 ```
 
-**On approval — final state management:**
-1. Update plan.md frontmatter: `status: completed`
-2. Update `.sage/progress.md` with completion
-3. Update `.sage/journal.md` with final status for all artifacts
-4. Store key findings in memory (architecture, conventions, insights)
-5. Recommend what's next
+**On approval — checkpoint state update (Rule 7):**
+1. Walk through plan.md and check completed tasks in bulk
+2. Update plan.md frontmatter: `status: completed`
+3. Update `.sage/progress.md` with completion
+4. Update `.sage/journal.md` with final status for all artifacts
+5. Store key findings in memory (architecture, conventions, insights)
+6. Recommend what's next
 
 ## Quality Criteria
 
@@ -191,7 +188,6 @@ Good build output:
 - Edge cases from the spec are handled, not just happy paths
 - Code follows project conventions (naming, structure, patterns)
 - No unrelated changes mixed in — scope discipline maintained
-- Plan checkboxes reflect actual completion status
 - Verification output is from the actual test run, not a summary
 
 ## Self-Review

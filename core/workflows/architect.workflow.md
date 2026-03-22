@@ -87,8 +87,6 @@ phase: plan
 priority: high
 created: YYYY-MM-DD
 updated: YYYY-MM-DD
-tasks-total: 0
-tasks-done: 0
 ---
 ```
 
@@ -98,17 +96,16 @@ Sage: Milestone plan saved to .sage/work/YYYYMMDD-slug/plan.md
 [A] Approve — start building milestone 1
 [R] Revise — adjust the breakdown
 
-On approval: run Post-Flight (update journal, store findings).
+On approval: update progress.md and journal.md (Rule 7).
 
 ## Step 5: Phased Build
 
 Execute milestone by milestone. Each milestone follows the build workflow:
 implement → test → review → checkpoint before moving to the next.
 
-**After completing each milestone:**
-1. Check off milestone tasks in plan.md
-2. Update `tasks-done` and `updated` in plan.md frontmatter
-3. Run Post-Flight (update journal, store findings in memory)
+**At each milestone completion checkpoint:**
+Update progress.md with milestone status. Update journal.md.
+Store architecture findings in memory.
 
 After each milestone:
 Sage: Milestone [N] complete — [summary]

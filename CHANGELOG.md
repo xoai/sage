@@ -2,6 +2,61 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [1.0.5] — Intelligent Copilot
+
+### Constitution Rewrite
+- **7 rules with compliance checks** — each rule has an observable signal
+  that it was followed. Replaces the previous 5 abstract principles.
+- **Rule 0: Route Every Request** — scope classification fires FIRST,
+  before state reading or skill activation. Tier 1/2/3 routing with
+  6 free-input examples showing how to route without asking.
+- **Rule 3: Document Decisions** — renamed from "Never Plan Alone."
+  Artifacts serve humans AND agents. Even Tier 2 tasks produce a record.
+- **Rule 5: Verify Before Claiming Done** — universal pre-completion
+  quality gate. Tests must exist, pass, and output must be pasted.
+- **Rule 6: Capture Corrections** — automatic self-learning with 6
+  trigger types. User corrections are MANDATORY captures.
+- **Rule 7: Update State at Checkpoints** — replaces failed per-task
+  tracking with checkpoint-only state updates.
+
+### Simplified State Management
+- **Removed per-task state tracking** from build and architect workflows.
+  Plan.md is a guide, not a tracking database. Checkboxes are checked
+  in bulk at completion, not per-task during implementation.
+- **Removed `tasks-total` / `tasks-done`** from plan frontmatter
+  convention, session hook output, navigator state scanning, and skill
+  authoring guide.
+- **File system as source of truth** — what artifacts exist and their
+  frontmatter status (updated at checkpoints) is the authoritative state.
+
+### Self-Learning Triggers
+- **6 trigger types in always-on layer** — correction (mandatory),
+  gotcha, convention, api-drift, error-fix. Listed in CLAUDE.md and
+  GEMINI.md so they fire automatically, not when the agent decides.
+- **Prevention rules required** — every learning must answer "what should
+  I check BEFORE this happens again?"
+
+### Document-First Scope Calibration
+- **Tightened Lightweight threshold** — now requires "no design decisions
+  AND no behavior changes visible to other team members." Any behavior
+  change → Tier 2 minimum.
+- **New Standard trigger** — "task involves a decision that another team
+  member would need to know about."
+- **"Documents serve humans too"** principle added to navigator scope
+  assessment.
+
+### Sub-Agent Strategy
+- **Clear guidance** on when Task delegation adds value (artifact review,
+  code review of 5+ file implementations) and when it doesn't (testing,
+  state management, small fixes, implementation).
+- Advisory — navigator recommends, user decides.
+
+### Routing Strengthened
+- **6 free-input routing examples** in CLAUDE.md / GEMINI.md showing
+  Tier 1/2/3 classification on natural language requests.
+- **Rule 0 position** — routing fires before state reading, before
+  skill activation, before any work.
+
 ## [1.0.3] — Quality, Review & Memory Enforcement
 
 ### Review Workflow (new)

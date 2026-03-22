@@ -37,18 +37,11 @@ for dir in "$SAGE_DIR"/work/*/; do
     title=$(sed -n '/^---$/,/^---$/{ /^title:/s/^title: *"*\([^"]*\)"*/\1/p; }' "$f" 2>/dev/null)
     status=$(sed -n '/^---$/,/^---$/{ /^status:/s/^status: *//p; }' "$f" 2>/dev/null)
     phase=$(sed -n '/^---$/,/^---$/{ /^phase:/s/^phase: *//p; }' "$f" 2>/dev/null)
-    tasks_total=$(sed -n '/^---$/,/^---$/{ /^tasks-total:/s/^tasks-total: *//p; }' "$f" 2>/dev/null)
-    tasks_done=$(sed -n '/^---$/,/^---$/{ /^tasks-done:/s/^tasks-done: *//p; }' "$f" 2>/dev/null)
 
     [ -z "$title" ] && title=$(basename "$dir" | sed 's|/$||')
     [ -z "$status" ] && status="unknown"
 
-    progress=""
-    if [ -n "$tasks_total" ] && [ "$tasks_total" != "0" ]; then
-      progress=" ($tasks_done/$tasks_total tasks)"
-    fi
-
-    ACTIVE_WORK="$ACTIVE_WORK  - $title [$status, $phase]$progress — $f\n"
+    ACTIVE_WORK="$ACTIVE_WORK  - $title [$status, $phase] — $f\n"
     WORK_COUNT=$((WORK_COUNT + 1))
     break  # One artifact per initiative is enough
   done
