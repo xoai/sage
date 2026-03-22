@@ -55,6 +55,9 @@ consider a fresh session or the /review command."
 
 Review the artifact against three lenses:
 
+For detailed code quality review, read
+`sage/core/capabilities/review/quality-review/SKILL.md`.
+
 **Completeness** — Does it cover what it should? Are there missing
 sections, unaddressed scenarios, or gaps in reasoning? Check against
 the producing skill's quality criteria if available.

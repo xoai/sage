@@ -84,6 +84,10 @@ This gives you instant orientation without reading full documents.
 - **Fresh project?** Report: "Sage: Fresh project, no work in progress."
   Move on to intent.
 - **Artifacts exist but nothing active?** Note the context, move on.
+- **State mismatch?** If progress.md and `.sage/work/` artifacts disagree
+  (e.g., progress says "spec phase" but a plan already exists), trust the
+  artifacts over progress.md. The file system is the ground truth. Update
+  progress.md to match reality, then report the corrected state.
 
 ### Routing Context
 

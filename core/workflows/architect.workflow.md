@@ -23,6 +23,12 @@ This is the most important step. Understand the full picture before
 designing anything. DO NOT proceed to design until you have answers
 covering all three rounds.
 
+For comprehensive elicitation process, read
+`sage/core/capabilities/elicitation/deep-elicit/SKILL.md`.
+
+For the elicitation mindset, read
+`sage/core/agents/analyst.persona.md`.
+
 **Round 1 — Vision:** What are you building and why? Who is it for?
 What does success look like?
 
@@ -140,8 +146,13 @@ question? Present your self-assessment alongside the design.
 
 ## Rules
 
-- Architecture decisions must be documented with rationale, not just chosen.
-- Each milestone must be independently testable.
+- Elicitation before design (Rule 0 gate). Complete all 3 rounds
+  before starting architecture.
+- Decisions documented with rationale (Rule 3). Save ADRs to
+  .sage/docs/decision-*.md.
+- Checkpoints mandatory (Rule 4). Present [A]/[R] and wait.
+- Milestones independently testable (Base Principle 5).
+- State at checkpoints (Rule 7). Save frequently — architect work
+  spans sessions.
 - Re-validate architecture assumptions after each milestone —
   real implementation reveals things design missed.
-- Save state frequently. Architect-scale work spans sessions.

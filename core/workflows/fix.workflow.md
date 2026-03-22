@@ -35,6 +35,12 @@ Sage: Here's what I understand:
 Trace the error. Gather evidence. The goal is UNDERSTANDING, not
 a fix.
 
+For systematic debugging methodology, read
+`sage/core/capabilities/debugging/systematic-debug/SKILL.md`.
+
+For the investigator mindset, read
+`sage/core/agents/debugger.persona.md`.
+
 Produce a root cause statement with evidence:
 
 Sage: Root cause identified.
@@ -86,6 +92,9 @@ code. Verify the test passes.
 ## Step 4: Verify
 
 **Run the verification command. Read the output. THEN report.**
+
+For detailed verification process, read
+`sage/core/capabilities/debugging/verify-completion/SKILL.md`.
 
 1. Run the project's test suite (full or relevant subset)
 2. Read the actual output — don't summarize from memory
@@ -144,10 +153,12 @@ Before presenting the close checkpoint, verify:
 
 ## Rules
 
-- Diagnose first: no fixes before root cause is confirmed.
-- Test first: write a failing test before writing the fix.
-- Verify with evidence: paste test output, don't summarize.
+- Root cause before fix (Rule 0 gate). DO NOT fix before root cause
+  is confirmed with evidence.
+- Tests before code (Base Principle 1). Write failing test first.
+- Verify with evidence (Rule 5). Paste actual test output.
+- Capture corrections (Rule 6). Store as self-learning.
 - Minimal change: fix the bug, don't refactor the neighborhood.
-- If stuck, use problem-solving: don't keep trying the same approach.
+- If stuck, use problem-solving skill. Don't retry the same approach.
 - If the fix reveals a larger issue, note it and offer to create
   a separate task — don't scope-creep a fix into a feature.

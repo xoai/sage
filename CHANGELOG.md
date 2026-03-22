@@ -57,6 +57,64 @@ All notable changes to Sage will be documented in this file.
 - **Rule 0 position** — routing fires before state reading, before
   skill activation, before any work.
 
+### Enforcement Architecture (hybrid loading)
+- **Workflow gates in CLAUDE.md Rule 0** — build (spec→plan→implement),
+  fix (root cause→fix→verify), architect (elicit→design→plan) gates
+  inline in always-on layer. Enforced for BOTH slash commands and free
+  input. "DO NOT implement before spec checkpoint is approved."
+- **Self-check loop in Rule 5** — agent verifies against workflow gates
+  before presenting any checkpoint. Catches "announced build then
+  jumped to code." Includes adversarial spec compliance.
+- **Base constitution principles deployed** — 5 engineering principles
+  (TDD, no silent failures, no secrets, explicit deps, reversible
+  changes) from base.constitution.md now in CLAUDE.md / GEMINI.md.
+- **Command preambles** — every generated command file has a RULES
+  block at the top with workflow-specific enforcement. Triple
+  reinforcement: CLAUDE.md + preamble + workflow steps.
+- **Load-command instruction** — Rule 0 tells agent to read the
+  command file after routing, with gates as fallback.
+
+### Workflow Compliance Hardening
+- **Complexity-based scope** replaces time-based ("< 30 min", "hours",
+  "days"). Scope signals: component count, design decisions, team
+  visibility. "MUST write spec" replaces "Recommend a spec."
+- **All code-fenced checkpoints removed** — interaction renders as
+  plain text, not code blocks.
+- **Learn workflow** gains a findings review checkpoint (Step 4) before
+  storing knowledge in memory.
+- **Fix workflow** clarifies vague bug report handling.
+- **Navigator** uses mandatory language for Standard scope specs.
+
+### Capability Wiring (13 previously unused capabilities activated)
+- **build-loop** → Build Step 6 execution engine. Task-by-task
+  implementation with TDD, scope-guard, quality gates between tasks,
+  inter-task checkpoints, escalation, context budget awareness.
+- **quality-gates** sub-workflow → Build Step 7. Sequences 5 gates:
+  spec compliance, constitution, code quality, hallucination check,
+  verification. Fix-and-retry with max 3 attempts.
+- **quick-elicit** → Build Step 3. Structured 3-round elicitation
+  (intent, boundaries, verification) for brief writing.
+- **tdd** → Build Step 6 via build-loop. RED→GREEN→REFACTOR with
+  deletion rule for code written before tests.
+- **scope-guard** → Build Step 6 via build-loop. "Is this in my task?
+  Was this in the plan? Did the human ask for this?"
+- **systematic-debug** → Fix Step 2. 4-phase debugging framework.
+- **verify-completion** → Build/Fix verification via quality-gates.
+- **deep-elicit** → Architect Step 2. Comprehensive elicitation.
+- **specify** → Build Step 4. PRD-to-spec structured process.
+- **quality-review** → Review Step 3 and quality-gates Gate 3.
+- **spec-review** → Quality-gates Gate 1. Adversarial verification.
+- **Agent personas wired** — reviewer (Task-delegated reviews),
+  debugger (fix workflow), analyst (architect elicitation), developer
+  (build implementation).
+- **Session-bridge concept** — "trust artifacts over progress.md"
+  rule added to navigator State section.
+
+### `/sage` Command Rewritten
+- Self-contained with structured options using [1] [2] [3] brackets.
+- Three conditional templates: work in progress, artifacts exist,
+  fresh project. Never asks "What would you like to do?" open-ended.
+
 ## [1.0.3] — Quality, Review & Memory Enforcement
 
 ### Review Workflow (new)

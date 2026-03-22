@@ -55,8 +55,20 @@ but record the skip and rationale in progress.md.
 
 ## Step 3: Brief (Standard with unclear scope, or Comprehensive)
 
-If scope is unclear or the task is Comprehensive, define: what to build,
-why, acceptance scenarios, and constraints.
+If scope is unclear or the task is Comprehensive, elicit requirements
+before defining the brief.
+
+For structured elicitation process, read
+`sage/core/capabilities/elicitation/quick-elicit/SKILL.md`.
+It provides 3 focused rounds (~2 minutes):
+1. Intent — what should this do when working perfectly?
+2. Boundaries — what should this NOT do?
+3. Verification — how will we know it works?
+
+If quick-elicit cannot be loaded, ask these three questions directly
+and draft a brief from the answers.
+
+Define: what to build, why, acceptance scenarios, and constraints.
 
 Save to `.sage/work/YYYYMMDD-slug/brief.md` with frontmatter:
 
@@ -86,6 +98,9 @@ Run Post-Flight (update journal, store findings).
 Define: components, data model, APIs, key decisions, edge cases.
 Resolve open questions from the brief.
 
+For detailed spec writing process, read
+`sage/core/capabilities/planning/specify/SKILL.md`.
+
 Save to `.sage/work/YYYYMMDD-slug/spec.md` with frontmatter:
 
 ```yaml
@@ -113,6 +128,9 @@ Run Post-Flight (update journal, store findings).
 Break into small, independently testable tasks. Each task: what to do,
 done criteria, files involved. Use checkboxes as a guide.
 
+For detailed planning process, read
+`sage/core/capabilities/planning/plan/SKILL.md`.
+
 Save to `.sage/work/YYYYMMDD-slug/plan.md` with frontmatter:
 
 ```yaml
@@ -137,35 +155,50 @@ On approval: run Post-Flight (update journal, store findings).
 
 ## Step 6: Implement
 
-Per task: test first → code → refactor → run suite → commit.
+Execute the plan task by task using the build loop.
 
-Implement tasks following the plan. Focus on quality — tests for each
-change, verify before moving on.
+Read and follow `sage/core/capabilities/orchestration/build-loop/SKILL.md`.
+It provides:
+- Task-by-task execution with status reporting
+- TDD discipline for each task (loads `sage/core/capabilities/execution/tdd/SKILL.md`)
+- Scope guard to prevent drift (loads `sage/core/capabilities/context/scope-guard/SKILL.md`)
+- Quality gates between tasks (loads `sage/core/workflows/sub-workflows/quality-gates.workflow.md`)
+- Inter-task checkpoints every 1-3 tasks
+- Escalation on repeated failure (3x → ask human)
+- Context budget awareness (suggest new session if full)
 
-If relevant Sage skills exist, read and follow them.
+For implementation discipline, the developer persona at
+`sage/core/agents/developer.persona.md` applies.
+
+If the build-loop cannot be loaded, follow these minimum rules:
+implement one task at a time, write tests before code, run full
+suite after each task, stay in scope, commit after each task.
+
+If relevant Sage skills exist in `sage/skills/`, read and follow them.
 
 **If stuck during implementation:** Activate the `problem-solving` skill.
 Match the stuck pattern to a technique — complexity spiral → Simplification,
 forced solution → Inversion, works-locally-but-fails → Scale Testing,
 can't isolate → Minimal Reproduction.
 
-## Step 7: Verify
+## Step 7: Quality Gates
 
-**Run the verification command. Read the output. THEN report.**
+Run quality gates on the completed implementation.
 
-1. Run the project's test suite (full suite, not just new tests)
-2. Read the actual output — don't summarize from memory
-3. Confirm: zero failures, zero errors
-4. If any test fails, fix it before proceeding — do NOT present
-   the completion checkpoint with failing tests
+Read and follow `sage/core/workflows/sub-workflows/quality-gates.workflow.md`.
+It sequences 5 verification stages:
+1. Spec compliance — does implementation match the plan? (adversarial)
+2. Constitution compliance — does it respect project principles?
+3. Code quality — clean, secure, maintainable?
+4. Hallucination check — are all imports, APIs, versions real?
+5. Verification — tests pass with pasted evidence?
 
-Sage: Verification results:
+Each gate that fails triggers fix-and-retry (max 3 attempts) or
+escalation to the user.
 
-  Test suite: [command that was run]
-  Result: [X passed, 0 failed] ← paste actual output
-
-**If tests fail:** Diagnose and fix. If the failure persists after
-2 attempts, activate the `problem-solving` skill.
+If quality-gates cannot be loaded, follow these minimum rules:
+run full test suite, paste output, verify implementation matches spec,
+check for hallucinated imports or APIs.
 
 ## Step 8: Review and Close
 
@@ -210,9 +243,12 @@ Before presenting completed work, check each criterion above. Also:
 
 ## Rules
 
-- Test first, always.
-- Verify with evidence: paste test output, don't summarize.
-- Checkpoints are mandatory — never skip human approval.
+- Spec before implementing (Rule 0 gate). DO NOT implement without
+  an approved spec in .sage/work/.
+- Tests before code (Base Principle 1). Write failing test first.
+- Checkpoints mandatory (Rule 4). Present [A]/[R] and wait.
+- Verify with evidence (Rule 5). Paste actual test output.
+- Capture corrections (Rule 6). Store as self-learning.
+- State at checkpoints (Rule 7). Update progress.md.
 - Stay in scope — note improvements, don't add them.
-- If stuck, use problem-solving: don't keep trying the same approach.
-- Save state after every significant step.
+- If stuck, use problem-solving skill. Don't retry the same approach.

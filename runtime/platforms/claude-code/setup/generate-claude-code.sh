@@ -93,6 +93,31 @@ funnel before making changes. Starting with research.
 **Compliance:** Every substantial response starts with "Sage →", uses a
 slash command, or is genuinely Tier 1.
 
+### Workflow Gates (enforced for both slash commands and free input)
+
+After announcing a workflow, read and follow the command file at
+`.claude/commands/[workflow].md` for detailed steps and capability
+references. If you cannot load it, these gates are the minimum:
+
+**Build (Standard+ scope):**
+1. Write spec to .sage/work/ → present [A]/[R] → wait for approval
+2. Write plan → present [A]/[R] → wait for approval
+3. Implement (tests before code)
+4. Verify with pasted test output → present [A]/[R]
+DO NOT implement before spec checkpoint is approved.
+
+**Fix:**
+1. Investigate root cause with evidence → present [A]/[R]/[S] → wait
+2. Write failing test → fix → verify with pasted test output
+3. Present [A]/[R] → wait for approval
+DO NOT fix before root cause is confirmed.
+
+**Architect:**
+1. Complete elicitation (vision, constraints, gaps) — all 3 rounds
+2. Design with ADRs to .sage/docs/ → present [A]/[R] → wait
+3. Milestone plan → present [A]/[R] → phased build
+DO NOT design before elicitation is complete.
+
 ### Rule 1: State First
 
 Before any substantial response, read `.sage/progress.md`. If work exists
@@ -133,6 +158,14 @@ Before presenting any completion checkpoint:
 - Implementation matches the spec or plan
 - If tests don't exist or don't pass, the task is NOT done
 
+**Self-check before every checkpoint:**
+- Build: did I write a spec BEFORE implementing? If no → go back.
+- Fix: did I confirm root cause BEFORE fixing? If no → go back.
+- All: do tests exist and pass with pasted output? If no → not done.
+- Spec compliance is adversarial — do not trust your own report that
+  implementation matches the spec. Verify independently.
+If any gate was missed, complete it before presenting the checkpoint.
+
 **Compliance:** Every completion checkpoint includes pasted test output.
 
 ### Rule 6: Capture Corrections
@@ -153,6 +186,15 @@ Plan.md is a guide (what to do next), not a tracking database. The file
 system — what artifacts exist — is the source of truth.
 
 **Compliance:** progress.md is current after each checkpoint.
+
+## Engineering Principles (base constitution)
+
+These apply to all code written in this project:
+1. Tests before code — every behavior has a test before implementation
+2. No silent failures — errors handled, logged, or propagated
+3. Secrets never in code — use env vars or secret managers
+4. Dependencies explicit — declared with pinned versions
+5. Changes reversible — migrations reversible, deployments rollbackable
 
 ## Learning Triggers
 
@@ -230,9 +272,139 @@ for wf in "$CORE"/workflows/*.workflow.md; do
   [ -f "$wf" ] || continue
   basename_wf=$(basename "$wf" .workflow.md)
 
+  # ── Per-workflow compliance preamble ──
+  # Added to the TOP of every command so the agent reads it first
+  PREAMBLE=""
+  case "$basename_wf" in
+    build)
+      PREAMBLE='RULES (apply to every step — non-negotiable):
+- Announce: "Sage → build workflow." before starting work
+- Standard+ scope: MUST write spec before implementing. DO NOT skip.
+- Save ALL artifacts to .sage/work/ or .sage/docs/ — never inline-only
+- Checkpoints: present with [A] Approve / [R] Revise — wait for response
+- Choices: present with [1] [2] [3] bracket notation
+- Verify: paste actual test output before claiming done
+- Never use code blocks for interaction (checkpoints, options, status)
+- If user corrects your approach, store as self-learning before continuing
+
+'
+      ;;
+    fix)
+      PREAMBLE='RULES (apply to every step — non-negotiable):
+- Announce: "Sage → fix workflow." before starting work
+- MUST complete root cause investigation before ANY fix attempt
+- Present root cause gate with [A] / [R] / [S] — wait for response
+- Verify: paste actual test output before claiming done
+- Choices: present with [1] [2] [3] bracket notation
+- Never use code blocks for interaction (checkpoints, options, status)
+- If user corrects your approach, store as self-learning before continuing
+
+'
+      ;;
+    architect)
+      PREAMBLE='RULES (apply to every step — non-negotiable):
+- Announce: "Sage → architect workflow." before starting work
+- MUST complete all 3 elicitation rounds before designing
+- Save ADRs to .sage/docs/decision-*.md, spec to .sage/work/
+- Checkpoints: present with [A] Approve / [R] Revise — wait for response
+- Choices: present with [1] [2] [3] bracket notation
+- Never use code blocks for interaction (checkpoints, options, status)
+- If user corrects your approach, store as self-learning before continuing
+
+'
+      ;;
+    learn)
+      PREAMBLE='RULES (apply to every step — non-negotiable):
+- Announce: "Sage → learn workflow." before starting work
+- Present findings to user BEFORE storing in memory
+- Checkpoint: [A] Looks correct / [R] Some findings are wrong
+- Choices: present with [1] [2] [3] bracket notation
+- Never use code blocks for interaction (checkpoints, options, status)
+
+'
+      ;;
+    status)
+      PREAMBLE='RULES (apply to every step — non-negotiable):
+- Present with "Sage: Project status" prefix
+- Show options with [C] Continue or [1] [2] [3] bracket notation
+- Never use code blocks for interaction output
+
+'
+      ;;
+  esac
+
+  # Special case: sage command is self-contained
+  if [ "$basename_wf" = "sage" ]; then
+    cat > "$CLAUDE_DIR/commands/sage.md" << 'SAGEEOF'
+RULES (apply to every step — non-negotiable):
+- Present project state with "Sage:" prefix
+- Present options with [1] [2] [3] bracket notation — ALWAYS
+- Recommend a specific workflow for Standard+ tasks
+- NEVER just ask "What would you like to do?" — present structured choices
+- Never use code blocks for interaction output
+
+Sage's intelligent entry point. Assess the project and guide the user.
+
+## Step 1: Read State
+
+Read `.sage/progress.md` and scan `.sage/work/` for active initiatives
+(read frontmatter: title, status, phase). Scan `.sage/docs/` for
+project-level artifacts.
+
+## Step 2: Present Status and Options
+
+Present what you found, then structured options based on context.
+
+**If work is in progress:**
+
+**Sage:** [Project name] — [feature] is in progress, [phase] phase.
+
+[1] Continue [feature] — resume from [next step]
+[2] Start something new
+[3] Review what's been done
+
+**If no work in progress but artifacts exist:**
+
+**Sage:** [Project name] — no active work. Previous: [list initiatives].
+
+[1] Start a new task — describe what you want to build
+[2] Review existing artifacts
+[3] Learn the codebase
+
+**If fresh project:**
+
+**Sage:** Fresh project, no work in progress.
+
+[1] Build something — describe what you want to create
+[2] Learn the codebase first
+[3] Something else — describe what you need
+
+## Step 3: Route to Workflow
+
+Based on user's choice or free-form input, classify scope and route:
+- Lightweight → just do it
+- Standard → announce build/fix workflow, start first step
+- Comprehensive → present architect workflow card
+
+For complex routing or gap detection, read the sage-navigator at
+`sage/core/capabilities/orchestration/sage-navigator/SKILL.md`.
+
+$ARGUMENTS
+SAGEEOF
+    echo "  ✓ sage.md → /sage (self-contained)"
+    continue
+  fi
+
   # Special case: review command uses Task-based sub-agent delegation
   if [ "$basename_wf" = "review" ]; then
     cat > "$CLAUDE_DIR/commands/review.md" << 'REVIEWEOF'
+RULES (apply to every step — non-negotiable):
+- Announce: "Sage → review workflow." before starting work
+- Present artifact list with [1] [2] [3] bracket notation
+- Present findings with [A] Accept / [R] Revise / [D] Discuss
+- Load producing skill's quality criteria — mandatory, not optional
+- Never use code blocks for interaction output
+
 Review an artifact with independent evaluation via sub-agent delegation.
 
 ## Step 1: Identify What to Review
@@ -240,15 +412,13 @@ Review an artifact with independent evaluation via sub-agent delegation.
 If not specified, scan `.sage/work/` and `.sage/docs/` for recent
 artifacts. Present them:
 
-```
-Sage: Available for review:
+**Sage:** Available for review:
 
 [1] .sage/work/20260316-checkout/brief.md (updated today)
 [2] .sage/work/20260316-checkout/spec.md (updated today)
 [3] .sage/docs/ux-audit-homepage.md (updated yesterday)
 
 Which artifact should I review?
-```
 
 If the user specifies an artifact, proceed directly.
 
@@ -275,6 +445,9 @@ Use the Task tool to spawn a sub-agent with this prompt:
 ```
 You are independently reviewing a Sage project artifact. You were
 NOT involved in producing this work — evaluate it with fresh eyes.
+
+Before reviewing, read sage/core/agents/reviewer.persona.md for the
+review mindset: skeptical, evidence-based, reads code not reports.
 
 STEPS:
 1. Read the artifact at: [ARTIFACT PATH]
@@ -309,13 +482,11 @@ PRESENT YOUR REVIEW AS:
 
 Share the sub-agent's review with the user:
 
-```
-Sage: Review complete.
+**Sage:** Review complete.
 
 [A] Accept findings — proceed with suggested next step
 [R] Revise — I'll address the issues found
 [D] Discuss — let's talk about specific findings
-```
 
 Update `.sage/journal.md` with review completion.
 Run Post-Flight state management.
@@ -326,8 +497,9 @@ REVIEWEOF
     continue
   fi
 
-  # Standard: strip frontmatter, substitute refs with Claude Code paths, add $ARGUMENTS
+  # Standard: add preamble + strip frontmatter + substitute refs + add $ARGUMENTS
   {
+    printf "%s" "$PREAMBLE"
     sed '/^---$/,/^---$/d' "$wf" \
       | sed 's|\*\*sage-navigator\*\* skill|**sage-navigator** skill at `sage/core/capabilities/orchestration/sage-navigator/SKILL.md`|g' \
       | sed "s|sage-navigator's intelligence layer|sage-navigator's intelligence layer (\`sage/core/capabilities/orchestration/sage-navigator/SKILL.md\`, section 2)|g" \
@@ -401,6 +573,7 @@ fi
 
 # Create or update settings.local.json with hook config
 SETTINGS_LOCAL="$CLAUDE_DIR/settings.local.json"
+mkdir -p "$CLAUDE_DIR"
 cat > "$SETTINGS_LOCAL" << 'HOOKEOF'
 {
   "hooks": {
