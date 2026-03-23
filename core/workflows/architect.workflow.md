@@ -156,8 +156,9 @@ On approval: append plan approach to decisions.md (Rule 7).
 **Next steps (Zone 3):**
 
 Next steps:
-  /build  — spec → plan → implement → verify (start milestone 1)
-  /review — independent evaluation of the architecture
+  /build   — spec → plan → implement → verify (start milestone 1)
+  /review  — independent evaluation of the architecture
+  /reflect — review design decisions before building
 
 Type a command, or describe what you want to do next.
 

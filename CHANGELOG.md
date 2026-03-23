@@ -61,15 +61,19 @@ All notable changes to Sage will be documented in this file.
 - **Every workflow completion uses Zone 3** to suggest the logical
   next workflow with chain visibility.
 
-### UNDERSTAND → ENVISION → DELIVER Pipeline
-- **10 workflow commands.** `/sage`, `/build`, `/fix`, `/architect`,
-  `/research`, `/design`, `/analyze`, `/status`, `/review`, `/learn`.
-- **Natural flow:** /research → /design → /build → /review. Each
-  phase produces artifacts that inform the next. Users can enter
-  at any point — the artifacts that exist determine the context.
-- **Confirmation with alternatives.** After routing, always present
-  the chosen workflow with 2 alternatives showing chains and step
-  counts. Users confirm before committing.
+### UNDERSTAND → ENVISION → DELIVER → REFLECT Pipeline
+- **`/reflect` workflow.** Reviews the full cycle (artifacts,
+  decisions, approaches tried), asks for real-world feedback,
+  extracts WHEN/CHECK/BECAUSE learnings, stores with `reflect`
+  tag, and seeds the next cycle with concrete recommendations.
+- **11 workflow commands.** `/sage`, `/build`, `/fix`, `/architect`,
+  `/research`, `/design`, `/analyze`, `/status`, `/review`,
+  `/learn`, `/reflect` — the complete guided path.
+- **Four-phase pipeline.** Reflect closes the loop: learnings from
+  /reflect feed into the next /research via Rule 0 memory search.
+- **Natural flow:** /research → /design → /build → /review →
+  /reflect. Each phase produces artifacts that inform the next.
+  Users can enter at any point.
 
 ## [1.0.7] — State, Learning & Coordination
 

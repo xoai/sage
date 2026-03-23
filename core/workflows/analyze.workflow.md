@@ -91,9 +91,9 @@ Pick A/R/N, or tell me what to change.
 ## Step 4: Next Step (Zone 3)
 
 Next steps:
-  /design — brief → spec → copy (address the issues found)
-  /fix    — diagnose → scope → fix → verify (fix specific issues)
-  /build  — spec → plan → implement → verify
+  /design  — brief → spec → copy (address the issues found)
+  /fix     — diagnose → scope → fix → verify (fix specific issues)
+  /reflect — review evaluation quality, extract patterns
   /research — deeper understanding of why issues exist
 
 Type a command, or describe what you want to do next.

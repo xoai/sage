@@ -116,9 +116,9 @@ Append to decisions.md (Rule 7).
 ## Step 4: Next Step (Zone 3)
 
 Next steps:
-  /build  — spec → plan → implement → verify (reads your design)
-  /review — independent evaluation of the design
-  /research — if more understanding is needed
+  /build   — spec → plan → implement → verify (reads your design)
+  /review  — independent evaluation of the design
+  /reflect — review design decisions before building
 
 Type a command, or describe what you want to do next.
 

@@ -95,9 +95,9 @@ Pick A/R/N, or tell me what to change.
 ## Step 4: Next Step (Zone 3)
 
 Next steps:
-  /design — brief → spec → copy (reads your research findings)
-  /build  — spec → plan → implement → verify
-  /analyze — deeper evaluation of specific areas
+  /design  — brief → spec → copy (reads your research findings)
+  /build   — spec → plan → implement → verify
+  /reflect — review research quality, extract meta-learnings
 
 Type a command, or describe what you want to do next.
 

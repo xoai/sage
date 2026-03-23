@@ -165,6 +165,7 @@ Pick 1-3, type / for commands, or describe what you need.
 | /research | interview → JTBD → opportunity map |
 | /design | brief → spec → copy |
 | /analyze | UX audit → evaluation → findings |
+| /reflect | review cycle → extract learnings → seed next cycle |
 
 Skip confirmation ONLY when: user typed an explicit slash command,
 or the request is unambiguous Tier 1.
@@ -172,16 +173,18 @@ or the request is unambiguous Tier 1.
 ### Intent Spectrum (context for understanding)
 
 ```
-UNDERSTAND              ENVISION               DELIVER
-(why, who, what)        (how it should work)   (make it real)
+UNDERSTAND              ENVISION              DELIVER              REFLECT
+(why, who, what)        (how it should work)  (make it real)       (what did we learn)
 
-Research & Discovery    Design & Definition    Planning & Execution
-/research  /analyze     /design  /architect    /build  /fix
+Research & Discovery    Design & Definition   Planning & Execution Learning & Improvement
+/research  /analyze     /design  /architect   /build  /fix         /reflect
+/learn                                        /review
 ```
 
 **When multiple intents are present, start from the LEFT.** Understanding
-before envisioning. Envisioning before delivering. This prevents the most
-common mistake: building the wrong thing.
+before envisioning. Envisioning before delivering. Reflecting after
+delivering. This prevents the most common mistake: building the wrong
+thing. And reflecting prevents repeating the same mistakes.
 
 ### Scope
 

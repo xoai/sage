@@ -57,6 +57,7 @@ architect/redesign/system design/migrate/rewrite → /architect
 understand/research/interview/discover/user needs/jobs to be done → /research
 design/wireframe/brief/UX/PRD/prototype/mockup → /design
 audit/evaluate/assess/analyze/measure/funnel/usability → /analyze
+reflect/retro/retrospective/lessons/what did we learn/look back → /reflect
 
 If keywords match ONE workflow → go to confirmation.
 If keywords match MULTIPLE → present matched workflows as options.
@@ -321,6 +322,7 @@ Rules:
 | `/status` | Compute project state from artifacts |
 | `/review` | Independent evaluation via sub-agent |
 | `/learn` | Codebase scan → memory storage |
+| `/reflect` | Review cycle → extract learnings → seed next cycle |
 
 ## Available Skills
 
@@ -528,6 +530,20 @@ for wf in "$CORE"/workflows/*.workflow.md; do
 - Present findings BEFORE storing — Zone 2 for approval
 - Save all findings to .sage/docs/ with skill-prefix naming
 - Zone 3 for next steps at completion
+- Never use code blocks for interaction (checkpoints, options, status)
+
+'
+      ;;
+    reflect)
+      PREAMBLE='RULES (apply to every step — non-negotiable):
+- Announce: "Sage → reflect workflow." before starting work
+- Review the FULL cycle: artifacts, decisions, approaches tried
+- ASK the user for real-world feedback — do not skip this step
+- Every learning MUST use WHEN/CHECK/BECAUSE format
+- Present learnings BEFORE storing — Zone 2 for approval
+- Save reflection report to .sage/docs/reflect-*.md
+- Seed the next cycle with concrete recommendations (Zone 3)
+- Reflect is for looking back, NOT fixing. Suggest /fix if needed.
 - Never use code blocks for interaction (checkpoints, options, status)
 
 '

@@ -6,7 +6,7 @@
   <img src="sage-logo-eagle.svg" alt="Sage - An intelligent skills framework for AI agents." width="150" />
 </p>
 
-<p align="center">Think clearly. Work thoroughly. Deliver excellence.</p>
+<p align="center"><strong>Think clearly. Work thoroughly. Deliver excellence.</strong></p>
 
 Sage is a skills framework that makes AI agents think before they act,
 stay focused under complexity, and deliver outcomes you can trust.
@@ -52,6 +52,8 @@ match the plan. Scripts run first; agent review runs second. The script
 says tests fail → gate fails, regardless of what the agent thinks.
 Five gates sequence after every implementation: spec compliance,
 constitution compliance, code quality, hallucination check, verification.
+
+<img src="sage_routing.svg" alt="Sage Enforcement Model." width="600" />
 
 ## Get Started
 
@@ -176,6 +178,7 @@ Use inside your IDE (Claude Code, Antigravity):
 | `/status` | Compute project state from artifacts |
 | `/review` | Independent evaluation via sub-agent |
 | `/learn` | Codebase scan → memory storage |
+| `/reflect` | Review cycle → extract learnings → seed next cycle |
 
 ### Interaction Patterns
 
@@ -196,6 +199,8 @@ learned about your codebase, architecture decisions, and conventions
 across sessions.
 
 ### Enforcement Model
+
+<img src="sage_enforcement.svg" alt="Sage Enforcement Model." width="600" />
 
 Sage uses triple reinforcement to ensure agents follow the process:
 
@@ -234,25 +239,30 @@ enterprise (auth everywhere, audit trails, postmortems), or opensource
 The generator merges all three tiers into the always-on instructions.
 Lower tiers add constraints but cannot remove inherited ones.
 
-### The Pipeline: UNDERSTAND → ENVISION → DELIVER
+### The Pipeline: UNDERSTAND → ENVISION → DELIVER → REFLECT
 
-Sage organizes work into three phases. Each phase has dedicated
+<img src="sage_workflows_v108.svg" alt="Sage Workflows." width="600" />
+
+Sage organizes work into four phases. Each phase has dedicated
 workflows that chain skills automatically:
 
 ```
-UNDERSTAND              ENVISION               DELIVER
-/research  /analyze     /design  /architect    /build  /fix
+UNDERSTAND              ENVISION               DELIVER              REFLECT
+/research  /analyze     /design  /architect    /build  /fix         /reflect
+/learn                                         /review
 ```
 
 `/research` chains user-interview → JTBD → opportunity-map.
 `/design` chains ux-brief → ux-specify → ux-writing and reads
 research findings automatically. `/build` chains spec → plan →
-build-loop → quality-gates and reads design specs.
+build-loop → quality-gates and reads design specs. `/reflect`
+reviews the full cycle, extracts WHEN/CHECK/BECAUSE learnings,
+and seeds the next cycle with concrete recommendations.
 
 You can enter at any phase. But the further right you start, the
-more you're building on assumptions. Research → Design → Build
-produces better outcomes than Build alone — because each phase
-produces artifacts that inform the next.
+more you're building on assumptions. The addition of Reflect as
+a distinct phase is what separates teams that improve from teams
+that just ship.
 
 Routing is deterministic: keywords match to workflows before any
 LLM judgment. When keywords don't match, a focused sub-agent

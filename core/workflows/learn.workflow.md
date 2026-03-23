@@ -148,9 +148,9 @@ Key findings:
 [C] Continue — learn another area
 
 Next steps:
-  /build  — spec → plan → implement → verify
+  /build   — spec → plan → implement → verify
   /research — interview → JTBD → opportunity map
-  /design — brief → spec → copy
+  /reflect — review what you learned, extract patterns
 
 Type a command, or describe what you want to do next.
 

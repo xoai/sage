@@ -253,9 +253,9 @@ Pick A/R/V, or tell me what to change.
 4. **Next steps (Zone 3):**
 
 Next steps:
-  /review — independent evaluation of the fix
-  /build  — spec → plan → implement (if the fix revealed a feature need)
-  /analyze — audit related areas for similar issues
+  /reflect — review what went wrong, prevent recurrence
+  /review  — independent evaluation of the fix
+  /build   — spec → plan → implement (if fix revealed a feature need)
 
 Type a command, or describe what you want to do next.
 

@@ -278,9 +278,9 @@ Pick A/R/V, or tell me what to change.
 **Next steps (Zone 3):**
 
 Next steps:
-  /review — independent code evaluation
-  /research — understand users before building more
-  /design — shape the next feature
+  /reflect — review the cycle, extract learnings
+  /review  — independent code evaluation
+  /research — start the next initiative
 
 Type a command, or describe what you want to do next.
 
