@@ -51,10 +51,6 @@ says tests fail → gate fails, regardless of what the agent thinks.
 Five gates sequence after every implementation: spec compliance,
 constitution compliance, code quality, hallucination check, verification.
 
-<p align="center">
-  <img src="sage_routing.svg" alt="Sage Enforcement Model." width="600" />
-</p>
-
 ## Get Started
 
 ### Install
@@ -161,6 +157,10 @@ Every step: structured options with `[1] [2] [3]`, saved artifacts,
 recommended next step. You stay in control — Sage stays intelligent.
 
 ## How Sage Works
+
+<p align="center">
+  <img src="sage_routing.svg" alt="Sage Enforcement Model." width="600" />
+</p>
 
 ### Slash Commands
 
