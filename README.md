@@ -1,11 +1,8 @@
-# Sage
-
-**An intelligent skills framework for AI agents.**
-
+<h1 align="center">Sage</h1>
 <p align="center">
   <img src="sage-logo-eagle.svg" alt="Sage - An intelligent skills framework for AI agents." width="150" />
 </p>
-
+<p align="center"><strong>An intelligent skills framework for AI agents.</strong></p>
 <p align="center">Think clearly. Work thoroughly. Deliver excellence.</p>
 
 Sage is a skills framework that makes AI agents think before they act,
@@ -160,6 +157,10 @@ recommended next step. You stay in control — Sage stays intelligent.
 
 ## How Sage Works
 
+<p align="center">
+  <img src="sage_routing.svg" alt="Sage Enforcement Model." width="600" />
+</p>
+
 ### Slash Commands
 
 Use inside your IDE (Claude Code, Antigravity):
@@ -201,6 +202,10 @@ across sessions.
 
 ### Enforcement Model
 
+<p align="center">
+  <img src="sage_enforcement.svg" alt="Sage Enforcement Model." width="600" />
+</p>
+
 Sage uses triple reinforcement to ensure agents follow the process:
 
 **1. Eager layer (CLAUDE.md / GEMINI.md)** — always in context. Contains
@@ -239,6 +244,10 @@ The generator merges all three tiers into the always-on instructions.
 Lower tiers add constraints but cannot remove inherited ones.
 
 ### The Pipeline: UNDERSTAND → ENVISION → DELIVER → REFLECT
+
+<p align="center">
+  <img src="sage_workflows_v108.svg" alt="Sage Workflows." width="600" />
+</p>
 
 Sage organizes work into four phases. Each phase has dedicated
 workflows that chain skills automatically:
