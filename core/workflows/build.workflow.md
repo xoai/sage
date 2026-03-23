@@ -15,19 +15,22 @@ Feature development guided by Sage.
 ## Auto-Pickup
 
 BEFORE ANYTHING: Scan `.sage/work/` for existing artifacts.
-This scan is MANDATORY — do not skip it because you "remember"
-the project state from conversation context. Check the DISK.
+This scan is MANDATORY — check the DISK.
 
-**Resume from phase based on what EXISTS ON DISK:**
+**Manifest-first path:** If `.sage/work/*/manifest.md` exists, read it.
+Resume at the phase indicated. Use context summary and handoff guidance
+for judgment context. The manifest is the primary context source.
+
+**Fallback path:** If no manifest.md but artifacts exist, use file-scan
+routing (below). Create manifest.md from inferred state before proceeding
+(backfill). This preserves backward compatibility with pre-v1.0.9 cycles.
+
+**File-scan routing (when no manifest):**
 - No artifacts exist → Step 2 (scope assessment)
-- Brief exists, no spec → "Sage: Resuming [name]. Brief approved.
-  Starting with spec." → Step 4
-- Spec exists, no plan → "Sage: Resuming [name]. Spec approved.
-  Starting with plan." → Step 5
-- Plan exists, not all completed → "Sage: Resuming [name]. Plan
-  approved. Starting build-loop." → Step 6
-- All status: completed → "Sage: [name] is complete." → offer
-  next steps or new initiative
+- Brief exists, no spec → Step 4 (spec)
+- Spec exists, no plan → Step 5 (plan)
+- Plan exists, not all completed → Step 6 (build-loop)
+- All status: completed → offer next steps
 
 You MUST follow this routing. Do not override it based on:
 - Conversation context ("we discussed this before")
@@ -41,13 +44,39 @@ The disk is the source of truth. Not your memory.
 [3] Start something new
 
 Read `.sage/decisions.md` for recent context. Read the `handoff`
-field in the most recent artifact's frontmatter if present — it
-contains the previous agent's judgment about what to focus on.
+field in the most recent artifact's frontmatter if present.
 
 **Upstream context:** Also scan `.sage/docs/` for research and
 analysis artifacts (jtbd-*, ux-audit-*, opportunity-*, ux-evaluate-*).
 If found, announce: "Sage: Found research/analysis context — [list].
-Using as build input." These inform implementation decisions.
+Using as build input."
+
+### Manifest Lifecycle (build workflow)
+
+**Create** manifest.md when the first artifact is saved (brief or spec).
+Use the template from `develop/templates/manifest-template.md`.
+
+**Update** manifest.md at EVERY checkpoint:
+- Every [A]/[R]/[N] gate: update phase, status, updated timestamp
+- Phase transitions: update context summary if new information emerged
+- New decisions: append to the manifest's decisions list
+
+**Context budget pressure:** If the conversation is very long (many
+tool calls, approaching context limits), write a manifest update BEFORE
+suggesting a session break. This is the critical moment — capture the
+judgment that's about to be lost.
+
+**Session end ([N]):** Manifest update is MANDATORY. Write handoff
+guidance and context summary before ending.
+
+**Completion:** Set `status: complete` at Step 8.
+
+**Anti-lazy-manifest contract:**
+Context summary MUST NOT be:
+- A copy of the spec's title or description
+- "See spec.md for details"
+- Generic guidance ("Continue with implementation")
+The summary must contain judgment the spec doesn't contain.
 
 ## Step 2: Assess Scope
 
@@ -278,9 +307,10 @@ Pick A/R/V, or tell me what to change.
 **Next steps (Zone 3):**
 
 Next steps:
-  /reflect — review the cycle, extract learnings
-  /review  — independent code evaluation
-  /research — start the next initiative
+  /qa             — browser-based functional testing
+  /design-review  — design quality audit
+  /reflect        — review the cycle, extract learnings
+  /review         — independent code evaluation
 
 Type a command, or describe what you want to do next.
 

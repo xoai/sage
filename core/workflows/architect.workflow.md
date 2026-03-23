@@ -15,21 +15,38 @@ Elicit, then design, then plan. Never skip steps.
 
 ## Auto-Pickup
 
-Scan `.sage/work/` for architect initiatives with `status: in-progress`.
-This scan is MANDATORY — check the DISK. Do not skip because you
-"remember" the project state from conversation.
+Scan `.sage/work/` for architect initiatives.
+This scan is MANDATORY — check the DISK.
 
-**Resume from phase based on what EXISTS ON DISK:**
+**Manifest-first path:** If `.sage/work/*/manifest.md` exists with
+`workflow: architect`, read it. Resume at the phase indicated.
+Use context summary and handoff guidance for judgment context.
+Multi-session architect cycles benefit most from the manifest —
+it preserves the reasoning behind architecture decisions across sessions.
+
+**Fallback path:** If no manifest.md but artifacts exist, use file-scan:
 - No artifacts → Step 2 (elicitation)
 - Brief exists, no spec/ADRs → Step 3 (design)
 - Spec/ADRs exist, no plan → Step 4 (milestone plan)
 - Plan exists → Step 5 (phased build)
+Create manifest.md from inferred state before proceeding (backfill).
 
 You MUST follow this routing. Do not override it.
 
 Scan `.sage/docs/` for existing research, ADRs, or decisions.
 Read `.sage/decisions.md` for context. Read `handoff` field in
 the most recent artifact if present.
+
+### Manifest Lifecycle (architect workflow)
+
+**Create** manifest.md when brief.md is saved (after elicitation).
+**Update** at every checkpoint: elicitation gate, design checkpoint,
+plan checkpoint, each milestone completion.
+**Session end ([N]):** Manifest update is MANDATORY — architect cycles
+span sessions, so handoff guidance is critical.
+**Completion:** Set `status: complete` after final milestone.
+**Anti-lazy-manifest:** Same contract as build workflow — summary must
+contain judgment, not spec titles.
 
 ## Step 2: Deep Elicitation
 

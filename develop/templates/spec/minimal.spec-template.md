@@ -2,15 +2,26 @@
 name: spec-minimal
 type: spec
 variant: minimal
-version: "1.0.0"
-description: Lightweight specification for BUILD mode. Three sections from guided elicitation.
+version: "1.1.0"
+description: Lightweight specification for BUILD mode. Four sections from guided elicitation.
 mode: build
-sections: [intent, boundaries, acceptance-criteria, affected-areas]
+sections: [framing, intent, boundaries, acceptance-criteria, affected-areas]
 ---
 
 # {feature_name}
 
 **Deliverable:** code | document | mixed
+
+[SECTION: framing]
+## Framing
+
+**Original request:** {user_verbatim_request}
+**Pain:** {struggling_moment_from_round_0}
+**Premises challenged:**
+- {premise_1}: {confirmed | revised | rejected}
+- {premise_2}: {confirmed | revised | rejected}
+**Chosen framing:** {original | adjusted — description}
+[/SECTION]
 
 [SECTION: intent]
 ## Intent

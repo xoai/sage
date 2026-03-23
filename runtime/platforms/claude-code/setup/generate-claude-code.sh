@@ -58,6 +58,9 @@ understand/research/interview/discover/user needs/jobs to be done → /research
 design/wireframe/brief/UX/PRD/prototype/mockup → /design
 audit/evaluate/assess/analyze/measure/funnel/usability → /analyze
 reflect/retro/retrospective/lessons/what did we learn/look back → /reflect
+continue/resume/pick up/where was I/what was I doing → /continue
+qa/test the app/smoke test/browser test/functional test → /qa
+design review/design audit/design check/visual audit/slop check → /design-review
 
 If keywords match ONE workflow → go to confirmation.
 If keywords match MULTIPLE → present matched workflows as options.
@@ -323,6 +326,9 @@ Rules:
 | `/review` | Independent evaluation via sub-agent |
 | `/learn` | Codebase scan → memory storage |
 | `/reflect` | Review cycle → extract learnings → seed next cycle |
+| `/continue` | Resume any active cycle with full context |
+| `/qa` | Browser-based functional testing (optional Lightpanda) |
+| `/design-review` | Design quality audit + design system compliance |
 
 ## Available Skills
 
@@ -544,6 +550,46 @@ for wf in "$CORE"/workflows/*.workflow.md; do
 - Save reflection report to .sage/docs/reflect-*.md
 - Seed the next cycle with concrete recommendations (Zone 3)
 - Reflect is for looking back, NOT fixing. Suggest /fix if needed.
+- Never use code blocks for interaction (checkpoints, options, status)
+
+'
+      ;;
+    continue)
+      PREAMBLE='RULES (apply to every step — non-negotiable):
+- Announce: "Sage → continue." before starting work
+- Scan .sage/work/*/manifest.md for in-progress/paused cycles
+- Read manifest as PRIMARY context source — do not re-scan from scratch
+- Follow handoff guidance from the manifest
+- Do NOT re-ask questions the previous agent already resolved
+- Route to the correct workflow Auto-Pickup with manifest context
+- Never use code blocks for interaction (checkpoints, options, status)
+
+'
+      ;;
+    qa)
+      PREAMBLE='RULES (apply to every step — non-negotiable):
+- Announce: "Sage → qa workflow." before starting work
+- Check Lightpanda MCP availability FIRST — if not available, offer
+  code-only fallback with setup guidance
+- Do NOT fabricate browser test results if no browser is available
+- Report completeness: untested routes are "not tested", NOT "pass"
+- /qa REPORTS ONLY — do NOT fix bugs. Suggest /fix instead.
+- Each bug gets severity AND fix classification (Surgical/Moderate/Systemic)
+- Evidence is mandatory for all fail/warning findings
+- Never use code blocks for interaction (checkpoints, options, status)
+
+'
+      ;;
+    design-review)
+      PREAMBLE='RULES (apply to every step — non-negotiable):
+- Announce: "Sage → design-review workflow." before starting work
+- Auto-detect design system (skill, DESIGN.md, CSS tokens) — invisible when none
+- Layer 1 (general quality) always runs. Layer 2 (compliance) only when system detected.
+- Do NOT fabricate browser findings if no Lightpanda
+- Do NOT invent design system standards — if none detected, skip Layer 2
+- Classify findings as /fix (mechanical) or manual (design decision)
+- Do NOT auto-fix design decisions — report only
+- AI slop indicators are WARNINGS, not issues. Count, do not grade.
 - Never use code blocks for interaction (checkpoints, options, status)
 
 '

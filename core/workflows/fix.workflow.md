@@ -17,18 +17,75 @@ Diagnose, then scope, then fix. Never skip steps.
 Scan `.sage/work/` for fix-related directories with `status: in-progress`.
 This scan is MANDATORY — check the DISK.
 
-If found: read the root cause analysis and current phase.
+**Manifest-first path:** If manifest.md exists for a fix cycle, read it.
+Resume at the phase indicated.
+
+**Fallback path:** If no manifest but artifacts exist:
 - Investigation in progress → resume at Step 2
 - Root cause confirmed, no fix plan → resume at Step 3 (scope)
 - Fix applied, not verified → resume at Step 5 (verify)
-- Report: "Sage: Resuming fix for [problem]. [Phase]."
 
 If not found: start new investigation at Step 1.
 
 Read `.sage/decisions.md` for context — previous root cause analyses
 and fix patterns may be relevant.
 
+### Manifest Lifecycle (fix workflow)
+
+**Surgical fixes:** No manifest. Too fast — completes in one session.
+**Moderate fixes:** Create manifest when fix plan is written (Step 3).
+**Systemic fixes:** Create manifest at escalation point.
+**Update** at fix scope gate and close checkpoint.
+**Session end ([N]):** Mandatory update for Moderate+ fixes.
+
 ## Step 1: Understand the Problem
+
+**Upstream report check (before asking the user):**
+
+Scan for recent reports that can serve as pre-diagnosed input:
+
+1. **qa-report.md** in `.sage/work/*/` or `.sage/docs/`
+2. **design-review.md** in `.sage/work/*/` or `.sage/docs/`
+
+**If qa-report.md exists with bugs:**
+
+```
+Sage: Found QA report with {N} bugs:
+
+[1] BUG-1: {title} — {severity} — suggested: {Surgical/Moderate/Systemic}
+[2] BUG-2: {title} — {severity} — suggested: {classification}
+[3] BUG-3: {title} — {severity} — suggested: {classification}
+[A] Fix all — accept classifications and proceed
+[R] Reclassify — I want to change some classifications
+
+Pick 1-N/A/R, or tell me what to fix.
+```
+
+On selection: skip Steps 1-2 (root cause already diagnosed in QA report).
+Use the QA report's reproduction steps and evidence. Proceed to Step 3
+(scope the fix) with the QA bug's suggested classification.
+
+**If design-review.md exists with mechanical findings:**
+
+```
+Sage: Found design review with {N} mechanical findings:
+
+[1] {finding} — {severity} — /fix (mechanical)
+[2] {finding} — {severity} — /fix (mechanical)
+[M] Also found {K} design-decision findings (manual — not fixable by agent)
+[A] Fix mechanical findings — accept and proceed
+
+Pick 1-N/A, or tell me what to fix.
+```
+
+Design-decision findings are EXCLUDED from the fix pipeline. Show them
+as a summary ("manual action needed: {K} findings") but do NOT attempt
+to fix them. These require human judgment.
+
+**If both reports exist:** Present QA bugs first (functional issues),
+then design mechanical findings. User can choose to fix all or select.
+
+**If no reports exist:** Proceed with standard fix flow below.
 
 Ask for or identify: what's broken, when it started, error messages,
 steps to reproduce. If the user already provided details, confirm

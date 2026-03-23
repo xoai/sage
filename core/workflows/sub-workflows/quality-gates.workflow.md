@@ -83,6 +83,39 @@ for acceptance criteria verification beyond what the script checks.
 Domain-specific checks from installed extensions.
 e.g., OWASP security scan, accessibility audit, performance budget.
 
+### Gate 6: Browser Check (optional, advisory)
+
+Read `sage/core/capabilities/verification/browser-check/SKILL.md`.
+
+**Activation conditions (ALL must be true):**
+1. Lightpanda MCP tools are available (tool discovery succeeds)
+2. The change touches user-facing code (frontend, API with UI consumers)
+3. A running URL is known or obtainable
+
+If ANY condition is false → skip INVISIBLY. No output, no warning.
+
+**When active:** Navigate to the primary affected route, check for
+JS errors, verify non-empty content, verify key elements. 30 seconds max.
+
+**Advisory only.** A failure produces a warning and recommends /qa
+or /fix. It does NOT block the build. Hard-blocking on an optional
+external dependency would break Sage for users without Lightpanda.
+
+### Gate 7: Design Check (optional, advisory)
+
+Read `sage/core/capabilities/verification/design-check/SKILL.md`.
+
+**Activation conditions (ALL must be true):**
+1. The diff contains frontend files (.html, .css, .jsx, .tsx, .vue, .svelte, etc.)
+2. Does NOT require Lightpanda (code-only analysis)
+
+If no frontend files in diff → skip INVISIBLY.
+
+**When active:** Scan for hardcoded colors (if design system exists),
+missing interactive states, AI slop indicators. 15 seconds max.
+
+**Advisory only.** Warnings/notes, never blocks.
+
 ## Rules
 
 - Script-based gates (1, 4, 5) run FIRST. Script failure = gate failure.

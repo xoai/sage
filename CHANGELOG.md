@@ -2,6 +2,70 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [1.0.9] — Clarity
+
+### Framing Round
+- **quick-elicit v1.1.0:** gains Round 0 — pain question + premise
+  challenge before solutioning. 3 rounds → 4 rounds, budget 7 → 8.
+- **deep-elicit** Vision round gains premise challenging (2-3 premises).
+- **Spec template** includes Framing section (original request, pain,
+  premises challenged, chosen framing).
+- **Anti-rationalization contracts** block skipping Round 0 for Standard+.
+- **Compression** merges pain + intent into one question. Even compressed,
+  framing question survives — can be compressed but never eliminated.
+- **Research integration:** Round 0 references existing JTBD/research
+  findings when available.
+
+### Session Resilience
+- **Cycle manifest** (manifest.md) captures state, context summary,
+  decisions, open questions, and handoff guidance at every checkpoint.
+- **`/continue` command** resumes any active cycle — reads manifest,
+  routes to correct workflow, preserves judgment context.
+- **Manifest-first Auto-Pickup** in build, architect, fix workflows.
+  Falls back to file-scan for pre-v1.0.9 cycles (backward compatible).
+- **Anti-lazy-manifest contracts:** summary must contain judgment, not
+  "see spec.md." Context summary max 200 words, handoff max 150 words.
+- **Context budget pressure:** manifest updated before session break
+  to capture judgment that's about to be lost.
+
+### /qa Workflow
+- **Browser-based functional testing** via Lightpanda MCP (optional).
+- **Code-only fallback:** diff analysis for integration issues when
+  no browser available.
+- **5-step process:** prerequisites → scope → route testing →
+  interaction testing → QA report.
+- **QA report** with bugs, severity, reproduction steps, evidence,
+  and /fix classification (Surgical/Moderate/Systemic).
+- **browser-check capability** in quality gates (Gate 6, advisory,
+  invisible when Lightpanda absent or no frontend files).
+- **Enforcement:** no fake testing, report completeness, advisory only,
+  no fixing in /qa (/fix fixes).
+
+### /design-review Workflow
+- **Layer 1 — General quality** (always): typography, spacing, hierarchy,
+  interactive states, color/contrast, AI slop detection (10 patterns).
+- **Layer 2 — Design system compliance** (when DESIGN.md, design skill,
+  or CSS tokens detected): token, component, layout compliance.
+- **Browser audit** via Lightpanda (optional, invisible when absent).
+- **Findings classified:** /fix (mechanical) vs manual (design decision).
+- **design-check capability** in quality gates (Gate 7, advisory,
+  invisible when no frontend files).
+- **AI slop indicators** are warnings, not issues. Count, not grade.
+
+### /fix Integration
+- **/fix reads qa-report.md:** presents bugs with suggested classifications,
+  user can accept or reclassify, skips re-diagnosis.
+- **/fix reads design-review.md:** mechanical findings route to fix pipeline,
+  design-decision findings excluded ("manual action needed" summary).
+
+### Shared Infrastructure
+- **Lightpanda setup reference** (core/references/lightpanda-setup.md):
+  install guides for macOS, Linux/WSL, Docker + MCP config.
+- **Manifest template** (develop/templates/manifest-template.md).
+- **15 workflow commands** total: sage, build, fix, architect, research,
+  design, analyze, reflect, continue, qa, design-review, status,
+  review, learn, plus individual skill commands.
+
 ## [1.0.8] — Intelligent Routing
 
 ### Three-Layer Routing

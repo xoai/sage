@@ -67,6 +67,43 @@ PROBLEM BRIEF:
 
 "Does this capture the real problem? Anything to adjust?"
 
+**Premise challenge (after Problem Brief is confirmed):**
+
+Before moving to Round 2, surface 2-3 implicit premises in the user's
+framing. Present as brief observations:
+
+```
+Before we scope this — I see a few assumptions worth examining:
+
+1. [Premise]: [one sentence stating the assumption]
+   → [one sentence describing why it might be wrong]
+
+2. [Premise]: [one sentence stating the assumption]
+   → [one sentence describing why it might be wrong]
+
+3. [Premise]: [one sentence stating the assumption]
+   → [one sentence describing why it might be wrong]
+
+Do these hold, or should we adjust our framing?
+```
+
+deep-elicit can challenge 2-3 premises (vs. quick-elicit's 1-2) because
+the architect workflow operates at higher stakes and the user expects a
+more thorough examination.
+
+**What counts as a premise:** The framing of the problem itself, the
+assumed solution category, the assumed scope, the assumed user, the
+assumed timeline. NOT technical choices — those come in Round 2/3.
+
+**Record the framing decision** in the brief's Vision section and
+append to `.sage/decisions.md`:
+
+```
+### YYYY-MM-DD — Framing: [initiative]
+[Chose framing]. Pain: [pain]. Challenged: [premise names].
+(deep-elicit Round 1)
+```
+
 ### Round 2: Scope and Priorities (3 minutes)
 
 Now narrow from problem to solution:
