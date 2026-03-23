@@ -1,12 +1,10 @@
-# Sage
-
-**An intelligent skills framework for AI agents.**
-
+<h1 align="center">Sage</h1>
 <p align="center">
   <img src="sage-logo-eagle.svg" alt="Sage - An intelligent skills framework for AI agents." width="150" />
 </p>
+<p align="center"><strong>An intelligent skills framework for AI agents.</strong></p>
 
-<p align="center"><strong>Think clearly. Work thoroughly. Deliver excellence.</strong></p>
+<p align="center">Think clearly. Work thoroughly. Deliver excellence.</p>
 
 Sage is a skills framework that makes AI agents think before they act,
 stay focused under complexity, and deliver outcomes you can trust.
@@ -53,7 +51,9 @@ says tests fail → gate fails, regardless of what the agent thinks.
 Five gates sequence after every implementation: spec compliance,
 constitution compliance, code quality, hallucination check, verification.
 
-<img src="sage_routing.svg" alt="Sage Enforcement Model." width="600" />
+<p align="center">
+  <img src="sage_routing.svg" alt="Sage Enforcement Model." width="600" />
+</p>
 
 ## Get Started
 
@@ -200,7 +200,9 @@ across sessions.
 
 ### Enforcement Model
 
-<img src="sage_enforcement.svg" alt="Sage Enforcement Model." width="600" />
+<p align="center">
+  <img src="sage_enforcement.svg" alt="Sage Enforcement Model." width="600" />
+</p>
 
 Sage uses triple reinforcement to ensure agents follow the process:
 
@@ -241,7 +243,9 @@ Lower tiers add constraints but cannot remove inherited ones.
 
 ### The Pipeline: UNDERSTAND → ENVISION → DELIVER → REFLECT
 
-<img src="sage_workflows_v108.svg" alt="Sage Workflows." width="600" />
+<p align="center">
+  <img src="sage_workflows_v108.svg" alt="Sage Workflows." width="600" />
+</p>
 
 Sage organizes work into four phases. Each phase has dedicated
 workflows that chain skills automatically:
