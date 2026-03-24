@@ -23,3 +23,12 @@ dist/
 # Environment
 .env
 .env.local
+
+# Internal Docs
+docs/
+.mcp.json
+.sage/
+.sage-memory/
+sage/
+.claude/
+CLAUDE.md
