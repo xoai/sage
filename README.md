@@ -175,13 +175,10 @@ recommended next step. You stay in control — Sage stays intelligent.
 
 ## How Sage Works
 
-<<<<<<< HEAD
-=======
 <p align="center">
   <img src="sage_routing.svg" alt="Sage Routing." width="600" />
 </p>
 
->>>>>>> f7f20d8715ef62b393fdf0a64431821c7be2c7be
 ### Slash Commands
 
 Use inside your IDE (Claude Code, Antigravity):
@@ -223,6 +220,10 @@ across sessions.
 
 ### Enforcement Model
 
+<p align="center">
+  <img src="sage_enforcement.svg" alt="Sage Enforcement." width="600" />
+</p>
+
 Sage uses triple reinforcement to ensure agents follow the process:
 
 **1. Eager layer (CLAUDE.md / GEMINI.md)** — always in context. Contains
@@ -262,13 +263,10 @@ Lower tiers add constraints but cannot remove inherited ones.
 
 ### The Pipeline: UNDERSTAND → ENVISION → DELIVER → REFLECT
 
-<<<<<<< HEAD
-=======
 <p align="center">
   <img src="sage_workflows.svg" alt="Sage Workflows." width="600" />
 </p>
 
->>>>>>> f7f20d8715ef62b393fdf0a64431821c7be2c7be
 Sage organizes work into four phases. Each phase has dedicated
 workflows that chain skills automatically:
 
