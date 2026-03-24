@@ -1,0 +1,19 @@
+{
+  "hooks": {
+    "SessionStart": [{
+      "hooks": [{
+        "type": "command",
+        "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/scripts/sage-session-init.sh",
+        "timeout": 10
+      }]
+    }],
+    "PostToolUse": [{
+      "matcher": "Write|Edit",
+      "hooks": [{
+        "type": "command",
+        "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/scripts/sage-verify.sh ${CLAUDE_PROJECT_DIR}",
+        "timeout": 30
+      }]
+    }]
+  }
+}
