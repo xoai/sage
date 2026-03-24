@@ -174,8 +174,50 @@ Good QA output:
 fabricate browser test results. Code-only analysis is honest about
 what it can and cannot verify.
 
+BLOCKED RATIONALIZATIONS:
+- "I can infer what the browser would show from the code" — inference
+  is not testing. If you didn't load the page, you didn't test it.
+- "The component renders correctly in tests" — unit test render ≠
+  browser render. DOM, CSS, JS interaction differ.
+- "I'll note it as browser-verified since the code looks right" —
+  "looks right" is not "browser-verified." Label honestly.
+
 **Report completeness:** Untested routes must be listed as "not tested"
 in the report. Do NOT claim a route passes if you didn't load it.
+
+BLOCKED RATIONALIZATIONS:
+- "I checked the main flows, edge cases are unlikely" — edge cases
+  are where bugs live. List what you didn't test.
+- "All routes use the same component, so testing one covers all" —
+  same component, different data, different bugs. Test each route.
+- "The route is trivial, it definitely works" — trivial routes break
+  too. Test it or mark it untested.
+
+**Test execution gate:** When the workflow requires running tests or
+verification commands, the agent MUST run them fresh and read output.
+
+BLOCKED RATIONALIZATIONS:
+- "Tests passed in a previous response" — FRESH output required.
+  Previous runs are stale evidence.
+- "Tests should pass, I only changed X" — "should" is not evidence.
+  Run the command.
+- "The linter passed, so the build must work" — linter ≠ compiler ≠ tests.
+  Each gate is independent.
+- "The subagent reported tests pass" — verify independently.
+  Agent reports are claims, not evidence.
+- "I already tested this manually" — manual ≠ automated.
+  Run the test suite.
+
+**Bug classification gate:** Every bug MUST be classified as
+Surgical/Moderate/Systemic with evidence supporting the classification.
+
+BLOCKED RATIONALIZATIONS:
+- "This is clearly Surgical" — classification requires evidence.
+  Read the stack trace before classifying.
+- "I'll just fix it and skip the report" — /qa produces a report
+  for a reason. The report is the audit trail.
+- "This bug is too minor to classify" — minor bugs compound.
+  Classify or explain why classification doesn't apply.
 
 **Advisory only:** /qa reports. It does NOT fix bugs. If the agent
 catches itself thinking "I'll just fix this real quick" — STOP.

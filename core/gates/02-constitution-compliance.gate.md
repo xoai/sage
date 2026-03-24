@@ -33,6 +33,18 @@ Check for:
 - Mandated patterns that are present but implemented incorrectly
 - Implicit assumptions that contradict constitution constraints
 
+## Blocked Rationalizations
+
+- "This library is well-known, it doesn't need a license check" —
+  the constitution is literal. If it says check, check.
+- "The principle is about production code, this is just a test" —
+  unless the constitution explicitly scopes out tests, it applies
+  to all code. Read the principle, not your interpretation.
+- "We follow the spirit of the principle" — spirit without letter
+  is rationalization. Check literal compliance first.
+- "A waiver is obvious for this case" — waivers require documentation,
+  an approver, and an expiration. If those don't exist, it's not a waiver.
+
 ## Failure Response
 
 **Principle violated:** FAIL. Implementer changes code to comply. Re-run.

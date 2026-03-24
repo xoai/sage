@@ -52,6 +52,19 @@ Don't rubber-stamp. Read the code line by line. Look specifically for:
 - Error paths that are never tested
 - Complexity that could be removed, not just refactored
 
+## Blocked Rationalizations
+
+- "The code is straightforward, a line-by-line review isn't needed" —
+  security issues hide in straightforward code. Read every line.
+- "This error can't happen in practice" — if you can't prove it
+  can't happen, handle it. Production finds ways.
+- "The security concern is theoretical" — theoretical security issues
+  become real exploits. If it's in the checklist, check it.
+- "I already reviewed this in a previous gate" — each gate checks
+  different things. Code quality is not spec compliance.
+- "The existing codebase does it this way too" — existing patterns
+  may be technical debt. Don't propagate known issues.
+
 ## Failure Response
 
 **Security issue:** FAIL (always critical). Fix immediately. Re-run.

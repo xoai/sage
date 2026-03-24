@@ -38,6 +38,19 @@ and fix patterns may be relevant.
 **Update** at fix scope gate and close checkpoint.
 **Session end ([N]):** Mandatory update for Moderate+ fixes.
 
+## Phase Announcements
+
+At each major phase transition, announce before doing any phase work:
+
+```
+Sage: Entering UNDERSTAND phase [cycle-id] — investigating root cause.
+Sage: Entering PLAN phase [cycle-id] — scoping the fix.
+Sage: Entering DELIVER phase [cycle-id] — implementing and verifying fix.
+```
+
+The cycle ID is the directory name under `.sage/work/` (e.g., `20260324-auth-bug`).
+For Surgical fixes without a cycle directory, use the bug description as cycle ID.
+
 ## Step 1: Understand the Problem
 
 **Upstream report check (before asking the user):**

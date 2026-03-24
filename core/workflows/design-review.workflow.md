@@ -166,12 +166,42 @@ Good design review output:
 **No fabricated browser findings.** If Lightpanda wasn't used, do NOT
 claim browser-verified findings. Code-only analysis is honest.
 
+BLOCKED RATIONALIZATIONS:
+- "The computed styles should match based on the CSS" — "should" is
+  not "verified." If you didn't run getComputedStyle, don't claim it.
+- "I can tell from the code that it renders correctly" — code analysis
+  finds code issues. Browser audit finds render issues. Different gates.
+- "Browser testing would just confirm what I already found" — or it
+  would find things you missed. Don't assume.
+
 **Design system detection honesty.** Do NOT invent design system
 standards. If no DESIGN.md, no skill, no tokens → Layer 2 doesn't run.
+
+**AI slop detection gate.** Slop indicators must be counted and reported
+honestly, not minimized or explained away.
+
+BLOCKED RATIONALIZATIONS:
+- "The user asked for this exact design" — user requests don't override
+  quality standards. Purple gradients on white are bad regardless of who
+  asked.
+- "This is just a prototype" — prototypes set expectations. Slop in
+  prototypes becomes slop in production.
+- "The design matches the mockup" — mockups can contain slop too.
+  The review evaluates quality, not fidelity.
+- "There's no time for design review" — there's always time to not
+  ship something embarrassing. Review takes 2 minutes.
 
 **Mechanical vs judgment separation.** A missing :focus style is
 mechanical (/fix). "The page layout buries the primary action" is
 judgment (manual). Do NOT auto-fix design decisions.
+
+BLOCKED RATIONALIZATIONS:
+- "This design decision is obviously wrong, I'll fix it" — "obviously
+  wrong" to you may be intentional to the designer. Flag it, don't fix it.
+- "The user will want me to just fix everything" — mechanical fixes yes,
+  design judgments no. The distinction protects the user's intent.
+- "It's faster to fix than to report" — speed is not the goal.
+  Correct classification is the goal. Report design decisions as manual.
 
 **Light mode invisible when N/A.** In quality gates (Gate 7), if no
 frontend files in diff → no output, no warning.

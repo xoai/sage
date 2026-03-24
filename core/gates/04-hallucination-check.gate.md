@@ -72,6 +72,18 @@ may not exist. A package that "should have" a feature may not. Check by:
 
 Don't trust the agent's memory of an API. Trust the installed code.
 
+## Blocked Rationalizations
+
+- "I'm sure this API exists, I've used it before" — your memory is
+  training data, not installed code. Verify against node_modules or docs.
+- "The import resolved without errors" — resolution ≠ correctness.
+  The method you're calling may not exist on the resolved module.
+- "This is a standard library function" — standard libraries change
+  between versions. Check the installed version, not your memory.
+- "The script passed, so hallucinations are unlikely" — the script
+  checks file existence and imports. Method signatures and version
+  compatibility require manual verification.
+
 ## Failure Response
 
 **Non-existent import:** FAIL. Replace with real package/import. Re-run.

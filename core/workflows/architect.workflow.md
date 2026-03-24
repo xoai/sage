@@ -48,6 +48,19 @@ span sessions, so handoff guidance is critical.
 **Anti-lazy-manifest:** Same contract as build workflow — summary must
 contain judgment, not spec titles.
 
+## Phase Announcements
+
+At each major phase transition, announce before doing any phase work:
+
+```
+Sage: Entering UNDERSTAND phase [cycle-id] — gathering requirements via deep-elicit.
+Sage: Entering PLAN phase [cycle-id] — creating architecture design and ADRs.
+Sage: Entering DELIVER phase [cycle-id] — implementing milestones with quality gates.
+Sage: Entering REVIEW phase [cycle-id] — validating architecture against implementation.
+```
+
+The cycle ID is the directory name under `.sage/work/` (e.g., `20260324-platform-redesign`).
+
 ## Step 2: Deep Elicitation
 
 This is the most important step. Understand the full picture before

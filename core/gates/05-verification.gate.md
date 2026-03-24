@@ -62,6 +62,19 @@ Requirements:
 - If tests can't be run (missing environment, tool, etc.), report BLOCKED
   — do NOT report PASS
 
+## Blocked Rationalizations
+
+- "Tests should pass, I only changed X" — "should" is not evidence.
+  Run the command. Show the output.
+- "All tests passed in my previous response" — previous runs are stale.
+  Run fresh. Paste fresh output.
+- "The script passed, manual checks aren't needed" — the script checks
+  automated tests. Acceptance criteria may require manual verification.
+- "I'm confident the feature works" — confidence ≠ evidence.
+  Run it. Show it. Prove it.
+- "Tests can't run in this environment" — then report BLOCKED, not PASS.
+  Never skip verification because it's inconvenient.
+
 ## Failure Response
 
 **Test failure:** FAIL. Investigate with `systematic-debug`. Fix through TDD. Re-run all gates from Gate 1 (the fix might have changed things).

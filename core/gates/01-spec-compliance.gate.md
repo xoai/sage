@@ -50,6 +50,17 @@ Assume the implementer:
 
 Read the CODE. Not the commit message. Not the self-review. The code.
 
+## Blocked Rationalizations
+
+- "The implementation covers the intent, even if not every detail" —
+  intent is not spec compliance. Check every requirement literally.
+- "This extra code is just good practice, not scope creep" — if it's
+  not in the spec, it's extra. Remove it or get the spec amended.
+- "The test verifies the feature works" — tests can pass while missing
+  requirements. Check each spec requirement against code, not tests.
+- "I read through the code, it matches" — reading is not checking.
+  Use the checklist. Tick each box against actual code lines.
+
 ## Failure Response
 
 **Missing requirement:** FAIL. Implementer adds the missing functionality + test. Re-run this gate.

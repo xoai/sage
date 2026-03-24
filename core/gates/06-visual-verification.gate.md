@@ -106,6 +106,18 @@ Assume the implementer:
 
 Screenshots don't lie. Trust what you see, not what was described.
 
+## Blocked Rationalizations
+
+- "It looks right on desktop, mobile is probably fine" — mobile breaks
+  differently than desktop. Check all three breakpoints.
+- "The CSS is correct, it must render correctly" — correct CSS can render
+  wrong (z-index, overflow, viewport units). Screenshots are truth.
+- "This is a minor visual difference, not worth failing" — minor visual
+  issues compound. If the checklist says check it, check it.
+- "I can't capture screenshots, so I'll review the code instead" —
+  code review is Gate 3, not Gate 6. If you can't screenshot, report
+  BLOCKED, not PASS.
+
 ## Failure Response
 
 - **Dev server not running:** BLOCKED. Start it: `npm run dev` (Next.js), `flutter run -d chrome`

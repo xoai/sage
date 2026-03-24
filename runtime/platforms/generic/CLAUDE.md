@@ -20,6 +20,29 @@ When the user asks you to do something, determine the appropriate mode:
   Read all skills and personas from `.sage/skills/` and `.sage/agents/`.
   Follow the full planning → architecture → sprint → implementation pipeline.
 
+## Phase Announcements
+
+When transitioning between pipeline phases (Understand → Plan → Deliver → Review),
+announce the transition with a single line BEFORE any phase work begins:
+
+```
+Sage: Entering [PHASE] phase [cycle-id] — [what happens next].
+```
+
+The cycle ID is the directory name under `.sage/work/`. Always include it.
+
+BLOCKED RATIONALIZATIONS:
+- "The user can see what I'm doing" — tool calls are not phase announcements.
+  Explicitly name the phase and cycle.
+- "This is a continuation, not a transition" — if the phase changed, announce it.
+- "The cycle ID is obvious from context" — obvious in your context window,
+  not in the user's terminal history. Always include it.
+
+## Parallel Work
+
+For parallel feature work, see `docs/parallel-work.md` — use git worktrees
+for physical isolation. Each worktree gets its own Sage cycle.
+
 ## Mandatory Rules
 
 1. **TDD is law.** Read `.sage/skills/execution/tdd/SKILL.md` before writing any code.

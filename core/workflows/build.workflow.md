@@ -78,6 +78,19 @@ Context summary MUST NOT be:
 - Generic guidance ("Continue with implementation")
 The summary must contain judgment the spec doesn't contain.
 
+## Phase Announcements
+
+At each major phase transition, announce before doing any phase work:
+
+```
+Sage: Entering UNDERSTAND phase [cycle-id] — gathering requirements via quick-elicit.
+Sage: Entering PLAN phase [cycle-id] — creating implementation plan from spec.
+Sage: Entering DELIVER phase [cycle-id] — implementing with TDD and quality gates.
+Sage: Entering REVIEW phase [cycle-id] — running quality verification.
+```
+
+The cycle ID is the directory name under `.sage/work/` (e.g., `20260324-auth-flow`).
+
 ## Step 2: Assess Scope
 
 Classify by structural complexity — not time, not gut feeling.
