@@ -1,0 +1,12 @@
+{
+  "name": "sage",
+  "version": "1.0.9",
+  "description": "AI skills framework: UNDERSTAND → ENVISION → DELIVER → REFLECT. Process enforcement, 14 workflows, 37 skills, 5 agent personas.",
+  "author": {
+    "name": "xoai",
+    "url": "https://github.com/xoai"
+  },
+  "repository": "https://github.com/xoai/sage-claude-plugin",
+  "license": "MIT",
+  "keywords": ["framework", "process", "skills", "workflows", "product", "engineering", "design", "ux", "research"]
+}
