@@ -9,7 +9,7 @@ Sage is a skills framework that makes AI agents think before they act,
 stay focused under complexity, and deliver outcomes you can trust.
 Built for product and engineering teams, open to any domain.
 
-- **Think first, build second** — prevents the most expensive mistake: solving the wrong problem
+- **Think first, build second** — a framing round challenges assumptions before solutioning begins, preventing the most expensive mistake: solving the wrong problem
 - **Focus over noise** — loads only what the task needs, producing sharper reasoning
 - **Reliable by design** — quality gates catch drift at every stage, automatically
 - **Gets smarter over time** — persistent memory turns every session into accumulated wisdom
@@ -22,10 +22,13 @@ Built for product and engineering teams, open to any domain.
 Most AI frameworks skip from request to implementation. Sage's navigator
 thinks first — mapping every request to an intent spectrum (UNDERSTAND →
 ENVISION → DELIVER) and detecting what's missing before work begins.
-Building without research? It tells you what 15 minutes of discovery
-would prevent, then lets you decide. Gap detection, not gatekeeping.
-The belief: an AI agent's job isn't to execute fast — it's to arrive at
-the right outcome.
+
+It starts with a framing round: surface the pain, challenge the
+premises, and arrive at a chosen framing — before any solutioning
+happens. Building without research? It tells you what 15 minutes of
+discovery would prevent, then lets you decide. Gap detection, not
+gatekeeping. The belief: an AI agent's job isn't to execute fast — it's
+to arrive at the right outcome.
 
 ### Hybrid Loading
 
@@ -47,8 +50,19 @@ verification scripts** that don't rely on the agent's self-assessment:
 verifies imports exist, `sage-spec-check.sh` confirms deliverables
 match the plan. Scripts run first; agent review runs second. The script
 says tests fail → gate fails, regardless of what the agent thinks.
-Five gates sequence after every implementation: spec compliance,
+Five core gates sequence after every implementation: spec compliance,
 constitution compliance, code quality, hallucination check, verification.
+Two advisory gates — browser check and design check — activate
+automatically when frontend files and Lightpanda are present.
+
+### Session Resilience
+Close your IDE, hit a context limit, come back tomorrow — Sage picks up
+exactly where you left off. A cycle manifest captures state, context
+summary, decisions, open questions, and handoff guidance at every
+checkpoint. Type `/continue` and Sage reads the manifest, routes to the
+correct workflow, and preserves the judgment context that would otherwise
+be lost. Every decision, artifact, and progress update persists in
+`.sage/`.
 
 ## Get Started
 
@@ -115,6 +129,7 @@ Run in your terminal:
 | `sage update` | Regenerate platform files after changes |
 | `sage upgrade` | Update Sage to the latest version |
 | `sage learn [path]` | Learn a codebase or module |
+| `sage setup [tool]` | Configure optional tools (e.g. Lightpanda) |
 | `sage find <query>` | Search community skill catalog |
 | `sage add <registry> <skill>` | Install a community skill |
 | `sage remove <skill>` | Remove a skill from project |
@@ -158,7 +173,7 @@ recommended next step. You stay in control — Sage stays intelligent.
 ## How Sage Works
 
 <p align="center">
-  <img src="sage_routing.svg" alt="Sage Enforcement Model." width="600" />
+  <img src="sage_routing.svg" alt="Sage Routing." width="600" />
 </p>
 
 ### Slash Commands
@@ -169,7 +184,7 @@ Use inside your IDE (Claude Code, Antigravity):
 |---------|-------------|
 | `/sage` | **Start here.** Routes via keywords → classify → confirm |
 | `/build` | Feature: spec → plan → build-loop → quality gates |
-| `/fix` | Diagnose → scope → fix → verify (escalates large fixes) |
+| `/fix` | Diagnose → scope → fix → verify (reads QA and design-review reports when available) |
 | `/architect` | Elicit → design → milestone plan → phased build |
 | `/research` | Interview → JTBD → opportunity map |
 | `/design` | Brief → spec → copy (reads research context) |
@@ -246,7 +261,7 @@ Lower tiers add constraints but cannot remove inherited ones.
 ### The Pipeline: UNDERSTAND → ENVISION → DELIVER → REFLECT
 
 <p align="center">
-  <img src="sage_workflows_v108.svg" alt="Sage Workflows." width="600" />
+  <img src="sage_workflows.svg" alt="Sage Workflows." width="600" />
 </p>
 
 Sage organizes work into four phases. Each phase has dedicated
@@ -255,7 +270,8 @@ workflows that chain skills automatically:
 ```
 UNDERSTAND              ENVISION               DELIVER              REFLECT
 /research  /analyze     /design  /architect    /build  /fix         /reflect
-/learn                                         /review
+/learn                                         /review  /qa
+                                               /design-review
 ```
 
 `/research` chains user-interview → JTBD → opportunity-map.
@@ -310,10 +326,12 @@ working.
 
 ### Built-in Bundles
 
-- **[product-management](skills/product-management/)** — JTBD → opportunity map → user interview → brief
-- **[ux-design](skills/ux-design/)** — audit → evaluate → brief → specify → writing
-- **[memory](skills/memory/)** — persistent knowledge, typed ontology, and self-learning from mistakes
-- **[skill-builder](skills/skill-builder/)** — tools for building new Sage skills
+Sage ships with 37+ skills across four domains:
+
+- **Product management** — JTBD, opportunity mapping, user interviews, PRDs, problem-solving
+- **UX design** — audit, evaluate, discovery, brief, specify, writing, heuristic review, research, plan-tasks
+- **Engineering** — React, React Native, Next.js, Flutter, web, mobile, API, BaaS, plus full-stack presets (Next.js + Supabase, Flutter + Firebase, React Native + Expo, Next.js fullstack)
+- **Framework** — memory, ontology, self-learning, skill-builder, and research packs (discover, draft, observe, source-process, validate)
 
 ### Ecosystem
 
@@ -340,7 +358,7 @@ When Sage runs in your project, it manages state in `.sage/`:
 ├── constitution.md          # Preset selection + project principles
 ├── docs/                    # Project knowledge (analyses, decisions, guides)
 ├── work/                    # Per-initiative deliverables
-│   └── YYYYMMDD-slug/       # brief.md, spec.md, plan.md
+│   └── YYYYMMDD-slug/       # brief.md, spec.md, plan.md, manifest.md
 └── gates/
     ├── gate-modes.yaml      # Which gates run per workflow mode
     └── scripts/             # Deterministic verification scripts
