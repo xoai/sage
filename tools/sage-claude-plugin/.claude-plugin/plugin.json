@@ -6,7 +6,7 @@
     "name": "xoai",
     "url": "https://github.com/xoai"
   },
-  "repository": "https://github.com/xoai/sage-claude-plugin",
+  "repository": "https://github.com/xoai/sage",
   "license": "MIT",
   "keywords": ["framework", "process", "skills", "workflows", "product", "engineering", "design", "ux", "research"]
 }

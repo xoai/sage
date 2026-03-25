@@ -13,7 +13,7 @@
       "source": {
         "source": "git-subdir",
         "url": "https://github.com/xoai/sage.git",
-        "path": "sage-plugin"
+        "path": "tools/sage-claude-plugin"
       },
       "author": {
         "name": "xoai",
