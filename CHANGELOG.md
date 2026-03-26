@@ -2,7 +2,7 @@
 
 All notable changes to Sage will be documented in this file.
 
-## [1.1.0] — Auto-Review
+## [1.1.0] — Auto-Review + skills.sh Integration
 
 ### Auto-Review Sub-Agent
 - **Automatic independent review** of spec and plan after user approval [A].
@@ -25,6 +25,26 @@ All notable changes to Sage will be documented in this file.
   auto-review skips silently. No self-review fallback.
 - **Findings logged:** all review verdicts appended to decisions.md for
   /reflect to learn from.
+
+### skills.sh Integration
+- **`sage find`** now searches the skills.sh catalog (90K+ skills, ranked by
+  install count). Replaces the old private index.
+- **`sage add`** supports multi-skill repos. `sage add vercel-labs/agent-skills`
+  discovers all skills in the repo, presents an interactive picker, downloads
+  selected skills individually via GitHub API (no git clone needed).
+- **Five source formats:** GitHub shorthand (`owner/repo`), GitHub URL, GitHub
+  deep link (`/tree/main/skills/react`), local path (`./my-skills`), and
+  well-known protocol (`https://example.com`).
+- **Platform-aware deploy:** `sage add` deploys to both Claude Code (loader
+  stub in `.claude/skills/`) and Antigravity (full copy in `.agent/skills/`).
+  `sage remove` cleans up all platform paths.
+- **`--skill` flag** for non-interactive single skill install:
+  `sage add vercel-labs/agent-skills --skill frontend-design`
+- **`--all` flag** to install all skills from a repo.
+- **`--audit` flag** for optional security check via skills.sh audit API.
+- **Enhanced skills.json** tracks source, path in repo, and install count.
+- **Atomic writes** for skills.json (write to temp, rename).
+- Removed old private registry/index code and bundled seed files.
 
 ### Bug Fixes
 - **macOS Bash 3.2 compatibility:** fixed `REMAINING_ARGS[@]` unbound variable
