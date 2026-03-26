@@ -161,6 +161,20 @@ handoff: |
 ```
 Append architecture decisions to decisions.md (Rule 7).
 
+⚡ **AUTO-REVIEW: Architecture / ADR**
+
+After design approval, run an independent sub-agent review.
+Read `sage/core/capabilities/review/auto-review/SKILL.md`.
+
+If conditions met (Task tool available + auto_review ≠ false):
+  Spawn sub-agent with the **ADR / Architectural Spec Review** prompt.
+  Pass the ADR path(s) and brief path.
+  Present findings inline.
+  If CRITICAL: recommend [R] Revise before planning.
+  If no CRITICAL: note findings, continue to Step 4.
+  Append review verdict to decisions.md.
+If conditions not met: skip silently.
+
 ## Step 4: Milestone Plan
 
 **File check:** `.sage/work/*/spec.md` MUST exist with `status: completed`
@@ -182,6 +196,20 @@ Sage: Milestone plan saved to .sage/work/YYYYMMDD-slug/plan.md
 Pick A/R/N, or tell me what to change.
 
 On approval: append plan approach to decisions.md (Rule 7).
+
+⚡ **AUTO-REVIEW: Milestone Plan**
+
+After plan approval, run an independent sub-agent review.
+Read `sage/core/capabilities/review/auto-review/SKILL.md`.
+
+If conditions met (Task tool available + auto_review ≠ false):
+  Spawn sub-agent with the **Plan Review** prompt.
+  Pass the plan path and spec path.
+  Present findings inline.
+  If CRITICAL: recommend [R] Revise before building.
+  If no CRITICAL: note findings, continue.
+  Append review verdict to decisions.md.
+If conditions not met: skip silently.
 
 **Next steps (Zone 3):**
 

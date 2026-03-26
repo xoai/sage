@@ -2,6 +2,36 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [1.1.0] — Auto-Review
+
+### Auto-Review Sub-Agent
+- **Automatic independent review** of spec and plan after user approval [A].
+  Sub-agent gets a fresh context window — no self-bias from the producing agent.
+- **Three review prompts:** spec review (5 checks: framing alignment, criteria
+  testability, boundary completeness, edge cases, internal consistency), plan
+  review (5 checks: spec-plan alignment, task decomposition, dependency ordering,
+  coverage gaps, risk concentration), ADR review (5 checks: trade-off analysis,
+  migration path, risk assessment, blast radius, reversibility).
+- **Build workflow:** auto-review fires after spec [A] and plan [A] for
+  Standard+ tasks. Lightweight tasks skip.
+- **Architect workflow:** auto-review fires after design checkpoint [A] (ADR
+  review) and plan checkpoint [A].
+- **Advisory, not blocking:** user can always [P] Proceed. Findings surface
+  with [R] Revise / [P] Proceed / [D] Discuss options.
+- **Config toggle:** `auto_review: false` in `.sage/config.yaml` disables
+  auto-review. Default is `true`.
+- **30-second timeout:** if sub-agent doesn't respond, skip with note.
+- **Task tool required:** if Task tool is not available (e.g., Antigravity),
+  auto-review skips silently. No self-review fallback.
+- **Findings logged:** all review verdicts appended to decisions.md for
+  /reflect to learn from.
+
+### Bug Fixes
+- **macOS Bash 3.2 compatibility:** fixed `REMAINING_ARGS[@]` unbound variable
+  error under `set -u` when running `sage init` with no extra arguments.
+- **macOS `date +%s%N` fix:** macOS outputs literal "N" instead of nanoseconds.
+  New `_sage_now()` helper strips non-digits and pads to nanosecond scale.
+
 ## [1.0.9] — Clarity
 
 ### Framing Round

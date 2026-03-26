@@ -512,6 +512,8 @@ for wf in "$CORE"/workflows/*.workflow.md; do
 - Standard+ scope: spec.md MUST EXIST at .sage/work/ before implementing.
   "Design is clear" is NOT a spec. "We discussed this" is NOT a spec.
   A spec is a FILE. No file = no implementation. Write it first.
+- AUTO-REVIEW: After spec [A] and plan [A], run sub-agent review via
+  sage/core/capabilities/review/auto-review/SKILL.md (if Task tool available).
 - Save ALL artifacts to .sage/work/ or .sage/docs/ — never inline-only
 - Checkpoints: present with [A] Approve / [R] Revise — wait for response
 - Choices: present with [1] [2] [3] bracket notation
@@ -545,6 +547,8 @@ for wf in "$CORE"/workflows/*.workflow.md; do
 - MUST complete all 3 elicitation rounds SEQUENTIALLY before designing.
   brief.md MUST EXIST at .sage/work/ before any design work.
   "I understand the system" is NOT a brief. Do NOT compress 3 rounds into 1.
+- AUTO-REVIEW: After design checkpoint [A] and plan [A], run sub-agent
+  review via sage/core/capabilities/review/auto-review/SKILL.md (if Task tool available).
 - Save ADRs to .sage/docs/decision-*.md, spec to .sage/work/
 - Each milestone in phased build follows build workflow gates independently.
   Do NOT batch-implement milestones without per-milestone checkpoints.

@@ -370,6 +370,23 @@ done
 
 echo "  ✓ $REF_COUNT references"
 
+# Copy key capabilities that workflows reference
+CAP_COUNT=0
+CAPS_DIR="$CORE/capabilities"
+for cap_file in \
+  "$CAPS_DIR/review/auto-review/SKILL.md:auto-review.md" \
+  "$CAPS_DIR/verification/browser-check/SKILL.md:browser-check.md" \
+  "$CAPS_DIR/verification/design-check/SKILL.md:design-check.md"; do
+
+  src="${cap_file%%:*}"
+  dst="${cap_file##*:}"
+  if [ -f "$src" ]; then
+    cp "$src" "$OUTPUT/references/$dst"
+    CAP_COUNT=$((CAP_COUNT + 1))
+  fi
+done
+[ "$CAP_COUNT" -gt 0 ] && echo "  ✓ $CAP_COUNT capabilities copied to references"
+
 # ═══════════════════════════════════════════════════════════════
 # Task 8: Create /sage:configure skill
 # ═══════════════════════════════════════════════════════════════
