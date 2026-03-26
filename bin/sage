@@ -327,6 +327,7 @@ project-name: "$project_name"
 detected-stack: [$DETECTED_STACK]
 auto_review: true
 auto_qa: true
+independent_gate3: true
 YAML
 
   cat > "$sage_dir/decisions.md" << MD

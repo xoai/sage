@@ -64,6 +64,25 @@ All notable changes to Sage will be documented in this file.
 - **Code-only:** no browser needed. /qa remains the manual deep-dive
   with browser testing via Lightpanda.
 
+### Code Quality Standard
+- **7 universal coding principles** loaded during implementation:
+  clarity over cleverness, fail loudly / recover gracefully, guard
+  the boundaries, smallest scope / shortest lifetime, make the right
+  thing easy, consistency beats perfection, test what matters.
+- **coding-principles capability** loaded by build-loop before every
+  task. Shapes code AS it's written, not reviewed after.
+- **Gate 3 upgraded to sub-agent** when Task tool is available.
+  Independent code quality review — the agent that wrote the code
+  no longer reviews its own quality.
+- **Self-review fallback** when Task tool is not available, announced
+  as self-review. No silent downgrade.
+- **Config toggle:** `independent_gate3: false` in `.sage/config.yaml`
+  to disable sub-agent Gate 3. Default is `true`.
+- **Auto-QA gains 6th check:** coding principles adherence (magic
+  numbers, swallowed errors, unclear names, multi-purpose functions).
+- Language-agnostic — applies to Python, TypeScript, Go, Rust, anything.
+  Stack skills add language-specific idioms on top.
+
 ### Bug Fixes
 - **macOS Bash 3.2 compatibility:** fixed `REMAINING_ARGS[@]` unbound variable
   error under `set -u` when running `sage init` with no extra arguments.

@@ -47,7 +47,7 @@ mandated patterns followed?
 **Agent review:** Check each principle in the active constitution
 (base + preset). No script for this gate — it requires judgment.
 
-### Gate 3: Code Quality
+### Gate 3: Code Quality (independent when available)
 
 Is the code clean, secure, maintainable, and performant? Security
 issues are always critical.
@@ -55,6 +55,13 @@ issues are always critical.
 **Agent review:** Read `sage/core/capabilities/review/quality-review/SKILL.md`
 for the 5-dimension review (readability, error handling, security,
 performance, conventions).
+
+When Task tool is available and `independent_gate3` ≠ false in config:
+the quality-review capability delegates to a sub-agent for independent
+review. The producing agent does NOT self-review.
+
+When Task tool is NOT available: self-review using the same 5 dimensions.
+Announced as self-review.
 
 ### Gate 4: Hallucination Check
 

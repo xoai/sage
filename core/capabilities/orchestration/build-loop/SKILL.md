@@ -16,7 +16,7 @@ activation: auto
 tags: [execution, orchestration, build, loop]
 inputs: [plan, codebase-context, constitution]
 outputs: [implementation, test-suite, updated-plan]
-requires: [implement, tdd, quality-review, spec-review, verify-completion, scope-guard]
+requires: [implement, tdd, coding-principles, quality-review, spec-review, verify-completion, scope-guard]
 -->
 
 # Build Loop
@@ -57,8 +57,12 @@ Say "pause" anytime to stop between tasks.
 
 ### Step 3: Execute Task
 
-For the current task, delegate to the `implement` skill:
+For the current task:
 
+0. **Load coding principles** — read
+   `sage/core/capabilities/execution/coding-principles/SKILL.md`.
+   Apply the 7 universal principles to every line written during
+   this task. Announce: "Loading coding principles for implementation."
 1. **Read** the task spec from the plan (files, action, test, verify)
 2. **Implement** using TDD (`tdd` skill):
    - Write failing test

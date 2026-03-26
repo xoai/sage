@@ -32,6 +32,72 @@ as Gate 3 in the quality pipeline.
 
 ## Process
 
+### Sub-Agent Delegation (preferred)
+
+**IF Task tool is available AND `independent_gate3` ≠ false in
+`.sage/config.yaml`:**
+
+Announce: "⚡ Running code quality review (sub-agent)..."
+
+Spawn a sub-agent with the following prompt:
+
+```
+You are a code reviewer. You were NOT involved in writing this code.
+Review it for quality, security, and maintainability. Be specific.
+
+INPUTS:
+- Changed files: {FILE_LIST}
+- Project conventions: {CONVENTIONS_FILE or "none detected"}
+- Stack: {DETECTED_STACK or "unknown"}
+
+REVIEW THESE 5 DIMENSIONS:
+
+1. READABILITY: Are names descriptive? Is flow obvious? Are complex
+   sections commented with WHY? Is there unnecessary complexity?
+
+2. ERROR HANDLING: Are errors handled, not swallowed? Do error
+   messages help diagnose? Are failure paths tested? Are external
+   calls protected?
+
+3. SECURITY: Are inputs validated? Is auth checked? Are secrets
+   hardcoded? Is user data logged? Are queries parameterized?
+   Security issues are ALWAYS critical.
+
+4. PERFORMANCE: Are there N+1 patterns? Unnecessary allocations?
+   Large datasets loaded into memory? Only flag OBVIOUS issues —
+   no speculative optimization.
+
+5. CONVENTIONS: Does the code match existing project patterns?
+   Naming, file structure, style? Is it internally consistent?
+
+CLASSIFY each finding:
+- CRITICAL: Security vulnerability or will break in production.
+  Must fix. Security issues are ALWAYS critical.
+- WARNING: Quality issue. Should fix before shipping.
+- SUGGESTION: Optional improvement. Can defer.
+
+FORMAT (strict):
+GATE: code-quality
+RESULT: PASS | FAIL
+CRITICAL: [list with file:line or "None"]
+WARNING: [list with file:line or "None"]
+SUGGESTION: [list with file:line or "None"]
+
+Be concise. Every finding names a specific file and line.
+No generic praise. No vague observations. Just findings.
+Security issues found = ALWAYS FAIL.
+```
+
+Present the sub-agent's findings as the Gate 3 result. Do NOT
+filter, downgrade, or dismiss findings.
+
+**IF Task tool is NOT available OR `independent_gate3` is false:**
+
+Announce: "Running code quality self-review. For independent review,
+run /review."
+
+Proceed with self-review using the 5 dimensions below.
+
 ### Dimension 1: Readability
 
 - Is the code clear to someone unfamiliar with it?

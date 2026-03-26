@@ -516,6 +516,9 @@ for wf in "$CORE"/workflows/*.workflow.md; do
   sage/core/capabilities/review/auto-review/SKILL.md (if Task tool available).
 - AUTO-QA: After quality gates pass, run sub-agent code verification via
   sage/core/capabilities/review/auto-qa/SKILL.md (if Task tool available).
+- CODING PRINCIPLES: Load sage/core/capabilities/execution/coding-principles/SKILL.md
+  before every implementation task. 7 universal principles applied during writing.
+- GATE 3 INDEPENDENT: Code quality review uses sub-agent when Task tool available.
 - Save ALL artifacts to .sage/work/ or .sage/docs/ — never inline-only
 - Checkpoints: present with [A] Approve / [R] Revise — wait for response
 - Choices: present with [1] [2] [3] bracket notation

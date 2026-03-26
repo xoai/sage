@@ -98,6 +98,12 @@ CHECK THESE 5 THINGS:
    their interfaces match? Response shapes, event contracts, shared
    types. Flag mismatches.
 
+6. CODING PRINCIPLES: Do changed files follow universal quality
+   principles? Check for: magic numbers, swallowed errors, unclear
+   names, functions doing multiple things, unnecessary global state,
+   missing input validation. Flag clear violations, not style
+   preferences.
+
 CLASSIFY each finding:
 - CRITICAL: Will break in production. Must fix.
 - MAJOR: Will cause problems. Should fix before shipping.
