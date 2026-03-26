@@ -324,6 +324,24 @@ If quality-gates cannot be loaded, follow these minimum rules:
 run full test suite, paste output, verify implementation matches spec,
 check for hallucinated imports or APIs.
 
+⚡ **AUTO-QA: Implementation**
+
+After quality gates pass, run an independent sub-agent code verification.
+Read `sage/core/capabilities/review/auto-qa/SKILL.md`.
+
+If conditions met (Task tool available + Standard+ scope +
+auto_qa ≠ false in config):
+  Gather changed file list from build-loop task tracking.
+  Spawn sub-agent with the **Implementation QA** prompt.
+  Pass spec path, plan path, changed files, test files.
+  Present findings inline.
+  If CRITICAL: recommend [R] Fix before completing.
+  If user picks [R]: fix the specific issues (file:line provided),
+    then re-run auto-QA (max 2 iterations).
+  If no CRITICAL: note findings, continue to Step 8.
+  Append verdict to decisions.md.
+If conditions not met: skip silently.
+
 ## Step 8: Review and Close
 
 Review against spec. Check for missed edge cases.

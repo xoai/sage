@@ -449,6 +449,9 @@ for wf in "$CORE"/workflows/*.workflow.md; do
 - AUTO-REVIEW: After spec [A] and plan [A], run sub-agent review via
   sage/core/capabilities/review/auto-review/SKILL.md. Do NOT skip because
   "the spec is straightforward." 30 seconds of review prevents days of rework.
+- AUTO-QA: After quality gates pass, run sub-agent code verification via
+  sage/core/capabilities/review/auto-qa/SKILL.md. Do NOT skip because
+  "quality gates already passed." Gates are self-review, auto-QA is independent.
 - Save ALL artifacts to .sage/work/ or .sage/docs/ — never inline-only
 - Checkpoints: present with [A] Approve / [R] Revise — wait for response
 - Choices: present with [1] [2] [3] bracket notation

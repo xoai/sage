@@ -375,6 +375,7 @@ CAP_COUNT=0
 CAPS_DIR="$CORE/capabilities"
 for cap_file in \
   "$CAPS_DIR/review/auto-review/SKILL.md:auto-review.md" \
+  "$CAPS_DIR/review/auto-qa/SKILL.md:auto-qa.md" \
   "$CAPS_DIR/verification/browser-check/SKILL.md:browser-check.md" \
   "$CAPS_DIR/verification/design-check/SKILL.md:design-check.md"; do
 

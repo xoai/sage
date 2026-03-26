@@ -326,6 +326,7 @@ sage-version: "1.0.0"
 project-name: "$project_name"
 detected-stack: [$DETECTED_STACK]
 auto_review: true
+auto_qa: true
 YAML
 
   cat > "$sage_dir/decisions.md" << MD

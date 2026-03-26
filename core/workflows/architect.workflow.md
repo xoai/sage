@@ -237,6 +237,19 @@ Do NOT batch-implement multiple milestones without checkpoints.
 Do NOT skip per-milestone verification because "I'll test everything
 at the end."
 
+⚡ **AUTO-QA: Milestone Implementation**
+
+After each milestone's quality gates pass, run independent code
+verification. Read `sage/core/capabilities/review/auto-qa/SKILL.md`.
+
+If conditions met (Task tool available + auto_qa ≠ false):
+  Spawn sub-agent with the Implementation QA prompt.
+  Pass spec, milestone plan, and changed files for this milestone.
+  Present findings inline.
+  If CRITICAL: recommend [R] Fix before continuing to next milestone.
+  Append verdict to decisions.md.
+If conditions not met: skip silently.
+
 **At each milestone completion checkpoint:**
 Sage: Milestone [N] complete — [summary]
 Decision: [what was learned during implementation]. (append to decisions.md)

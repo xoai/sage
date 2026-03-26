@@ -46,6 +46,24 @@ All notable changes to Sage will be documented in this file.
 - **Atomic writes** for skills.json (write to temp, rename).
 - Removed old private registry/index code and bundled seed files.
 
+### Auto-QA Sub-Agent
+- **Automatic code verification** after quality gates pass in /build.
+  Sub-agent with fresh context checks implementation against spec.
+- **5 checks:** spec-implementation alignment, test-criteria coverage,
+  missing error handling, boundary condition enforcement, integration
+  consistency between modules.
+- **Build workflow:** auto-QA fires after quality gates pass for
+  Standard+ tasks, before Step 8 (completion).
+- **Architect workflow:** auto-QA fires after each milestone's build
+  gates pass.
+- **Fix-and-recheck:** when user picks [R] Fix, agent fixes the
+  specific issues (file:line provided), then re-runs auto-QA.
+  Max 2 iterations before surfacing to user.
+- **Config toggle:** `auto_qa: false` in `.sage/config.yaml` disables
+  auto-QA independently from auto-review. Default is `true`.
+- **Code-only:** no browser needed. /qa remains the manual deep-dive
+  with browser testing via Lightpanda.
+
 ### Bug Fixes
 - **macOS Bash 3.2 compatibility:** fixed `REMAINING_ARGS[@]` unbound variable
   error under `set -u` when running `sage init` with no extra arguments.

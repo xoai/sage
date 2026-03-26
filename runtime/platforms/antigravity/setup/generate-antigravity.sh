@@ -514,6 +514,8 @@ for wf in "$CORE"/workflows/*.workflow.md; do
   A spec is a FILE. No file = no implementation. Write it first.
 - AUTO-REVIEW: After spec [A] and plan [A], run sub-agent review via
   sage/core/capabilities/review/auto-review/SKILL.md (if Task tool available).
+- AUTO-QA: After quality gates pass, run sub-agent code verification via
+  sage/core/capabilities/review/auto-qa/SKILL.md (if Task tool available).
 - Save ALL artifacts to .sage/work/ or .sage/docs/ — never inline-only
 - Checkpoints: present with [A] Approve / [R] Revise — wait for response
 - Choices: present with [1] [2] [3] bracket notation
