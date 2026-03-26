@@ -24,18 +24,28 @@ RESET='\033[0m'
 SAGE_START_TIME=""
 STEP_START_TIME=""
 
-timer_start() { SAGE_START_TIME=$(date +%s%N 2>/dev/null || date +%s); }
-step_start()  { STEP_START_TIME=$(date +%s%N 2>/dev/null || date +%s); }
+# macOS date doesn't support %N — outputs literal "N" instead of failing
+_sage_now() {
+  local t
+  t=$(date +%s%N 2>/dev/null || date +%s)
+  # Strip non-digits (macOS outputs "1774343489N")
+  t="${t//[!0-9]/}"
+  # If length <= 10, it's seconds only — no nanosecond support
+  if [ ${#t} -le 10 ]; then
+    echo "${t}000000000"
+  else
+    echo "$t"
+  fi
+}
+
+timer_start() { SAGE_START_TIME=$(_sage_now); }
+step_start()  { STEP_START_TIME=$(_sage_now); }
 
 elapsed_ms() {
-  local now end_ns start_ns
-  now=$(date +%s%N 2>/dev/null || date +%s)
-  # Handle systems without nanosecond support
-  if [ ${#now} -gt 10 ]; then
-    echo $(( (now - ${1:-$STEP_START_TIME}) / 1000000 ))
-  else
-    echo $(( (now - ${1:-$STEP_START_TIME}) * 1000 ))
-  fi
+  local now start
+  now=$(_sage_now)
+  start="${1:-$STEP_START_TIME}"
+  echo $(( (now - start) / 1000000 ))
 }
 
 fmt_time() {
@@ -976,7 +986,7 @@ for arg in "$@"; do
       ;;
   esac
 done
-set -- "${REMAINING_ARGS[@]}" 2>/dev/null || true
+set -- ${REMAINING_ARGS[@]+"${REMAINING_ARGS[@]}"}
 
 case "$COMMAND" in
   new)              sage_new "$@" ;;
