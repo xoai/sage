@@ -47,21 +47,25 @@ mandated patterns followed?
 **Agent review:** Check each principle in the active constitution
 (base + preset). No script for this gate — it requires judgment.
 
-### Gate 3: Code Quality (independent when available)
+### Gate 3: Code Quality (sub-agent REQUIRED when Task tool available)
 
 Is the code clean, secure, maintainable, and performant? Security
 issues are always critical.
 
-**Agent review:** Read `sage/core/capabilities/review/quality-review/SKILL.md`
-for the 5-dimension review (readability, error handling, security,
-performance, conventions).
+**Gate 3 REQUIRES sub-agent delegation when Task tool is available.**
 
-When Task tool is available and `independent_gate3` ≠ false in config:
-the quality-review capability delegates to a sub-agent for independent
-review. The producing agent does NOT self-review.
+Step 1: Check Task tool availability.
+Step 2: If available AND `independent_gate3` ≠ false in config →
+  Announce: "⚡ Running code quality review (sub-agent)..."
+  Read `sage/core/capabilities/review/quality-review/SKILL.md`.
+  Spawn sub-agent with the code review prompt from that capability.
+  Present findings as Gate 3 result. This is MANDATORY, not optional.
+Step 3: If NOT available OR `independent_gate3` is false →
+  Self-review using `sage/core/capabilities/review/quality-review/SKILL.md`.
+  Announce: "Self-review — Task tool not available."
 
-When Task tool is NOT available: self-review using the same 5 dimensions.
-Announced as self-review.
+Do NOT self-review when Task tool IS available and config allows
+sub-agent. Self-review is the fallback, not the default.
 
 ### Gate 4: Hallucination Check
 
@@ -123,11 +127,42 @@ missing interactive states, AI slop indicators. 15 seconds max.
 
 **Advisory only.** Warnings/notes, never blocks.
 
+### Gate 8: Auto-QA (sub-agent, advisory)
+
+Independent sub-agent verification of implementation against spec.
+Runs as part of the gate sequence, not by agent discretion.
+
+**Activation conditions (ALL must be true):**
+1. Task tool is available
+2. Scope is Standard or Comprehensive (Lightweight tasks skip)
+3. `auto_qa` ≠ false in `.sage/config.yaml`
+
+If ANY condition is false → skip silently.
+
+**When active:**
+1. Announce: "⚡ Running implementation QA (sub-agent)..."
+2. Read `sage/core/capabilities/review/auto-qa/SKILL.md`.
+3. Gather changed file list, spec path, plan path, test files.
+4. Spawn sub-agent with the Implementation QA prompt.
+5. Present findings inline.
+
+**Advisory.** Gate 8 findings are warnings and recommendations.
+A failure does NOT block the build — it produces findings with
+[R] Fix / [P] Proceed / [D] Discuss options. But findings MUST
+be presented to the user before Step 8.
+
+**Fix-and-recheck:** If user picks [R], fix the specific issues
+(file:line provided), then re-run Gate 8 (max 2 iterations).
+
 ## Rules
 
 - Script-based gates (1, 4, 5) run FIRST. Script failure = gate failure.
 - Agent review runs SECOND. It catches what scripts can't.
 - Security issues in Gate 3 are ALWAYS critical — they cause FAIL.
+- Gate 3 MUST use sub-agent when Task tool is available. Self-review
+  is the fallback, not the default.
+- Gate 8 (Auto-QA) is advisory — findings don't block, but MUST be
+  presented to the user.
 - Gate failures trigger fix-and-retry (max 3), then escalate to human.
 - Never skip mandatory gates. They are mandatory, not suggestions.
 

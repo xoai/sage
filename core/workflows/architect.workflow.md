@@ -143,15 +143,17 @@ If ANY fails → go back and create the missing artifact.
 Sage: Architecture design saved. ADRs in .sage/docs/decision-*.md
 Decision: [key architecture decisions]. (append to .sage/decisions.md)
 
-[A] Approve — continue to planning in this session
+[A] Approve & review — sub-agent reviews ADRs, then continue to plan
+[S] Skip review — approve without independent review
 [R] Revise — here's what needs changing
 [Q] Question — I want to understand [specific decision] better
 [N] New session — type /architect to continue with milestone plan
 
-Pick A/R/Q/N, or tell me what to change.
+Pick A/S/R/Q/N, or tell me what to change.
 
-On approval: update spec frontmatter to `status: completed`.
-Write `handoff` field in frontmatter:
+**On [A] Approve & review:**
+1. Update spec frontmatter to `status: completed`.
+2. Write `handoff` field in frontmatter:
 ```yaml
 handoff: |
   Key decisions: [architecture choices and trade-offs]
@@ -159,21 +161,24 @@ handoff: |
   Risks: [cross-cutting concerns, performance, migration]
   Next agent should: [specific guidance for milestone planning]
 ```
-Append architecture decisions to decisions.md (Rule 7).
+3. Append architecture decisions to decisions.md (Rule 7).
+4. **Run auto-review BEFORE proceeding to Step 4:**
+   Read `sage/core/capabilities/review/auto-review/SKILL.md`.
+   If conditions met (Task tool available + auto_review ≠ false):
+     Announce: "⚡ Running ADR review (sub-agent)..."
+     Spawn sub-agent with the **ADR / Architectural Spec Review** prompt.
+     Pass the ADR path(s) and brief path.
+     Present findings inline.
+     Append review verdict to decisions.md.
+   If Task tool NOT available:
+     Announce: "Task tool not available — skipping independent review."
+5. THEN proceed to Step 4.
 
-⚡ **AUTO-REVIEW: Architecture / ADR**
-
-After design approval, run an independent sub-agent review.
-Read `sage/core/capabilities/review/auto-review/SKILL.md`.
-
-If conditions met (Task tool available + auto_review ≠ false):
-  Spawn sub-agent with the **ADR / Architectural Spec Review** prompt.
-  Pass the ADR path(s) and brief path.
-  Present findings inline.
-  If CRITICAL: recommend [R] Revise before planning.
-  If no CRITICAL: note findings, continue to Step 4.
-  Append review verdict to decisions.md.
-If conditions not met: skip silently.
+**On [S] Skip review:**
+1. Update frontmatter, write handoff, append decisions (same as above).
+2. Announce: "Skipping independent review."
+3. Log to decisions.md: "ADRs approved without auto-review (user chose [S])."
+4. Proceed to Step 4.
 
 ## Step 4: Milestone Plan
 
@@ -189,27 +194,32 @@ Save to `.sage/work/YYYYMMDD-slug/plan.md` with frontmatter.
 🔒 **PLAN CHECKPOINT:**
 Sage: Milestone plan saved to .sage/work/YYYYMMDD-slug/plan.md
 
-[A] Approve — start building milestone 1 in this session
+[A] Approve & review — sub-agent reviews plan, then start milestone 1
+[S] Skip review — approve without independent review
 [R] Revise — adjust the breakdown
 [N] New session — type /build to start milestone 1
 
-Pick A/R/N, or tell me what to change.
+Pick A/S/R/N, or tell me what to change.
 
-On approval: append plan approach to decisions.md (Rule 7).
+**On [A] Approve & review:**
+1. Append plan approach to decisions.md (Rule 7).
+2. **Run auto-review BEFORE proceeding:**
+   Read `sage/core/capabilities/review/auto-review/SKILL.md`.
+   If conditions met (Task tool available + auto_review ≠ false):
+     Announce: "⚡ Running plan review (sub-agent)..."
+     Spawn sub-agent with the **Plan Review** prompt.
+     Pass the plan path and spec path.
+     Present findings inline.
+     Append review verdict to decisions.md.
+   If Task tool NOT available:
+     Announce: "Task tool not available — skipping independent review."
+3. THEN proceed.
 
-⚡ **AUTO-REVIEW: Milestone Plan**
-
-After plan approval, run an independent sub-agent review.
-Read `sage/core/capabilities/review/auto-review/SKILL.md`.
-
-If conditions met (Task tool available + auto_review ≠ false):
-  Spawn sub-agent with the **Plan Review** prompt.
-  Pass the plan path and spec path.
-  Present findings inline.
-  If CRITICAL: recommend [R] Revise before building.
-  If no CRITICAL: note findings, continue.
-  Append review verdict to decisions.md.
-If conditions not met: skip silently.
+**On [S] Skip review:**
+1. Append plan approach to decisions.md.
+2. Announce: "Skipping independent review."
+3. Log to decisions.md: "Plan approved without auto-review (user chose [S])."
+4. Proceed.
 
 **Next steps (Zone 3):**
 
@@ -237,18 +247,9 @@ Do NOT batch-implement multiple milestones without checkpoints.
 Do NOT skip per-milestone verification because "I'll test everything
 at the end."
 
-⚡ **AUTO-QA: Milestone Implementation**
-
-After each milestone's quality gates pass, run independent code
-verification. Read `sage/core/capabilities/review/auto-qa/SKILL.md`.
-
-If conditions met (Task tool available + auto_qa ≠ false):
-  Spawn sub-agent with the Implementation QA prompt.
-  Pass spec, milestone plan, and changed files for this milestone.
-  Present findings inline.
-  If CRITICAL: recommend [R] Fix before continuing to next milestone.
-  Append verdict to decisions.md.
-If conditions not met: skip silently.
+Quality gates for each milestone include Gate 8 (Auto-QA) which runs
+automatically as part of the gate sequence when Task tool is available.
+See `quality-gates.workflow.md` for the full sequence including Gate 8.
 
 **At each milestone completion checkpoint:**
 Sage: Milestone [N] complete — [summary]

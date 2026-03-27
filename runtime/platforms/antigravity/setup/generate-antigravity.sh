@@ -514,13 +514,14 @@ for wf in "$CORE"/workflows/*.workflow.md; do
   A spec is a FILE. No file = no implementation. Write it first.
 - AUTO-REVIEW: After spec [A] and plan [A], run sub-agent review via
   sage/core/capabilities/review/auto-review/SKILL.md (if Task tool available).
-- AUTO-QA: After quality gates pass, run sub-agent code verification via
-  sage/core/capabilities/review/auto-qa/SKILL.md (if Task tool available).
+  [A] means "approve AND review." Present [A] Approve & review / [S] Skip
+  review at checkpoints. Only [S] skips review.
+- GATE 3 INDEPENDENT: Code quality review MUST use sub-agent when Task tool available.
+- GATE 8 AUTO-QA: Runs as part of quality gates sequence (if Task tool available).
 - CODING PRINCIPLES: Load sage/core/capabilities/execution/coding-principles/SKILL.md
   before every implementation task. 7 universal principles applied during writing.
-- GATE 3 INDEPENDENT: Code quality review uses sub-agent when Task tool available.
 - Save ALL artifacts to .sage/work/ or .sage/docs/ — never inline-only
-- Checkpoints: present with [A] Approve / [R] Revise — wait for response
+- Checkpoints: present with [A] Approve & review / [S] Skip review / [R] Revise — wait for response
 - Choices: present with [1] [2] [3] bracket notation
 - Verify: PASTE actual test output before claiming done — no summaries
 - Never use code blocks for interaction (checkpoints, options, status)
@@ -553,11 +554,15 @@ for wf in "$CORE"/workflows/*.workflow.md; do
   brief.md MUST EXIST at .sage/work/ before any design work.
   "I understand the system" is NOT a brief. Do NOT compress 3 rounds into 1.
 - AUTO-REVIEW: After design checkpoint [A] and plan [A], run sub-agent
-  review via sage/core/capabilities/review/auto-review/SKILL.md (if Task tool available).
+  review via sage/core/capabilities/review/auto-review/SKILL.md (if Task tool
+  available). [A] means "approve AND review." Present [A] Approve & review /
+  [S] Skip review at checkpoints. Only [S] skips review.
+- GATE 3 INDEPENDENT: Code quality review MUST use sub-agent when Task tool available.
+- GATE 8 AUTO-QA: Runs per milestone as part of quality gates sequence.
 - Save ADRs to .sage/docs/decision-*.md, spec to .sage/work/
 - Each milestone in phased build follows build workflow gates independently.
   Do NOT batch-implement milestones without per-milestone checkpoints.
-- Checkpoints: present with [A] Approve / [R] Revise — wait for response
+- Checkpoints: present with [A] Approve & review / [S] Skip review / [R] Revise — wait for response
 - Choices: present with [1] [2] [3] bracket notation
 - Never use code blocks for interaction (checkpoints, options, status)
 - If user corrects your approach, store as self-learning before continuing

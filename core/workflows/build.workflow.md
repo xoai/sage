@@ -200,14 +200,16 @@ updated: YYYY-MM-DD
 Sage: Spec saved to .sage/work/YYYYMMDD-slug/spec.md
 Decision: [key technical decisions]. (append to .sage/decisions.md)
 
-[A] Approve — continue to plan in this session
+[A] Approve & review — sub-agent reviews spec, then continue to plan
+[S] Skip review — approve without independent review
 [R] Revise — tell me what to change
 [N] New session — type /build to continue with planning
 
-Pick A/R/N, or tell me what to change.
+Pick A/S/R/N, or tell me what to change.
 
-On approval: update spec frontmatter to `status: completed`.
-Write `handoff` field in frontmatter:
+**On [A] Approve & review:**
+1. Update spec frontmatter to `status: completed`.
+2. Write `handoff` field in frontmatter:
 ```yaml
 handoff: |
   Key decisions: [summary of choices made]
@@ -215,22 +217,25 @@ handoff: |
   Risks: [what to watch for during implementation]
   Next agent should: [specific guidance for planning phase]
 ```
-Append decision to decisions.md (Rule 7).
+3. Append decision to decisions.md (Rule 7).
+4. **Run auto-review BEFORE proceeding to Step 5:**
+   Read `sage/core/capabilities/review/auto-review/SKILL.md`.
+   If conditions met (Task tool available + Standard+ scope +
+   auto_review ≠ false in config):
+     Announce: "⚡ Running spec review (sub-agent)..."
+     Spawn sub-agent with the **Spec Review** prompt.
+     Pass the spec path and decisions.md path.
+     Present findings inline (see capability for format).
+     Append review verdict to decisions.md.
+   If Task tool NOT available:
+     Announce: "Task tool not available — skipping independent review."
+5. THEN proceed to Step 5.
 
-⚡ **AUTO-REVIEW: Spec**
-
-After spec approval, run an independent sub-agent review.
-Read `sage/core/capabilities/review/auto-review/SKILL.md`.
-
-If conditions met (Task tool available + Standard+ scope +
-auto_review ≠ false in config):
-  Spawn sub-agent with the **Spec Review** prompt.
-  Pass the spec path and decisions.md path.
-  Present findings inline (see capability for format).
-  If CRITICAL: recommend [R] Revise before proceeding.
-  If no CRITICAL: note findings, continue to Step 5.
-  Append review verdict to decisions.md.
-If conditions not met: skip silently.
+**On [S] Skip review:**
+1. Update spec frontmatter, write handoff, append decision (same as above).
+2. Announce: "Skipping independent review."
+3. Log to decisions.md: "Spec approved without auto-review (user chose [S])."
+4. Proceed to Step 5.
 
 ## Step 5: Plan
 
@@ -257,28 +262,33 @@ updated: YYYY-MM-DD
 
 Sage: Plan saved to .sage/work/YYYYMMDD-slug/plan.md
 
-[A] Approve — start building in this session
+[A] Approve & review — sub-agent reviews plan, then start building
+[S] Skip review — approve without independent review
 [R] Revise — tell me what to change
 [N] New session — type /build to start implementation
 
-Pick A/R/N, or tell me what to change.
+Pick A/S/R/N, or tell me what to change.
 
-On approval: append plan approach to decisions.md (Rule 7).
+**On [A] Approve & review:**
+1. Append plan approach to decisions.md (Rule 7).
+2. **Run auto-review BEFORE proceeding to Step 6:**
+   Read `sage/core/capabilities/review/auto-review/SKILL.md`.
+   If conditions met (Task tool available + Standard+ scope +
+   auto_review ≠ false in config):
+     Announce: "⚡ Running plan review (sub-agent)..."
+     Spawn sub-agent with the **Plan Review** prompt.
+     Pass the plan path and spec path.
+     Present findings inline.
+     Append review verdict to decisions.md.
+   If Task tool NOT available:
+     Announce: "Task tool not available — skipping independent review."
+3. THEN proceed to Step 6.
 
-⚡ **AUTO-REVIEW: Plan**
-
-After plan approval, run an independent sub-agent review.
-Read `sage/core/capabilities/review/auto-review/SKILL.md`.
-
-If conditions met (Task tool available + Standard+ scope +
-auto_review ≠ false in config):
-  Spawn sub-agent with the **Plan Review** prompt.
-  Pass the plan path and spec path.
-  Present findings inline.
-  If CRITICAL: recommend [R] Revise before implementing.
-  If no CRITICAL: note findings, continue to Step 6.
-  Append review verdict to decisions.md.
-If conditions not met: skip silently.
+**On [S] Skip review:**
+1. Append plan approach to decisions.md.
+2. Announce: "Skipping independent review."
+3. Log to decisions.md: "Plan approved without auto-review (user chose [S])."
+4. Proceed to Step 6.
 
 ## Step 6: Implement
 
@@ -324,23 +334,9 @@ If quality-gates cannot be loaded, follow these minimum rules:
 run full test suite, paste output, verify implementation matches spec,
 check for hallucinated imports or APIs.
 
-⚡ **AUTO-QA: Implementation**
-
-After quality gates pass, run an independent sub-agent code verification.
-Read `sage/core/capabilities/review/auto-qa/SKILL.md`.
-
-If conditions met (Task tool available + Standard+ scope +
-auto_qa ≠ false in config):
-  Gather changed file list from build-loop task tracking.
-  Spawn sub-agent with the **Implementation QA** prompt.
-  Pass spec path, plan path, changed files, test files.
-  Present findings inline.
-  If CRITICAL: recommend [R] Fix before completing.
-  If user picks [R]: fix the specific issues (file:line provided),
-    then re-run auto-QA (max 2 iterations).
-  If no CRITICAL: note findings, continue to Step 8.
-  Append verdict to decisions.md.
-If conditions not met: skip silently.
+Quality gates now include Gate 8 (Auto-QA) which runs automatically
+as part of the gate sequence when Task tool is available. See
+`quality-gates.workflow.md` for the full sequence including Gate 8.
 
 ## Step 8: Review and Close
 

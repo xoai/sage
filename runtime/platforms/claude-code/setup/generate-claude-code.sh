@@ -446,19 +446,27 @@ for wf in "$CORE"/workflows/*.workflow.md; do
 - Standard+ scope: spec.md MUST EXIST at .sage/work/ before implementing.
   "Design is clear" is NOT a spec. "We discussed this" is NOT a spec.
   A spec is a FILE. No file = no implementation. Write it first.
-- AUTO-REVIEW: After spec [A] and plan [A], run sub-agent review via
-  sage/core/capabilities/review/auto-review/SKILL.md. Do NOT skip because
-  "the spec is straightforward." 30 seconds of review prevents days of rework.
-- AUTO-QA: After quality gates pass, run sub-agent code verification via
-  sage/core/capabilities/review/auto-qa/SKILL.md. Do NOT skip because
-  "quality gates already passed." Gates are self-review, auto-QA is independent.
+- APPROVAL INCLUDES REVIEW: When user picks [A] at spec or plan checkpoint,
+  you MUST run auto-review sub-agent BEFORE proceeding to the next phase.
+  [A] means "approve AND review." Present [A] Approve & review / [S] Skip
+  review at every spec and plan checkpoint. If you proceed without showing
+  auto-review findings after [A], you have violated the process.
+  The only way to skip review is if the user picks [S] Skip review.
+  Blocked rationalizations:
+  - "The spec is straightforward" — [A] means review. Period.
+  - "The user wants to move fast" — they picked [A], not [S]
+  - "I already reviewed while writing" — self-review is not independent
+  - "Task tool might not work" — check first, skip only if truly unavailable
+- GATE 3 INDEPENDENT: Code quality review (Gate 3) MUST use sub-agent when
+  Task tool is available. Do NOT self-review when sub-agent is possible.
+- GATE 8 AUTO-QA: Runs as part of quality gates sequence (Gate 8). Do NOT
+  skip because "quality gates already passed." It runs by position in the
+  gate sequence, not by your discretion.
 - CODING PRINCIPLES: Load sage/core/capabilities/execution/coding-principles/SKILL.md
   before every implementation task. 7 universal principles: clarity, error handling,
   boundary guards, minimal scope, safe APIs, consistency, behavior testing.
-- GATE 3 INDEPENDENT: Code quality review (Gate 3) uses sub-agent when Task tool
-  is available. The agent that wrote the code does NOT review its own quality.
 - Save ALL artifacts to .sage/work/ or .sage/docs/ — never inline-only
-- Checkpoints: present with [A] Approve / [R] Revise — wait for response
+- Checkpoints: present with [A] Approve & review / [S] Skip review / [R] Revise — wait for response
 - Choices: present with [1] [2] [3] bracket notation
 - Verify: PASTE actual test output before claiming done — no summaries
 - Never use code blocks for interaction (checkpoints, options, status)
@@ -490,13 +498,18 @@ for wf in "$CORE"/workflows/*.workflow.md; do
 - MUST complete all 3 elicitation rounds SEQUENTIALLY before designing.
   brief.md MUST EXIST at .sage/work/ before any design work.
   "I understand the system" is NOT a brief. Do NOT compress 3 rounds into 1.
-- AUTO-REVIEW: After design checkpoint [A] and plan [A], run sub-agent
-  review via sage/core/capabilities/review/auto-review/SKILL.md. Architecture
-  decisions are the most expensive to reverse — independent review is critical.
+- APPROVAL INCLUDES REVIEW: When user picks [A] at design or plan checkpoint,
+  you MUST run auto-review sub-agent BEFORE proceeding. [A] means "approve AND
+  review." Present [A] Approve & review / [S] Skip review at every checkpoint.
+  Architecture decisions are the most expensive to reverse — independent review
+  is critical. If you proceed without showing findings after [A], you violated
+  the process. Only [S] skips review.
+- GATE 3 INDEPENDENT: Code quality review MUST use sub-agent when Task tool available.
+- GATE 8 AUTO-QA: Runs per milestone as part of quality gates sequence.
 - Save ADRs to .sage/docs/decision-*.md, spec to .sage/work/
 - Each milestone in phased build follows build workflow gates independently.
   Do NOT batch-implement milestones without per-milestone checkpoints.
-- Checkpoints: present with [A] Approve / [R] Revise — wait for response
+- Checkpoints: present with [A] Approve & review / [S] Skip review / [R] Revise — wait for response
 - Choices: present with [1] [2] [3] bracket notation
 - Never use code blocks for interaction (checkpoints, options, status)
 - If user corrects your approach, store as self-learning before continuing

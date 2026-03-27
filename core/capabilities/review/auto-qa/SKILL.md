@@ -21,12 +21,17 @@ requires: [Task tool]
 # Auto-QA
 
 Quick independent verification of implementation against spec via
-sub-agent delegation. Triggered automatically after quality gates
-pass. 30 seconds max. Code-only. Advisory — never blocks.
+sub-agent delegation. Runs as **Gate 8** in the quality gates
+sequence — positioned after Gate 5 (verification), alongside
+Gate 6 (browser) and Gate 7 (design). 30 seconds max. Code-only.
+Advisory — never blocks.
 
 ## When to Run
 
-Auto-QA runs when ALL conditions are met:
+Auto-QA runs as Gate 8 in the quality-gates workflow. The gate
+sequence triggers it — the agent does not decide whether to run it.
+
+**Activation conditions (checked by quality-gates workflow):**
 
 1. **Task tool is available.** If not (e.g., Antigravity), skip
    silently. No self-review fallback.
@@ -38,12 +43,12 @@ Auto-QA runs when ALL conditions are met:
    "Auto-QA disabled. Run /qa for manual testing."
    If `auto_qa: true` or absent (default), proceed.
 
-4. **Quality gates passed.** Auto-QA runs AFTER gates, not instead
-   of them. Gates catch structural issues; auto-QA catches semantic
-   issues.
-
 If ANY condition is false → skip silently (except config disabled
 which shows one-line note).
+
+Gate 8 runs AFTER Gates 1-5 pass. Gates catch structural issues;
+Gate 8 catches semantic issues (spec drift, missing handlers,
+boundary gaps, integration mismatches).
 
 ## Time Budget
 

@@ -21,30 +21,39 @@ requires: [Task tool]
 # Auto-Review
 
 Quick independent review of spec/plan/ADR via sub-agent delegation.
-Triggered automatically after user approval at workflow checkpoints.
+Triggered as part of the [A] Approve & review checkpoint flow.
 30 seconds max. Advisory — never blocks.
 
 ## When to Run
 
-Auto-review runs when ALL conditions are met:
+Auto-review runs when the user picks **[A] Approve & review** at a
+workflow checkpoint. It is part of the [A] flow, not a separate step.
 
-1. **Task tool is available.** Check by attempting to use the Task
-   tool. If not available (e.g., Antigravity), skip silently.
-   No output. No warning. No self-review fallback.
+The workflow checkpoint presents:
+```
+[A] Approve & review — sub-agent reviews, then proceed
+[S] Skip review — approve without independent review
+```
+
+When the user picks [A], the workflow MUST run auto-review before
+proceeding to the next phase. The only way to skip is [S].
+
+### Conditions (checked by the workflow before spawning)
+
+1. **Task tool is available.** If not (e.g., Antigravity), [A] falls
+   back to simple approval. Announce: "Task tool not available —
+   skipping independent review."
 
 2. **Scope is Standard or Comprehensive.** Lightweight tasks skip
-   auto-review — they have no spec/plan to review.
+   auto-review — they have no spec/plan to review. [A] behaves as
+   simple approval.
 
 3. **Config allows it.** Check `.sage/config.yaml` for `auto_review`.
-   If `auto_review: false`, skip with one-line note:
+   If `auto_review: false`, [A] behaves as simple approval with note:
    "Auto-review disabled. Run /review for independent evaluation."
-   If `auto_review: true` or absent (default), proceed.
 
-4. **Artifact was just approved [A].** Auto-review fires immediately
-   after the user approves, before the next phase begins.
-
-If ANY condition is false → skip. No output unless config explicitly
-disabled (then the one-line note).
+When all conditions are met and user picks [A]: announce
+"⚡ Running [type] review (sub-agent)..." and spawn the sub-agent.
 
 ## Time Budget
 

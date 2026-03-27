@@ -32,10 +32,15 @@ as Gate 3 in the quality pipeline.
 
 ## Process
 
-### Sub-Agent Delegation (preferred)
+### Sub-Agent Delegation (REQUIRED when Task tool available)
 
-**IF Task tool is available AND `independent_gate3` ≠ false in
-`.sage/config.yaml`:**
+Gate 3 REQUIRES sub-agent delegation when Task tool is available.
+Self-review is the fallback when Task tool is NOT available, not
+a choice the agent makes.
+
+**Step 1:** Check Task tool availability.
+
+**Step 2 — Task tool available AND `independent_gate3` ≠ false:**
 
 Announce: "⚡ Running code quality review (sub-agent)..."
 
@@ -91,10 +96,13 @@ Security issues found = ALWAYS FAIL.
 Present the sub-agent's findings as the Gate 3 result. Do NOT
 filter, downgrade, or dismiss findings.
 
-**IF Task tool is NOT available OR `independent_gate3` is false:**
+**Step 3 — Task tool NOT available OR `independent_gate3` is false:**
 
-Announce: "Running code quality self-review. For independent review,
-run /review."
+Self-review fallback. Announce: "Self-review only — Task tool not
+available. For independent review, run /review."
+
+Do NOT self-review when Task tool IS available and config allows
+sub-agent. That defeats the purpose of independent review.
 
 Proceed with self-review using the 5 dimensions below.
 
