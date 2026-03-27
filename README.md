@@ -116,27 +116,81 @@ curl -fsSL https://raw.githubusercontent.com/xoai/sage/main/install.sh | bash
 All `sage` commands run in bash. On Windows, use Git Bash or WSL
 for both installation and daily use.
 
-### Create a Project
+### Path A: New Project (Greenfield)
 
 ```bash
-sage new my-app
+sage new my-app                  # scaffold a new project with Sage
+cd my-app
 ```
 
-### Or Add to an Existing Project
+Open the project in your IDE, then follow a natural progression:
+
+```
+/sage                            # 1. describe what you want to build
+                                 #    Sage classifies intent, detects gaps,
+                                 #    and recommends the right workflow
+
+/research                        # 2. (optional) user interviews → JTBD →
+                                 #    opportunity map — understand the problem
+                                 #    before solutioning
+
+/architect                       # 3. (optional) system design → ADRs →
+                                 #    milestone plan — for non-trivial systems
+
+/build                           # 4. spec → plan → build-loop → quality gates
+                                 #    auto-review, TDD, coding principles, auto-QA
+```
+
+Not every project needs every step. A simple feature can go straight
+to `/build`. A complex product benefits from `/research` → `/design`
+→ `/architect` → `/build`. Sage tells you what you're skipping and
+lets you decide.
+
+### Path B: Existing Project (Brownfield)
 
 ```bash
 cd your-project
-sage init                        # interactive — asks for platform and preset
-sage init --preset startup       # non-interactive with preset
-sage init --preset enterprise    # auth, audit trails, postmortems
+sage init                        # interactive — detects stack, asks for preset
+sage init --preset startup       # or pick a preset directly
 ```
 
 Available presets: `base` (default), `startup`, `enterprise`, `opensource`.
 Presets add engineering principles on top of the universal base (TDD, no
-secrets, explicit deps). Choose during init or configure later in
-`.sage/config.yaml`.
+secrets, explicit deps). Configure later in `.sage/config.yaml`.
 
-### Upgrade an Existing Project
+**Then teach Sage your codebase:**
+
+```bash
+# 1. Set up persistent memory (one-time)
+sage setup memory                # configures sage-memory MCP server
+
+# 2. Learn your codebase (run inside your IDE)
+sage learn                       # broad scan — architecture, patterns, conventions
+sage learn src/billing           # deep dive — learn a specific module
+```
+
+After learning, Sage knows your conventions, architecture, and
+landmines. Every future session starts by searching this memory —
+no more explaining context from scratch.
+
+**Then work naturally:**
+
+```
+/sage                            # describe your task — Sage reads memory,
+                                 # checks for work in progress, and routes
+                                 # to the right workflow
+
+/fix                             # diagnose → scope → fix → verify
+                                 # reads prior QA reports and design reviews
+
+/build                           # spec → plan → build-loop → quality gates
+                                 # reads prior research, design specs, ADRs
+
+/continue                        # resume where you left off — reads the
+                                 # cycle manifest for full context handoff
+```
+
+### Upgrade
 
 ```bash
 sage upgrade   # pulls latest Sage framework from GitHub
@@ -145,12 +199,8 @@ sage update    # regenerates platform files, preserves .sage/ state
 
 `sage update` regenerates CLAUDE.md, commands, workflows, and gate
 scripts while preserving your project state (decisions, work
-artifacts, memory). It also migrates stale patterns from previous
-versions. You may need to restart your IDE to load latest configs.
-
-That's it. Open your project in your IDE, type `/sage`, and describe
-what you want to build. Sage reads your project, assesses the task,
-and guides you through the right process.
+artifacts, memory). You may need to restart your IDE to load latest
+configs.
 
 ### CLI Commands
 
@@ -170,41 +220,6 @@ Run in your terminal:
 | `sage remove <skill>` | Remove a skill from project |
 | `sage skills` | List installed skills |
 | `sage update [target]` | Update community skills to latest |
-
-## What It Looks Like
-
-Type `/sage` and describe what you want to do. Sage reads your project,
-assesses the task, and guides you:
-
-```
-> /sage
-> Redesign our homepage for better conversion
-
-Sage: Fresh project, no work in progress.
-
-This looks like a comprehensive task — redesign involves understanding
-what's not working before designing what's next.
-
-[1] Start with UX audit of current homepage, then redesign
-[2] Skip research, go straight to redesign
-[3] Something else — describe what you have in mind
-
-> 1
-
-Sage → build workflow. Starting with UX audit. Reading ux-audit skill...
-
-[Sage runs the audit, saves findings to .sage/docs/ux-audit-homepage.md]
-
-Sage: UX audit complete. Key findings:
-- Navigation is clear but CTA is buried below the fold
-- Mobile load time is 4.2s (target: <2s)
-- No social proof visible in first viewport
-
-[C] Continue with brief  |  Or tell me what you'd like to do
-```
-
-Every step: structured options with `[1] [2] [3]`, saved artifacts,
-recommended next step. You stay in control — Sage stays intelligent.
 
 ## How Sage Works
 
