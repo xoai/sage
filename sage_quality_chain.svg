@@ -1,0 +1,116 @@
+<svg width="100%" viewBox="0 0 720 720" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+</defs>
+
+<!-- Title -->
+<text x="360" y="28" text-anchor="middle" style="fill:#faf9f5;font-family:'Anthropic Sans',-apple-system,system-ui,sans-serif;font-size:15px;font-weight:600">The Quality Chain</text>
+<text x="360" y="48" text-anchor="middle" style="fill:#c2c0b6;font-family:'Anthropic Sans',-apple-system,system-ui,sans-serif;font-size:11px;font-weight:400">4 sub-agent review points. The agent that writes never reviews its own work alone.</text>
+
+<!-- ═══ PHASE: SPEC ═══ -->
+<rect x="40" y="68" width="640" height="72" rx="10" fill="#1a3a2a" stroke="#3d9" stroke-width="0.5"/>
+<text x="60" y="90" style="fill:#7dffb3;font-family:'Anthropic Sans',-apple-system,system-ui,sans-serif;font-size:13px;font-weight:600">spec [A] Approve &amp; review</text>
+<text x="280" y="90" style="fill:#5a9;font-family:'Anthropic Sans',-apple-system,system-ui,sans-serif;font-size:11px;font-weight:400">user picks [A] → review fires</text>
+<!-- sub-agent badge -->
+<rect x="60" y="100" width="245" height="28" rx="6" fill="#0d2818" stroke="#3d9" stroke-width="0.4"/>
+<text x="72" y="118" style="fill:#3d9;font-family:'Anthropic Sans',-apple-system,system-ui,sans-serif;font-size:12px;font-weight:500">⚡ auto-review  ·  SUB-AGENT</text>
+<!-- checks -->
+<text x="320" y="112" style="fill:#9dc;font-family:'Anthropic Sans',-apple-system,system-ui,sans-serif;font-size:10px;font-weight:400">framing alignment · testable criteria · boundary completeness</text>
+<text x="320" y="128" style="fill:#9dc;font-family:'Anthropic Sans',-apple-system,system-ui,sans-serif;font-size:10px;font-weight:400">edge cases · internal consistency</text>
+
+<!-- Arrow spec → plan -->
+<line x1="360" y1="140" x2="360" y2="156" stroke="#555" stroke-width="1" marker-end="url(#arr)"/>
+
+<!-- ═══ PHASE: PLAN ═══ -->
+<rect x="40" y="158" width="640" height="72" rx="10" fill="#1a2a3a" stroke="#5ad" stroke-width="0.5"/>
+<text x="60" y="180" style="fill:#7ddfff;font-family:'Anthropic Sans',-apple-system,system-ui,sans-serif;font-size:13px;font-weight:600">plan [A] Approve &amp; review</text>
+<text x="280" y="180" style="fill:#5ad;font-family:'Anthropic Sans',-apple-system,system-ui,sans-serif;font-size:11px;font-weight:400">user picks [A] → review fires</text>
+<rect x="60" y="190" width="245" height="28" rx="6" fill="#0d1828" stroke="#5ad" stroke-width="0.4"/>
+<text x="72" y="208" style="fill:#5ad;font-family:'Anthropic Sans',-apple-system,system-ui,sans-serif;font-size:12px;font-weight:500">⚡ auto-review  ·  SUB-AGENT</text>
+<text x="320" y="202" style="fill:#9ce;font-family:'Anthropic Sans',-apple-system,system-ui,sans-serif;font-size:10px;font-weight:400">spec-plan alignment · task decomposition · dependency ordering</text>
+<text x="320" y="218" style="fill:#9ce;font-family:'Anthropic Sans',-apple-system,system-ui,sans-serif;font-size:10px;font-weight:400">coverage gaps · risk concentration</text>
+
+<!-- Arrow plan → implement -->
+<line x1="360" y1="230" x2="360" y2="246" stroke="#555" stroke-width="1" marker-end="url(#arr)"/>
+
+<!-- ═══ PHASE: IMPLEMENT ═══ -->
+<rect x="40" y="248" width="640" height="52" rx="10" fill="#2a2a1a" stroke="#da5" stroke-width="0.5"/>
+<text x="60" y="270" style="fill:#ffe07d;font-family:'Anthropic Sans',-apple-system,system-ui,sans-serif;font-size:13px;font-weight:600">implement</text>
+<text x="145" y="270" style="fill:#da5;font-family:'Anthropic Sans',-apple-system,system-ui,sans-serif;font-size:11px;font-weight:400">coding principles active during every line</text>
+<text x="60" y="290" style="fill:#cb9;font-family:'Anthropic Sans',-apple-system,system-ui,sans-serif;font-size:10px;font-weight:400">clarity · error handling · boundary guards · minimal scope · safe APIs · consistency · behavior testing</text>
+
+<!-- Arrow implement → gates -->
+<line x1="360" y1="300" x2="360" y2="316" stroke="#555" stroke-width="1" marker-end="url(#arr)"/>
+
+<!-- ═══ QUALITY GATES ═══ -->
+<rect x="40" y="318" width="640" height="310" rx="10" fill="none" stroke="#666" stroke-width="0.5" stroke-dasharray="4,3"/>
+<text x="60" y="340" style="fill:#aaa;font-family:'Anthropic Sans',-apple-system,system-ui,sans-serif;font-size:12px;font-weight:600;letter-spacing:1px">QUALITY GATES</text>
+
+<!-- Gate 1 -->
+<rect x="60" y="352" width="290" height="32" rx="6" fill="#1c1c1c" stroke="#888" stroke-width="0.3"/>
+<text x="72" y="372" style="fill:#ccc;font-family:'Anthropic Sans',-apple-system,system-ui,sans-serif;font-size:11px;font-weight:500">Gate 1  spec compliance</text>
+<rect x="240" y="358" width="100" height="20" rx="4" fill="#2a2a2a"/>
+<text x="250" y="372" style="fill:#999;font-family:'Anthropic Sans',-apple-system,system-ui,sans-serif;font-size:9px;font-weight:400">script + agent</text>
+
+<!-- Gate 2 -->
+<rect x="60" y="390" width="290" height="32" rx="6" fill="#1c1c1c" stroke="#888" stroke-width="0.3"/>
+<text x="72" y="410" style="fill:#ccc;font-family:'Anthropic Sans',-apple-system,system-ui,sans-serif;font-size:11px;font-weight:500">Gate 2  constitution compliance</text>
+<rect x="270" y="396" width="70" height="20" rx="4" fill="#2a2a2a"/>
+<text x="283" y="410" style="fill:#999;font-family:'Anthropic Sans',-apple-system,system-ui,sans-serif;font-size:9px;font-weight:400">agent</text>
+
+<!-- Gate 3 — SUB-AGENT highlight -->
+<rect x="60" y="428" width="600" height="42" rx="6" fill="#2a1a2a" stroke="#d6f" stroke-width="0.5"/>
+<text x="72" y="448" style="fill:#f0c0ff;font-family:'Anthropic Sans',-apple-system,system-ui,sans-serif;font-size:11px;font-weight:600">Gate 3  code quality</text>
+<rect x="200" y="436" width="110" height="22" rx="5" fill="#1a0d28" stroke="#d6f" stroke-width="0.4"/>
+<text x="212" y="451" style="fill:#d6f;font-family:'Anthropic Sans',-apple-system,system-ui,sans-serif;font-size:10px;font-weight:500">⚡ SUB-AGENT</text>
+<text x="322" y="448" style="fill:#b8a;font-family:'Anthropic Sans',-apple-system,system-ui,sans-serif;font-size:10px;font-weight:400">readability · error handling · security · performance · conventions</text>
+<text x="72" y="464" style="fill:#96c;font-family:'Anthropic Sans',-apple-system,system-ui,sans-serif;font-size:9px;font-weight:400">MUST delegate — self-review only when Task tool not available</text>
+
+<!-- Gate 4 -->
+<rect x="60" y="476" width="290" height="32" rx="6" fill="#1c1c1c" stroke="#888" stroke-width="0.3"/>
+<text x="72" y="496" style="fill:#ccc;font-family:'Anthropic Sans',-apple-system,system-ui,sans-serif;font-size:11px;font-weight:500">Gate 4  hallucination check</text>
+<rect x="240" y="482" width="100" height="20" rx="4" fill="#2a2a2a"/>
+<text x="250" y="496" style="fill:#999;font-family:'Anthropic Sans',-apple-system,system-ui,sans-serif;font-size:9px;font-weight:400">script + agent</text>
+
+<!-- Gate 5 -->
+<rect x="60" y="514" width="290" height="32" rx="6" fill="#1c1c1c" stroke="#888" stroke-width="0.3"/>
+<text x="72" y="534" style="fill:#ccc;font-family:'Anthropic Sans',-apple-system,system-ui,sans-serif;font-size:11px;font-weight:500">Gate 5  test verification</text>
+<rect x="220" y="520" width="60" height="20" rx="4" fill="#2a2a2a"/>
+<text x="233" y="534" style="fill:#999;font-family:'Anthropic Sans',-apple-system,system-ui,sans-serif;font-size:9px;font-weight:400">script</text>
+
+<!-- Gate 8 — SUB-AGENT highlight -->
+<rect x="60" y="556" width="600" height="56" rx="6" fill="#1a2a1a" stroke="#3d9" stroke-width="0.5"/>
+<text x="72" y="576" style="fill:#7dffb3;font-family:'Anthropic Sans',-apple-system,system-ui,sans-serif;font-size:11px;font-weight:600">Gate 8  auto-QA</text>
+<rect x="168" y="564" width="110" height="22" rx="5" fill="#0d2818" stroke="#3d9" stroke-width="0.4"/>
+<text x="180" y="579" style="fill:#3d9;font-family:'Anthropic Sans',-apple-system,system-ui,sans-serif;font-size:10px;font-weight:500">⚡ SUB-AGENT</text>
+<text x="290" y="576" style="fill:#9dc;font-family:'Anthropic Sans',-apple-system,system-ui,sans-serif;font-size:10px;font-weight:400">spec alignment · test coverage · error handling</text>
+<text x="290" y="592" style="fill:#9dc;font-family:'Anthropic Sans',-apple-system,system-ui,sans-serif;font-size:10px;font-weight:400">boundary conditions · integration · coding principles</text>
+<text x="72" y="605" style="fill:#6b6;font-family:'Anthropic Sans',-apple-system,system-ui,sans-serif;font-size:9px;font-weight:400">advisory — runs by position in gate sequence, not by agent discretion</text>
+
+<!-- Arrow connections inside gates -->
+<line x1="205" y1="384" x2="205" y2="390" stroke="#555" stroke-width="0.5"/>
+<line x1="205" y1="422" x2="205" y2="428" stroke="#555" stroke-width="0.5"/>
+<line x1="205" y1="470" x2="205" y2="476" stroke="#555" stroke-width="0.5"/>
+<line x1="205" y1="508" x2="205" y2="514" stroke="#555" stroke-width="0.5"/>
+<line x1="205" y1="546" x2="205" y2="556" stroke="#555" stroke-width="0.5"/>
+
+<!-- Arrow gates → done -->
+<line x1="360" y1="628" x2="360" y2="650" stroke="#555" stroke-width="1" marker-end="url(#arr)"/>
+
+<!-- Done -->
+<rect x="290" y="652" width="140" height="36" rx="8" fill="#1a3a2a" stroke="#3d9" stroke-width="0.5"/>
+<text x="360" y="674" text-anchor="middle" style="fill:#7dffb3;font-family:'Anthropic Sans',-apple-system,system-ui,sans-serif;font-size:13px;font-weight:600">✓  done</text>
+
+<!-- Legend -->
+<rect x="400" y="340" width="10" height="10" rx="2" fill="#2a1a2a" stroke="#d6f" stroke-width="0.4"/>
+<rect x="400" y="356" width="10" height="10" rx="2" fill="#1a2a1a" stroke="#3d9" stroke-width="0.4"/>
+<rect x="400" y="372" width="10" height="10" rx="2" fill="#1c1c1c" stroke="#888" stroke-width="0.3"/>
+<text x="418" y="349" style="fill:#d6f;font-family:'Anthropic Sans',-apple-system,system-ui,sans-serif;font-size:9px;font-weight:400">sub-agent (independent context)</text>
+<text x="418" y="365" style="fill:#3d9;font-family:'Anthropic Sans',-apple-system,system-ui,sans-serif;font-size:9px;font-weight:400">sub-agent (advisory)</text>
+<text x="418" y="381" style="fill:#999;font-family:'Anthropic Sans',-apple-system,system-ui,sans-serif;font-size:9px;font-weight:400">script or self-review</text>
+
+<!-- Right side annotation: [S] skip -->
+<text x="558" y="90" style="fill:#666;font-family:'Anthropic Sans',-apple-system,system-ui,sans-serif;font-size:9px;font-weight:400;font-style:italic">[S] Skip review = explicit,</text>
+<text x="558" y="102" style="fill:#666;font-family:'Anthropic Sans',-apple-system,system-ui,sans-serif;font-size:9px;font-weight:400;font-style:italic">logged to decisions.md</text>
+
+</svg>

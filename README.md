@@ -139,14 +139,14 @@ secrets, explicit deps). Choose during init or configure later in
 ### Upgrade an Existing Project
 
 ```bash
-sage update    # regenerates platform files, preserves .sage/ state
 sage upgrade   # pulls latest Sage framework from GitHub
+sage update    # regenerates platform files, preserves .sage/ state
 ```
 
 `sage update` regenerates CLAUDE.md, commands, workflows, and gate
 scripts while preserving your project state (decisions, work
 artifacts, memory). It also migrates stale patterns from previous
-versions.
+versions. You may need to restart your IDE to load latest configs.
 
 That's it. Open your project in your IDE, type `/sage`, and describe
 what you want to build. Sage reads your project, assesses the task,
@@ -321,6 +321,10 @@ The agent must bypass all five layers to skip the spec. Each layer is
 independently enforceable.
 
 ### Independent Reviews (Sub-Agent)
+
+<p align="center">
+  <img src="sage_quality_chain.svg" alt="Sage Quality Chain." width="600" />
+</p>
 
 Sage delegates three review points to sub-agents with independent
 context windows. The producing agent's conversation history — where
