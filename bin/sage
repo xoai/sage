@@ -103,16 +103,23 @@ sage_complete() {
 }
 
 spin() {
-  [ -t 1 ] || return 0  # No spinner in non-interactive mode
   local pid=$1 msg="${2:-Working...}"
+  # Non-interactive: just wait silently
+  if [ ! -t 1 ]; then
+    wait "$pid" 2>/dev/null
+    return $?
+  fi
   local chars='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
   while kill -0 "$pid" 2>/dev/null; do
     for i in $(seq 0 $((${#chars} - 1))); do
-      printf "\r  │  ${DIM}${chars:$i:1}${RESET} %s" "$msg"
+      kill -0 "$pid" 2>/dev/null || break
+      printf "\r  ${DIM}${chars:$i:1} %s${RESET}" "$msg"
       sleep 0.08
     done
   done
-  printf "\r  │                                                    \r"
+  printf "\r                                                       \r"
+  wait "$pid" 2>/dev/null
+  return $?
 }
 
 # ── Resolve framework source ──
@@ -250,7 +257,8 @@ copy_framework() {
   if [ -d "$target/sage" ]; then
     echo -e "  ${GREEN}✓${RESET} sage/ already present"
   else
-    cp -a "$SAGE_FRAMEWORK" "$target/sage"
+    cp -a "$SAGE_FRAMEWORK" "$target/sage" &
+    spin $! "Copying framework..."
     echo -e "  ${GREEN}✓${RESET} sage/ copied to project"
   fi
 }
@@ -645,7 +653,8 @@ except: pass
   # Update sage/ framework
   if [ -d "$target/sage" ]; then
     rm -rf "$target/sage"
-    cp -a "$SAGE_FRAMEWORK" "$target/sage"
+    cp -a "$SAGE_FRAMEWORK" "$target/sage" &
+    spin $! "Updating framework..."
     echo -e "  ${GREEN}✓${RESET} sage/ updated"
   fi
 
@@ -756,9 +765,10 @@ sage_upgrade() {
   fi
 
   if [ -d "$sage_home/framework/.git" ]; then
-    echo "  Pulling latest from GitHub..."
-    if (cd "$sage_home/framework" && git pull --ff-only 2>/dev/null); then
-      echo ""
+    timer_start
+    step_start
+    (cd "$sage_home/framework" && git pull --ff-only 2>/dev/null) &
+    if spin $! "Pulling latest from GitHub..."; then
       echo -e "  ${GREEN}✓${RESET} Sage upgraded to latest"
       echo ""
       echo "  Run 'sage update' in your projects to regenerate platform files."
