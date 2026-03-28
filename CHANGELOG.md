@@ -20,7 +20,7 @@ All notable changes to Sage will be documented in this file.
   with [R] Revise / [P] Proceed / [D] Discuss options.
 - **Config toggle:** `auto_review: false` in `.sage/config.yaml` disables
   auto-review. Default is `true`.
-- **30-second timeout:** if sub-agent doesn't respond, skip with note.
+- **60-second timeout:** if sub-agent doesn't respond, skip with note.
 - **Task tool required:** if Task tool is not available (e.g., Antigravity),
   auto-review skips silently. No self-review fallback.
 - **Findings logged:** all review verdicts appended to decisions.md for

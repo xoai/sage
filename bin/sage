@@ -321,6 +321,9 @@ create_sage_state() {
   local sage_dir="$target/.sage"
   mkdir -p "$sage_dir/work" "$sage_dir/docs" "$sage_dir/gates/scripts"
 
+  local prefix_val="false"
+  [ "$PREFIX_FLAG" = "true" ] && prefix_val="true"
+
   cat > "$sage_dir/config.yaml" << YAML
 sage-version: "1.0.0"
 project-name: "$project_name"
@@ -328,6 +331,7 @@ detected-stack: [$DETECTED_STACK]
 auto_review: true
 auto_qa: true
 independent_gate3: true
+command_prefix: $prefix_val
 YAML
 
   cat > "$sage_dir/decisions.md" << MD
@@ -403,19 +407,23 @@ print_success() {
 
   sage_complete
 
+  # Command prefix display
+  local p=""
+  [ "$PREFIX_FLAG" = "true" ] && p="sage:"
+
   echo -e "  ${BOLD}Get started:${RESET}"
   echo ""
   if [ "$PLATFORM" = "claude-code" ] || [ "$PLATFORM" = "both" ]; then
     echo "    1. Open this project in your IDE"
     echo -e "    2. Type ${BOLD}/sage${RESET} and describe what you want to build"
     echo ""
-    echo -e "  ${DIM}Commands: /build  /fix  /architect  /status  /review  /learn${RESET}"
+    echo -e "  ${DIM}Commands: /${p}build  /${p}fix  /${p}architect  /${p}status  /${p}review  /${p}learn${RESET}"
   fi
   if [ "$PLATFORM" = "antigravity" ] && [ "$PLATFORM" != "both" ]; then
     echo "    1. Open this project in Antigravity"
     echo -e "    2. Type ${BOLD}/sage${RESET} and describe what you want to build"
     echo ""
-    echo -e "  ${DIM}Commands: /build  /fix  /architect  /status  /review  /learn${RESET}"
+    echo -e "  ${DIM}Commands: /${p}build  /${p}fix  /${p}architect  /${p}status  /${p}review  /${p}learn${RESET}"
   fi
 
   # Check for sage-memory
@@ -943,7 +951,7 @@ sage_help() {
   echo ""
   echo "Project commands:"
   echo "  sage new <n>                  Create a new project with Sage"
-  echo "  sage init                        Add Sage to the current directory"
+  echo "  sage init [--prefix]             Add Sage to the current directory"
   echo "  sage update                      Regenerate platform files"
   echo "  sage upgrade                     Update Sage to the latest version"
   echo "  sage learn [path]                Learn a codebase or module"
@@ -960,8 +968,13 @@ sage_help() {
   echo ""
   echo "  sage help                        Show this help"
   echo ""
+  echo "Flags:"
+  echo "  --prefix                         Namespace commands as sage:build, sage:fix, etc."
+  echo "  --preset <name>                  Set constitution preset (base|startup|enterprise|opensource)"
+  echo ""
   echo "Examples:"
   echo "  sage new my-app                  # Create project with Sage"
+  echo "  sage init --prefix               # Add Sage with sage: prefixed commands"
   echo "  sage learn                       # Broad scan of whole project"
   echo "  sage learn src/billing/          # Deep dive into a module"
   echo "  sage find react                  # Search skills.sh for React skills"
@@ -977,13 +990,15 @@ sage_help() {
 COMMAND="${1:-}"
 shift 2>/dev/null || true
 
-# Parse --preset flag from remaining args
+# Parse flags from remaining args
 PRESET_FLAG=""
+PREFIX_FLAG=""
 REMAINING_ARGS=()
 for arg in "$@"; do
   case "$arg" in
     --preset=*) PRESET_FLAG="${arg#--preset=}" ;;
     --preset)   PRESET_FLAG="__NEXT__" ;;
+    --prefix)   PREFIX_FLAG="true" ;;
     *)
       if [ "$PRESET_FLAG" = "__NEXT__" ]; then
         PRESET_FLAG="$arg"

@@ -22,7 +22,7 @@ requires: [Task tool]
 
 Quick independent review of spec/plan/ADR via sub-agent delegation.
 Triggered as part of the [A] Approve & review checkpoint flow.
-30 seconds max. Advisory — never blocks.
+60 seconds max. Advisory — never blocks.
 
 ## When to Run
 
@@ -50,16 +50,16 @@ proceeding to the next phase. The only way to skip is [S].
 
 3. **Config allows it.** Check `.sage/config.yaml` for `auto_review`.
    If `auto_review: false`, [A] behaves as simple approval with note:
-   "Auto-review disabled. Run /review for independent evaluation."
+   "Auto-review disabled. Run the review command for independent evaluation."
 
 When all conditions are met and user picks [A]: announce
 "⚡ Running [type] review (sub-agent)..." and spawn the sub-agent.
 
 ## Time Budget
 
-30 seconds max per review. If the sub-agent doesn't respond within
-30 seconds, skip with: "Auto-review timed out. Consider /review
-manually." Do not block the workflow.
+60 seconds max per review. If the sub-agent doesn't respond within
+60 seconds, skip with: "Auto-review timed out. Run the review command
+manually for a full evaluation." Do not block the workflow.
 
 ## Presentation Format
 
@@ -134,7 +134,7 @@ The whole point is independent judgment. Filtering defeats it.
 Blocked rationalizations:
 - "The spec is straightforward" — straightforward specs still
   benefit from independent eyes
-- "The user is in a hurry" — 30 seconds is not a delay
+- "The user is in a hurry" — 60 seconds is not a delay
 - "I already reviewed it while writing" — self-review is not review
 - "The previous review passed" — this is a different artifact
 

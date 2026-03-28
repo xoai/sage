@@ -15,6 +15,14 @@ echo ""
 echo "🚀 Sage → Claude Code Setup"
 echo "═══════════════════════════════"
 
+# ── Read prefix config ──
+PREFIX=""
+if [ -f "$PROJECT_SAGE/config.yaml" ]; then
+  if grep -q 'command_prefix: true' "$PROJECT_SAGE/config.yaml" 2>/dev/null; then
+    PREFIX="sage:"
+  fi
+fi
+
 # ── Validate ──
 if [ ! -d "$CORE" ]; then
   echo "❌ Sage framework not found at $SAGE_DIR"
@@ -421,7 +429,30 @@ with open('$SAGE_ROOT/CLAUDE.md', 'w') as f:
   sed -i "s|__CONSTITUTION_PLACEHOLDER__|## Engineering Principles\n\nBase (all projects):\n1. Tests before code\n2. No silent failures\n3. Secrets never in code\n4. Dependencies explicit\n5. Changes reversible|" "$SAGE_ROOT/CLAUDE.md" 2>/dev/null
 }
 
-echo "  ✓ CLAUDE.md"
+# ── Apply command prefix to CLAUDE.md routing table ──
+# Replaces all /command references except /sage (which stays unprefixed).
+# Order matters: longer names first to avoid partial matches
+# (e.g., /design-review before /design, /build before /b).
+if [ -n "$PREFIX" ]; then
+  sed -i \
+    -e "s|/design-review|/${PREFIX}design-review|g" \
+    -e "s|/architect|/${PREFIX}architect|g" \
+    -e "s|/research|/${PREFIX}research|g" \
+    -e "s|/continue|/${PREFIX}continue|g" \
+    -e "s|/reflect|/${PREFIX}reflect|g" \
+    -e "s|/analyze|/${PREFIX}analyze|g" \
+    -e "s|/design|/${PREFIX}design|g" \
+    -e "s|/review|/${PREFIX}review|g" \
+    -e "s|/status|/${PREFIX}status|g" \
+    -e "s|/build|/${PREFIX}build|g" \
+    -e "s|/learn|/${PREFIX}learn|g" \
+    -e "s|/fix|/${PREFIX}fix|g" \
+    -e "s|/qa|/${PREFIX}qa|g" \
+    "$SAGE_ROOT/CLAUDE.md"
+  echo "  ✓ CLAUDE.md (with ${PREFIX} prefix)"
+else
+  echo "  ✓ CLAUDE.md"
+fi
 
 # ═══════════════════════════════════════════════════════════════
 # Commands — Adapted from core/workflows/ for Claude Code
@@ -695,7 +726,7 @@ SAGEEOF
 
   # Special case: review command uses Task-based sub-agent delegation
   if [ "$basename_wf" = "review" ]; then
-    cat > "$CLAUDE_DIR/commands/review.md" << 'REVIEWEOF'
+    cat > "$CLAUDE_DIR/commands/${PREFIX}review.md" << 'REVIEWEOF'
 RULES (apply to every step — non-negotiable):
 - PERSONA: Read sage/core/agents/reviewer.persona.md for your mindset.
 - Announce: "Sage → review workflow." before starting work
@@ -823,7 +854,7 @@ Append review findings to `.sage/decisions.md`.
 
 $ARGUMENTS
 REVIEWEOF
-    echo "  ✓ review.md → /review (Task-delegated)"
+    echo "  ✓ ${PREFIX}review.md → /${PREFIX}review (Task-delegated)"
     continue
   fi
 
@@ -837,9 +868,13 @@ REVIEWEOF
       | sed '/^$/N;/^\n$/d'
     echo ""
     echo '$ARGUMENTS'
-  } > "$CLAUDE_DIR/commands/${basename_wf}.md"
+  # /sage stays unprefixed; everything else gets PREFIX
+  cmd_name="${basename_wf}"
+  [ "$basename_wf" != "sage" ] && cmd_name="${PREFIX}${basename_wf}"
 
-  echo "  ✓ ${basename_wf}.md → /${basename_wf}"
+  } > "$CLAUDE_DIR/commands/${cmd_name}.md"
+
+  echo "  ✓ ${cmd_name}.md → /${cmd_name}"
 done
 
 # ═══════════════════════════════════════════════════════════════
@@ -916,12 +951,12 @@ for skill_dir in "$SAGE_DIR/skills"/*/; do
   # Truncate long descriptions for frontmatter
   desc=$(echo "$desc" | head -1 | cut -c1-120)
 
-  # Create loader SKILL.md
-  target_dir="$CLAUDE_DIR/skills/$skill_name"
+  # Create loader SKILL.md (prefix skill directory name if configured)
+  target_dir="$CLAUDE_DIR/skills/${PREFIX}${skill_name}"
   mkdir -p "$target_dir"
   cat > "$target_dir/SKILL.md" << LOADEREOF
 ---
-name: $skill_name
+name: ${PREFIX}${skill_name}
 description: $desc
 ---
 Read and follow the full skill at sage/skills/$skill_name/SKILL.md

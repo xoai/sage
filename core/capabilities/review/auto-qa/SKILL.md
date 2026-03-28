@@ -4,7 +4,7 @@ description: >
   Automatic sub-agent code verification after quality gates pass.
   Independent context window. Checks spec-implementation alignment,
   test coverage, error handling, boundary conditions, and integration
-  consistency. 30 seconds, code-only, advisory.
+  consistency. 60 seconds, code-only, advisory.
 version: "1.0.0"
 modes: [build, architect]
 ---
@@ -23,7 +23,7 @@ requires: [Task tool]
 Quick independent verification of implementation against spec via
 sub-agent delegation. Runs as **Gate 8** in the quality gates
 sequence — positioned after Gate 5 (verification), alongside
-Gate 6 (browser) and Gate 7 (design). 30 seconds max. Code-only.
+Gate 6 (browser) and Gate 7 (design). 60 seconds max. Code-only.
 Advisory — never blocks.
 
 ## When to Run
@@ -40,7 +40,7 @@ sequence triggers it — the agent does not decide whether to run it.
 
 3. **Config allows it.** Check `.sage/config.yaml` for `auto_qa`.
    If `auto_qa: false`, skip with one-line note:
-   "Auto-QA disabled. Run /qa for manual testing."
+   "Auto-QA disabled. Run the QA command for manual testing."
    If `auto_qa: true` or absent (default), proceed.
 
 If ANY condition is false → skip silently (except config disabled
@@ -52,8 +52,8 @@ boundary gaps, integration mismatches).
 
 ## Time Budget
 
-30 seconds max. If the sub-agent doesn't respond within 30 seconds,
-skip with: "Auto-QA timed out. Consider /qa for manual testing."
+60 seconds max. If the sub-agent doesn't respond within 60 seconds,
+skip with: "Auto-QA timed out. Run the QA command manually for full testing."
 
 ## Gathering Context for the Sub-Agent
 
