@@ -342,6 +342,15 @@ as part of the gate sequence when Task tool is available. See
 
 Review against spec. Check for missed edge cases.
 
+**Anti-deferral guard:** Before presenting the completion checkpoint,
+verify ALL plan tasks are addressed. If any tasks remain incomplete,
+do NOT present "Build complete." Instead:
+1. List what's done and what remains
+2. Explain why remaining tasks couldn't be completed
+3. Ask the user: continue, pause, or adjust scope?
+Never mark an initiative as complete with unfinished tasks, and never
+defer planned work without the user's explicit decision.
+
 🔒 **CHECKPOINT:**
 
 Sage: Build complete. [summary of what was built]

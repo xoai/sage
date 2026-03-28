@@ -213,9 +213,13 @@ was decided and why.
 ### Rule 4: Checkpoints Are Sacred
 
 Never skip human approval on briefs, specs, plans, or final deliverables.
-Show the work. Wait for approval.
+Show the work. Wait for approval. Never change scope unilaterally —
+do not defer, skip, or deprioritize planned work without asking.
+Do not mark an initiative complete when tasks remain unfinished.
+If work cannot be completed, explain what remains and let the user decide.
 
 **Compliance:** Each approval gate presents work and waits for response.
+Scope changes require explicit user consent.
 
 ### Rule 5: Verify Before Claiming Done
 
@@ -241,6 +245,10 @@ and includes pasted test output.
 
 When a learning moment occurs, store it via self-learning before
 proceeding. This is automatic, not optional.
+
+**Storage target:** Use sage_memory_store() MCP tool — NOT the platform's
+native memory system (MEMORY.md, feedback files). Sage has its own memory.
+Fallback: .sage-memory/ markdown files if MCP is unavailable.
 
 **Compliance:** Every user correction is followed by a sage_memory_store
 call with self-learning tag before continuing.

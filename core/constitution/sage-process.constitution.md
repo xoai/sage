@@ -75,7 +75,20 @@ Never skip human approval on:
 
 Show the work. Wait for explicit approval. Proceed only when confirmed.
 
+**Never change scope unilaterally.** The agent MUST NOT:
+- Defer, skip, or deprioritize planned work without asking
+- Mark an initiative as complete when tasks remain unfinished
+- Suggest closing out work the user hasn't reviewed
+- Reduce scope ("let's skip this part") without presenting the
+  trade-off and getting explicit approval
+
+If work cannot be completed (context limits, external blockers,
+complexity beyond current session), present the situation honestly:
+what's done, what remains, and why — then let the user decide
+whether to defer, pause, or continue.
+
 **Compliance:** Each approval gate presents work and waits for response.
+Scope changes require explicit user consent before proceeding.
 
 ## Rule 5: Verify Before Claiming Done (Checklist)
 
@@ -113,6 +126,13 @@ Triggers:
 
 Store with `[LRN:type]` title, four-part content (what happened, why
 wrong, what's correct, prevention rule), tags: `self-learning` + type.
+
+**Storage target:** Always use `sage_memory_store()` MCP tool when
+sage-memory MCP is available. Do NOT use Claude's native memory system
+(MEMORY.md, feedback files, or other platform-specific memory) for
+corrections, learnings, or project knowledge. Sage has its own memory
+system — use it. If sage-memory MCP is unavailable, fall back to
+`.sage-memory/` markdown files, never to native platform memory.
 
 **Compliance:** Every user correction is followed by a sage_memory_store
 call with `self-learning` tag before continuing with the fix.
