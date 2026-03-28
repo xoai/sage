@@ -858,6 +858,10 @@ REVIEWEOF
     continue
   fi
 
+  # /sage stays unprefixed; everything else gets PREFIX
+  cmd_name="${basename_wf}"
+  [ "$basename_wf" != "sage" ] && cmd_name="${PREFIX}${basename_wf}"
+
   # Standard: add preamble + strip frontmatter + substitute refs + add $ARGUMENTS
   {
     printf "%s" "$PREAMBLE"
@@ -868,10 +872,6 @@ REVIEWEOF
       | sed '/^$/N;/^\n$/d'
     echo ""
     echo '$ARGUMENTS'
-  # /sage stays unprefixed; everything else gets PREFIX
-  cmd_name="${basename_wf}"
-  [ "$basename_wf" != "sage" ] && cmd_name="${PREFIX}${basename_wf}"
-
   } > "$CLAUDE_DIR/commands/${cmd_name}.md"
 
   echo "  ✓ ${cmd_name}.md → /${cmd_name}"
