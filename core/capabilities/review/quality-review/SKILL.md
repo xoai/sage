@@ -6,8 +6,8 @@ description: >
   vulnerabilities, and convention adherence. Use after implementation, or when
   the user says "review my code", "quality check", "security review", or "is
   this code good".
-version: "1.0.0"
-modes: [build, architect]
+version: "1.1.0"
+modes: [build, architect, fix]
 ---
 
 <!-- sage-metadata

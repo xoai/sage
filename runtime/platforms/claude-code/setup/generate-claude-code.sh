@@ -522,7 +522,12 @@ for wf in "$CORE"/workflows/*.workflow.md; do
   Moderate+ (3+ files): write fix plan BEFORE implementing
   Systemic (5+ files, interface changes): ESCALATE to /build or /architect
   "I know what to change" is NOT a plan file.
-- Present root cause gate with [A] / [R] / [S] — wait for response
+- APPROVAL INCLUDES REVIEW: When user picks [A] at root cause gate or fix
+  plan gate, you MUST run auto-review sub-agent BEFORE proceeding. [A] means
+  "approve AND review." Present [A] Approve & review / [S] Skip review.
+  Low-quality fixes are expensive — independent review catches weak diagnoses
+  and incomplete plans. If you proceed without showing findings after [A],
+  you violated the process. Only [S] skips review.
 - Verify: PASTE actual test output before claiming done — no summaries
 - Choices: present with [1] [2] [3] bracket notation
 - Never use code blocks for interaction (checkpoints, options, status)

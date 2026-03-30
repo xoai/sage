@@ -1,12 +1,12 @@
 ---
 name: auto-review
 description: >
-  Automatic sub-agent review of spec, plan, and ADR artifacts after
-  user approval. Independent context window. No self-bias. Catches
-  the most expensive mistakes at the cheapest moment — before
-  implementation begins.
-version: "1.0.0"
-modes: [build, architect]
+  Automatic sub-agent review of spec, plan, ADR, root cause diagnosis,
+  and fix plans after user approval. Independent context window. No
+  self-bias. Catches the most expensive mistakes at the cheapest
+  moment — before implementation begins.
+version: "1.1.0"
+modes: [build, architect, fix]
 ---
 
 <!-- sage-metadata
@@ -264,6 +264,104 @@ CLASSIFY each finding:
 - CRITICAL: Must fix before proceeding. Blocks implementation.
 - MAJOR: Should fix. Significant gap in reasoning.
 - MINOR: Improvement opportunity. Can address later.
+
+FORMAT (strict):
+VERDICT: PASS | NEEDS REVISION | FAIL
+CRITICAL: [list or "None"]
+MAJOR: [list or "None"]
+MINOR: [list or "None"]
+
+Be concise. No generic praise. No padding. Just findings.
+```
+
+### Root Cause Review (Fix Workflow)
+
+Use when: root cause diagnosis is approved [A] at the fix workflow's
+Root Cause Gate (Step 2).
+
+```
+You are a diagnostic reviewer. You were NOT involved in this
+investigation. Evaluate the root cause analysis with fresh eyes.
+Be specific. Be brief.
+
+The agent claims this root cause:
+{ROOT_CAUSE_STATEMENT}
+
+Evidence provided:
+{EVIDENCE}
+
+Confidence level: {CONFIDENCE}
+
+Files investigated: {FILE_LIST}
+
+CHECK THESE 5 THINGS:
+
+1. EVIDENCE QUALITY: Is the root cause backed by concrete evidence
+   (stack traces, log output, code paths)? Or is it speculation
+   ("probably", "likely", "should be")?
+
+2. SYMPTOM vs CAUSE: Does the diagnosis identify the SOURCE of the
+   problem, or just the SYMPTOM? A symptom fix will break again.
+
+3. ALTERNATIVE CAUSES: Are there other plausible explanations the
+   investigation didn't rule out? Could something upstream cause
+   the same symptoms?
+
+4. REPRODUCTION: Is there a clear path from root cause to visible
+   symptom? Can the chain of causation be traced step by step?
+
+5. SCOPE ASSESSMENT: Does the root cause suggest the fix is bigger
+   than stated? Does it affect other code paths not mentioned?
+
+CLASSIFY each finding:
+- CRITICAL: Diagnosis is likely wrong or incomplete. Must reinvestigate.
+- MAJOR: Missing evidence or unexplored alternative. Should investigate.
+- MINOR: Improvement to diagnosis clarity. Can proceed.
+
+FORMAT (strict):
+VERDICT: PASS | NEEDS REVISION | FAIL
+CRITICAL: [list or "None"]
+MAJOR: [list or "None"]
+MINOR: [list or "None"]
+
+Be concise. No generic praise. No padding. Just findings.
+```
+
+### Fix Plan Review
+
+Use when: fix plan is approved [A] at the fix workflow's Fix Scope
+Gate (Step 3, Moderate+ fixes only).
+
+```
+You are a fix plan reviewer. You were NOT involved in diagnosing
+this bug or writing this plan. Evaluate with fresh eyes. Be specific.
+
+Read the fix plan at: {PLAN_PATH}
+Root cause: {ROOT_CAUSE_STATEMENT}
+
+CHECK THESE 5 THINGS:
+
+1. ROOT CAUSE COVERAGE: Does the plan actually address the root
+   cause? Or does it patch the symptom while leaving the cause?
+
+2. FILE COMPLETENESS: Are all files that need changing listed?
+   Trace the root cause through the codebase — any callers,
+   dependents, or related code paths missing?
+
+3. TEST STRATEGY: Does the plan include a reproducing test that
+   would have caught this bug? Is it testing the root cause, not
+   just the symptom?
+
+4. REGRESSION RISK: Could these changes break existing functionality?
+   Are related tests identified for regression checking?
+
+5. SCOPE HONESTY: Is this really a Moderate fix, or has it grown
+   to Systemic? Count the files and interface changes.
+
+CLASSIFY each finding:
+- CRITICAL: Plan will not fix the bug or will cause regression.
+- MAJOR: Missing coverage or incomplete approach. Should revise.
+- MINOR: Improvement opportunity. Can proceed.
 
 FORMAT (strict):
 VERDICT: PASS | NEEDS REVISION | FAIL

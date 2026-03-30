@@ -10,9 +10,10 @@ fix:
     - verification              # Gate 5 — prove the fix works
   optional:
     - spec-compliance           # Gate 1 — useful if fixing from a ticket spec
+    - code-quality              # Gate 3 — catches low-quality fixes that cause rework
+    - auto-qa                   # Gate 8 — independent verification of fix completeness
   skipped:
     - constitution-compliance   # Gate 2 — overkill for hotfixes
-    - code-quality              # Gate 3 — focus on the fix, not style
 
 build:
   mandatory:

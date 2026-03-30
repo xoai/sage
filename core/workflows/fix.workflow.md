@@ -169,14 +169,17 @@ Sage: Root cause analysis complete.
   Evidence: [what confirms it]
   Confidence: [high/medium/low]
 
-[A] Approve diagnosis — continue to fix scoping
+[A] Approve & review — sub-agent verifies diagnosis, then proceed
+[S] Skip review — approve without independent review
 [R] Revise — investigate further
-[S] Stuck — try a different approach (activates problem-solving)
+[K] Stuck — try a different approach (activates problem-solving)
 [N] New session — type /fix to continue
 
-Pick A/R/E/N, or tell me what to change.
+Pick A/S/R/K/N, or tell me what to change.
 
-Pick A/R/S/N, or tell me what to change.
+**On [A]:** Run auto-review (root cause review prompt) before
+proceeding. This catches weak diagnoses — symptom-level fixes that
+will break again. See `sage/core/capabilities/review/auto-review/SKILL.md`.
 
 Do not proceed to Step 3 until the user confirms the root cause.
 
@@ -240,14 +243,16 @@ Sage: Fix scope: [Moderate/Systemic]
   Tests: [what tests to add/modify]
   Risk: [what could go wrong]
 
-[A] Approve plan — start implementing
+[A] Approve & review — sub-agent reviews fix plan, then implement
+[S] Skip review — approve without independent review
 [R] Revise — adjust the approach
 [E] Escalate — type /build or /architect instead
 [N] New session — type /fix to continue
 
-Pick A/R/E/N, or tell me what to change.
+Pick A/S/R/E/N, or tell me what to change.
 
-Pick A/R/S/N, or tell me what to change.
+**On [A]:** Run auto-review (fix plan review prompt) before
+implementing. See `sage/core/capabilities/review/auto-review/SKILL.md`.
 
 ## Step 4: Implement Fix
 
@@ -270,7 +275,7 @@ Now: [N+X files, M+Y changes]
 [2] Escalate to /build
 [3] Revert to original plan and accept limitations
 
-## Step 5: Verify
+## Step 5: Verify and Quality Gates
 
 **Run the verification command. Read the output. THEN report.**
 
@@ -292,6 +297,13 @@ Sage: Verification results:
 **If tests fail after the fix:** Return to Step 2. The root cause
 analysis was incomplete — either the diagnosis was wrong, or the
 fix introduced a new issue.
+
+**Quality gates:** After tests pass, run quality gates per
+`sage/core/workflows/sub-workflows/quality-gates.workflow.md`.
+Read `.sage/gates/gate-modes.yaml` for fix mode activation —
+Gate 3 (code quality review) and Gate 8 (auto-QA) run as optional
+gates to catch low-quality fixes before they ship. Findings are
+advisory but surfaced to the user.
 
 ## Step 6: Close
 

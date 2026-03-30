@@ -5,8 +5,8 @@ description: >
   Independent context window. Checks spec-implementation alignment,
   test coverage, error handling, boundary conditions, and integration
   consistency. 60 seconds, code-only, advisory.
-version: "1.0.0"
-modes: [build, architect]
+version: "1.1.0"
+modes: [build, architect, fix]
 ---
 
 <!-- sage-metadata

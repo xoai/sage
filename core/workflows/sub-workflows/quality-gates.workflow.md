@@ -22,7 +22,8 @@ or `skipped` (don't run).
 
 If `gate-modes.yaml` doesn't exist, default to all mandatory for
 build/architect and reduced set for fix (hallucination + verification
-mandatory, spec-compliance optional, others skipped).
+mandatory; spec-compliance, code-quality, and auto-QA optional;
+constitution-compliance skipped).
 
 ## Sequence
 
