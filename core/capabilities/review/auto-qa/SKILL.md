@@ -183,7 +183,7 @@ Max 2 re-checks. This keeps the loop bounded.
 
 ## Decision Logging
 
-After every auto-QA (any verdict), append to `.sage/decisions.md`:
+After every auto-QA (any verdict), prepend to `.sage/decisions.md`:
 
 ```
 ### YYYY-MM-DD — Auto-QA: implementation

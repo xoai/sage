@@ -297,7 +297,7 @@ When the user reviews a deliverable. Used at checkpoints.
 
 ```
 Sage: [Deliverable] complete.
-Decision: [key decision]. (appended to decisions.md)
+Decision: [key decision]. (prepended to decisions.md)
 
 [A] Approve  [R] Revise  [N] New session → /[next] to continue
 
@@ -364,11 +364,12 @@ location:
 
 **This step runs at CHECKPOINTS only — not per-task, not per-file.**
 
-**1. Append to decisions.md.**
+**1. Prepend to decisions.md.**
 
-If a significant decision was made at this checkpoint, append it to
-`.sage/decisions.md`. The decision is typically part of the checkpoint
-output — write it once, append to decisions.md. Format:
+If a significant decision was made at this checkpoint, prepend it to
+`.sage/decisions.md` (insert after the `# Decisions` header, before
+existing entries). The decision is typically part of the checkpoint
+output — write it once, prepend to decisions.md. Format:
 
 ```markdown
 ### YYYY-MM-DD — [Decision title]

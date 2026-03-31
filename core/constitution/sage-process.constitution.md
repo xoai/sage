@@ -139,15 +139,27 @@ call with `self-learning` tag before continuing with the fix.
 
 ## Rule 7: Record Decisions at Checkpoints
 
-At each checkpoint, append significant decisions to
-`.sage/decisions.md` — what was decided, why, and what alternatives
-were considered. This serves both agents (session context) and
-humans (project history).
+At each checkpoint, **prepend** significant decisions to
+`.sage/decisions.md` (insert after the `# Decisions` header, before
+existing entries) — newest first. Record what was decided, why, and
+what alternatives were considered. This serves both agents (session
+context) and humans (project history).
+
+**Newest-first ordering:** Recent decisions are most relevant for
+context. Prepending ensures the agent reads recent context first
+without burning tokens on old entries.
+
+**Archive rotation:** When decisions.md exceeds ~200 lines, archive
+old entries at the next workflow close:
+1. Keep the 20 most recent entries in decisions.md
+2. Move the rest to `decisions-{YYYY-MM-DD}.md` (today's date)
+3. If an archive file with that date already exists, append to it
+4. Archives are read-only reference — only decisions.md gets new entries
 
 Update artifact frontmatter (status, phase) when artifacts are
 completed or change phase. The file system — what artifacts exist
 in `.sage/work/` and their frontmatter — is the source of truth
 for state. decisions.md is the source of truth for reasoning.
 
-**Compliance:** decisions.md has a new entry after each checkpoint
-that involved a decision.
+**Compliance:** decisions.md has a new entry (prepended) after each
+checkpoint that involved a decision.

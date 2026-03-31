@@ -319,7 +319,7 @@ Sage: Fix verified.
 - Scope: [Surgical/Moderate/Systemic]
 - Change: [what was changed, in which files]
 - Tests: [X passed, 0 failed — from actual output]
-Decision: [root cause + fix approach]. (append to .sage/decisions.md)
+Decision: [root cause + fix approach]. (prepend to .sage/decisions.md)
 
 [A] Approve — commit and close
 [R] Revise — something's not right
@@ -328,7 +328,7 @@ Decision: [root cause + fix approach]. (append to .sage/decisions.md)
 Pick A/R/V, or tell me what to change.
 
 **On approval — Post-Flight (Rule 7):**
-1. Append root cause and fix to `.sage/decisions.md`
+1. Prepend root cause and fix to `.sage/decisions.md`
 2. Update artifact frontmatter if relevant
 3. Store root cause and fix in memory (tagged `self-learning`)
    with WHEN/CHECK/BECAUSE prevention rule

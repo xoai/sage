@@ -77,7 +77,7 @@ Top priority: [most impactful finding with rationale]
 Artifacts:
   .sage/docs/[skill-prefix]-[topic].md
 
-Decision: [analysis conclusions]. (appended to decisions.md)
+Decision: [analysis conclusions]. (prepended to decisions.md)
 
 [A] Approve findings  [R] Revise  [N] New session → /design to continue
 

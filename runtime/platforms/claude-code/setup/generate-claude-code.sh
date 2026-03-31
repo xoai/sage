@@ -255,18 +255,21 @@ call with self-learning tag before continuing.
 
 ### Rule 7: Record Decisions at Checkpoints
 
-At each checkpoint, append significant decisions to
-`.sage/decisions.md` — what was decided, why, and what alternatives
-were considered. This serves agents (session context) and humans
-(project history). Update artifact frontmatter (status, phase)
-when artifacts are completed.
+At each checkpoint, **prepend** significant decisions to
+`.sage/decisions.md` (insert after the `# Decisions` header, before
+existing entries) — newest first. Record what was decided, why, and
+what alternatives were considered.
+
+**Archive rotation:** When decisions.md exceeds ~200 lines, at the
+next workflow close: keep the 20 most recent entries, move the rest
+to `decisions-{YYYY-MM-DD}.md`. Archives are read-only reference.
 
 The file system — what artifacts exist in `.sage/work/` and their
 frontmatter — is the source of truth for state. decisions.md is
 the source of truth for reasoning and context.
 
-**Compliance:** decisions.md has a new entry after each checkpoint
-that involved a decision.
+**Compliance:** decisions.md has a new entry (prepended) after each
+checkpoint that involved a decision.
 
 __CONSTITUTION_PLACEHOLDER__
 
@@ -863,7 +866,7 @@ Sage: Review complete. [verdict summary]
 [R] Revise — I'll address the issues found
 [D] Discuss — let's talk about specific findings
 
-Append review findings to `.sage/decisions.md`.
+Prepend review findings to `.sage/decisions.md`.
 
 $ARGUMENTS
 REVIEWEOF

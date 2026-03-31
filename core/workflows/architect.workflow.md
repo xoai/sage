@@ -141,7 +141,7 @@ Save the full design to `.sage/work/YYYYMMDD-slug/spec.md` with frontmatter.
 If ANY fails → go back and create the missing artifact.
 
 Sage: Architecture design saved. ADRs in .sage/docs/decision-*.md
-Decision: [key architecture decisions]. (append to .sage/decisions.md)
+Decision: [key architecture decisions]. (prepend to .sage/decisions.md)
 
 [A] Approve & review — sub-agent reviews ADRs, then continue to plan
 [S] Skip review — approve without independent review
@@ -161,7 +161,7 @@ handoff: |
   Risks: [cross-cutting concerns, performance, migration]
   Next agent should: [specific guidance for milestone planning]
 ```
-3. Append architecture decisions to decisions.md (Rule 7).
+3. Prepend architecture decisions to decisions.md (Rule 7).
 4. **Run auto-review BEFORE proceeding to Step 4:**
    Read `sage/core/capabilities/review/auto-review/SKILL.md`.
    If conditions met (Task tool available + auto_review ≠ false):
@@ -169,7 +169,7 @@ handoff: |
      Spawn sub-agent with the **ADR / Architectural Spec Review** prompt.
      Pass the ADR path(s) and brief path.
      Present findings inline.
-     Append review verdict to decisions.md.
+     Prepend review verdict to decisions.md.
    If Task tool NOT available:
      Announce: "Task tool not available — skipping independent review."
 5. THEN proceed to Step 4.
@@ -202,7 +202,7 @@ Sage: Milestone plan saved to .sage/work/YYYYMMDD-slug/plan.md
 Pick A/S/R/N, or tell me what to change.
 
 **On [A] Approve & review:**
-1. Append plan approach to decisions.md (Rule 7).
+1. Prepend plan approach to decisions.md (Rule 7).
 2. **Run auto-review BEFORE proceeding:**
    Read `sage/core/capabilities/review/auto-review/SKILL.md`.
    If conditions met (Task tool available + auto_review ≠ false):
@@ -210,13 +210,13 @@ Pick A/S/R/N, or tell me what to change.
      Spawn sub-agent with the **Plan Review** prompt.
      Pass the plan path and spec path.
      Present findings inline.
-     Append review verdict to decisions.md.
+     Prepend review verdict to decisions.md.
    If Task tool NOT available:
      Announce: "Task tool not available — skipping independent review."
 3. THEN proceed.
 
 **On [S] Skip review:**
-1. Append plan approach to decisions.md.
+1. Prepend plan approach to decisions.md.
 2. Announce: "Skipping independent review."
 3. Log to decisions.md: "Plan approved without auto-review (user chose [S])."
 4. Proceed.
@@ -253,7 +253,7 @@ See `quality-gates.workflow.md` for the full sequence including Gate 8.
 
 **At each milestone completion checkpoint:**
 Sage: Milestone [N] complete — [summary]
-Decision: [what was learned during implementation]. (append to decisions.md)
+Decision: [what was learned during implementation]. (prepend to decisions.md)
 
 [C] Continue to milestone [N+1]
 [R] Revise — adjust before continuing

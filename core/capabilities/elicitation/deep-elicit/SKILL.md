@@ -96,7 +96,7 @@ assumed solution category, the assumed scope, the assumed user, the
 assumed timeline. NOT technical choices — those come in Round 2/3.
 
 **Record the framing decision** in the brief's Vision section and
-append to `.sage/decisions.md`:
+prepend to `.sage/decisions.md`:
 
 ```
 ### YYYY-MM-DD — Framing: [initiative]

@@ -108,7 +108,7 @@ Pick R/P/D, or tell me what to change.
 
 ## Decision Logging
 
-After every auto-review (any verdict), append to `.sage/decisions.md`:
+After every auto-review (any verdict), prepend to `.sage/decisions.md`:
 
 ```
 ### YYYY-MM-DD — Auto-review: {artifact type}

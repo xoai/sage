@@ -73,7 +73,7 @@ For each skill in the chain:
 5. Present per-artifact checkpoint (Zone 2):
 
 Sage: [Artifact] saved to .sage/work/YYYYMMDD-slug/[name].md
-Decision: [key design decision]. (appended to decisions.md)
+Decision: [key design decision]. (prepended to decisions.md)
 
 [A] Approve — continue to next step  [R] Revise
 
@@ -96,7 +96,7 @@ Artifacts:
   .sage/work/YYYYMMDD-slug/brief.md
   .sage/work/YYYYMMDD-slug/spec.md
 
-Decision: [key design decisions]. (appended to decisions.md)
+Decision: [key design decisions]. (prepended to decisions.md)
 
 [A] Approve  [R] Revise  [V] → /review  [N] New session → /build
 
@@ -111,7 +111,7 @@ handoff: |
   Open questions: [what needs resolution during build]
   Next agent should: [guidance for implementation]
 ```
-Append to decisions.md (Rule 7).
+Prepend to decisions.md (Rule 7).
 
 ## Step 4: Next Step (Zone 3)
 

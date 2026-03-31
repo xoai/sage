@@ -130,7 +130,7 @@ original framing but flag it:
 `Framing: Original request (low confidence). Pain: unclear.
 Consider /research or /jtbd before building.`
 
-**At Round 0 completion:** Append framing decision to `.sage/decisions.md`
+**At Round 0 completion:** Prepend framing decision to `.sage/decisions.md`
 BEFORE proceeding to Round 1:
 
 ```
@@ -261,7 +261,7 @@ a Framing section in the spec.
 - MUST show the drafted output after each round for validation.
 - MUST make acceptance criteria testable and specific.
 - MUST execute Round 0 for Standard+ tasks (see bypass conditions).
-- MUST append framing decision to decisions.md before Round 1.
+- MUST prepend framing decision to decisions.md before Round 1.
 - MUST include a non-empty Framing section in spec output.
 
 **SHOULD (violation = suboptimal experience):**

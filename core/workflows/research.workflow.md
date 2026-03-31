@@ -81,7 +81,7 @@ Sage: Research complete. Key findings:
 Artifacts:
   .sage/docs/[skill-prefix]-[topic].md (for each skill)
 
-Decision: [research conclusions]. (appended to decisions.md)
+Decision: [research conclusions]. (prepended to decisions.md)
 
 [A] Approve findings  [R] Revise  [N] New session → /design to continue
 

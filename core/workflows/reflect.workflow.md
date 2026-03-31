@@ -128,7 +128,7 @@ On approval:
 3. **Save reflection report** to `.sage/docs/reflect-[slug].md`
    with the full cycle review, user feedback, and learnings.
 
-4. **Append to decisions.md:**
+4. **Prepend to decisions.md:**
    ```
    ### YYYY-MM-DD — Reflection: [initiative/topic]
    [Summary of key learnings and what changes going forward.]

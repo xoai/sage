@@ -84,7 +84,7 @@ State updates happen ONLY at checkpoints (Rule 7), not per-task:
 
 ### At each checkpoint:
 
-Append significant decisions to `.sage/decisions.md`:
+Prepend significant decisions to `.sage/decisions.md`:
 ```markdown
 ### 2025-03-13 — Token storage decision
 Chose httpOnly cookies over localStorage for JWT storage.
@@ -108,7 +108,7 @@ All route handlers throw typed errors; the middleware formats the response.
 If the session is ending gracefully (human says "stop", "done for now"):
 
 1. Update artifact frontmatter to reflect current phase
-2. Append session summary to decisions.md if significant work was done
+2. Prepend session summary to decisions.md if significant work was done
 3. Report: "**Sage:** Session saved. Type /build to resume next time."
 
 **If the session ends abruptly:** the artifacts in `.sage/work/` and
@@ -137,7 +137,7 @@ file existence) over artifacts. Update artifact frontmatter to match.
 - Artifacts in `.sage/work/` are the ground truth for state.
 - decisions.md is the ground truth for reasoning and context.
 - Update state at checkpoints only (Rule 7), not per-task.
-- Append to decisions.md and conventions.md — never overwrite.
+- Prepend to decisions.md — never overwrite. Append to conventions.md.
 - If state is ambiguous, verify against the codebase.
 
 ## Failure Modes
