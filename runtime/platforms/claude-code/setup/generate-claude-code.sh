@@ -68,6 +68,7 @@ audit/evaluate/assess/analyze/measure/funnel/usability → /analyze
 reflect/retro/retrospective/lessons/what did we learn/look back → /reflect
 continue/resume/pick up/where was I/what was I doing → /continue
 qa/test the app/smoke test/browser test/functional test → /qa
+map/ontology/graph/dependencies/structure/what connects/what depends → /map
 design review/design audit/design check/visual audit/slop check → /design-review
 
 If keywords match ONE workflow → go to confirmation.
@@ -473,6 +474,7 @@ if [ -n "$PREFIX" ]; then
     -e "s|/build|/${PREFIX}build|g" \
     -e "s|/learn|/${PREFIX}learn|g" \
     -e "s|/fix|/${PREFIX}fix|g" \
+    -e "s|/map|/${PREFIX}map|g" \
     -e "s|/qa|/${PREFIX}qa|g" \
     "$SAGE_ROOT/CLAUDE.md"
   echo "  ✓ CLAUDE.md (with ${PREFIX} prefix)"
@@ -597,6 +599,18 @@ for wf in "$CORE"/workflows/*.workflow.md; do
   a navigable knowledge graph. Read skills/ontology/SKILL.md for encoding.
   Search ontology first to avoid duplicates.
 - Checkpoint: [A] Looks correct / [R] Some findings are wrong
+- Choices: present with [1] [2] [3] bracket notation
+- Never use code blocks for interaction (checkpoints, options, status)
+
+'
+      ;;
+    map)
+      PREAMBLE='RULES (apply to every step — non-negotiable):
+- Announce: "Sage → map workflow." before starting work
+- Read skills/ontology/SKILL.md for entity encoding format BEFORE creating any entities
+- Search existing ontology BEFORE creating entities — no duplicates
+- Present discovered structure to user BEFORE storing — checkpoint mandatory
+- MCP parameter types: tags is array (not string), limit is integer (not string)
 - Choices: present with [1] [2] [3] bracket notation
 - Never use code blocks for interaction (checkpoints, options, status)
 
