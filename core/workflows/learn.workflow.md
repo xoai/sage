@@ -123,6 +123,30 @@ If `sage_memory_store` is not available, fall back to `.sage-memory/`
 files. For each finding, create a file using the format defined in the
 memory skill's Storage Priority section. Filename = kebab-case title.
 
+### Ontology Bootstrapping
+
+After storing prose knowledge, create ontology entities for the
+structural elements you discovered. This builds a knowledge graph
+that keeps the codebase's architecture navigable across sessions.
+
+**For broad scans, create entities for:**
+- Each major module or service → `Project` entity (name, status: active)
+- Key inter-module dependencies → `depends_on` relations
+- Entry points (APIs, CLI commands, main routes) → `Document` entities
+
+**For deep dives, create entities for:**
+- The module itself → `Project` entity if not already in graph
+- Key internal components → `Task` entities (as sub-units of work)
+- Dependencies this module has on other modules → `depends_on` relations
+- Services it calls or is called by → `depends_on` relations
+
+**Keep it lightweight:**
+- Only create entities for things a future agent needs to navigate
+  (modules, services, APIs, dependencies) — not every file or function
+- Search ontology first (`sage_memory_search: tags=["ontology"]`) to
+  avoid duplicating existing entities
+- 5-15 ontology entries for broad scans, 3-8 for deep dives
+- Use the encoding format from `skills/ontology/SKILL.md`
 
 ## Step 6: Generate Knowledge Report
 

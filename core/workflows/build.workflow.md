@@ -200,14 +200,14 @@ updated: YYYY-MM-DD
 Sage: Spec saved to .sage/work/YYYYMMDD-slug/spec.md
 Decision: [key technical decisions]. (prepend to .sage/decisions.md)
 
-[A] Approve & review — sub-agent reviews spec, then continue to plan
+[A] Review — sub-agent reviews spec, then continue to plan
 [S] Skip review — approve without independent review
 [R] Revise — tell me what to change
 [N] New session — type /build to continue with planning
 
 Pick A/S/R/N, or tell me what to change.
 
-**On [A] Approve & review:**
+**On [A] Review:**
 1. Update spec frontmatter to `status: completed`.
 2. Write `handoff` field in frontmatter:
 ```yaml
@@ -262,14 +262,14 @@ updated: YYYY-MM-DD
 
 Sage: Plan saved to .sage/work/YYYYMMDD-slug/plan.md
 
-[A] Approve & review — sub-agent reviews plan, then start building
+[A] Review — sub-agent reviews plan, then start building
 [S] Skip review — approve without independent review
 [R] Revise — tell me what to change
 [N] New session — type /build to start implementation
 
 Pick A/S/R/N, or tell me what to change.
 
-**On [A] Approve & review:**
+**On [A] Review:**
 1. Prepend plan approach to decisions.md (Rule 7).
 2. **Run auto-review BEFORE proceeding to Step 6:**
    Read `sage/core/capabilities/review/auto-review/SKILL.md`.
@@ -369,6 +369,13 @@ Pick A/R/V, or tell me what to change.
 4. Write `handoff` field in plan.md frontmatter with key decisions,
    open questions, and risks for the next agent
 5. Store key findings in memory if sage-memory available
+6. **Wiring check:** Verify all new components are connected — imports
+   wired, routes registered, handlers hooked up, config entries added.
+7. **Ontology update (if sage-memory available):** For significant new
+   structure (new module, service, API endpoint, major component), create
+   ontology entities and link them to existing graph. Skip for small
+   changes within existing modules — only update when the codebase's
+   *navigable structure* changed. Search ontology first to avoid dupes.
 
 **Next steps (Zone 3):**
 

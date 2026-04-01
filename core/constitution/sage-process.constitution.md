@@ -33,6 +33,31 @@ artifacts that already exist without acknowledging them.
 
 **Compliance:** Active work is acknowledged before new work begins.
 
+## Rule 1A: Memory Before Work
+
+Before writing specs, plans, ADRs, or starting an investigation,
+search sage-memory for relevant context. This is mandatory for
+Standard+ scope work when sage-memory MCP is available.
+
+```
+sage_memory_search(query: "[task domain keywords]", limit: 5)
+sage_memory_search(query: "[task domain]", filter_tags: ["self-learning"], limit: 5)
+```
+
+Use findings to inform your approach:
+- Previous corrections → avoid repeating the same mistake
+- Gotchas → known pitfalls in this area of the codebase
+- Conventions → project-specific patterns to follow
+- Architecture decisions → constraints that affect this work
+
+This is the counterpart to Rule 6 (capture corrections). Rule 1A
+ensures learnings are recalled; Rule 6 ensures they are stored.
+Without both, the memory system is write-only.
+
+**Compliance:** Every Standard+ workflow start includes at least one
+sage_memory_search call before producing artifacts. If MCP is
+unavailable, check `.sage-memory/` folder instead.
+
 ## Rule 2: Skills Before Assumptions
 
 If a Sage skill exists for the current task, activate and follow it.

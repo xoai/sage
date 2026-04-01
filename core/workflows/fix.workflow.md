@@ -169,7 +169,7 @@ Sage: Root cause analysis complete.
   Evidence: [what confirms it]
   Confidence: [high/medium/low]
 
-[A] Approve & review — sub-agent verifies diagnosis, then proceed
+[A] Review — sub-agent verifies diagnosis, then proceed
 [S] Skip review — approve without independent review
 [R] Revise — investigate further
 [K] Stuck — try a different approach (activates problem-solving)
@@ -190,8 +190,10 @@ Do not proceed to Step 3 until the user confirms the root cause.
 Classify the fix by structural impact:
 
 **Surgical:** 1-2 files changed, no interface changes, no new
-abstractions. The fix is obvious from the root cause.
-→ Proceed directly to Step 4 (implement fix).
+abstractions. The fix follows directly from the confirmed root cause.
+→ Present classification to user for confirmation, then proceed
+  to Step 4 (implement fix). Even Surgical fixes require the user
+  to see and confirm the scope before implementation begins.
 
 **Moderate:** 3-5 files changed, OR test infrastructure changes,
 OR error handling pattern changes. The fix is clear but touches
@@ -243,7 +245,7 @@ Sage: Fix scope: [Moderate/Systemic]
   Tests: [what tests to add/modify]
   Risk: [what could go wrong]
 
-[A] Approve & review — sub-agent reviews fix plan, then implement
+[A] Review — sub-agent reviews fix plan, then implement
 [S] Skip review — approve without independent review
 [R] Revise — adjust the approach
 [E] Escalate — type /build or /architect instead
@@ -298,6 +300,14 @@ Sage: Verification results:
 analysis was incomplete — either the diagnosis was wrong, or the
 fix introduced a new issue.
 
+**Self-learning trigger:** If you return to Step 2 more than once
+(i.e., 2+ failed fix attempts), this is a MANDATORY `gotcha` trigger.
+Before attempting the next fix, store what you learned via
+sage_memory_store with `[LRN:gotcha]` title, `self-learning` tag,
+and four-part content (what happened, why wrong, what's correct,
+prevention rule). Do NOT wait until the fix succeeds — capture the
+learning NOW so future sessions benefit even if this session fails.
+
 **Quality gates:** After tests pass, run quality gates per
 `sage/core/workflows/sub-workflows/quality-gates.workflow.md`.
 Read `.sage/gates/gate-modes.yaml` for fix mode activation —
@@ -332,6 +342,15 @@ Pick A/R/V, or tell me what to change.
 2. Update artifact frontmatter if relevant
 3. Store root cause and fix in memory (tagged `self-learning`)
    with WHEN/CHECK/BECAUSE prevention rule
+4. **Wiring check:** Verify the fix is fully connected — if you changed
+   an interface, check all callers. If you added error handling, verify
+   the error path is wired end-to-end. Incomplete wiring is the #1
+   cause of fixes that need re-fixing.
+5. **Ontology update (if sage-memory available):** If the fix changed
+   module dependencies or interfaces (e.g., a service now calls a
+   different service, a dependency was added/removed), update ontology
+   relations. Most Surgical fixes won't need this — only update when
+   the codebase's structural relationships changed.
 4. **Next steps (Zone 3):**
 
 Next steps:

@@ -21,17 +21,17 @@ requires: [Task tool]
 # Auto-Review
 
 Quick independent review of spec/plan/ADR via sub-agent delegation.
-Triggered as part of the [A] Approve & review checkpoint flow.
+Triggered as part of the [A] Review checkpoint flow.
 60 seconds max. Advisory — never blocks.
 
 ## When to Run
 
-Auto-review runs when the user picks **[A] Approve & review** at a
+Auto-review runs when the user picks **[A] Review** at a
 workflow checkpoint. It is part of the [A] flow, not a separate step.
 
 The workflow checkpoint presents:
 ```
-[A] Approve & review — sub-agent reviews, then proceed
+[A] Review — sub-agent reviews, then proceed
 [S] Skip review — approve without independent review
 ```
 
@@ -142,6 +142,14 @@ Blocked rationalizations:
 
 ## Sub-Agent Prompts
 
+**All review sub-agents are READ-ONLY.** Include this constraint at
+the top of every sub-agent prompt. Sub-agents MUST NOT modify any
+files — no Edit, no Write, no code changes. Their role is to find
+issues and report them. The user decides what to do with findings.
+
+If a sub-agent modifies a spec, plan, or code file, the review is
+INVALID and must be discarded. Re-run with the original artifact.
+
 ### Spec Review
 
 Use when: spec.md is approved [A] in build or architect workflow.
@@ -149,6 +157,10 @@ Use when: spec.md is approved [A] in build or architect workflow.
 ```
 You are a spec reviewer. You were NOT involved in writing this spec.
 Evaluate it with fresh eyes. Be specific. Be brief.
+
+CRITICAL: You are READ-ONLY. Do NOT modify any files. Do NOT use
+Edit or Write tools. Your job is to REPORT findings, not fix them.
+If you find an issue, describe it — do not attempt to correct it.
 
 Read the spec at: {SPEC_PATH}
 Read the framing decision from: .sage/decisions.md (most recent
@@ -196,6 +208,9 @@ Use when: plan.md is approved [A] in build or architect workflow.
 You are a plan reviewer. You were NOT involved in writing this plan.
 Evaluate it with fresh eyes. Be specific. Be brief.
 
+CRITICAL: You are READ-ONLY. Do NOT modify any files. Do NOT use
+Edit or Write tools. Your job is to REPORT findings, not fix them.
+
 Read the plan at: {PLAN_PATH}
 Read the spec at: {SPEC_PATH}
 
@@ -238,6 +253,9 @@ workflow's design checkpoint.
 ```
 You are an architecture reviewer. You were NOT involved in writing
 this design. Evaluate it with fresh eyes. Be specific. Be brief.
+
+CRITICAL: You are READ-ONLY. Do NOT modify any files. Do NOT use
+Edit or Write tools. Your job is to REPORT findings, not fix them.
 
 Read the artifact at: {ADR_PATH}
 Read the brief at: {BRIEF_PATH} (if exists)
@@ -283,6 +301,9 @@ Root Cause Gate (Step 2).
 You are a diagnostic reviewer. You were NOT involved in this
 investigation. Evaluate the root cause analysis with fresh eyes.
 Be specific. Be brief.
+
+CRITICAL: You are READ-ONLY. Do NOT modify any files. Do NOT use
+Edit or Write tools. Your job is to REPORT findings, not fix them.
 
 The agent claims this root cause:
 {ROOT_CAUSE_STATEMENT}
@@ -335,6 +356,9 @@ Gate (Step 3, Moderate+ fixes only).
 ```
 You are a fix plan reviewer. You were NOT involved in diagnosing
 this bug or writing this plan. Evaluate with fresh eyes. Be specific.
+
+CRITICAL: You are READ-ONLY. Do NOT modify any files. Do NOT use
+Edit or Write tools. Your job is to REPORT findings, not fix them.
 
 Read the fix plan at: {PLAN_PATH}
 Root cause: {ROOT_CAUSE_STATEMENT}

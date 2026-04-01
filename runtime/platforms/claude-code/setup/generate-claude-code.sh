@@ -136,10 +136,21 @@ team-visible decision → Tier 2 minimum.
 **Compliance:** Every substantial response starts with "Sage →", uses a
 slash command, or is genuinely Tier 1.
 
-**Memory recall (Standard+ tasks):** Before starting work on any Tier 2
-or Tier 3 task, search sage-memory for relevant self-learning entries:
-`sage_memory_search(query: "[domain keywords]", filter_tags: ["self-learning"], limit: 5)`
-If sage-memory is not available, continue without search.
+### Rule 1A: Memory Before Work (MANDATORY for Standard+)
+
+Before writing specs, plans, ADRs, or starting an investigation,
+search sage-memory. This prevents repeating past mistakes.
+
+```
+sage_memory_search(query: "[task domain keywords]", limit: 5)
+sage_memory_search(query: "[task domain]", filter_tags: ["self-learning"], limit: 5)
+```
+
+Use findings to inform your approach. If sage-memory MCP is
+unavailable, check `.sage-memory/` folder. Skip only for Tier 1 tasks.
+
+**Compliance:** Every Standard+ workflow start includes at least one
+sage_memory_search call before producing artifacts.
 
 ### Workflow Gates (enforced for both slash commands and free input)
 
@@ -485,15 +496,18 @@ for wf in "$CORE"/workflows/*.workflow.md; do
       PREAMBLE='RULES (apply to every step — non-negotiable):
 - PERSONA: Read sage/core/agents/developer.persona.md for your mindset.
 - Announce: "Sage → build workflow." before starting work
+- MEMORY FIRST: Before writing spec, plan, or starting implementation, run
+  sage_memory_search(query: "[feature domain]", limit: 5) and
+  sage_memory_search(query: "[feature domain]", filter_tags: ["self-learning"], limit: 5).
+  Use findings to avoid past mistakes. This is MANDATORY, not optional.
 - Standard+ scope: spec.md MUST EXIST at .sage/work/ before implementing.
   "Design is clear" is NOT a spec. "We discussed this" is NOT a spec.
   A spec is a FILE. No file = no implementation. Write it first.
-- APPROVAL INCLUDES REVIEW: When user picks [A] at spec or plan checkpoint,
+- [A] = REVIEW: When user picks [A] at spec or plan checkpoint,
   you MUST run auto-review sub-agent BEFORE proceeding to the next phase.
-  [A] means "approve AND review." Present [A] Approve & review / [S] Skip
+  [S] = Skip review (approve without review). Present [A] Review / [S] Skip
   review at every spec and plan checkpoint. If you proceed without showing
   auto-review findings after [A], you have violated the process.
-  The only way to skip review is if the user picks [S] Skip review.
   Blocked rationalizations:
   - "The spec is straightforward" — [A] means review. Period.
   - "The user wants to move fast" — they picked [A], not [S]
@@ -508,7 +522,7 @@ for wf in "$CORE"/workflows/*.workflow.md; do
   before every implementation task. 7 universal principles: clarity, error handling,
   boundary guards, minimal scope, safe APIs, consistency, behavior testing.
 - Save ALL artifacts to .sage/work/ or .sage/docs/ — never inline-only
-- Checkpoints: present with [A] Approve & review / [S] Skip review / [R] Revise — wait for response
+- Checkpoints: present with [A] Review / [S] Skip review / [R] Revise — wait for response
 - Choices: present with [1] [2] [3] bracket notation
 - Verify: PASTE actual test output before claiming done — no summaries
 - Never use code blocks for interaction (checkpoints, options, status)
@@ -520,17 +534,24 @@ for wf in "$CORE"/workflows/*.workflow.md; do
       PREAMBLE='RULES (apply to every step — non-negotiable):
 - PERSONA: Read sage/core/agents/debugger.persona.md for your mindset.
 - Announce: "Sage → fix workflow." before starting work
-- MUST complete root cause investigation before ANY fix attempt
-- AFTER root cause: MUST scope the fix (Surgical/Moderate/Systemic)
-  Moderate+ (3+ files): write fix plan BEFORE implementing
-  Systemic (5+ files, interface changes): ESCALATE to /build or /architect
+- MEMORY FIRST: Before investigating, run
+  sage_memory_search(query: "[bug domain/error]", filter_tags: ["self-learning"], limit: 5).
+  Check for previous root causes, gotchas, and fixes in this area. MANDATORY.
+- MUST complete root cause investigation before ANY fix attempt.
+  Present root cause with evidence to user. Wait for [A] confirmation.
+  Do NOT skip this gate for ANY reason — not for "obvious" bugs, not for
+  "simple" fixes, not for Surgical scope. Every fix needs confirmed diagnosis.
+- AFTER root cause confirmed: MUST scope the fix (Surgical/Moderate/Systemic)
+  Even Surgical fixes: present scope to user before implementing.
+  Moderate+ (3+ files): write fix plan BEFORE implementing.
+  Systemic (5+ files, interface changes): ESCALATE to /build or /architect.
   "I know what to change" is NOT a plan file.
-- APPROVAL INCLUDES REVIEW: When user picks [A] at root cause gate or fix
-  plan gate, you MUST run auto-review sub-agent BEFORE proceeding. [A] means
-  "approve AND review." Present [A] Approve & review / [S] Skip review.
+- [A] = REVIEW: When user picks [A] at root cause gate or fix plan gate,
+  you MUST run auto-review sub-agent BEFORE proceeding. [S] = Skip review
+  (approve without review). Present [A] Review / [S] Skip review.
   Low-quality fixes are expensive — independent review catches weak diagnoses
   and incomplete plans. If you proceed without showing findings after [A],
-  you violated the process. Only [S] skips review.
+  you violated the process.
 - Verify: PASTE actual test output before claiming done — no summaries
 - Choices: present with [1] [2] [3] bracket notation
 - Never use code blocks for interaction (checkpoints, options, status)
@@ -545,18 +566,18 @@ for wf in "$CORE"/workflows/*.workflow.md; do
 - MUST complete all 3 elicitation rounds SEQUENTIALLY before designing.
   brief.md MUST EXIST at .sage/work/ before any design work.
   "I understand the system" is NOT a brief. Do NOT compress 3 rounds into 1.
-- APPROVAL INCLUDES REVIEW: When user picks [A] at design or plan checkpoint,
-  you MUST run auto-review sub-agent BEFORE proceeding. [A] means "approve AND
-  review." Present [A] Approve & review / [S] Skip review at every checkpoint.
-  Architecture decisions are the most expensive to reverse — independent review
-  is critical. If you proceed without showing findings after [A], you violated
-  the process. Only [S] skips review.
+- [A] = REVIEW: When user picks [A] at design or plan checkpoint,
+  you MUST run auto-review sub-agent BEFORE proceeding. [S] = Skip review
+  (approve without review). Present [A] Review / [S] Skip review at every
+  checkpoint. Architecture decisions are the most expensive to reverse —
+  independent review is critical. If you proceed without showing findings
+  after [A], you violated the process.
 - GATE 3 INDEPENDENT: Code quality review MUST use sub-agent when Task tool available.
 - GATE 8 AUTO-QA: Runs per milestone as part of quality gates sequence.
 - Save ADRs to .sage/docs/decision-*.md, spec to .sage/work/
 - Each milestone in phased build follows build workflow gates independently.
   Do NOT batch-implement milestones without per-milestone checkpoints.
-- Checkpoints: present with [A] Approve & review / [S] Skip review / [R] Revise — wait for response
+- Checkpoints: present with [A] Review / [S] Skip review / [R] Revise — wait for response
 - Choices: present with [1] [2] [3] bracket notation
 - Never use code blocks for interaction (checkpoints, options, status)
 - If user corrects your approach, store as self-learning before continuing
@@ -567,6 +588,10 @@ for wf in "$CORE"/workflows/*.workflow.md; do
       PREAMBLE='RULES (apply to every step — non-negotiable):
 - Announce: "Sage → learn workflow." before starting work
 - Present findings to user BEFORE storing in memory
+- ONTOLOGY: After storing prose knowledge, create ontology entities for
+  structural elements (modules, services, APIs, dependencies). This builds
+  a navigable knowledge graph. Read skills/ontology/SKILL.md for encoding.
+  Search ontology first to avoid duplicates.
 - Checkpoint: [A] Looks correct / [R] Some findings are wrong
 - Choices: present with [1] [2] [3] bracket notation
 - Never use code blocks for interaction (checkpoints, options, status)
