@@ -316,12 +316,26 @@ select_preset() {
   echo -e "  ${GREEN}Preset:${RESET} $SELECTED_PRESET"
 }
 
+apply_prefix_config() {
+  local config="$1/.sage/config.yaml"
+  [ -f "$config" ] || return 0
+  local prefix_val="false"
+  [ "$PREFIX_FLAG" = "true" ] && prefix_val="true"
+  if grep -q 'command_prefix:' "$config" 2>/dev/null; then
+    sed -i "s/^command_prefix:.*$/command_prefix: $prefix_val/" "$config"
+  else
+    echo "command_prefix: $prefix_val" >> "$config"
+  fi
+}
+
 create_sage_state() {
   local target="$1"
   local project_name
   project_name=$(basename "$target")
 
   if [ -d "$target/.sage" ]; then
+    # Still apply prefix flag to existing config
+    [ "$PREFIX_FLAG" = "true" ] && apply_prefix_config "$target"
     echo -e "  ${GREEN}✓${RESET} .sage/ preserved (existing state)"
     return
   fi
@@ -683,6 +697,9 @@ except: pass
 
     echo -e "  ${GREEN}✓${RESET} Community skills preserved: $community_skills"
   fi
+
+  # Apply --prefix flag if provided
+  [ "$PREFIX_FLAG" = "true" ] && apply_prefix_config "$target"
 
   # Regenerate platform files
   DETECTED_STACK=""
