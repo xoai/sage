@@ -88,16 +88,15 @@ correction as a self-learning entry (Rule 6).
 ## Step 5: Store Knowledge
 
 Store each finding by calling the `sage_memory_store` MCP tool directly.
-Each call stores one focused insight:
+Each call stores one focused insight with these parameters:
+- **content** (string): detailed finding — what, why, implications
+- **title** (string): short specific title (5-15 words)
+- **tags** (array of strings): domain and area tags, e.g. ["billing", "auth"]
+- **scope** (string): "project"
 
-```
-sage_memory_store(
-  content: "detailed finding — what, why, implications",
-  title: "Short specific title (5-15 words)",
-  tags: ["domain-tag", "area-tag"],
-  scope: "project"
-)
-```
+**MCP parameter types matter:** tags must be an actual array, not a JSON
+string. Pass ["billing", "auth"], not '["billing", "auth"]'. Same for
+all array and integer parameters across all sage-memory tools.
 
 For broad scans, aim for 10-20 calls covering:
 - Tech stack and framework choices

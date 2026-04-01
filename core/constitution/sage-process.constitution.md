@@ -39,10 +39,12 @@ Before writing specs, plans, ADRs, or starting an investigation,
 search sage-memory for relevant context. This is mandatory for
 Standard+ scope work when sage-memory MCP is available.
 
-```
-sage_memory_search(query: "[task domain keywords]", limit: 5)
-sage_memory_search(query: "[task domain]", filter_tags: ["self-learning"], limit: 5)
-```
+Two searches minimum:
+1. General domain search — query with task domain keywords, limit 5
+2. Self-learning search — same query with filter_tags ["self-learning"], limit 5
+
+**MCP parameter types:** query is a string, limit is an integer (not
+"5"), filter_tags and tags are arrays of strings (not JSON strings).
 
 Use findings to inform your approach:
 - Previous corrections → avoid repeating the same mistake

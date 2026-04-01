@@ -141,10 +141,14 @@ slash command, or is genuinely Tier 1.
 Before writing specs, plans, ADRs, or starting an investigation,
 search sage-memory. This prevents repeating past mistakes.
 
-```
-sage_memory_search(query: "[task domain keywords]", limit: 5)
-sage_memory_search(query: "[task domain]", filter_tags: ["self-learning"], limit: 5)
-```
+Two searches minimum:
+1. General domain search — query with task domain keywords, limit 5
+2. Self-learning search — same query with filter_tags ["self-learning"], limit 5
+
+**Parameter types (MCP tool schema):** query is a string, limit is an
+integer (not a string — pass 5, not "5"), filter_tags and tags are
+arrays of strings (not JSON strings — pass ["self-learning"], not
+'["self-learning"]'). Get the types right or the call will fail.
 
 Use findings to inform your approach. If sage-memory MCP is
 unavailable, check `.sage-memory/` folder. Skip only for Tier 1 tasks.
@@ -496,10 +500,10 @@ for wf in "$CORE"/workflows/*.workflow.md; do
       PREAMBLE='RULES (apply to every step — non-negotiable):
 - PERSONA: Read sage/core/agents/developer.persona.md for your mindset.
 - Announce: "Sage → build workflow." before starting work
-- MEMORY FIRST: Before writing spec, plan, or starting implementation, run
-  sage_memory_search(query: "[feature domain]", limit: 5) and
-  sage_memory_search(query: "[feature domain]", filter_tags: ["self-learning"], limit: 5).
-  Use findings to avoid past mistakes. This is MANDATORY, not optional.
+- MEMORY FIRST: Before writing spec, plan, or starting implementation,
+  search sage-memory with the feature domain as query (limit: 5), then
+  search again with filter_tags: ["self-learning"] (limit: 5). Use findings
+  to avoid past mistakes. This is MANDATORY, not optional.
 - Standard+ scope: spec.md MUST EXIST at .sage/work/ before implementing.
   "Design is clear" is NOT a spec. "We discussed this" is NOT a spec.
   A spec is a FILE. No file = no implementation. Write it first.
@@ -534,8 +538,8 @@ for wf in "$CORE"/workflows/*.workflow.md; do
       PREAMBLE='RULES (apply to every step — non-negotiable):
 - PERSONA: Read sage/core/agents/debugger.persona.md for your mindset.
 - Announce: "Sage → fix workflow." before starting work
-- MEMORY FIRST: Before investigating, run
-  sage_memory_search(query: "[bug domain/error]", filter_tags: ["self-learning"], limit: 5).
+- MEMORY FIRST: Before investigating, search sage-memory with the bug
+  domain or error message as query, filter_tags: ["self-learning"], limit: 5.
   Check for previous root causes, gotchas, and fixes in this area. MANDATORY.
 - MUST complete root cause investigation before ANY fix attempt.
   Present root cause with evidence to user. Wait for [A] confirmation.
@@ -837,7 +841,7 @@ CONTEXT PACKAGE:
 3. CRITERIA: Read quality criteria from: [SKILL/WORKFLOW PATH],
    section titled "## Quality Criteria"
 4. DECISIONS: Read .sage/decisions.md for last 5 entries.
-5. LEARNINGS: Call sage_memory_search(query: "[MEMORY QUERY]", limit: 5)
+5. LEARNINGS: Search sage-memory with the artifact domain as query, limit 5.
    If this tool is not available, check .sage-memory/ folder.
 
 EVALUATE the artifact against EACH quality criterion specifically.

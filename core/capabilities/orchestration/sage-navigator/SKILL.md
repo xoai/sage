@@ -47,9 +47,8 @@ assess the situation.
 **This step runs FIRST, every time.** Search for knowledge from
 previous sessions before reading files or assessing intent.
 
-```
-sage_memory_search(query: "<describe the user's task or area>", limit: 5)
-```
+Use sage_memory_search — pass the user's task or area description
+as query (string), limit as 5 (integer, not string).
 
 If the tool responds with results, categorize by tags:
 - **Knowledge** (no special tag) — architecture, conventions, domain logic

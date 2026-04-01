@@ -30,10 +30,8 @@ If the user specifies an artifact, proceed directly.
 
 ## Step 2: Gather Context
 
-Search for prior knowledge by calling the MCP tool:
-```
-sage_memory_search(query: "<artifact topic and domain>", limit: 5)
-```
+Search for prior knowledge using sage_memory_search — pass the
+artifact topic and domain as query (string), limit as 5 (integer).
 If the tool is not available, proceed without memory context.
 
 Read the artifact fully.

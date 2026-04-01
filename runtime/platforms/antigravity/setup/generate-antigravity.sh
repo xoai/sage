@@ -120,10 +120,11 @@ team-visible decision → Tier 2 minimum.
 **Compliance:** Every substantial response starts with "Sage →", uses a
 slash command, or is genuinely Tier 1.
 
-**Memory recall (Standard+ tasks):** Before starting work on any Tier 2
-or Tier 3 task, search sage-memory for relevant self-learning entries:
-`sage_memory_search(query: "[domain keywords]", filter_tags: ["self-learning"], limit: 5)`
-If sage-memory is not available, continue without search.
+**Memory recall (MANDATORY for Standard+ tasks):** Before starting work
+on any Tier 2/3 task, search sage-memory: pass domain keywords as query
+(string), filter_tags as ["self-learning"] (array), limit as 5 (integer).
+Parameter types matter — arrays must be arrays, integers must be integers,
+not JSON strings. If sage-memory is not available, continue without search.
 
 ### Workflow Gates (enforced for both slash commands and free input)
 
