@@ -36,7 +36,12 @@ def read_tail(path: Path, n: int = 20) -> list[Iteration]:
 
 
 def render_tsv(iterations: list[Iteration], metric_name: str) -> str:
-    """Render iterations as a TSV table for human inspection."""
+    """Render iterations as a TSV table for human inspection.
+
+    Delta is computed against the last keep/baseline value (the current
+    best at that point), not the immediately preceding iteration. This
+    means a discard's delta shows how far it regressed from current best.
+    """
     if not iterations:
         return "iter\tcommit\t(no data)\n"
 
@@ -68,14 +73,6 @@ def render_tsv(iterations: list[Iteration], metric_name: str) -> str:
 def write_tsv(path: Path, iterations: list[Iteration], metric_name: str) -> None:
     """Write TSV file derived from iterations."""
     path.write_text(render_tsv(iterations, metric_name))
-
-
-def detect_stuck(iterations: list[Iteration], n: int = 5) -> bool:
-    """Return True if the last N iterations are all discard or crash."""
-    if len(iterations) < n:
-        return False
-    tail = iterations[-n:]
-    return all(it.status in (Status.DISCARD, Status.CRASH) for it in tail)
 
 
 def current_best(iterations: list[Iteration], metric_name: str, direction: str) -> float | None:

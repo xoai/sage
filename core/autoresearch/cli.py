@@ -23,6 +23,8 @@ def main(argv: list[str] | None = None) -> int:
     run_parser = sub.add_parser("run", help="Run an autoresearch session")
     run_parser.add_argument("--brief", required=True, help="Path to brief.md")
     run_parser.add_argument("--project", default=".", help="Project root directory")
+    run_parser.add_argument("--keep-on-tie", action="store_true",
+                            help="Keep iterations that match current best (default: discard ties)")
 
     sub.add_parser("help", help="Show help")
 
@@ -49,6 +51,9 @@ def main(argv: list[str] | None = None) -> int:
         if not brief.verify:
             print("❌ No verify command in brief.", file=sys.stderr)
             return 1
+
+        if args.keep_on_tie:
+            brief.keep_on_tie = True
 
         work_dir = brief_path.parent
         print(f"🔬 Sage Autoresearch v{__version__}")

@@ -46,9 +46,15 @@ def commit(message: str, cwd: Path) -> str:
     return short_sha(cwd)
 
 
-def reset_hard(cwd: Path) -> None:
-    """Reset working tree to HEAD, discarding all changes."""
-    _run(["git", "reset", "--hard", "HEAD"], cwd)
+def reset_hard(cwd: Path, undo_commit: bool = False) -> None:
+    """Reset working tree, discarding changes.
+
+    If undo_commit=True, also undo the last commit (reset to HEAD~1).
+    Used after DECIDE when discarding or crashing — the commit from
+    Phase 4 needs to be removed from the branch.
+    """
+    target = "HEAD~1" if undo_commit else "HEAD"
+    _run(["git", "reset", "--hard", target], cwd)
     _run(["git", "clean", "-fd"], cwd)
 
 

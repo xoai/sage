@@ -21,6 +21,7 @@ from .types import (
     PhaseState,
     Status,
     Termination,
+    VerifyResult,
 )
 
 STATE_FILE = ".autoresearch-state.json"
@@ -88,7 +89,7 @@ def _agent_modify(work_dir: Path, idea: str, iteration: int) -> bool:
 
 
 def _decide(
-    verify_result: timer.VerifyResult,
+    verify_result: VerifyResult,
     brief: BriefConfig,
     current_best_val: float | None,
 ) -> Decision:
@@ -121,13 +122,18 @@ def _decide(
     value = metrics[brief.metric.name]
     if current_best_val is None:
         improved = True
+        tied = False
     elif brief.metric.direction == Direction.LOWER:
         improved = value < current_best_val
+        tied = value == current_best_val
     else:
         improved = value > current_best_val
+        tied = value == current_best_val
 
     if improved:
         return Decision(status=Status.KEEP, metrics=metrics, improved=True, reason="improved")
+    elif tied and brief.keep_on_tie:
+        return Decision(status=Status.KEEP, metrics=metrics, improved=False, reason="tied (keep-on-tie)")
     else:
         return Decision(status=Status.DISCARD, metrics=metrics, improved=False, reason="no improvement")
 
@@ -251,9 +257,9 @@ def run_iteration(
     if decision.metrics:
         print(f"  Metrics: {decision.metrics}")
 
-    # Revert if not keeping
+    # Revert if not keeping — undo the commit from Phase 4
     if decision.status != Status.KEEP:
-        git.reset_hard(project_dir)
+        git.reset_hard(project_dir, undo_commit=True)
 
     # Phase 7: LOG
     it = Iteration(
@@ -317,8 +323,31 @@ def run_baseline(
 
 def run_session(brief: BriefConfig, work_dir: Path, project_dir: Path) -> None:
     """Run the full autoresearch session loop."""
+    # Refuse to start on a dirty working tree
+    if not git.is_clean(project_dir):
+        print("❌ Working tree is dirty. Commit or stash your changes first.")
+        print("   Autoresearch commits on every iteration — uncommitted changes")
+        print("   would be mixed into the first autoresearch commit.")
+        return
+
     jsonl_path = work_dir / "autoresearch.jsonl"
     work_dir.mkdir(parents=True, exist_ok=True)
+
+    # Check for crash recovery state (mid-phase resume)
+    saved_state = _load_state(work_dir)
+    if saved_state is not None:
+        existing = results.read_iterations(jsonl_path)
+        last_logged = existing[-1].iteration if existing else -1
+        if saved_state.iteration > last_logged:
+            # Crash happened after COMMIT but before LOG completed.
+            # The commit exists but wasn't logged — revert it.
+            print(f"\n⚠ Recovering from crash during phase {saved_state.phase.value} "
+                  f"(iteration {saved_state.iteration}).")
+            if saved_state.phase in (Phase.COMMIT, Phase.VERIFY):
+                print("  Reverting uncommitted iteration...")
+                git.reset_hard(project_dir, undo_commit=True)
+            # Clean up state file — JSONL is authoritative
+            (work_dir / STATE_FILE).unlink(missing_ok=True)
 
     # Check for existing state (resume)
     existing = results.read_iterations(jsonl_path)

@@ -8,10 +8,10 @@ import pytest
 from core.autoresearch.results import (
     append_iteration,
     current_best,
-    detect_stuck,
     read_iterations,
     render_tsv,
 )
+from core.autoresearch.stuck import detect_stuck
 from core.autoresearch.types import Iteration, Status
 
 

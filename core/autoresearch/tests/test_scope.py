@@ -30,3 +30,28 @@ def test_frozen_takes_priority():
     ok, v = check_scope(["src/config/db.ts"], ["src/**"], ["src/config/**"])
     assert ok is False
     assert any("frozen" in x for x in v)
+
+
+def test_recursive_glob_deep_nesting():
+    """PurePosixPath.match supports ** for recursive matching."""
+    ok, v = check_scope(
+        ["src/components/deep/Button.tsx"],
+        ["src/**/*.tsx"],
+        [],
+    )
+    assert ok is True
+    assert v == []
+
+
+def test_recursive_glob_with_extension():
+    ok, v = check_scope(
+        ["src/utils/helpers.ts", "src/index.ts"],
+        ["src/**/*.ts"],
+        [],
+    )
+    assert ok is True
+
+
+def test_wrong_extension_rejected():
+    ok, v = check_scope(["src/style.css"], ["src/**/*.ts"], [])
+    assert ok is False

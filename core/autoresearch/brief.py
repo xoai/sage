@@ -15,25 +15,46 @@ from .types import (
 )
 
 
-def _parse_yaml_value(line: str) -> str:
-    """Extract value after colon, stripping quotes."""
+def _extract_value(line: str) -> str:
+    """Extract value after FIRST colon, stripping surrounding quotes/whitespace."""
     _, _, val = line.partition(":")
-    val = val.strip().strip('"').strip("'")
+    val = val.strip()
+    if (val.startswith('"') and val.endswith('"')) or \
+       (val.startswith("'") and val.endswith("'")):
+        val = val[1:-1]
     return val
 
 
-def _parse_list(lines: list[str], start: int) -> tuple[list[str], int]:
-    """Parse a YAML list starting at the given index."""
+def _parse_list_items(lines: list[str], start: int) -> tuple[list[str], int]:
+    """Parse YAML list items (lines starting with '- ') from start index."""
     items = []
     i = start
     while i < len(lines):
         stripped = lines[i].strip()
         if stripped.startswith("- "):
-            items.append(stripped[2:].strip().strip('"').strip("'"))
+            item = stripped[2:].strip()
+            if (item.startswith('"') and item.endswith('"')) or \
+               (item.startswith("'") and item.endswith("'")):
+                item = item[1:-1]
+            items.append(item)
             i += 1
         else:
             break
     return items, i
+
+
+def _parse_inline_list(val: str) -> list[str]:
+    """Parse an inline YAML list like ["a", "b", "c"]."""
+    val = val.strip()
+    if not val.startswith("[") or not val.endswith("]"):
+        return [val] if val else []
+    inner = val[1:-1]
+    items = []
+    for item in inner.split(","):
+        item = item.strip().strip('"').strip("'")
+        if item:
+            items.append(item)
+    return items
 
 
 def parse_brief(path: Path) -> BriefConfig:
@@ -45,9 +66,10 @@ def parse_brief(path: Path) -> BriefConfig:
         raise ValueError(f"No YAML frontmatter found in {path}")
 
     lines = fm_match.group(1).split("\n")
+
+    # First pass: extract top-level and nested keys
     data: dict = {}
     i = 0
-
     while i < len(lines):
         line = lines[i]
         stripped = line.strip()
@@ -56,47 +78,71 @@ def parse_brief(path: Path) -> BriefConfig:
             i += 1
             continue
 
+        # Skip stray list items at top level
         if stripped.startswith("- "):
             i += 1
             continue
 
-        if ":" in stripped:
-            key = stripped.split(":")[0].strip()
-            val = _parse_yaml_value(stripped)
+        if ":" not in stripped:
+            i += 1
+            continue
 
-            if key in ("metric", "scope", "budget") and not val:
-                sub: dict = {}
-                i += 1
-                while i < len(lines) and lines[i].startswith("  "):
-                    subline = lines[i].strip()
-                    if subline.startswith("- "):
-                        break
-                    if ":" in subline:
-                        subkey = subline.split(":")[0].strip()
-                        subval = _parse_yaml_value(subline)
-                        if not subval and i + 1 < len(lines) and lines[i + 1].strip().startswith("- "):
-                            items, i = _parse_list(lines, i + 1)
-                            sub[subkey] = items
-                        else:
-                            sub[subkey] = subval
+        key = stripped.split(":")[0].strip()
+        val = _extract_value(stripped)
+
+        # Nested block (metric, scope, budget) — value is empty, children indented
+        if key in ("metric", "scope", "budget") and not val:
+            sub: dict = {}
+            i += 1
+            while i < len(lines) and (lines[i].startswith("  ") or lines[i].strip() == ""):
+                subline = lines[i].strip()
+                if not subline:
                     i += 1
-                data[key] = sub
-            else:
-                data[key] = val
-                i += 1
+                    continue
+                if subline.startswith("- "):
+                    # Orphan list item in a block — skip
+                    i += 1
+                    continue
+                if ":" in subline:
+                    subkey = subline.split(":")[0].strip()
+                    subval = _extract_value(subline)
+                    # Check if next lines are list items
+                    if not subval and i + 1 < len(lines) and lines[i + 1].strip().startswith("- "):
+                        items, i = _parse_list_items(lines, i + 1)
+                        sub[subkey] = items
+                    elif subval.startswith("["):
+                        sub[subkey] = _parse_inline_list(subval)
+                        i += 1
+                    else:
+                        sub[subkey] = subval
+                        i += 1
+                else:
+                    i += 1
+            data[key] = sub
+        elif val.startswith("["):
+            data[key] = _parse_inline_list(val)
+            i += 1
         else:
+            data[key] = val
             i += 1
 
+    # Build config from parsed data
     metric_data = data.get("metric", {})
+    if isinstance(metric_data, str):
+        metric_data = {}
     scope_data = data.get("scope", {})
+    if isinstance(scope_data, str):
+        scope_data = {}
     budget_data = data.get("budget", {})
+    if isinstance(budget_data, str):
+        budget_data = {}
 
     writable = scope_data.get("writable", [])
     if isinstance(writable, str):
-        writable = [w.strip().strip('"').strip("'") for w in writable.strip("[]").split(",")]
+        writable = _parse_inline_list(writable)
     frozen = scope_data.get("frozen", [])
     if isinstance(frozen, str):
-        frozen = [f.strip().strip('"').strip("'") for f in frozen.strip("[]").split(",")]
+        frozen = _parse_inline_list(frozen)
 
     target = metric_data.get("target")
     target_val = float(target) if target else None

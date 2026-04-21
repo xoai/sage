@@ -66,6 +66,7 @@ class BriefConfig:
     scope: ScopeConfig = field(default_factory=ScopeConfig)
     budget: BudgetConfig = field(default_factory=BudgetConfig)
     slug: str = ""
+    keep_on_tie: bool = False
 
     @property
     def branch_name(self) -> str:
