@@ -109,6 +109,7 @@ class PhaseState:
     brief_path: str
     work_dir: str
     branch: str
+    pre_iteration_sha: str = ""
     last_commit: str = ""
     last_description: str = ""
     last_metrics: dict[str, float] = field(default_factory=dict)
@@ -121,6 +122,7 @@ class PhaseState:
             "brief_path": self.brief_path,
             "work_dir": self.work_dir,
             "branch": self.branch,
+            "pre_iteration_sha": self.pre_iteration_sha,
             "last_commit": self.last_commit,
             "last_description": self.last_description,
             "last_metrics": self.last_metrics,
@@ -135,6 +137,7 @@ class PhaseState:
             brief_path=d["brief_path"],
             work_dir=d["work_dir"],
             branch=d["branch"],
+            pre_iteration_sha=d.get("pre_iteration_sha", ""),
             last_commit=d.get("last_commit", ""),
             last_description=d.get("last_description", ""),
             last_metrics=d.get("last_metrics", {}),

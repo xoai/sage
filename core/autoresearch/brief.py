@@ -58,7 +58,13 @@ def _parse_inline_list(val: str) -> list[str]:
 
 
 def parse_brief(path: Path) -> BriefConfig:
-    """Parse brief.md frontmatter into a BriefConfig."""
+    """Parse brief.md frontmatter into a BriefConfig.
+
+    Note on verify commands: the parser takes everything after the first
+    colon and strips surrounding quotes. Verify commands containing inner
+    escaped quotes (\\") are not supported — use single quotes in the
+    command or move complex commands to a .sh file.
+    """
     text = path.read_text()
 
     fm_match = re.match(r"^---\s*\n(.*?)\n---", text, re.DOTALL)

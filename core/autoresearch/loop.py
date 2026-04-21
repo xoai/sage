@@ -7,7 +7,6 @@ Phases marked 'runtime' are deterministic Python.
 from __future__ import annotations
 
 import json
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -25,6 +24,19 @@ from .types import (
 )
 
 STATE_FILE = ".autoresearch-state.json"
+
+
+def _run_git_reset(project_dir: Path, target_sha: str) -> None:
+    """Reset to a specific commit SHA."""
+    import subprocess
+    subprocess.run(
+        ["git", "reset", "--hard", target_sha],
+        cwd=project_dir, capture_output=True, text=True, check=True,
+    )
+    subprocess.run(
+        ["git", "clean", "-fd"],
+        cwd=project_dir, capture_output=True, text=True, check=True,
+    )
 
 
 def _save_state(state: PhaseState, work_dir: Path) -> None:
@@ -141,7 +153,8 @@ def _decide(
 def _check_termination(brief: BriefConfig, iterations: list[Iteration]) -> bool:
     """Phase 8: REPEAT — check if we should stop. Returns True to stop."""
     if brief.budget.termination == Termination.ITERATIONS:
-        if brief.budget.max_iterations and len(iterations) >= brief.budget.max_iterations:
+        actual = sum(1 for it in iterations if it.status != Status.BASELINE)
+        if brief.budget.max_iterations and actual >= brief.budget.max_iterations:
             print(f"\n🏁 Iteration budget reached ({brief.budget.max_iterations}).")
             return True
 
@@ -182,12 +195,14 @@ def run_iteration(
     is_stuck = stuck_mod.detect_stuck(all_iterations)
     idea = _agent_ideate(work_dir, "reviewed", iteration, is_stuck, all_iterations)
 
+    pre_sha = git.short_sha(project_dir)
     state = PhaseState(
         iteration=iteration,
         phase=Phase.IDEATE,
         brief_path=str(work_dir / "brief.md"),
         work_dir=str(work_dir),
         branch=brief.branch_name,
+        pre_iteration_sha=pre_sha,
         last_description=idea,
     )
     _save_state(state, work_dir)
@@ -205,7 +220,7 @@ def run_iteration(
         if not ok:
             print(f"  ⚠ Scope violation: {violations}")
             git.reset_hard(project_dir)
-            return Iteration(
+            crash_it = Iteration(
                 iteration=iteration,
                 timestamp=datetime.now(timezone.utc).isoformat(),
                 commit="",
@@ -216,6 +231,10 @@ def run_iteration(
                 status=Status.CRASH,
                 notes=f"scope violation: {violations}",
             )
+            results.append_iteration(jsonl_path, crash_it)
+            all_iterations.append(crash_it)
+            results.write_tsv(work_dir / "results.tsv", all_iterations, brief.metric.name)
+            return crash_it
 
     # Phase 4: COMMIT
     parent = git.short_sha(project_dir)
@@ -340,11 +359,15 @@ def run_session(brief: BriefConfig, work_dir: Path, project_dir: Path) -> None:
         last_logged = existing[-1].iteration if existing else -1
         if saved_state.iteration > last_logged:
             # Crash happened after COMMIT but before LOG completed.
-            # The commit exists but wasn't logged — revert it.
+            # Reset to the exact pre-iteration SHA (handles double-commits
+            # from the pre-verify gate cleanly).
             print(f"\n⚠ Recovering from crash during phase {saved_state.phase.value} "
                   f"(iteration {saved_state.iteration}).")
-            if saved_state.phase in (Phase.COMMIT, Phase.VERIFY):
-                print("  Reverting uncommitted iteration...")
+            if saved_state.phase in (Phase.COMMIT, Phase.VERIFY) and saved_state.pre_iteration_sha:
+                print(f"  Resetting to pre-iteration state ({saved_state.pre_iteration_sha})...")
+                _run_git_reset(project_dir, saved_state.pre_iteration_sha)
+            elif saved_state.phase in (Phase.COMMIT, Phase.VERIFY):
+                print("  Reverting last commit...")
                 git.reset_hard(project_dir, undo_commit=True)
             # Clean up state file — JSONL is authoritative
             (work_dir / STATE_FILE).unlink(missing_ok=True)

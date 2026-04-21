@@ -31,5 +31,8 @@ docs/
 .sage-memory/
 sage/
 .claude/
-CLAUDE.md__pycache__/
+CLAUDE.md
+
+# Python
+__pycache__/
 *.pyc
