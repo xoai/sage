@@ -2,6 +2,115 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [1.1.1] — Autoresearch, Enforcement Hardening, Quality of Life
+
+### Autoresearch
+- **`/autoresearch` workflow** — autonomous iteration toward a measurable
+  outcome. Modify → commit → verify → keep or revert → repeat. Based on
+  Karpathy's autoresearch pattern, native to Sage.
+- **Python runtime** (`core/autoresearch/`, stdlib only) — 8-phase state
+  machine, METRIC line parser, git branch management, subprocess timer
+  with SIGTERM/SIGKILL budget, JSONL logging, TSV rendering.
+- **Scope enforcement** — writable/frozen glob matching with `**` recursive
+  support. Frozen files can't be touched; out-of-scope changes auto-revert.
+- **Stuck recovery** — detects 5+ consecutive discards/crashes, builds
+  recovery context with near-miss analysis, surfaces playbook.
+- **Session resume** — crash recovery via PhaseState persistence. Dirty
+  tree detection. Cross-platform resume (Claude Code ↔ Antigravity).
+- **Memory integration** — session-end summaries stored to sage-memory,
+  session-start priors injected into IDEATE context.
+- **Three worked examples** — bundle size reduction, test coverage
+  improvement, prose readability (Flesch-Kincaid grade level).
+- **`--keep-on-tie` flag** — keep iterations that match current best
+  (default: discard ties per Karpathy's simpler-is-better principle).
+- **Navigator routing** — optimization-shaped requests (reduce, increase,
+  minimize, maximize, improve, iterate until) auto-route to `/autoresearch`.
+- **31 unit tests + 4 integration tests** — harness parsing, results
+  tracking, scope enforcement, memory formatting, baseline creation,
+  dirty-tree refusal.
+
+### /map Workflow
+- **Dedicated ontology builder** — scans codebase and creates typed
+  knowledge graph entities (modules, services, APIs) with relationships
+  (depends_on, calls, part_of) in sage-memory.
+- **Three modes** — broad scan (project-level), deep dive (specific module),
+  refresh (update stale entities, remove deleted modules).
+- **Mermaid diagrams** — presents discovered structure visually before
+  storing. Checkpoint for user approval.
+- **Navigator routing** — map/ontology/graph/dependencies/structure keywords
+  auto-route to `/map`.
+
+### Enforcement Hardening
+- **Rule 1A: Memory Before Work** — mandatory sage_memory_search before
+  writing specs, plans, ADRs, or starting investigations. Added to
+  constitution, CLAUDE.md, and build/fix preambles. The counterpart to
+  Rule 6 (capture corrections) — without both, memory is write-only.
+- **Anti-deferral (Rule 4)** — agent must not defer, skip, or deprioritize
+  planned work without explicit user consent. Must not mark initiative
+  complete with tasks remaining. Added to constitution and build workflow.
+- **Fix workflow gates hardened** — root cause gate no longer skippable for
+  "obvious" bugs. Surgical fixes now require user scope confirmation before
+  implementation. Explicit: "Do NOT skip this gate for ANY reason."
+- **Fix workflow gains auto-review** — root cause diagnosis and fix plan
+  reviewed by sub-agent. Two new review prompts: root cause review (5
+  checks) and fix plan review (5 checks).
+- **Fix workflow gains quality gates** — Gate 3 (code quality) and Gate 8
+  (auto-QA) now run as optional/advisory for fixes. Previously skipped.
+- **Self-learning trigger** — fix workflow now stores `[LRN:gotcha]` after
+  2+ failed fix attempts, before the next attempt (don't wait for success).
+- **Read-only sub-agents** — all 6 review sub-agent prompts include explicit
+  "READ-ONLY: do NOT modify any files" constraint. Prevents sub-agents from
+  editing specs during review.
+- **Sage-memory over native memory** — Rule 6 now explicitly prohibits
+  Claude's native MEMORY.md for corrections and learnings. Sage has its
+  own memory system.
+- **Ontology wiring checks** — build/fix close steps verify new components
+  are connected (imports, routes, handlers) and update ontology when
+  structural relationships change.
+
+### Decisions.md Improvements
+- **Newest-first ordering** — all decision writes now prepend (insert after
+  header, before existing entries). Recent context read first, no wasted
+  tokens on old entries.
+- **Archive rotation** — when decisions.md exceeds ~200 lines, keep 20 most
+  recent, move rest to `decisions-{YYYY-MM-DD}.md`. Archives are read-only.
+- Updated across all 8 workflows, 6 capabilities, constitution Rule 7.
+
+### Command Prefix Support
+- **`--prefix` flag** — `sage init --prefix` namespaces all commands as
+  `sage:build`, `sage:fix`, `sage:review`, etc. Avoids conflicts with
+  other plugins. `/sage` stays unprefixed.
+- **Config persistence** — `command_prefix: true/false` in `.sage/config.yaml`.
+  `sage update --prefix` toggles it. Generator reads config on every run.
+- **Routing table prefixed** — CLAUDE.md keyword routing, command files,
+  and skill loaders all respect the prefix setting.
+
+### Quality of Life
+- **Sub-agent timeout 30s → 60s** — auto-review and auto-QA sub-agents
+  now have 60 seconds instead of 30. Reduces false timeouts.
+- **Animated CLI spinner** — `sage init`, `sage update`, `sage upgrade`
+  show braille spinner animation during long operations.
+- **Checkpoint labels simplified** — `[A] Review` / `[S] Skip review`
+  replaces redundant `[A] Approve & review`.
+- **MCP parameter types documented** — pseudo-code function call syntax
+  replaced with natural language + explicit type hints (arrays must be
+  arrays, integers must be integers). Fixes agent passing stringified JSON.
+
+### Bug Fixes
+- **`--prefix` flag persistence** — flag now updates `.sage/config.yaml`
+  for existing projects and during `sage update` (was silently ignored).
+- **`cmd_name` unbound variable** — moved variable assignment before the
+  redirect block in `generate-claude-code.sh`.
+- **Autoresearch `git reset`** — discard/crash now resets to `HEAD~1`
+  (was resetting to `HEAD`, a no-op). Crash recovery uses exact
+  pre-iteration SHA for multi-commit scenarios.
+- **Autoresearch scope violations logged** — scope gate crashes now appear
+  in JSONL/TSV results (were silently dropped).
+- **Autoresearch iteration count** — `max_iterations` now counts actual
+  attempts, excluding the baseline measurement.
+- **`.gitignore` corruption** — `__pycache__/` entry was appended without
+  newline, breaking the CLAUDE.md ignore rule.
+
 ## [1.1.0] — Auto-Review + skills.sh Integration
 
 ### Auto-Review Sub-Agent

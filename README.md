@@ -16,7 +16,7 @@ Built for product and engineering teams, open to any domain.
 - **Focus over noise** — loads only what the task needs, producing sharper reasoning
 - **Reliable by design** — 5-layer enforcement, 3 independent sub-agent reviews, quality gates with deterministic scripts
 - **Gets smarter over time** — self-learning, memory, and ontology compound into institutional knowledge of your codebase
-- **Grows with its ecosystem** — 37 built-in skills, extensible with 90K+ community skills from skills.sh
+- **Grows with its ecosystem** — 38 built-in skills, extensible with 90K+ community skills from skills.sh
 
 ## Why Sage
 
@@ -56,8 +56,8 @@ building the wrong thing confidently. Sage catches this at every stage:
 - 2 advisory gates activate when applicable — browser check (Lightpanda), design check (frontend files)
 - Auto-QA (sub-agent) verifies code against spec — alignment, test coverage, error handling, boundary conditions, integration consistency, coding principles
 
-Four independent sub-agent review points. The agent that writes the
-code never reviews its own work alone.
+Six independent sub-agent review points. The agent that writes the
+code — or diagnoses the bug — never reviews its own work alone.
 
 ### Hybrid Loading
 
@@ -152,6 +152,7 @@ lets you decide.
 cd your-project
 sage init                        # interactive — detects stack, asks for preset
 sage init --preset startup       # or pick a preset directly
+sage init --prefix               # namespace commands as sage:build, sage:fix, etc.
 ```
 
 Available presets: `base` (default), `startup`, `enterprise`, `opensource`.
@@ -185,6 +186,9 @@ no more explaining context from scratch.
 
 /build                           # spec → plan → build-loop → quality gates
                                  # reads prior research, design specs, ADRs
+
+/autoresearch                    # autonomous iteration toward a metric
+                                 # modify → commit → verify → keep/revert
 
 /continue                        # resume where you left off — reads the
                                  # cycle manifest for full context handoff
@@ -251,6 +255,8 @@ Use inside your IDE (Claude Code, Antigravity):
 | `/qa` | Browser-based functional testing (optional Lightpanda MCP) |
 | `/design-review` | Design quality audit + AI slop detection + design system compliance |
 | `/review` | Independent artifact evaluation via sub-agent delegation |
+| `/autoresearch` | Autonomous iteration toward a measurable metric (reduce bundle, increase coverage) |
+| `/map` | Build ontology knowledge graph — modules, services, dependencies |
 | `/learn` | Codebase scan → memory storage |
 | `/reflect` | Review cycle → extract learnings → seed next cycle |
 | `/continue` | Resume any active cycle with full context |
@@ -278,7 +284,8 @@ workflows that chain skills automatically:
 ```
 UNDERSTAND              ENVISION               DELIVER              REFLECT
 /research  /analyze     /design  /architect    /build  /fix         /reflect
-/learn                                         /review  /qa
+/learn     /map                                /autoresearch
+                                               /review  /qa
                                                /design-review
 ```
 
@@ -304,9 +311,10 @@ will be reinterpreted. Sage solves this with 5 independent enforcement
 layers and observable conditions that can't be argued away.
 
 **Layer 1 — Always-on rules** in the system prompt. Even if nothing else
-loads, the gates prevent the worst violations. Seven rules covering
-spec-first, artifact-only state, checkpoints, self-check, decisions
-logging, learning from corrections, and memory search.
+loads, the gates prevent the worst violations. Eight rules covering
+memory-before-work, spec-first, artifact-only state, checkpoints
+(no unilateral deferral), self-check, decisions logging, learning
+from corrections, and skills-before-assumptions.
 
 **Layer 2 — Command preambles.** Every slash command has enforcement
 rules the agent reads before its first token. Named rationalizations
@@ -350,6 +358,8 @@ self-bias lives — is not included.
 | **Auto-review: spec** | After spec [A] | Framing alignment, testable criteria, boundary completeness, edge cases, consistency |
 | **Auto-review: plan** | After plan [A] | Spec-plan alignment, task decomposition, dependencies, coverage gaps, risk |
 | **Auto-review: ADR** | After design [A] in /architect | Trade-off analysis, migration path, risk assessment, blast radius, reversibility |
+| **Auto-review: root cause** | After diagnosis [A] in /fix | Evidence quality, symptom vs cause, alternative causes, reproduction chain |
+| **Auto-review: fix plan** | After fix plan [A] in /fix | Root cause coverage, file completeness, test strategy, regression risk |
 | **Gate 3: code quality** | During quality gates | Readability, error handling, security, performance, conventions |
 | **Auto-QA** | After gates pass | Spec-implementation alignment, test coverage, error handling, boundaries, integration, coding principles |
 
@@ -410,14 +420,14 @@ unambiguous guidance. Domain vocabulary in the right places improves
 reasoning. Reference material separated from instructions keeps the
 agent focused on the task, not on parsing a wall of text.
 
-### Built-in Skills (37)
+### Built-in Skills (38)
 
 Sage ships with skills across four domains:
 
 - **Product management** — JTBD, opportunity mapping, user interviews, PRDs, problem-solving
 - **UX design** — audit, evaluate, discovery, brief, specify, writing, heuristic review, research, plan-tasks
 - **Engineering** — React, React Native, Next.js, Flutter, web, mobile, API, BaaS, plus full-stack presets (Next.js + Supabase, Flutter + Firebase, React Native + Expo, Next.js fullstack)
-- **Framework** — memory, ontology, self-learning, skill-builder, and research packs (discover, draft, observe, source-process, validate)
+- **Framework** — memory, ontology, self-learning, autoresearch, skill-builder, and research packs (discover, draft, observe, source-process, validate)
 
 ### Community Ecosystem (powered by skills.sh)
 
@@ -444,21 +454,23 @@ relationships) for smarter integration.
 Sage configuration lives in `.sage/config.yaml`:
 
 ```yaml
-sage-version: "1.1.0"
+sage-version: "1.1.1"
 project-name: "my-app"
 detected-stack: [react, typescript]
 auto_review: true          # sub-agent review after spec/plan approval
 auto_qa: true              # sub-agent QA after quality gates
 independent_gate3: true    # sub-agent code quality review (Gate 3)
+command_prefix: false      # prefix commands as sage:build, sage:fix, etc.
 ```
 
-All toggles default to `true`. Set to `false` to disable:
+All toggles default to `true` (except `command_prefix`). Set to `false` to disable:
 
 | Setting | What It Controls |
 |---------|-----------------|
 | `auto_review` | Sub-agent review of spec, plan, and ADR after approval |
 | `auto_qa` | Sub-agent code verification after quality gates pass |
 | `independent_gate3` | Sub-agent code quality review at Gate 3 (falls back to self-review) |
+| `command_prefix` | Namespace all commands as `sage:build`, `sage:fix`, etc. (set via `--prefix` flag) |
 
 ## Project State
 
@@ -492,8 +504,9 @@ agent summarizes. The artifacts ARE the state: spec.md exists = spec
 phase complete. plan.md exists = planning done. File existence is
 binary — the agent can't hallucinate a file into existence.
 
-**decisions.md is append-only.** The agent adds entries, never edits
-or summarizes past ones. No lossy compression.
+**decisions.md is newest-first.** The agent prepends entries after the
+header — recent context is always read first. When the file exceeds
+~200 lines, old entries archive to `decisions-{date}.md`.
 
 ## Platforms
 
