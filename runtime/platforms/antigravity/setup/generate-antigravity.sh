@@ -570,6 +570,24 @@ for wf in "$CORE"/workflows/*.workflow.md; do
 
 '
       ;;
+    autoresearch)
+      PREAMBLE='RULES (apply to every step — non-negotiable):
+- Announce: "Sage → autoresearch workflow." before starting work
+- Read skills/autoresearch/SKILL.md BEFORE starting the loop
+- MEMORY FIRST: Search sage-memory for priors on this repo + metric domain
+  (filter_tags: ["autoresearch"], limit: 5). Use findings as starting context.
+- Elicit: goal, metric (name + direction + optional target), verify command,
+  writable/frozen scope, per-run budget. Present as brief for [A]/[R] approval.
+- ONE CHANGE PER ITERATION. COMMIT BEFORE VERIFY.
+- Agent handles REVIEW, IDEATE, MODIFY. Runtime handles COMMIT, VERIFY,
+  DECIDE, LOG, REPEAT. Do NOT run verify yourself.
+- If stuck (5+ consecutive discard/crash): read stuck-recovery.md before IDEATE.
+- Never touch the main/master branch. All work on autoresearch/<slug>.
+- Choices: present with [1] [2] [3] bracket notation
+- Never use code blocks for interaction (checkpoints, options, status)
+
+'
+      ;;
     learn)
       PREAMBLE='RULES (apply to every step — non-negotiable):
 - Announce: "Sage → learn workflow." before starting work

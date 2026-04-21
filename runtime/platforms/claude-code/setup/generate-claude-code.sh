@@ -69,6 +69,7 @@ reflect/retro/retrospective/lessons/what did we learn/look back → /reflect
 continue/resume/pick up/where was I/what was I doing → /continue
 qa/test the app/smoke test/browser test/functional test → /qa
 map/ontology/graph/dependencies/structure/what connects/what depends → /map
+optimize/reduce/increase/minimize/maximize/improve/iterate until/autoresearch → /autoresearch
 design review/design audit/design check/visual audit/slop check → /design-review
 
 If keywords match ONE workflow → go to confirmation.
@@ -463,6 +464,7 @@ with open('$SAGE_ROOT/CLAUDE.md', 'w') as f:
 if [ -n "$PREFIX" ]; then
   sed -i \
     -e "s|/design-review|/${PREFIX}design-review|g" \
+    -e "s|/autoresearch|/${PREFIX}autoresearch|g" \
     -e "s|/architect|/${PREFIX}architect|g" \
     -e "s|/research|/${PREFIX}research|g" \
     -e "s|/continue|/${PREFIX}continue|g" \
@@ -599,6 +601,26 @@ for wf in "$CORE"/workflows/*.workflow.md; do
   a navigable knowledge graph. Read skills/ontology/SKILL.md for encoding.
   Search ontology first to avoid duplicates.
 - Checkpoint: [A] Looks correct / [R] Some findings are wrong
+- Choices: present with [1] [2] [3] bracket notation
+- Never use code blocks for interaction (checkpoints, options, status)
+
+'
+      ;;
+    autoresearch)
+      PREAMBLE='RULES (apply to every step — non-negotiable):
+- Announce: "Sage → autoresearch workflow." before starting work
+- Read skills/autoresearch/SKILL.md BEFORE starting the loop
+- MEMORY FIRST: Search sage-memory for priors on this repo + metric domain
+  (filter_tags: ["autoresearch"], limit: 5). Use findings as starting context.
+- Elicit: goal, metric (name + direction + optional target), verify command,
+  writable/frozen scope, per-run budget. Present as brief for [A]/[R] approval.
+- ONE CHANGE PER ITERATION. Not two. Not "try A and also B."
+- COMMIT BEFORE VERIFY. Never verify uncommitted changes.
+- The agent handles REVIEW, IDEATE, MODIFY. Runtime handles COMMIT, VERIFY,
+  DECIDE, LOG, REPEAT. Do NOT run verify yourself — the runtime does that.
+- After each iteration: update autoresearch.md living doc with what was tried.
+- If stuck (5+ consecutive discard/crash): read stuck-recovery.md before IDEATE.
+- Never touch the main/master branch. All work on autoresearch/<slug>.
 - Choices: present with [1] [2] [3] bracket notation
 - Never use code blocks for interaction (checkpoints, options, status)
 
