@@ -159,6 +159,12 @@ resolve_framework
 # SHARED FUNCTIONS
 # ═══════════════════════════════════════════════════════════════
 
+prune_framework_copy() {
+  local sage_dir="$1"
+  rm -rf "$sage_dir/.git" "$sage_dir/.github" "$sage_dir/.tmp"
+  rm -f "$sage_dir/.DS_Store"
+}
+
 ask_choice() {
   local prompt="$1"
   shift
@@ -259,6 +265,7 @@ copy_framework() {
   else
     cp -a "$SAGE_FRAMEWORK" "$target/sage" &
     spin $! "Copying framework..."
+    prune_framework_copy "$target/sage"
     echo -e "  ${GREEN}✓${RESET} sage/ copied to project"
   fi
 }
@@ -669,6 +676,7 @@ except: pass
     rm -rf "$target/sage"
     cp -a "$SAGE_FRAMEWORK" "$target/sage" &
     spin $! "Updating framework..."
+    prune_framework_copy "$target/sage"
     echo -e "  ${GREEN}✓${RESET} sage/ updated"
   fi
 
