@@ -322,7 +322,7 @@ apply_prefix_config() {
   local prefix_val="false"
   [ "$PREFIX_FLAG" = "true" ] && prefix_val="true"
   if grep -q 'command_prefix:' "$config" 2>/dev/null; then
-    sed -i "s/^command_prefix:.*$/command_prefix: $prefix_val/" "$config"
+    sed -i.bak "s/^command_prefix:.*$/command_prefix: $prefix_val/" "$config" && rm -f "${config}.bak"
   else
     echo "command_prefix: $prefix_val" >> "$config"
   fi

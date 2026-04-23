@@ -454,7 +454,7 @@ with open('$SAGE_ROOT/CLAUDE.md', 'w') as f:
     f.write(content)
 " 2>/dev/null || {
   # Fallback: simple sed if python3 not available
-  sed -i "s|__CONSTITUTION_PLACEHOLDER__|## Engineering Principles\n\nBase (all projects):\n1. Tests before code\n2. No silent failures\n3. Secrets never in code\n4. Dependencies explicit\n5. Changes reversible|" "$SAGE_ROOT/CLAUDE.md" 2>/dev/null
+  sed -i.bak "s|__CONSTITUTION_PLACEHOLDER__|## Engineering Principles\n\nBase (all projects):\n1. Tests before code\n2. No silent failures\n3. Secrets never in code\n4. Dependencies explicit\n5. Changes reversible|" "$SAGE_ROOT/CLAUDE.md" 2>/dev/null && rm -f "$SAGE_ROOT/CLAUDE.md.bak"
 }
 
 # ── Apply command prefix to CLAUDE.md routing table ──
@@ -462,7 +462,7 @@ with open('$SAGE_ROOT/CLAUDE.md', 'w') as f:
 # Order matters: longer names first to avoid partial matches
 # (e.g., /design-review before /design, /build before /b).
 if [ -n "$PREFIX" ]; then
-  sed -i \
+  sed -i.bak \
     -e "s|/design-review|/${PREFIX}design-review|g" \
     -e "s|/autoresearch|/${PREFIX}autoresearch|g" \
     -e "s|/architect|/${PREFIX}architect|g" \
@@ -478,7 +478,7 @@ if [ -n "$PREFIX" ]; then
     -e "s|/fix|/${PREFIX}fix|g" \
     -e "s|/map|/${PREFIX}map|g" \
     -e "s|/qa|/${PREFIX}qa|g" \
-    "$SAGE_ROOT/CLAUDE.md"
+    "$SAGE_ROOT/CLAUDE.md" && rm -f "$SAGE_ROOT/CLAUDE.md.bak"
   echo "  ✓ CLAUDE.md (with ${PREFIX} prefix)"
 else
   echo "  ✓ CLAUDE.md"
