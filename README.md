@@ -533,24 +533,45 @@ header — recent context is always read first. When the file exceeds
 
 Sage is platform-agnostic. It works wherever AI agents work.
 
-| Platform | How Sage Integrates | Status |
-|----------|---------------------|--------|
-| [Claude Code](runtime/platforms/claude-code/) | CLAUDE.md + `.claude/commands/` with slash commands | Full |
-| [Antigravity](runtime/platforms/antigravity/) | GEMINI.md + `.agent/` with rules, skills, workflows | Full |
-| [Claude Code Plugin](runtime/platforms/claude-code/setup/generate-plugin.sh) | Plugin format — install with `/plugin install sage@xoai` | Full |
+| Platform | How Sage Integrates | Sub-agent reviews | Status |
+|----------|---------------------|-------------------|--------|
+| [Claude Code](runtime/platforms/claude-code/) | CLAUDE.md + `.claude/commands/` (markdown) | Task tool | Full |
+| [Antigravity](runtime/platforms/antigravity/) | GEMINI.md + `.agent/` (markdown) | Native | Full |
+| [Codex (OpenAI)](runtime/platforms/codex/) | AGENTS.md + `.codex/agents/` (TOML sub-agents) | Native (TOML) | Full |
+| [Opencode](runtime/platforms/opencode/) | AGENTS.md + `.opencode/{commands,agents}/` (markdown) | Native (markdown) | Full |
+| [Gemini CLI](runtime/platforms/gemini-cli/) | GEMINI.md + `.gemini/commands/` (TOML) | Single-pass fallback in v1 | Full |
+| [Claude Code Plugin](runtime/platforms/claude-code/setup/generate-plugin.sh) | Plugin format — install with `/plugin install sage@xoai` | Task tool | Full |
 
-Three distribution paths from one source:
+Six distribution paths from one source:
 
 ```
 Sage Framework (source of truth)
-    ├── generate-claude-code.sh → CLAUDE.md + .claude/ (in-project)
-    ├── generate-antigravity.sh → GEMINI.md + .agent/ (in-project)
-    └── generate-plugin.sh      → sage-plugin/ (Claude Code plugin)
+    ├── generate-claude-code.sh   → CLAUDE.md + .claude/
+    ├── generate-antigravity.sh   → GEMINI.md + .agent/
+    ├── generate-codex.sh         → AGENTS.md + .codex/agents/
+    ├── generate-opencode.sh      → AGENTS.md + .opencode/{commands,agents}/
+    ├── generate-gemini-cli.sh    → GEMINI.md + .gemini/commands/
+    └── generate-plugin.sh        → sage-plugin/ (Claude Code plugin)
 ```
 
-Both in-project paths share the same `.sage/` project state. Switch
-platforms mid-project. The plugin path manages its own installation
-via Claude Code's plugin system.
+All in-project paths share the same `.sage/` project state. Multiple
+platforms can be installed simultaneously — Sage detects them and
+generates files for each. AGENTS.md is shared between Codex and
+Opencode; GEMINI.md is shared between Antigravity and Gemini CLI.
+
+### Installing for a specific platform
+
+```bash
+sage init                              # detect existing platforms; ask if none
+sage init --platform codex             # explicit: just Codex
+sage init --platform codex,opencode    # multiple
+sage init --platform all               # all 5 platforms
+sage update                            # regenerate using the persisted list
+sage update --platform gemini-cli      # override on update
+```
+
+The selected platforms persist in `.sage/config.yaml` under
+`platforms:`. `sage update` reads this list and regenerates for each.
 
 ## Why sage/ Lives in Your Project
 

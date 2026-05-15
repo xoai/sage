@@ -198,6 +198,29 @@ select_platform() {
   if [ -f "$target/GEMINI.md" ] && [ "$has_gemini" = false ]; then
     has_agent=true
   fi
+
+  # AGENTS.md alone is ambiguous (Codex vs Opencode). If neither .codex/ nor
+  # .opencode/ exists, ask once. Only triggers when no other platform is
+  # clearly detected, to avoid interrupting auto-detection flows.
+  local agents_alone=false
+  if [ -f "$target/AGENTS.md" ] && [ "$has_codex" = false ] && [ "$has_opencode" = false ]; then
+    agents_alone=true
+  fi
+  if [ "$agents_alone" = true ] && [ "$has_claude" = false ] && [ "$has_agent" = false ] && [ "$has_gemini" = false ] && [ -z "${PLATFORM_FLAG:-}" ] && [ -t 0 ]; then
+    echo ""
+    echo "  AGENTS.md exists, but no .codex/ or .opencode/ directory."
+    echo "  Which platform is using this AGENTS.md?"
+    echo "    [1] Codex (OpenAI)"
+    echo "    [2] Opencode"
+    echo "    [3] Both"
+    printf "  > "
+    read -r choice
+    case "$choice" in
+      1) has_codex=true ;;
+      2) has_opencode=true ;;
+      3) has_codex=true; has_opencode=true ;;
+    esac
+  fi
   # Check if CLAUDE.md is Sage-generated
   if [ -f "$target/CLAUDE.md" ] && head -1 "$target/CLAUDE.md" | grep -q "Sage"; then
     has_claude=true
@@ -391,10 +414,17 @@ create_sage_state() {
   local prefix_val="false"
   [ "$PREFIX_FLAG" = "true" ] && prefix_val="true"
 
+  # Format PLATFORMS array as YAML list
+  local platforms_yaml="[]"
+  if [ -n "${PLATFORMS+set}" ] && [ ${#PLATFORMS[@]} -gt 0 ]; then
+    platforms_yaml="[$(printf '"%s", ' "${PLATFORMS[@]}" | sed 's/, $//')]"
+  fi
+
   cat > "$sage_dir/config.yaml" << YAML
 sage-version: "1.0.0"
 project-name: "$project_name"
 detected-stack: [$DETECTED_STACK]
+platforms: $platforms_yaml
 auto_review: true
 auto_qa: true
 independent_gate3: true
@@ -496,18 +526,44 @@ print_success() {
 
   echo -e "  ${BOLD}Get started:${RESET}"
   echo ""
-  if [ "$PLATFORM" = "claude-code" ] || [ "$PLATFORM" = "both" ]; then
-    echo "    1. Open this project in your IDE"
-    echo -e "    2. Type ${BOLD}/sage${RESET} and describe what you want to build"
-    echo ""
-    echo -e "  ${DIM}Commands: /${p}build  /${p}fix  /${p}architect  /${p}status  /${p}review  /${p}learn${RESET}"
+
+  # Build a per-platform instructions list from PLATFORMS array
+  local plats_arr=()
+  if [ -n "${PLATFORMS+set}" ] && [ ${#PLATFORMS[@]} -gt 0 ]; then
+    plats_arr=("${PLATFORMS[@]}")
+  else
+    # Fall back to legacy PLATFORM string
+    case "$PLATFORM" in
+      both) plats_arr=("claude-code" "antigravity") ;;
+      *)    plats_arr=("$PLATFORM") ;;
+    esac
   fi
-  if [ "$PLATFORM" = "antigravity" ] && [ "$PLATFORM" != "both" ]; then
-    echo "    1. Open this project in Antigravity"
-    echo -e "    2. Type ${BOLD}/sage${RESET} and describe what you want to build"
-    echo ""
-    echo -e "  ${DIM}Commands: /${p}build  /${p}fix  /${p}architect  /${p}status  /${p}review  /${p}learn${RESET}"
-  fi
+
+  local step=1
+  for plat in "${plats_arr[@]}"; do
+    case "$plat" in
+      claude-code)
+        echo "    $step. Claude Code: open the project — slash commands are in .claude/commands/"
+        ;;
+      antigravity)
+        echo "    $step. Antigravity: open the project — Sage is wired via .agent/"
+        ;;
+      codex)
+        echo "    $step. Codex: run \`codex\` — AGENTS.md is loaded as system prompt"
+        ;;
+      opencode)
+        echo "    $step. Opencode: run \`opencode\` — commands in .opencode/commands/, agents in .opencode/agents/"
+        ;;
+      gemini-cli)
+        echo "    $step. Gemini CLI: run \`gemini\` — TOML commands in .gemini/commands/"
+        ;;
+    esac
+    step=$((step + 1))
+  done
+  echo ""
+  echo -e "    Type ${BOLD}/sage${RESET} (or \`@sage\` in Opencode) and describe what you want."
+  echo ""
+  echo -e "  ${DIM}Commands: /${p}build  /${p}fix  /${p}architect  /${p}status  /${p}review  /${p}learn${RESET}"
 
   # Check for sage-memory
   local has_memory=false
@@ -653,23 +709,44 @@ sage_update() {
   timer_start
   step_start
 
-  # Detect platform
+  # Detect platforms — first try persisted config, then file/dir detection
   PLATFORM=""
-  [ -f "$target/GEMINI.md" ] || [ -d "$target/.agent" ] && PLATFORM="antigravity"
-  if [ -f "$target/CLAUDE.md" ] && head -1 "$target/CLAUDE.md" 2>/dev/null | grep -q "Sage"; then
-    [ -z "$PLATFORM" ] && PLATFORM="claude-code" || PLATFORM="both"
-  fi
-  if [ -d "$target/.claude/commands" ]; then
-    [ -z "$PLATFORM" ] && PLATFORM="claude-code" || [ "$PLATFORM" = "antigravity" ] && PLATFORM="both"
+  PLATFORMS=()
+
+  # Read persisted platforms: list from .sage/config.yaml if present
+  local config_file="$target/.sage/config.yaml"
+  if [ -f "$config_file" ]; then
+    local persisted
+    persisted=$(grep '^platforms:' "$config_file" 2>/dev/null | sed 's/^platforms: *\[//;s/\]$//;s/"//g;s/,/ /g')
+    if [ -n "$persisted" ]; then
+      for p in $persisted; do
+        PLATFORMS+=("$p")
+      done
+    fi
   fi
 
-  if [ -z "$PLATFORM" ]; then
-    echo -e "  ${YELLOW}No platform files found.${RESET}"
-    echo "  Selecting platform..."
+  # If config didn't list any, fall back to detection
+  if [ ${#PLATFORMS[@]} -eq 0 ]; then
     select_platform "$target"
-  else
-    echo -e "  ${GREEN}Platform:${RESET} $PLATFORM"
   fi
+
+  # Honor --platform flag override even on update
+  if [ -n "${PLATFORM_FLAG:-}" ]; then
+    PLATFORMS=()
+    IFS=', ' read -ra FLAG_LIST <<< "$PLATFORM_FLAG"
+    for p in "${FLAG_LIST[@]}"; do
+      case "$p" in
+        claude-code|antigravity|codex|opencode|gemini-cli)
+          PLATFORMS+=("$p") ;;
+        all)
+          PLATFORMS=("claude-code" "antigravity" "codex" "opencode" "gemini-cli")
+          break ;;
+      esac
+    done
+  fi
+
+  PLATFORM=$(printf '%s\n' "${PLATFORMS[@]}" | tr '\n' '+' | sed 's/+$//')
+  echo -e "  ${GREEN}Platforms:${RESET} ${PLATFORMS[*]}"
 
   # Detect community skills before updating
   local community_skills=""

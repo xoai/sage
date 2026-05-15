@@ -58,6 +58,71 @@ All notable changes to Sage will be documented in this file.
 - Added "Flag state" section to manifest template body (omitted when
   no flags are active).
 
+## [1.1.3] — Multi-Platform Support: Codex, Opencode, Gemini CLI
+
+### Three New Platforms
+- **Codex (OpenAI)** — AGENTS.md (read by Codex as system prompt) +
+  `.codex/agents/*.toml` for sub-agents. Native sub-agent support
+  via TOML definitions with `name`, `description`, `developer_instructions`.
+  32 KiB AGENTS.md cap respected (Sage's output is ~15 KB).
+- **Opencode** — AGENTS.md + `.opencode/commands/*.md` (markdown with
+  YAML frontmatter) + `.opencode/agents/*.md` for sub-agents. Native
+  `@agent-name` invocation. Permission system used to enforce READ-ONLY
+  on review sub-agents (`permission.edit: deny`, `permission.bash: deny`).
+- **Gemini CLI** — GEMINI.md + `.gemini/commands/*.toml` (TOML format
+  with `prompt` + `description`, `{{args}}` placeholder). Subdirectories
+  produce namespaced commands (`/sage:build`, `/sage:fix`) when
+  `command_prefix: true`. Sub-agent format not documented in v1 — falls
+  back to single-pass review with a session notice.
+
+### Multi-Platform Installation
+- **Up to 5 platforms can coexist** in one project. AGENTS.md is shared
+  between Codex and Opencode; GEMINI.md is shared between Antigravity
+  and Gemini CLI. Each platform's commands/agents directory is
+  independent.
+- **`--platform <list>` flag** — comma-separated platform list, or
+  `all` for all 5. Works on `sage init` and `sage update`.
+- **`platforms:` persisted in .sage/config.yaml** — sage update reads
+  this list and regenerates for each platform. The list is set during
+  `sage init` from detection or the `--platform` flag.
+- **Ambiguity handling** — when only AGENTS.md exists (no `.codex/`,
+  no `.opencode/`), `sage init` asks the user once and persists the
+  choice. Same logic for GEMINI.md → Antigravity vs Gemini CLI.
+
+### Shared Generation Infrastructure
+- **`runtime/platforms/_shared/instructions-body.sh`** — single source
+  of truth for the instructions-file body (Rules 0-7, routing table,
+  workflow gates, learning triggers). All 5 platform generators source
+  it; each platform's generator sed-substitutes platform-specific
+  terminology.
+- **`runtime/platforms/_shared/preambles.sh`** — workflow preambles
+  (the 14 compliance-rule blocks prepended to each command) extracted
+  into `emit_preamble(workflow_name)`. Used by Claude Code, Opencode,
+  and Gemini CLI generators.
+- **CLAUDE.md output remains byte-identical** to pre-refactor (verified
+  with MD5 parity check).
+
+### Sub-Agent Behavior Matrix
+- Claude Code, Antigravity, Codex, Opencode: full sub-agent reviews
+  via independent context windows
+- Gemini CLI: single-pass fallback in v1 (sub-agent format pending docs)
+- Auto-review / auto-qa / quality-locked all work cross-platform; the
+  fallback for sub-agent-less sessions surfaces a clear notice
+
+### Bug Fixes
+- **Shell quoting in preambles** — `'<JSON of past iterations>'` inside
+  a single-quoted bash string caused bash to interpret `<JSON` as a
+  redirect. Replaced with `"<JSON of past iterations>"`. This bug
+  silently broke the `build` and `architect` command generation for
+  workflows after `analyze`.
+
+### Documentation
+- README Platforms section expanded to 5+ platforms with sub-agent
+  column
+- `runtime/platforms/{codex,opencode,gemini-cli}/notes.md` document
+  platform-specific quirks
+- bin/sage `--help` updated with `--platform` flag
+
 ## [1.1.1] — Autoresearch, Enforcement Hardening, Quality of Life
 
 ### Autoresearch
