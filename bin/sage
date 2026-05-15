@@ -720,11 +720,15 @@ sage_update() {
   PLATFORM=""
   PLATFORMS=()
 
-  # Read persisted platforms: list from .sage/config.yaml if present
+  # Read persisted platforms: list from .sage/config.yaml if present.
+  # Note: under `set -euo pipefail`, a failing grep inside $(...) with a
+  # bare assignment (not `local var=...`) triggers errexit and silently
+  # exits the script. Use `|| true` to keep the script running when the
+  # `platforms:` line is absent (pre-v1.1.3 projects).
   local config_file="$target/.sage/config.yaml"
   if [ -f "$config_file" ]; then
     local persisted
-    persisted=$(grep '^platforms:' "$config_file" 2>/dev/null | sed 's/^platforms: *\[//;s/\]$//;s/"//g;s/,/ /g')
+    persisted=$(grep '^platforms:' "$config_file" 2>/dev/null | sed 's/^platforms: *\[//;s/\]$//;s/"//g;s/,/ /g' || true)
     if [ -n "$persisted" ]; then
       for p in $persisted; do
         PLATFORMS+=("$p")
