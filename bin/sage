@@ -187,12 +187,17 @@ select_platform() {
   PLATFORMS=()  # additive list — multiple platforms can coexist
 
   # Auto-detect from existing files
-  local has_agent=false has_claude=false has_codex=false has_opencode=false
+  local has_agent=false has_claude=false has_codex=false has_opencode=false has_gemini=false
   [ -d "$target/.agent" ] && has_agent=true
-  [ -f "$target/GEMINI.md" ] && has_agent=true
   [ -d "$target/.claude" ] && has_claude=true
   [ -d "$target/.codex" ] && has_codex=true
   [ -d "$target/.opencode" ] && has_opencode=true
+  [ -d "$target/.gemini" ] && has_gemini=true
+  # GEMINI.md alone is ambiguous (Antigravity vs Gemini CLI); only count it
+  # toward Antigravity if .agent/ also exists (or if .gemini/ doesn't exist).
+  if [ -f "$target/GEMINI.md" ] && [ "$has_gemini" = false ]; then
+    has_agent=true
+  fi
   # Check if CLAUDE.md is Sage-generated
   if [ -f "$target/CLAUDE.md" ] && head -1 "$target/CLAUDE.md" | grep -q "Sage"; then
     has_claude=true
@@ -203,6 +208,7 @@ select_platform() {
   [ "$has_agent" = true ] && PLATFORMS+=("antigravity")
   [ "$has_codex" = true ] && PLATFORMS+=("codex")
   [ "$has_opencode" = true ] && PLATFORMS+=("opencode")
+  [ "$has_gemini" = true ] && PLATFORMS+=("gemini-cli")
 
   # Honor --platform flag (one or more, space- or comma-separated)
   if [ -n "${PLATFORM_FLAG:-}" ]; then
@@ -210,17 +216,17 @@ select_platform() {
     IFS=', ' read -ra FLAG_LIST <<< "$PLATFORM_FLAG"
     for p in "${FLAG_LIST[@]}"; do
       case "$p" in
-        claude-code|antigravity|codex|opencode)
+        claude-code|antigravity|codex|opencode|gemini-cli)
           PLATFORMS+=("$p")
           ;;
         both)
           PLATFORMS+=("claude-code" "antigravity")
           ;;
         all)
-          PLATFORMS=("claude-code" "antigravity" "codex" "opencode")
+          PLATFORMS=("claude-code" "antigravity" "codex" "opencode" "gemini-cli")
           ;;
         *)
-          echo -e "  ${YELLOW}Unknown platform: $p (supported: claude-code, antigravity, codex, opencode)${RESET}"
+          echo -e "  ${YELLOW}Unknown platform: $p (supported: claude-code, antigravity, codex, opencode, gemini-cli)${RESET}"
           ;;
       esac
     done
@@ -236,13 +242,23 @@ select_platform() {
   # Nothing detected and no flag — ask interactively
   if [ -t 0 ]; then
     local choice
-    choice=$(ask_choice "Which platform are you using?" \
-      "Claude Code" "Antigravity" "Codex (OpenAI)" "Opencode" "Multiple — install for all")
+    # Two-line choice for readability (5+ platforms now)
+    echo ""
+    echo "  Which platform are you using? Pick one:"
+    echo "    [1] Claude Code"
+    echo "    [2] Antigravity (Google IDE)"
+    echo "    [3] Codex (OpenAI)"
+    echo "    [4] Opencode"
+    echo "    [5] Gemini CLI"
+    echo "    [6] Multiple — install for all"
+    printf "  > "
+    read -r choice
     case "$choice" in
       2) PLATFORMS=("antigravity") ;;
       3) PLATFORMS=("codex") ;;
       4) PLATFORMS=("opencode") ;;
-      5) PLATFORMS=("claude-code" "antigravity" "codex" "opencode") ;;
+      5) PLATFORMS=("gemini-cli") ;;
+      6) PLATFORMS=("claude-code" "antigravity" "codex" "opencode" "gemini-cli") ;;
       *) PLATFORMS=("claude-code") ;;
     esac
     PLATFORM=$(printf '%s\n' "${PLATFORMS[@]}" | tr '\n' '+' | sed 's/+$//')
@@ -447,6 +463,7 @@ run_generators() {
       antigravity) platforms_to_run=("antigravity") ;;
       codex)       platforms_to_run=("codex") ;;
       opencode)    platforms_to_run=("opencode") ;;
+      gemini-cli)  platforms_to_run=("gemini-cli") ;;
       *)           platforms_to_run=("claude-code") ;;
     esac
   fi
@@ -1042,7 +1059,7 @@ sage_help() {
   echo "Flags:"
   echo "  --prefix                         Namespace commands as sage:build, sage:fix, etc."
   echo "  --preset <name>                  Set constitution preset (base|startup|enterprise|opensource)"
-  echo "  --platform <list>                Comma-separated platforms (claude-code|antigravity|codex|opencode|all)"
+  echo "  --platform <list>                Comma-separated platforms (claude-code|antigravity|codex|opencode|gemini-cli|all)"
   echo ""
   echo "Examples:"
   echo "  sage new my-app                  # Create project with Sage"
