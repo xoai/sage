@@ -528,6 +528,10 @@ for wf in "$CORE"/workflows/*.workflow.md; do
   (approve without review). Present [A] Review / [S] Skip review.
 - GATE 3 INDEPENDENT: Code quality review MUST use sub-agent when Task tool available.
 - GATE 8 AUTO-QA: Runs as part of quality gates sequence (if Task tool available).
+- QUALITY-LOCKED LOOP: When --quality-locked flag is active, at every review
+  checkpoint use: python -m core.quality_locked check --review-output "..."
+    --iteration N --history-json "[...]"
+  Trust the returned JSON. Do NOT decide "clean enough" by reading findings.
 - CODING PRINCIPLES: Load sage/core/capabilities/execution/coding-principles/SKILL.md
   before every implementation task. 7 universal principles applied during writing.
 - Save ALL artifacts to .sage/work/ or .sage/docs/ — never inline-only
@@ -579,6 +583,10 @@ for wf in "$CORE"/workflows/*.workflow.md; do
   review (approve without review). Present [A] Review / [S] Skip review.
 - GATE 3 INDEPENDENT: Code quality review MUST use sub-agent when Task tool available.
 - GATE 8 AUTO-QA: Runs per milestone as part of quality gates sequence.
+- QUALITY-LOCKED LOOP: When --quality-locked flag is active, at every review
+  checkpoint use: python -m core.quality_locked check --review-output "..."
+    --iteration N --history-json "[...]"
+  Trust the returned JSON. Do NOT decide "clean enough" by reading findings.
 - Save ADRs to .sage/docs/decision-*.md, spec to .sage/work/
 - Each milestone in phased build follows build workflow gates independently.
   Do NOT batch-implement milestones without per-milestone checkpoints.
