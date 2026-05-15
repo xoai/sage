@@ -101,7 +101,9 @@ replacement = '''$CONST_SECTION'''
 content = content.replace('__CONSTITUTION_PLACEHOLDER__', replacement)
 with open('$SAGE_ROOT/AGENTS.md', 'w') as f:
     f.write(content)
-" 2>/dev/null || sed -i "s|__CONSTITUTION_PLACEHOLDER__|## Engineering Principles\n\nBase (all projects):\n1. Tests before code\n2. No silent failures\n3. Secrets never in code\n4. Dependencies explicit\n5. Changes reversible|" "$SAGE_ROOT/AGENTS.md" 2>/dev/null
+" 2>/dev/null || {
+  sed -i.bak "s|__CONSTITUTION_PLACEHOLDER__|## Engineering Principles\n\nBase (all projects):\n1. Tests before code\n2. No silent failures\n3. Secrets never in code\n4. Dependencies explicit\n5. Changes reversible|" "$SAGE_ROOT/AGENTS.md" 2>/dev/null && rm -f "$SAGE_ROOT/AGENTS.md.bak"
+}
 
 # ── Size check (Codex 32 KiB cap) ──
 AGENTS_SIZE=$(wc -c < "$SAGE_ROOT/AGENTS.md")
