@@ -184,41 +184,67 @@ ask_choice() {
 select_platform() {
   local target="$1"
   PLATFORM=""
+  PLATFORMS=()  # additive list — multiple platforms can coexist
 
   # Auto-detect from existing files
-  local has_agent=false has_claude=false
+  local has_agent=false has_claude=false has_codex=false
   [ -d "$target/.agent" ] && has_agent=true
   [ -f "$target/GEMINI.md" ] && has_agent=true
   [ -d "$target/.claude" ] && has_claude=true
+  [ -d "$target/.codex" ] && has_codex=true
   # Check if CLAUDE.md is Sage-generated
   if [ -f "$target/CLAUDE.md" ] && head -1 "$target/CLAUDE.md" | grep -q "Sage"; then
     has_claude=true
   fi
 
-  if [ "$has_agent" = true ] && [ "$has_claude" = true ]; then
-    PLATFORM="both"
-    echo -e "  ${GREEN}Detected:${RESET} Both platforms"
-    return
-  elif [ "$has_agent" = true ]; then
-    PLATFORM="antigravity"
-    echo -e "  ${GREEN}Detected:${RESET} Antigravity"
-    return
-  elif [ "$has_claude" = true ]; then
-    PLATFORM="claude-code"
-    echo -e "  ${GREEN}Detected:${RESET} Claude Code"
+  # Build the additive PLATFORMS list
+  [ "$has_claude" = true ] && PLATFORMS+=("claude-code")
+  [ "$has_agent" = true ] && PLATFORMS+=("antigravity")
+  [ "$has_codex" = true ] && PLATFORMS+=("codex")
+
+  # Honor --platform flag (one or more, space- or comma-separated)
+  if [ -n "${PLATFORM_FLAG:-}" ]; then
+    PLATFORMS=()
+    IFS=', ' read -ra FLAG_LIST <<< "$PLATFORM_FLAG"
+    for p in "${FLAG_LIST[@]}"; do
+      case "$p" in
+        claude-code|antigravity|codex)
+          PLATFORMS+=("$p")
+          ;;
+        both)
+          PLATFORMS+=("claude-code" "antigravity")
+          ;;
+        all)
+          PLATFORMS=("claude-code" "antigravity" "codex")
+          ;;
+        *)
+          echo -e "  ${YELLOW}Unknown platform: $p (supported: claude-code, antigravity, codex)${RESET}"
+          ;;
+      esac
+    done
+  fi
+
+  # If we detected something, use it; report and return
+  if [ ${#PLATFORMS[@]} -gt 0 ]; then
+    PLATFORM=$(printf '%s\n' "${PLATFORMS[@]}" | tr '\n' '+' | sed 's/+$//')
+    echo -e "  ${GREEN}Platforms:${RESET} ${PLATFORMS[*]}"
     return
   fi
 
-  # Ask interactively
+  # Nothing detected and no flag — ask interactively
   if [ -t 0 ]; then
     local choice
-    choice=$(ask_choice "Which platform are you using?" "Claude Code" "Antigravity" "Both")
+    choice=$(ask_choice "Which platform are you using?" \
+      "Claude Code" "Antigravity" "Codex (OpenAI)" "Multiple — I'll pick after init")
     case "$choice" in
-      2) PLATFORM="antigravity" ;;
-      3) PLATFORM="both" ;;
-      *) PLATFORM="claude-code" ;;
+      2) PLATFORMS=("antigravity") ;;
+      3) PLATFORMS=("codex") ;;
+      4) PLATFORMS=("claude-code" "antigravity" "codex") ;;
+      *) PLATFORMS=("claude-code") ;;
     esac
+    PLATFORM=$(printf '%s\n' "${PLATFORMS[@]}" | tr '\n' '+' | sed 's/+$//')
   else
+    PLATFORMS=("claude-code")
     PLATFORM="claude-code"
   fi
 }
@@ -407,15 +433,29 @@ run_generators() {
   local sage_path="$target/sage"
   [ -d "$sage_path" ] || sage_path="$SAGE_FRAMEWORK"
 
-  if [ "$PLATFORM" = "antigravity" ] || [ "$PLATFORM" = "both" ]; then
-    echo ""
-    bash "$sage_path/runtime/platforms/antigravity/setup/generate-antigravity.sh" "$target"
+  # If PLATFORMS array is set, iterate; otherwise fall back to legacy PLATFORM string
+  local platforms_to_run=()
+  if [ -n "${PLATFORMS+set}" ] && [ ${#PLATFORMS[@]} -gt 0 ]; then
+    platforms_to_run=("${PLATFORMS[@]}")
+  else
+    case "$PLATFORM" in
+      both)        platforms_to_run=("claude-code" "antigravity") ;;
+      claude-code) platforms_to_run=("claude-code") ;;
+      antigravity) platforms_to_run=("antigravity") ;;
+      codex)       platforms_to_run=("codex") ;;
+      *)           platforms_to_run=("claude-code") ;;
+    esac
   fi
 
-  if [ "$PLATFORM" = "claude-code" ] || [ "$PLATFORM" = "both" ]; then
-    echo ""
-    bash "$sage_path/runtime/platforms/claude-code/setup/generate-claude-code.sh" "$target"
-  fi
+  for p in "${platforms_to_run[@]}"; do
+    local script="$sage_path/runtime/platforms/$p/setup/generate-$p.sh"
+    if [ -f "$script" ]; then
+      echo ""
+      bash "$script" "$target"
+    else
+      echo -e "  ${YELLOW}⚠ Generator not found: $script${RESET}"
+    fi
+  done
 }
 
 print_success() {
@@ -998,6 +1038,7 @@ sage_help() {
   echo "Flags:"
   echo "  --prefix                         Namespace commands as sage:build, sage:fix, etc."
   echo "  --preset <name>                  Set constitution preset (base|startup|enterprise|opensource)"
+  echo "  --platform <list>                Comma-separated platforms (claude-code|antigravity|codex|all)"
   echo ""
   echo "Examples:"
   echo "  sage new my-app                  # Create project with Sage"
@@ -1020,19 +1061,25 @@ shift 2>/dev/null || true
 # Parse flags from remaining args
 PRESET_FLAG=""
 PREFIX_FLAG=""
+PLATFORM_FLAG=""
 REMAINING_ARGS=()
+NEXT_IS=""
 for arg in "$@"; do
+  if [ -n "$NEXT_IS" ]; then
+    case "$NEXT_IS" in
+      preset)   PRESET_FLAG="$arg" ;;
+      platform) PLATFORM_FLAG="$arg" ;;
+    esac
+    NEXT_IS=""
+    continue
+  fi
   case "$arg" in
-    --preset=*) PRESET_FLAG="${arg#--preset=}" ;;
-    --preset)   PRESET_FLAG="__NEXT__" ;;
-    --prefix)   PREFIX_FLAG="true" ;;
-    *)
-      if [ "$PRESET_FLAG" = "__NEXT__" ]; then
-        PRESET_FLAG="$arg"
-      else
-        REMAINING_ARGS+=("$arg")
-      fi
-      ;;
+    --preset=*)   PRESET_FLAG="${arg#--preset=}" ;;
+    --preset)     NEXT_IS="preset" ;;
+    --platform=*) PLATFORM_FLAG="${arg#--platform=}" ;;
+    --platform)   NEXT_IS="platform" ;;
+    --prefix)     PREFIX_FLAG="true" ;;
+    *)            REMAINING_ARGS+=("$arg") ;;
   esac
 done
 set -- ${REMAINING_ARGS[@]+"${REMAINING_ARGS[@]}"}
