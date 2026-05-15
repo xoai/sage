@@ -510,6 +510,11 @@ for wf in "$CORE"/workflows/*.workflow.md; do
       PREAMBLE='RULES (apply to every step — non-negotiable):
 - PERSONA: Read sage/core/agents/developer.persona.md for your mindset.
 - Announce: "Sage → build workflow." before starting work
+- FLAG PARSING: Before any other work, parse $ARGUMENTS using the rules in
+  sage/core/capabilities/orchestration/flag-parser/SKILL.md. Recognized flags:
+  --quality-locked (loop review/revise until clean, cap 10), --autonomous
+  (agent makes elicitation decisions from memory/codebase/principles).
+  Persist flag state to manifest.md.
 - Standard+ scope: spec.md MUST EXIST at .sage/work/ before implementing.
   "Design is clear" is NOT a spec. "We discussed this" is NOT a spec.
   A spec is a FILE. No file = no implementation. Write it first.
@@ -551,7 +556,13 @@ for wf in "$CORE"/workflows/*.workflow.md; do
       PREAMBLE='RULES (apply to every step — non-negotiable):
 - PERSONA: Read sage/core/agents/architect.persona.md for your mindset.
 - Announce: "Sage → architect workflow." before starting work
-- MUST complete all 3 elicitation rounds SEQUENTIALLY before designing.
+- FLAG PARSING: Before any other work, parse $ARGUMENTS using the rules in
+  sage/core/capabilities/orchestration/flag-parser/SKILL.md. Recognized flags:
+  --quality-locked (loop review/revise until clean, cap 10), --autonomous
+  (agent makes elicitation decisions from memory/codebase/principles).
+  Persist flag state to manifest.md.
+- MUST complete all 3 elicitation rounds SEQUENTIALLY before designing
+  (unless --autonomous flag is active — see flag-parser skill).
   brief.md MUST EXIST at .sage/work/ before any design work.
   "I understand the system" is NOT a brief. Do NOT compress 3 rounds into 1.
 - AUTO-REVIEW: After design checkpoint [A] and plan [A], run sub-agent

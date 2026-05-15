@@ -2,6 +2,62 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [1.1.2] — Workflow Flags: --quality-locked and --autonomous
+
+### Workflow Flags
+- **`--quality-locked` flag** for `/build` and `/architect`. At every
+  review checkpoint, loops review/revise until findings reach a clean
+  bar (no Critical, no Major, only cosmetic Minor) or the iteration cap
+  (10) is reached. Use when you want Sage to push for clean output.
+- **`--autonomous` flag** for `/build` and `/architect`. Skips
+  user-facing elicitation rounds. Agent makes brief/spec/plan decisions
+  by reading memory, codebase patterns, constitution principles, and
+  prior cycles. Every decision cites its source via a Rationale block.
+  Unconfident substantive decisions fall back to asking specific
+  questions (not the whole elicitation).
+- **Combinable.** `/build --quality-locked --autonomous "<goal>"` means
+  "decide the best approach yourself, deliver it, and don't stop until
+  the quality gates are clean."
+- **Manifest persists flag state.** `/continue` restores both modes
+  across sessions.
+
+### Cosmetic vs Substantive Findings
+- **Review sub-agent prompts** (all 7 prompts in auto-review, auto-qa,
+  quality-review SKILLs) now classify Minor findings as either:
+  - **MINOR-cosmetic** — style/naming/formatting with equally valid
+    alternatives, no behavior change
+  - **MINOR-substantive** — improvement opportunity affecting
+    readability, maintainability, or future behavior
+- This enables `--quality-locked` to auto-revise the substantive issues
+  while accepting cosmetic ones (same code is "clean enough").
+
+### New Capabilities
+- **`flag-parser` capability** — defines the shared parsing contract for
+  `--quality-locked` and `--autonomous`. Both workflows reference it.
+- **`quality-locked` capability** — defines the review-revise loop:
+  clean bar, iteration cap, per-iteration logging, cap-reached prompt,
+  architecture escalation heuristic.
+- **`autonomous` capability** — defines the pre-flight context
+  gathering (memory + codebase + constitution + prior work), decision
+  protocol with confidence threshold, rationale block format, and
+  question-fallback rules.
+
+### Workflow Updates
+- `/build` Step 3 (Brief), Step 4 (Spec), Step 5 (Plan) — each respects
+  `autonomous_mode` and produces a Rationale block when active.
+- `/build` spec and plan checkpoints — each respects
+  `quality_locked_mode` and runs the review loop when active.
+- `/architect` Step 2 (Deep Elicitation), Step 3 (Design), Step 4
+  (Milestone Plan) — same updates for both flags.
+- Generator preambles (Claude Code and Antigravity) include flag
+  parsing instructions for `/build` and `/architect`.
+
+### Manifest Template
+- Added `flags`, `quality_locked_history`, and `autonomous_decisions`
+  fields to manifest frontmatter.
+- Added "Flag state" section to manifest template body (omitted when
+  no flags are active).
+
 ## [1.1.1] — Autoresearch, Enforcement Hardening, Quality of Life
 
 ### Autoresearch

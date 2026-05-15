@@ -82,14 +82,18 @@ CLASSIFY each finding:
 - CRITICAL: Security vulnerability or will break in production.
   Must fix. Security issues are ALWAYS critical.
 - WARNING: Quality issue. Should fix before shipping.
-- SUGGESTION: Optional improvement. Can defer.
+- SUGGESTION-substantive: Optional improvement. Affects readability,
+  maintainability, or future behavior. Can defer.
+- SUGGESTION-cosmetic: Style/naming/formatting with equally valid
+  alternatives. No behavior change.
 
 FORMAT (strict):
 GATE: code-quality
 RESULT: PASS | FAIL
 CRITICAL: [list with file:line or "None"]
 WARNING: [list with file:line or "None"]
-SUGGESTION: [list with file:line or "None"]
+SUGGESTION-substantive: [list with file:line or "None"]
+SUGGESTION-cosmetic: [list with file:line or "None"]
 
 Be concise. Every finding names a specific file and line.
 No generic praise. No vague observations. Just findings.

@@ -246,9 +246,9 @@ Use inside your IDE (Claude Code, Antigravity):
 | Command | What It Does |
 |---------|-------------|
 | `/sage` | **Start here.** Routes via keywords → classify → confirm |
-| `/build` | Spec → plan → build-loop → quality gates (with auto-review, coding principles, auto-QA) |
+| `/build` | Spec → plan → build-loop → quality gates (with auto-review, coding principles, auto-QA). Accepts `--quality-locked`, `--autonomous` |
 | `/fix` | Diagnose → scope → fix → verify (reads QA and design-review reports) |
-| `/architect` | Elicit → design → milestone plan → phased build (with ADR auto-review) |
+| `/architect` | Elicit → design → milestone plan → phased build (with ADR auto-review). Accepts `--quality-locked`, `--autonomous` |
 | `/research` | Interview → JTBD → opportunity map |
 | `/design` | Brief → spec → copy (reads research context) |
 | `/analyze` | UX audit → evaluation → findings |
@@ -261,6 +261,27 @@ Use inside your IDE (Claude Code, Antigravity):
 | `/reflect` | Review cycle → extract learnings → seed next cycle |
 | `/continue` | Resume any active cycle with full context |
 | `/status` | Compute project state from artifacts |
+
+### Workflow Flags (`/build` and `/architect`)
+
+Two optional flags change how the workflow operates without changing
+what it produces:
+
+| Flag | Effect |
+|------|--------|
+| `--quality-locked` | At each review checkpoint, loop review/revise until findings are clean (no Critical, no Major, only cosmetic Minor) or cap hit (10 iterations). Use when you want Sage to push for a clean output bar. |
+| `--autonomous` | Skip user-facing elicitation. Agent makes brief/spec/plan decisions by reading memory, codebase patterns, constitution principles, and prior cycles. Every decision cites its source. Unconfident substantive decisions fall back to asking. Use when you want Sage to draft a recommended approach from your project's context. |
+
+```bash
+/build --quality-locked                       # interactive, quality-locked
+/build --autonomous "ship dark mode"          # autonomous decisions, normal review
+/build --autonomous --quality-locked "..."    # full autonomy, quality-locked
+/architect --autonomous "design billing v2"
+```
+
+Flags are independent and combinable. Both have hard iteration caps
+and explicit cap-reached prompts — no runaway behavior. Flag state
+persists in the cycle manifest, so `/continue` restores them.
 
 ### Interaction Patterns
 

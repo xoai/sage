@@ -136,6 +136,16 @@ record the skip rationale in decisions.md.
 If scope is unclear or the task is Comprehensive, elicit requirements
 before defining the brief.
 
+**If `autonomous_mode` is active** (from flag-parser): skip the
+interactive elicitation rounds. Read
+`sage/core/capabilities/orchestration/autonomous/SKILL.md` and follow
+its pre-flight + decision protocol. Produce brief.md with a Rationale
+block citing memory, codebase patterns, principles, and prior decisions.
+If substantive unconfident decisions remain, surface them as a Zone 1
+question block. Skip the rest of this step.
+
+**Otherwise:**
+
 For structured elicitation process, read
 `sage/core/capabilities/elicitation/quick-elicit/SKILL.md`.
 It provides 3 focused rounds (~2 minutes):
@@ -179,6 +189,11 @@ Prepend decision to decisions.md (Rule 7).
 
 Define: components, data model, APIs, key decisions, edge cases.
 Resolve open questions from the brief.
+
+**If `autonomous_mode` is active**: populate the spec using the
+autonomous capability's decision protocol. Include a Rationale block
+at the top of spec.md citing context sources. Surface unconfident
+substantive decisions as Zone 1 questions before finalizing.
 
 For detailed spec writing process, read
 `sage/core/capabilities/planning/specify/SKILL.md`.
@@ -227,6 +242,12 @@ handoff: |
      Pass the spec path and decisions.md path.
      Present findings inline (see capability for format).
      Prepend review verdict to decisions.md.
+
+     **If `quality_locked_mode` is active** (from flag-parser):
+     Read `sage/core/capabilities/orchestration/quality-locked/SKILL.md`
+     and run the review-revise loop instead of presenting findings to user.
+     Loop until clean bar (no Critical, Major, or substantive Minor) or
+     cap of 10 iterations. Log each iteration to manifest.
    If Task tool NOT available:
      Announce: "Task tool not available — skipping independent review."
 5. THEN proceed to Step 5.
@@ -241,6 +262,11 @@ handoff: |
 
 Break into small, independently testable tasks. Each task: what to do,
 done criteria, files involved. Use checkboxes as a guide.
+
+**If `autonomous_mode` is active**: decompose tasks using the autonomous
+capability's decision protocol. Each task's rationale (ordering,
+dependencies, scope) cites codebase patterns or prior plans where
+relevant. Include a Rationale block at the top of plan.md.
 
 For detailed planning process, read
 `sage/core/capabilities/planning/plan/SKILL.md`.
@@ -280,6 +306,9 @@ Pick A/S/R/N, or tell me what to change.
      Pass the plan path and spec path.
      Present findings inline.
      Prepend review verdict to decisions.md.
+
+     **If `quality_locked_mode` is active**:
+     Run the review-revise loop per `sage/core/capabilities/orchestration/quality-locked/SKILL.md`.
    If Task tool NOT available:
      Announce: "Task tool not available — skipping independent review."
 3. THEN proceed to Step 6.

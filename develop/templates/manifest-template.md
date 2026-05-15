@@ -18,6 +18,11 @@ phase: framing | brief | spec | plan | implement | quality-gates | review | comp
 status: in-progress | paused | blocked | complete
 created: YYYY-MM-DD
 updated: YYYY-MM-DD HH:MM
+flags:
+  quality_locked: false        # set true if --quality-locked passed
+  autonomous: false            # set true if --autonomous passed
+quality_locked_history: []     # per-checkpoint review/revise iterations (when active)
+autonomous_decisions: []       # per-phase counts of decisions made vs asked (when active)
 ---
 
 # Cycle: {title}
@@ -85,6 +90,16 @@ Git: not available (project is not a git repository)
 
 Values MUST come from fresh git commands, not memory or previous manifests.
 Git absence is normal — write "Git: not available" and move on.}
+
+## Flag state
+
+{If `flags.quality_locked` or `flags.autonomous` is true, summarize
+the current effect:
+
+- `--quality-locked`: review/revise iterations so far, per checkpoint
+- `--autonomous`: total decisions made autonomously, total asked back
+
+If both flags are false, omit this section entirely.}
 
 ## Handoff guidance
 

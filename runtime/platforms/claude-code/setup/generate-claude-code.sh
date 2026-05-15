@@ -504,6 +504,12 @@ for wf in "$CORE"/workflows/*.workflow.md; do
       PREAMBLE='RULES (apply to every step — non-negotiable):
 - PERSONA: Read sage/core/agents/developer.persona.md for your mindset.
 - Announce: "Sage → build workflow." before starting work
+- FLAG PARSING: Before any other work, parse $ARGUMENTS using the rules in
+  sage/core/capabilities/orchestration/flag-parser/SKILL.md. Recognized flags:
+  --quality-locked (loop review/revise until clean, cap 10), --autonomous
+  (agent makes elicitation decisions from memory/codebase/principles).
+  Unknown flags surface an error. Announce active modes. Persist flag state
+  to manifest.md frontmatter under "flags:".
 - MEMORY FIRST: Before writing spec, plan, or starting implementation,
   search sage-memory with the feature domain as query (limit: 5), then
   search again with filter_tags: ["self-learning"] (limit: 5). Use findings
@@ -571,7 +577,14 @@ for wf in "$CORE"/workflows/*.workflow.md; do
       PREAMBLE='RULES (apply to every step — non-negotiable):
 - PERSONA: Read sage/core/agents/architect.persona.md for your mindset.
 - Announce: "Sage → architect workflow." before starting work
-- MUST complete all 3 elicitation rounds SEQUENTIALLY before designing.
+- FLAG PARSING: Before any other work, parse $ARGUMENTS using the rules in
+  sage/core/capabilities/orchestration/flag-parser/SKILL.md. Recognized flags:
+  --quality-locked (loop review/revise until clean, cap 10), --autonomous
+  (agent makes elicitation decisions from memory/codebase/principles).
+  Unknown flags surface an error. Announce active modes. Persist flag state
+  to manifest.md frontmatter under "flags:".
+- MUST complete all 3 elicitation rounds SEQUENTIALLY before designing
+  (unless --autonomous flag is active — see flag-parser skill).
   brief.md MUST EXIST at .sage/work/ before any design work.
   "I understand the system" is NOT a brief. Do NOT compress 3 rounds into 1.
 - [A] = REVIEW: When user picks [A] at design or plan checkpoint,

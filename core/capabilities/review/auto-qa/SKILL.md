@@ -116,13 +116,17 @@ CHECK THESE 5 THINGS:
 CLASSIFY each finding:
 - CRITICAL: Will break in production. Must fix.
 - MAJOR: Will cause problems. Should fix before shipping.
-- MINOR: Improvement opportunity. Can fix later.
+- MINOR-substantive: Improvement opportunity. Affects readability,
+  maintainability, or future behavior. Can fix later.
+- MINOR-cosmetic: Style/naming/formatting with equally valid
+  alternatives. No behavior change.
 
 FORMAT (strict):
 VERDICT: PASS | NEEDS FIXES | FAIL
 CRITICAL: [list or "None"]
 MAJOR: [list or "None"]
-MINOR: [list or "None"]
+MINOR-substantive: [list or "None"]
+MINOR-cosmetic: [list or "None"]
 
 Be concise. Every finding must name a specific file and what's wrong.
 No generic observations. No praise. Just findings.

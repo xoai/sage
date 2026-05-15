@@ -66,6 +66,17 @@ The cycle ID is the directory name under `.sage/work/` (e.g., `20260324-platform
 This is the most important step. Understand the full picture before
 designing anything.
 
+**If `autonomous_mode` is active** (from flag-parser): skip the
+3-round interactive elicitation. Read
+`sage/core/capabilities/orchestration/autonomous/SKILL.md` and follow
+its pre-flight + decision protocol. Produce brief.md covering vision,
+constraints, and integration decisions with a Rationale block citing
+memory, codebase, principles, and prior architecture decisions. If
+substantive unconfident decisions remain, surface them as a Zone 1
+question block. Skip the rest of this step.
+
+**Otherwise:**
+
 For comprehensive elicitation process, read
 `sage/core/capabilities/elicitation/deep-elicit/SKILL.md`.
 
@@ -128,6 +139,14 @@ Define: system components, data model, API boundaries, technology choices,
 deployment architecture, security model. Document key trade-offs and
 the reasoning behind each decision.
 
+**If `autonomous_mode` is active**: produce ADRs using the autonomous
+capability's decision protocol. Each ADR includes a Rationale block
+citing memory, codebase patterns, and constitution principles. The
+Trade-offs section MUST explicitly address both short-term cost and
+long-term maintenance implications. Architecture is the most
+expensive layer to reverse — autonomous decisions here must be backed
+by strong signals, or asked back to the user.
+
 Save architecture decisions to `.sage/docs/decision-*.md`.
 Save the full design to `.sage/work/YYYYMMDD-slug/spec.md` with frontmatter.
 
@@ -170,6 +189,9 @@ handoff: |
      Pass the ADR path(s) and brief path.
      Present findings inline.
      Prepend review verdict to decisions.md.
+
+     **If `quality_locked_mode` is active**:
+     Run the review-revise loop per `sage/core/capabilities/orchestration/quality-locked/SKILL.md`.
    If Task tool NOT available:
      Announce: "Task tool not available — skipping independent review."
 5. THEN proceed to Step 4.
@@ -188,6 +210,11 @@ before creating a milestone plan. If it doesn't → go back to Step 3.
 Break the build into milestones (not tasks — milestones). Each milestone
 should be deployable and testable independently. Within each milestone,
 create a task plan.
+
+**If `autonomous_mode` is active**: decompose milestones using the
+autonomous capability's decision protocol. Each milestone has a
+rationale for its boundary (why this stops here and the next starts
+there). Include a Rationale block at the top of plan.md.
 
 Save to `.sage/work/YYYYMMDD-slug/plan.md` with frontmatter.
 
@@ -211,6 +238,9 @@ Pick A/S/R/N, or tell me what to change.
      Pass the plan path and spec path.
      Present findings inline.
      Prepend review verdict to decisions.md.
+
+     **If `quality_locked_mode` is active**:
+     Run the review-revise loop per `sage/core/capabilities/orchestration/quality-locked/SKILL.md`.
    If Task tool NOT available:
      Announce: "Task tool not available — skipping independent review."
 3. THEN proceed.

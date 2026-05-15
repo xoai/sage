@@ -150,6 +150,28 @@ issues and report them. The user decides what to do with findings.
 If a sub-agent modifies a spec, plan, or code file, the review is
 INVALID and must be discarded. Re-run with the original artifact.
 
+### Findings Classification (shared by all sub-agents)
+
+Every finding gets ONE of these severity labels:
+
+- **CRITICAL** — Must fix. Blocks the next phase.
+- **MAJOR** — Should fix. Significant gap or risk.
+- **MINOR-substantive** — Improvement opportunity that affects
+  readability, maintainability, or future behavior. Examples:
+  missing edge case handling, suboptimal data structure, fragile
+  patterns, ambiguous naming that hurts comprehension.
+- **MINOR-cosmetic** — Style/naming/formatting choices with equally
+  valid alternatives. No behavior change. Examples: variable naming
+  preferences, comment wording, equivalent syntactic forms, trailing
+  whitespace.
+
+The `--quality-locked` flag uses this distinction: it auto-revises
+CRITICAL, MAJOR, and MINOR-substantive findings, but treats
+MINOR-cosmetic as acceptable.
+
+Without `--quality-locked`, the user decides what to do with all
+findings regardless of severity.
+
 ### Spec Review
 
 Use when: spec.md is approved [A] in build or architect workflow.
@@ -189,13 +211,17 @@ CHECK THESE 5 THINGS:
 CLASSIFY each finding:
 - CRITICAL: Must fix before planning. Blocks proceeding.
 - MAJOR: Should fix before planning. Significant gap.
-- MINOR: Improvement opportunity. Can address later.
+- MINOR-substantive: Improvement opportunity. Affects readability,
+  maintainability, or future behavior. Can address later.
+- MINOR-cosmetic: Style/naming/formatting with equally valid
+  alternatives. No behavior change.
 
 FORMAT (strict):
 VERDICT: PASS | NEEDS REVISION | FAIL
 CRITICAL: [list or "None"]
 MAJOR: [list or "None"]
-MINOR: [list or "None"]
+MINOR-substantive: [list or "None"]
+MINOR-cosmetic: [list or "None"]
 
 Be concise. No generic praise. No padding. Just findings.
 ```
@@ -234,13 +260,17 @@ CHECK THESE 5 THINGS:
 CLASSIFY each finding:
 - CRITICAL: Must fix before implementing. Blocks proceeding.
 - MAJOR: Should fix before implementing. Significant gap.
-- MINOR: Improvement opportunity. Can address later.
+- MINOR-substantive: Improvement opportunity. Affects readability,
+  maintainability, or future behavior. Can address later.
+- MINOR-cosmetic: Style/naming/formatting with equally valid
+  alternatives. No behavior change.
 
 FORMAT (strict):
 VERDICT: PASS | NEEDS REVISION | FAIL
 CRITICAL: [list or "None"]
 MAJOR: [list or "None"]
-MINOR: [list or "None"]
+MINOR-substantive: [list or "None"]
+MINOR-cosmetic: [list or "None"]
 
 Be concise. No generic praise. No padding. Just findings.
 ```
@@ -281,13 +311,17 @@ CHECK THESE 5 THINGS:
 CLASSIFY each finding:
 - CRITICAL: Must fix before proceeding. Blocks implementation.
 - MAJOR: Should fix. Significant gap in reasoning.
-- MINOR: Improvement opportunity. Can address later.
+- MINOR-substantive: Improvement opportunity. Affects readability,
+  maintainability, or future behavior. Can address later.
+- MINOR-cosmetic: Style/naming/formatting with equally valid
+  alternatives. No behavior change.
 
 FORMAT (strict):
 VERDICT: PASS | NEEDS REVISION | FAIL
 CRITICAL: [list or "None"]
 MAJOR: [list or "None"]
-MINOR: [list or "None"]
+MINOR-substantive: [list or "None"]
+MINOR-cosmetic: [list or "None"]
 
 Be concise. No generic praise. No padding. Just findings.
 ```
@@ -343,7 +377,8 @@ FORMAT (strict):
 VERDICT: PASS | NEEDS REVISION | FAIL
 CRITICAL: [list or "None"]
 MAJOR: [list or "None"]
-MINOR: [list or "None"]
+MINOR-substantive: [list or "None"]
+MINOR-cosmetic: [list or "None"]
 
 Be concise. No generic praise. No padding. Just findings.
 ```
@@ -385,13 +420,17 @@ CHECK THESE 5 THINGS:
 CLASSIFY each finding:
 - CRITICAL: Plan will not fix the bug or will cause regression.
 - MAJOR: Missing coverage or incomplete approach. Should revise.
-- MINOR: Improvement opportunity. Can proceed.
+- MINOR-substantive: Improvement opportunity. Affects readability,
+  maintainability, or future behavior. Can proceed.
+- MINOR-cosmetic: Style/naming/formatting with equally valid
+  alternatives. No behavior change.
 
 FORMAT (strict):
 VERDICT: PASS | NEEDS REVISION | FAIL
 CRITICAL: [list or "None"]
 MAJOR: [list or "None"]
-MINOR: [list or "None"]
+MINOR-substantive: [list or "None"]
+MINOR-cosmetic: [list or "None"]
 
 Be concise. No generic praise. No padding. Just findings.
 ```
