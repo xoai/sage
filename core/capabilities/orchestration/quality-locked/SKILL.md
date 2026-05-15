@@ -159,6 +159,14 @@ The same findings keep returning. This suggests:
 Pick F/R/E/A, or describe what to do.
 ```
 
+### Interaction with --autonomous
+
+When `--autonomous` is also active, the `[A] Review` checkpoint that
+triggers this loop is auto-picked by the agent. The cap-reached and
+stuck-escalation prompts below still require user input — see
+`sage/core/capabilities/orchestration/autonomous/SKILL.md` section
+"Auto-Pick at Checkpoints" for the full rules.
+
 ### ESCALATE (stuck — 3 iterations with same critical+major count)
 
 ```

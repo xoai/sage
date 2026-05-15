@@ -2,6 +2,48 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [1.1.4] — Auto-pick [A] Review when --autonomous + --quality-locked combined
+
+### Auto-Pick at Checkpoints
+- When BOTH `--autonomous` AND `--quality-locked` are active, agent
+  auto-picks `[A] Review` at normal approval checkpoints (spec, plan,
+  ADR, root cause, fix plan) instead of prompting the user. The combined
+  flags already signal "decide yourself + don't stop until clean", and
+  `[A]` is the only checkpoint option consistent with both signals.
+- **Exception checkpoints still require user input** (no auto-pick):
+  - quality-locked cap-reached prompt (10 iterations without convergence)
+  - quality-locked stuck-escalation prompt (3 iterations no improvement)
+  - autonomous unconfident-decision questions (`[Q1]/[Q2]` block)
+  - sub-agent unavailable warnings (degraded mode notice)
+
+### Full Audit Trail (per Auto-Pick)
+Every auto-picked checkpoint is logged to TWO locations BEFORE the
+review action runs, so the trail survives crashes or interruption:
+- **manifest.md frontmatter** — `auto_picked_checkpoints: []` array with
+  `phase`, `checkpoint`, `decision`, `timestamp`, `reason` for each entry
+- **decisions.md** — human-readable entry per Rule 7 (newest-first prepend)
+  documenting which flags were active and how to override
+
+### Manifest Template
+- Added `auto_picked_checkpoints: []` field to frontmatter
+- Extended Flag state section to summarize auto-picked checkpoints when
+  both flags are active
+
+### Documentation
+- `core/capabilities/orchestration/autonomous/SKILL.md` — new
+  "Auto-Pick at Checkpoints" section with rules, exceptions, logging
+  contract, and rationale
+- `core/capabilities/orchestration/quality-locked/SKILL.md` — cross-reference
+  to the autonomous skill's auto-pick rules
+- Build, fix, architect preambles (Claude Code + Antigravity generators)
+  include the AUTO-PICK rule pointing at the autonomous SKILL
+
+### Bug Fixes
+- **`sage update` silent-exit on pre-v1.1.3 projects** — `set -euo pipefail`
+  trap triggered when `grep '^platforms:' .sage/config.yaml` returned 1
+  (no match). The bare assignment of the failing pipeline propagated to
+  errexit and silently exited the script. Added `|| true` to the pipeline.
+
 ## [1.1.3] — Multi-Platform Support: Codex, Opencode, Gemini CLI
 
 ### Three New Platforms

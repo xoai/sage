@@ -23,6 +23,7 @@ flags:
   autonomous: false            # set true if --autonomous passed
 quality_locked_history: []     # per-checkpoint review/revise iterations (when active)
 autonomous_decisions: []       # per-phase counts of decisions made vs asked (when active)
+auto_picked_checkpoints: []    # checkpoints auto-resolved when both flags active
 ---
 
 # Cycle: {title}
@@ -98,6 +99,9 @@ the current effect:
 
 - `--quality-locked`: review/revise iterations so far, per checkpoint
 - `--autonomous`: total decisions made autonomously, total asked back
+- Auto-picked checkpoints (only when BOTH flags active): list each
+  with phase, decision, and timestamp. Cross-reference decisions.md
+  entries for the long-form audit trail.
 
 If both flags are false, omit this section entirely.}
 

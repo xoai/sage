@@ -57,6 +57,15 @@ emit_preamble() {
       --iteration <N> --history-json "<JSON of past iterations>"
   Trust the returned JSON (counts, action). Do NOT decide "clean enough"
   by reading findings yourself. See sage/core/capabilities/orchestration/quality-locked/SKILL.md.
+- AUTO-PICK [A] WHEN BOTH FLAGS ACTIVE: If both --autonomous AND --quality-locked
+  are set, do NOT prompt the user at normal approval checkpoints (spec, plan,
+  ADR, root cause, fix plan). Auto-pick [A] Review (the only option consistent
+  with both flags). Print the auto-pick notice, log to manifest.md
+  auto_picked_checkpoints AND decisions.md BEFORE running the review, then
+  proceed. Exception checkpoints (quality-locked cap-reached, stuck-escalation,
+  autonomous unconfident-questions, sub-agent unavailable) still require user
+  input. See sage/core/capabilities/orchestration/autonomous/SKILL.md
+  "Auto-Pick at Checkpoints" for full rules.
 - CODING PRINCIPLES: Load sage/core/capabilities/execution/coding-principles/SKILL.md
   before every implementation task. 7 universal principles: clarity, error handling,
   boundary guards, minimal scope, safe APIs, consistency, behavior testing.

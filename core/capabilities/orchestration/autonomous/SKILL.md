@@ -165,6 +165,106 @@ If user picks [D], the agent documents the defaults in the rationale
 block AND prepends a decision to decisions.md so the choices are
 visible for review.
 
+## Auto-Pick at Checkpoints (when combined with --quality-locked)
+
+When BOTH `--autonomous` AND `--quality-locked` are active, the user
+has signaled "decide the best approach yourself AND don't stop until
+clean." Asking them to manually pick `[A] Review` at every approval
+checkpoint contradicts both flags. At normal approval checkpoints
+where the choices are `[A] Review / [S] Skip review / [R] Revise /
+[N] New session`, only `[A] Review` is consistent with both flags:
+
+| Option | Consistent with `--autonomous --quality-locked`? |
+|--------|-------------------------------------------------|
+| `[A] Review` | ✅ Triggers quality-locked loop |
+| `[S] Skip review` | ❌ Defeats `--quality-locked` |
+| `[R] Revise` | ❌ Requires user input — contradicts `--autonomous` |
+| `[N] New session` | ❌ Requires user input |
+
+**Auto-pick `[A] Review`** at normal approval checkpoints when both
+flags are active. This is not bypassing a decision — it's the
+deterministic conclusion of the user's stated intent.
+
+### How to render the auto-pick
+
+Print a clear notice in place of the prompt:
+
+```
+Sage: Auto-proceeding with [A] Review.
+  Reason: --autonomous --quality-locked both active. [A] is the only
+  option consistent with both flags.
+  Logged to: .sage/work/<cycle>/manifest.md (auto_picked_checkpoints)
+  Override: interrupt this session and re-run without one of the flags.
+```
+
+Then run the [A] Review path (sub-agent review → quality-locked loop)
+without waiting for input.
+
+### Where the auto-pick does NOT apply
+
+Exception checkpoints still require user input even with both flags
+active. These represent moments where automated continuation could
+hide a real problem:
+
+- **Quality-locked cap-reached** (`[F] Force / [R] Revise manually /
+  [E] Escalate / [A] Abort`) — 10 iterations without convergence
+  means structural issues. User judgment required.
+- **Quality-locked stuck-escalation** (`[E] Escalate / [C] Continue /
+  [R] Revise manually`) — 3 iterations with no improvement.
+  Architecture-level question.
+- **Autonomous unconfident-decision questions** (the `[Q1]/[Q2]` block
+  that surfaces when the agent can't recommend a substantive decision)
+  — by definition, the agent is asking because it doesn't know.
+- **Sub-agent unavailable warnings** — degraded mode notice must be
+  user-acknowledged so they know quality is reduced.
+
+For all of the above, present the full prompt and wait. Do NOT auto-pick.
+
+### Logging contract (mandatory)
+
+Every auto-picked checkpoint is logged to TWO places:
+
+**1. manifest.md frontmatter** — add the entry under
+`auto_picked_checkpoints`:
+
+```yaml
+auto_picked_checkpoints:
+  - phase: spec
+    checkpoint: spec-approval
+    decision: A
+    timestamp: 2026-05-15T14:23:18Z
+    reason: "--autonomous --quality-locked both active"
+  - phase: plan
+    checkpoint: plan-approval
+    decision: A
+    timestamp: 2026-05-15T14:31:47Z
+    reason: "--autonomous --quality-locked both active"
+```
+
+This is machine-readable and lets `/continue` understand exactly which
+checkpoints proceeded without user interaction.
+
+**2. decisions.md** — prepend a human-readable entry (per Rule 7):
+
+```markdown
+### 2026-05-15 14:23 — Auto-pick: [A] Review at spec checkpoint
+Flags active: --autonomous --quality-locked
+Effect: Triggered quality-locked review loop (results in manifest
+  under quality_locked_history.spec).
+Override: re-run /build without --autonomous (or --quality-locked)
+  to restore manual approval at this checkpoint.
+```
+
+**Both writes happen BEFORE the [A] Review action runs.** This way, if
+the review loop crashes or the user interrupts, the audit trail still
+shows the auto-pick happened and why.
+
+### Why log so verbosely
+
+The user trusted the flags to make decisions for them. The contract
+back to the user is: every auto-pick is traceable, reviewable, and
+reversible by inspecting `.sage/work/<cycle>/`. No hidden behavior.
+
 ## Conflict Handling
 
 If memory says X but codebase pattern says Y:

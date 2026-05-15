@@ -532,6 +532,11 @@ for wf in "$CORE"/workflows/*.workflow.md; do
   checkpoint use: python -m core.quality_locked check --review-output "..."
     --iteration N --history-json "[...]"
   Trust the returned JSON. Do NOT decide "clean enough" by reading findings.
+- AUTO-PICK [A] WHEN BOTH FLAGS ACTIVE: If both --autonomous AND --quality-locked
+  are set, auto-pick [A] Review at normal approval checkpoints. Log every
+  auto-pick to manifest.md (auto_picked_checkpoints) AND decisions.md BEFORE
+  running the review. See sage/core/capabilities/orchestration/autonomous/SKILL.md
+  "Auto-Pick at Checkpoints" for the full rules and exception list.
 - CODING PRINCIPLES: Load sage/core/capabilities/execution/coding-principles/SKILL.md
   before every implementation task. 7 universal principles applied during writing.
 - Save ALL artifacts to .sage/work/ or .sage/docs/ — never inline-only
@@ -587,6 +592,11 @@ for wf in "$CORE"/workflows/*.workflow.md; do
   checkpoint use: python -m core.quality_locked check --review-output "..."
     --iteration N --history-json "[...]"
   Trust the returned JSON. Do NOT decide "clean enough" by reading findings.
+- AUTO-PICK [A] WHEN BOTH FLAGS ACTIVE: If both --autonomous AND --quality-locked
+  are set, auto-pick [A] Review at normal approval checkpoints. Log every
+  auto-pick to manifest.md (auto_picked_checkpoints) AND decisions.md BEFORE
+  running the review. See sage/core/capabilities/orchestration/autonomous/SKILL.md
+  "Auto-Pick at Checkpoints" for the full rules and exception list.
 - Save ADRs to .sage/docs/decision-*.md, spec to .sage/work/
 - Each milestone in phased build follows build workflow gates independently.
   Do NOT batch-implement milestones without per-milestone checkpoints.
