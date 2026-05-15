@@ -2,17 +2,22 @@
 name: flag-parser
 description: >
   Parses workflow flags (--quality-locked, --autonomous) from $ARGUMENTS
-  at the start of /build and /architect commands. Sets workflow runtime
-  state, persists to manifest, and returns the cleaned goal string.
-version: "1.0.0"
+  at the start of /build and /architect commands. Uses deterministic
+  runtimes (Python primary, Bash fallback) with prose-rule fallback
+  if neither runtime is available. Returns a strict JSON contract that
+  the agent trusts unconditionally.
+version: "1.1.0"
 type: process
 ---
 
 # Flag Parser
 
 Workflow flags are passed inline in slash command arguments. Both
-`/build` and `/architect` accept the same two flags, parsed identically.
-This capability defines the parsing contract.
+`/build` and `/architect` accept the same flags, parsed identically.
+
+**Parsing must be deterministic.** Prose-only parsing by the agent is
+unreliable — the runtime layers below produce the same JSON output and
+the agent trusts that JSON unconditionally.
 
 ## Supported Flags
 
@@ -21,83 +26,111 @@ This capability defines the parsing contract.
 | `--quality-locked` | Loop review/revise until findings are clean or cap (10) hit | off |
 | `--autonomous` | Agent makes elicitation decisions from memory/codebase/principles | off |
 
-Flags are independent. Either, both, or neither can be set.
+## JSON Contract
 
-## Parsing Rules
+All three parsing layers emit the same JSON shape to stdout:
+
+```json
+{
+  "quality_locked": true | false,
+  "autonomous": true | false,
+  "goal": "<remainder after flags, trimmed>",
+  "error": null | "Unknown flag '--foo'. Supported flags: --quality-locked, --autonomous."
+}
+```
+
+Exit code semantics:
+- `0` — clean parse (`error: null`)
+- `1` — unknown flag detected (`error` is populated; still print JSON)
+
+## Parsing Order (Try Each Layer)
+
+The agent tries each layer in order. As soon as one returns valid JSON,
+use it and skip the rest.
+
+### Layer 1 — Python (primary, preferred)
+
+```bash
+python -m core.flag_parser parse "$ARGUMENTS"
+```
+
+Or from a project that has `sage/` installed:
+
+```bash
+python -m sage.core.flag_parser parse "$ARGUMENTS"
+```
+
+Outputs JSON to stdout. Exit 0 on clean parse, 1 on unknown flag.
+
+### Layer 2 — Bash fallback (when Python unavailable)
+
+```bash
+bash sage/core/flag_parser/parse.sh "$ARGUMENTS"
+```
+
+Same JSON shape, same exit codes. Uses only POSIX bash features —
+works on macOS bash 3.2+ and any Linux bash.
+
+### Layer 3 — Prose-rule fallback (last resort)
+
+Use ONLY when both Python and Bash are unavailable (rare — locked-down
+container, embedded environments). The agent reads the parsing rules
+below and produces JSON manually.
+
+**Announce when falling back:**
+
+```
+Sage: Deterministic parsers unavailable (Python and Bash both failed).
+Using prose-rule fallback for flag parsing.
+```
+
+This is the only case where prose parsing is acceptable.
+
+## Parsing Rules (used by all three layers)
 
 1. **Flags must appear before the goal description.** Flags at the end
-   are not parsed — they're treated as part of the goal text.
+   are not parsed — they're treated as part of the goal.
 2. **Flag order doesn't matter.** `--autonomous --quality-locked` and
    `--quality-locked --autonomous` are equivalent.
 3. **Unknown flags are an error.** If $ARGUMENTS starts with `--` and
-   the flag name isn't recognized, surface a clear error:
-   ```
-   Sage: Unknown flag `--foo`. Supported: --quality-locked, --autonomous
-   ```
+   the flag name isn't recognized, return JSON with `error` populated.
 4. **No values, just booleans.** Neither flag takes an argument.
-   `--quality-locked=true` is not supported (use bare `--quality-locked`).
-5. **Goal is everything after the flags.** Whitespace between flags
-   and the goal is trimmed.
-
-## Parsing Algorithm
-
-```
-INPUT: $ARGUMENTS (string)
-OUTPUT: quality_locked_mode (bool), autonomous_mode (bool), goal (string)
-
-quality_locked_mode = false
-autonomous_mode = false
-remaining = $ARGUMENTS.trim()
-
-WHILE remaining starts with "--":
-  first_word = remaining.split(whitespace)[0]
-  IF first_word == "--quality-locked":
-    quality_locked_mode = true
-  ELIF first_word == "--autonomous":
-    autonomous_mode = true
-  ELSE:
-    ERROR: "Unknown flag `{first_word}`."
-  remaining = remaining[len(first_word):].lstrip()
-
-goal = remaining
-```
+   `--quality-locked=true` is not supported.
+5. **Goal is everything after the flags.** Surrounding whitespace
+   trimmed; internal whitespace preserved.
 
 ## Examples
 
 ```
-$ARGUMENTS = "Ship dark mode"
-→ quality_locked_mode = false
-→ autonomous_mode = false
-→ goal = "Ship dark mode"
+INPUT:  "Ship dark mode"
+OUTPUT: {"quality_locked": false, "autonomous": false, "goal": "Ship dark mode", "error": null}
 
-$ARGUMENTS = "--quality-locked Ship dark mode"
-→ quality_locked_mode = true
-→ autonomous_mode = false
-→ goal = "Ship dark mode"
+INPUT:  "--quality-locked Ship dark mode"
+OUTPUT: {"quality_locked": true, "autonomous": false, "goal": "Ship dark mode", "error": null}
 
-$ARGUMENTS = "--autonomous --quality-locked Ship dark mode"
-→ quality_locked_mode = true
-→ autonomous_mode = true
-→ goal = "Ship dark mode"
+INPUT:  "--autonomous --quality-locked Ship dark mode"
+OUTPUT: {"quality_locked": true, "autonomous": true, "goal": "Ship dark mode", "error": null}
 
-$ARGUMENTS = "--quality-locked"
-→ quality_locked_mode = true
-→ autonomous_mode = false
-→ goal = "" (workflow may scan .sage/work/ for active initiative)
+INPUT:  "--quality-locked"
+OUTPUT: {"quality_locked": true, "autonomous": false, "goal": "", "error": null}
 
-$ARGUMENTS = "Ship --quality-locked dark mode"
-→ quality_locked_mode = false (flag not at start)
-→ autonomous_mode = false
-→ goal = "Ship --quality-locked dark mode"
+INPUT:  "Ship --quality-locked dark mode"   # flag not at start
+OUTPUT: {"quality_locked": false, "autonomous": false, "goal": "Ship --quality-locked dark mode", "error": null}
 
-$ARGUMENTS = "--foo bar"
-→ ERROR: "Unknown flag `--foo`. Supported: --quality-locked, --autonomous"
+INPUT:  "--foo bar"
+OUTPUT: {"quality_locked": false, "autonomous": false, "goal": "", "error": "Unknown flag '--foo'. Supported flags: --quality-locked, --autonomous."}
+EXIT:   1
 ```
 
-## Announcement
+## After Parsing
 
-After parsing, the workflow announces active modes (if any) before
-starting work:
+### On clean parse (error: null)
+
+1. Use `quality_locked` and `autonomous` booleans for the rest of the
+   workflow.
+2. Use `goal` as the user's task description (may be empty — workflow
+   will auto-pickup from `.sage/work/`).
+3. Announce active modes (if any) before starting work:
 
 ```
 Sage → build workflow.
@@ -105,12 +138,23 @@ Modes: --quality-locked, --autonomous
 Goal: Ship dark mode for the dashboard
 ```
 
-If neither flag is set, omit the Modes line entirely.
+If both flags are false, omit the Modes line entirely.
+
+### On error (error populated)
+
+Surface the error verbatim to the user and stop the workflow:
+
+```
+Sage: {error message}
+```
+
+Do NOT guess what the user meant. Wait for them to retry with the
+correct flag name.
 
 ## Manifest Persistence
 
-After parsing, before starting Step 1, the workflow writes flag state
-to manifest.md frontmatter:
+After successful parsing, before starting Step 1, the workflow writes
+flag state to manifest.md frontmatter:
 
 ```yaml
 flags:
@@ -123,16 +167,19 @@ modes for the duration of the session.
 
 ## Failure Modes
 
-- **Empty $ARGUMENTS + no active initiative:** workflow falls back to
-  asking for the goal interactively, with no flags active.
-- **Flag followed by no goal:** valid — workflow scans `.sage/work/`
-  for an in-progress initiative matching the flag state.
-- **Conflicting flag values on `/continue`:** the user's new invocation
-  overrides the manifest's stored flags. Note this to the user.
+| Situation | Behavior |
+|---|---|
+| Python missing | Fall through to Bash layer automatically |
+| Bash failed (e.g., parse.sh missing) | Fall through to prose-rule layer |
+| Unknown flag | Surface error message, stop workflow |
+| Empty $ARGUMENTS | Both modes off, empty goal — workflow may scan `.sage/work/` for active initiative |
+| `/continue` overrides | New invocation's flags override manifest; note to user |
 
 ## Quality Criteria
 
 - Parser is deterministic — same input always produces same output
+- All three layers produce IDENTICAL JSON for the same input (verified by parity tests)
 - Error messages name the unknown flag and list supported flags
 - Goal preserves user-supplied whitespace and casing
 - Flag state is announced and persisted before any artifact work begins
+- Prose-fallback announcement is mandatory so the user knows reliability is degraded

@@ -504,12 +504,16 @@ for wf in "$CORE"/workflows/*.workflow.md; do
       PREAMBLE='RULES (apply to every step — non-negotiable):
 - PERSONA: Read sage/core/agents/developer.persona.md for your mindset.
 - Announce: "Sage → build workflow." before starting work
-- FLAG PARSING: Before any other work, parse $ARGUMENTS using the rules in
-  sage/core/capabilities/orchestration/flag-parser/SKILL.md. Recognized flags:
-  --quality-locked (loop review/revise until clean, cap 10), --autonomous
-  (agent makes elicitation decisions from memory/codebase/principles).
-  Unknown flags surface an error. Announce active modes. Persist flag state
-  to manifest.md frontmatter under "flags:".
+- FLAG PARSING: Before any other work, parse $ARGUMENTS by invoking the
+  deterministic parser (in order — use the first one that works):
+    1. python -m core.flag_parser parse "$ARGUMENTS"
+    2. bash sage/core/flag_parser/parse.sh "$ARGUMENTS"
+    3. Prose-fallback per sage/core/capabilities/orchestration/flag-parser/SKILL.md
+  Trust the JSON output unconditionally. If "error" is non-null, surface
+  it to the user and stop. Recognized flags: --quality-locked (loop
+  review/revise until clean, cap 10), --autonomous (agent makes
+  elicitation decisions from memory/codebase/principles). Announce active
+  modes. Persist flag state to manifest.md frontmatter under "flags:".
 - MEMORY FIRST: Before writing spec, plan, or starting implementation,
   search sage-memory with the feature domain as query (limit: 5), then
   search again with filter_tags: ["self-learning"] (limit: 5). Use findings
@@ -577,12 +581,16 @@ for wf in "$CORE"/workflows/*.workflow.md; do
       PREAMBLE='RULES (apply to every step — non-negotiable):
 - PERSONA: Read sage/core/agents/architect.persona.md for your mindset.
 - Announce: "Sage → architect workflow." before starting work
-- FLAG PARSING: Before any other work, parse $ARGUMENTS using the rules in
-  sage/core/capabilities/orchestration/flag-parser/SKILL.md. Recognized flags:
-  --quality-locked (loop review/revise until clean, cap 10), --autonomous
-  (agent makes elicitation decisions from memory/codebase/principles).
-  Unknown flags surface an error. Announce active modes. Persist flag state
-  to manifest.md frontmatter under "flags:".
+- FLAG PARSING: Before any other work, parse $ARGUMENTS by invoking the
+  deterministic parser (in order — use the first one that works):
+    1. python -m core.flag_parser parse "$ARGUMENTS"
+    2. bash sage/core/flag_parser/parse.sh "$ARGUMENTS"
+    3. Prose-fallback per sage/core/capabilities/orchestration/flag-parser/SKILL.md
+  Trust the JSON output unconditionally. If "error" is non-null, surface
+  it to the user and stop. Recognized flags: --quality-locked (loop
+  review/revise until clean, cap 10), --autonomous (agent makes
+  elicitation decisions from memory/codebase/principles). Announce active
+  modes. Persist flag state to manifest.md frontmatter under "flags:".
 - MUST complete all 3 elicitation rounds SEQUENTIALLY before designing
   (unless --autonomous flag is active — see flag-parser skill).
   brief.md MUST EXIST at .sage/work/ before any design work.
