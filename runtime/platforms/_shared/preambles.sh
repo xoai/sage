@@ -21,14 +21,19 @@ emit_preamble() {
 - Announce: "Sage → build workflow." before starting work
 - FLAG PARSING: Before any other work, parse $ARGUMENTS by invoking the
   deterministic parser (in order — use the first one that works):
-    1. python -m core.flag_parser parse "$ARGUMENTS"
-    2. bash sage/core/flag_parser/parse.sh "$ARGUMENTS"
+    1. python -m core.flag_parser parse "$ARGUMENTS" --config-path .sage/config.yaml
+    2. bash sage/core/flag_parser/parse.sh "$ARGUMENTS" --config-path .sage/config.yaml
     3. Prose-fallback per sage/core/capabilities/orchestration/flag-parser/SKILL.md
   Trust the JSON output unconditionally. If "error" is non-null, surface
-  it to the user and stop. Recognized flags: --quality-locked (loop
-  review/revise until clean, cap 10), --autonomous (agent makes
-  elicitation decisions from memory/codebase/principles). Announce active
-  modes. Persist flag state to manifest.md frontmatter under "flags:".
+  it to the user and stop. Recognized flags:
+    --quality-locked     loop review/revise until clean (cap 10)
+    --no-quality-locked  override config default to off for this run
+    --autonomous         agent makes elicitation decisions
+    --no-autonomous      override config default to off for this run
+  When announcing active modes, use the quality_locked_source and
+  autonomous_source fields from the JSON to label sources, e.g.
+  "Modes: --quality-locked (from .sage/config.yaml), --autonomous (from flag)".
+  Persist flag state to manifest.md frontmatter under "flags:".
 - MEMORY FIRST: Before writing spec, plan, or starting implementation,
   search sage-memory with the feature domain as query (limit: 5), then
   search again with filter_tags: ["self-learning"] (limit: 5). Use findings
@@ -113,14 +118,19 @@ emit_preamble() {
 - Announce: "Sage → architect workflow." before starting work
 - FLAG PARSING: Before any other work, parse $ARGUMENTS by invoking the
   deterministic parser (in order — use the first one that works):
-    1. python -m core.flag_parser parse "$ARGUMENTS"
-    2. bash sage/core/flag_parser/parse.sh "$ARGUMENTS"
+    1. python -m core.flag_parser parse "$ARGUMENTS" --config-path .sage/config.yaml
+    2. bash sage/core/flag_parser/parse.sh "$ARGUMENTS" --config-path .sage/config.yaml
     3. Prose-fallback per sage/core/capabilities/orchestration/flag-parser/SKILL.md
   Trust the JSON output unconditionally. If "error" is non-null, surface
-  it to the user and stop. Recognized flags: --quality-locked (loop
-  review/revise until clean, cap 10), --autonomous (agent makes
-  elicitation decisions from memory/codebase/principles). Announce active
-  modes. Persist flag state to manifest.md frontmatter under "flags:".
+  it to the user and stop. Recognized flags:
+    --quality-locked     loop review/revise until clean (cap 10)
+    --no-quality-locked  override config default to off for this run
+    --autonomous         agent makes elicitation decisions
+    --no-autonomous      override config default to off for this run
+  When announcing active modes, use the quality_locked_source and
+  autonomous_source fields from the JSON to label sources, e.g.
+  "Modes: --quality-locked (from .sage/config.yaml), --autonomous (from flag)".
+  Persist flag state to manifest.md frontmatter under "flags:".
 - MUST complete all 3 elicitation rounds SEQUENTIALLY before designing
   (unless --autonomous flag is active — see flag-parser skill).
   brief.md MUST EXIST at .sage/work/ before any design work.

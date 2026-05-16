@@ -512,13 +512,14 @@ for wf in "$CORE"/workflows/*.workflow.md; do
 - Announce: "Sage → build workflow." before starting work
 - FLAG PARSING: Before any other work, parse $ARGUMENTS by invoking the
   deterministic parser (in order — use the first one that works):
-    1. python -m core.flag_parser parse "$ARGUMENTS"
-    2. bash sage/core/flag_parser/parse.sh "$ARGUMENTS"
+    1. python -m core.flag_parser parse "$ARGUMENTS" --config-path .sage/config.yaml
+    2. bash sage/core/flag_parser/parse.sh "$ARGUMENTS" --config-path .sage/config.yaml
     3. Prose-fallback per sage/core/capabilities/orchestration/flag-parser/SKILL.md
   Trust the JSON output unconditionally. If "error" is non-null, surface
-  it and stop. Recognized flags: --quality-locked (loop review/revise
-  until clean, cap 10), --autonomous (agent makes elicitation decisions
-  from memory/codebase/principles). Persist flag state to manifest.md.
+  it and stop. Recognized flags: --quality-locked / --no-quality-locked /
+  --autonomous / --no-autonomous. When announcing active modes, use the
+  quality_locked_source and autonomous_source fields to label sources.
+  Persist flag state to manifest.md.
 - Standard+ scope: spec.md MUST EXIST at .sage/work/ before implementing.
   "Design is clear" is NOT a spec. "We discussed this" is NOT a spec.
   A spec is a FILE. No file = no implementation. Write it first.
@@ -571,13 +572,14 @@ for wf in "$CORE"/workflows/*.workflow.md; do
 - Announce: "Sage → architect workflow." before starting work
 - FLAG PARSING: Before any other work, parse $ARGUMENTS by invoking the
   deterministic parser (in order — use the first one that works):
-    1. python -m core.flag_parser parse "$ARGUMENTS"
-    2. bash sage/core/flag_parser/parse.sh "$ARGUMENTS"
+    1. python -m core.flag_parser parse "$ARGUMENTS" --config-path .sage/config.yaml
+    2. bash sage/core/flag_parser/parse.sh "$ARGUMENTS" --config-path .sage/config.yaml
     3. Prose-fallback per sage/core/capabilities/orchestration/flag-parser/SKILL.md
   Trust the JSON output unconditionally. If "error" is non-null, surface
-  it and stop. Recognized flags: --quality-locked (loop review/revise
-  until clean, cap 10), --autonomous (agent makes elicitation decisions
-  from memory/codebase/principles). Persist flag state to manifest.md.
+  it and stop. Recognized flags: --quality-locked / --no-quality-locked /
+  --autonomous / --no-autonomous. When announcing active modes, use the
+  quality_locked_source and autonomous_source fields to label sources.
+  Persist flag state to manifest.md.
 - MUST complete all 3 elicitation rounds SEQUENTIALLY before designing
   (unless --autonomous flag is active — see flag-parser skill).
   brief.md MUST EXIST at .sage/work/ before any design work.

@@ -23,8 +23,47 @@ the agent trusts that JSON unconditionally.
 
 | Flag | Effect | Default |
 |------|--------|---------|
-| `--quality-locked` | Loop review/revise until findings are clean or cap (10) hit | off |
-| `--autonomous` | Agent makes elicitation decisions from memory/codebase/principles | off |
+| `--quality-locked` | Loop review/revise until findings are clean or cap (10) hit | off (overridable by config) |
+| `--no-quality-locked` | Force off, overriding a config default | — |
+| `--autonomous` | Agent makes elicitation decisions from memory/codebase/principles | off (overridable by config) |
+| `--no-autonomous` | Force off, overriding a config default | — |
+
+## Precedence (highest wins)
+
+For each mode (quality_locked, autonomous):
+
+| Priority | Source | Effect | Source label |
+|----------|--------|--------|--------------|
+| 1 (highest) | `--no-<flag>` | Force off | `"flag"` |
+| 2 | `--<flag>` | Force on | `"flag"` |
+| 3 | `<flag>: true` in `.sage/config.yaml` | Default on | `"config"` |
+| 4 (lowest) | nothing | Off (current behavior) | `null` |
+
+**Flag vs config when they agree:** the source label is `"flag"`
+(explicit intent always labels, even when the value matches config).
+Functional outcome is the same (mode on).
+
+**Conflict:** passing `--<flag>` AND `--no-<flag>` in the same invocation
+is a user error. The parser returns an error JSON and exits non-zero.
+
+## Config File Defaults
+
+Read from `.sage/config.yaml`. Strict-match contract: only lines
+matching exactly `<key>: true` (with one space after the colon,
+lowercase `true`, no trailing characters) are honored. The strict form
+ensures Python and Bash agree byte-for-byte. Rejected variants
+(treated as no default):
+
+- `quality_locked: True` (titlecase)
+- `quality_locked: "true"` (quoted)
+- `quality_locked: yes` (YAML alias)
+- `quality_locked:true` (no space)
+- `quality_locked:  true` (extra space)
+- `quality_locked: true  # comment` (trailing content)
+- Any nested/indented key (only top-level keys are read)
+
+`quality_locked: false` is equivalent to no default — value is off.
+Use the `--quality-locked` flag to override.
 
 ## JSON Contract
 
@@ -35,13 +74,21 @@ All three parsing layers emit the same JSON shape to stdout:
   "quality_locked": true | false,
   "autonomous": true | false,
   "goal": "<remainder after flags, trimmed>",
-  "error": null | "Unknown flag '--foo'. Supported flags: --quality-locked, --autonomous."
+  "error": null | "<error message>",
+  "quality_locked_source": "flag" | "config" | null,
+  "autonomous_source": "flag" | "config" | null
 }
 ```
 
+Source value is `"flag"` whenever a flag (positive `--X` or negative
+`--no-X`) influenced the result. `"config"` only when no flag was
+passed AND config provides the default-on. `null` when the value is
+the implicit default-off.
+
 Exit code semantics:
 - `0` — clean parse (`error: null`)
-- `1` — unknown flag detected (`error` is populated; still print JSON)
+- `1` — unknown flag, conflicting flags, or malformed input
+  (`error` is populated; JSON still printed)
 
 ## Parsing Order (Try Each Layer)
 
@@ -51,21 +98,20 @@ use it and skip the rest.
 ### Layer 1 — Python (primary, preferred)
 
 ```bash
-python -m core.flag_parser parse "$ARGUMENTS"
+python -m core.flag_parser parse "$ARGUMENTS" --config-path .sage/config.yaml
 ```
 
-Or from a project that has `sage/` installed:
+The `--config-path` is optional — when provided, the parser reads
+`quality_locked: true` / `autonomous: true` lines as defaults. When
+omitted (or the file is missing/malformed), no defaults apply.
 
-```bash
-python -m sage.core.flag_parser parse "$ARGUMENTS"
-```
-
-Outputs JSON to stdout. Exit 0 on clean parse, 1 on unknown flag.
+Outputs JSON to stdout. Exit 0 on clean parse, 1 on unknown flag or
+conflict.
 
 ### Layer 2 — Bash fallback (when Python unavailable)
 
 ```bash
-bash sage/core/flag_parser/parse.sh "$ARGUMENTS"
+bash sage/core/flag_parser/parse.sh "$ARGUMENTS" --config-path .sage/config.yaml
 ```
 
 Same JSON shape, same exit codes. Uses only POSIX bash features —
