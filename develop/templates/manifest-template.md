@@ -19,11 +19,14 @@ status: in-progress | paused | blocked | complete
 created: YYYY-MM-DD
 updated: YYYY-MM-DD HH:MM
 flags:
-  quality_locked: false        # set true if --quality-locked passed
-  autonomous: false            # set true if --autonomous passed
+  quality_locked: false        # resolved value (flag or config-default)
+  autonomous: false            # resolved value (flag or config-default)
 quality_locked_history: []     # per-checkpoint review/revise iterations (when active)
 autonomous_decisions: []       # per-phase counts of decisions made vs asked (when active)
-auto_picked_checkpoints: []    # checkpoints auto-resolved when both flags active
+auto_picked_checkpoints: []    # checkpoints auto-resolved when both flags active;
+                               # each entry has phase, decision, timestamp, reason,
+                               # and flag_sources: { quality_locked: flag|config,
+                               #                    autonomous: flag|config }
 ---
 
 # Cycle: {title}

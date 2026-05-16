@@ -225,7 +225,8 @@ For all of the above, present the full prompt and wait. Do NOT auto-pick.
 Every auto-picked checkpoint is logged to TWO places:
 
 **1. manifest.md frontmatter** — add the entry under
-`auto_picked_checkpoints`:
+`auto_picked_checkpoints`. Each entry records the flag source so the
+audit trail explains why each mode was on:
 
 ```yaml
 auto_picked_checkpoints:
@@ -234,26 +235,48 @@ auto_picked_checkpoints:
     decision: A
     timestamp: 2026-05-15T14:23:18Z
     reason: "--autonomous --quality-locked both active"
+    flag_sources:
+      quality_locked: config       # set in .sage/config.yaml
+      autonomous: flag             # passed as --autonomous
   - phase: plan
     checkpoint: plan-approval
     decision: A
     timestamp: 2026-05-15T14:31:47Z
     reason: "--autonomous --quality-locked both active"
+    flag_sources:
+      quality_locked: config
+      autonomous: flag
 ```
 
 This is machine-readable and lets `/continue` understand exactly which
-checkpoints proceeded without user interaction.
+checkpoints proceeded without user interaction, and where the trigger
+came from.
 
-**2. decisions.md** — prepend a human-readable entry (per Rule 7):
+**2. decisions.md** — prepend a human-readable entry (per Rule 7). The
+"Flags active" line names each mode's source; the Override hint adapts
+per flag:
 
 ```markdown
 ### 2026-05-15 14:23 — Auto-pick: [A] Review at spec checkpoint
-Flags active: --autonomous --quality-locked
+Flags active: --autonomous (flag), --quality-locked (config)
 Effect: Triggered quality-locked review loop (results in manifest
   under quality_locked_history.spec).
-Override: re-run /build without --autonomous (or --quality-locked)
-  to restore manual approval at this checkpoint.
+Override: pass --no-quality-locked to opt out of the .sage/config.yaml
+  default for one run; omit --autonomous to disable the flag.
 ```
+
+### Override hint rendering rule (per flag)
+
+- Source `"config"` → "pass `--no-X` to opt out of the .sage/config.yaml
+  default for one run"
+- Source `"flag"` (value on, came from `--X`) → "omit `--X` to disable
+  the flag"
+- Source `"flag"` (value off, came from `--no-X`) → no override hint
+  needed (mode already off; this case shouldn't occur in auto-pick
+  logging since the auto-pick path requires both modes ON)
+- Source `null` → not in the override section (not active)
+
+Each active flag contributes one clause; join with semicolons.
 
 **Both writes happen BEFORE the [A] Review action runs.** This way, if
 the review loop crashes or the user interrupts, the audit trail still
