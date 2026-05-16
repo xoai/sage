@@ -2,6 +2,74 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [1.1.5] — Project-level defaults for workflow flags
+
+### Config Defaults
+- `quality_locked: true` and `autonomous: true` keys in
+  `.sage/config.yaml` now act as project-level defaults for the
+  workflow flags. Set once, applied to every `/build`, `/architect`,
+  and `/fix` invocation. No flag needed per run.
+- **Strict-match contract:** only `<key>: true` (exact whitespace,
+  lowercase) is honored. Variants like `True`, `"true"`, `yes` are
+  rejected as "no default" — ensures Python and Bash parsers agree
+  byte-for-byte. Documented in flag-parser/SKILL.md.
+
+### New Override Flags
+- `--no-quality-locked` and `--no-autonomous` force their respective
+  mode off, overriding any config default for a single run.
+- Conflict detection: passing both `--X` and `--no-X` in the same
+  invocation produces a clear error and stops the workflow.
+
+### Source Visibility
+- Workflow announcement now labels the source of each active mode:
+  `Modes: --quality-locked (from .sage/config.yaml), --autonomous (from flag)`
+- Auto-pick logging records flag sources in both manifest.md
+  (`auto_picked_checkpoints[].flag_sources`) and decisions.md (in the
+  "Flags active" line). The override hint in decisions.md adapts to
+  source: "config" → "pass --no-X"; "flag" → "omit --X".
+
+### Precedence (highest wins)
+1. `--no-X` flag (force off, source "flag")
+2. `--X` flag (force on, source "flag")
+3. `X: true` in `.sage/config.yaml` (default on, source "config")
+4. nothing (off, source null — implicit default)
+
+Flag source label is always `"flag"` when a flag (positive or `--no-`)
+influenced the result, even when the value matches config. This makes
+the audit trail show explicit user intent.
+
+### Three-layer Parser Updated
+- **Python primary** (`core/flag_parser/parser.py`,
+  `core/flag_parser/config_loader.py`): new `defaults` parameter on
+  `parse()`, source fields in `ParseResult`, conflict detection.
+- **Bash fallback** (`core/flag_parser/parse.sh`): same JSON contract,
+  reads config via `grep -Eq '^<key>: true$'` (no eval).
+- **Prose fallback** (`flag-parser/SKILL.md`): precedence table and
+  config lookup section.
+
+### Tests
+- 79 flag_parser tests passing (up from 26):
+  - 28 parser unit tests (14 new for defaults, `--no-*`, conflicts, sources)
+  - 22 config_loader tests (new file; covers all strict-match rejections)
+  - 29 parity tests (17 new for config-aware paths)
+
+### Documentation
+- `core/capabilities/orchestration/flag-parser/SKILL.md` — precedence
+  table, strict-match contract, source field semantics
+- `core/capabilities/orchestration/autonomous/SKILL.md` — Logging
+  contract updated with `flag_sources`, per-flag override hint rule
+- Manifest template — `auto_picked_checkpoints[].flag_sources` shape
+  documented
+- README — new "Project-level defaults" subsection under Workflow Flags
+- Workflow preambles (Claude Code + Antigravity) — invoke parser with
+  `--config-path .sage/config.yaml`; announcement instructions reference
+  the new source fields
+
+### Compatibility
+Pre-v1.1.5 projects (no `quality_locked:` or `autonomous:` in config)
+behave identically to today. Adding the keys is opt-in; `sage init`
+does not set them.
+
 ## [1.1.4] — Auto-pick [A] Review when --autonomous + --quality-locked combined
 
 ### Auto-Pick at Checkpoints

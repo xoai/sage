@@ -283,6 +283,34 @@ Flags are independent and combinable. Both have hard iteration caps
 and explicit cap-reached prompts — no runaway behavior. Flag state
 persists in the cycle manifest, so `/continue` restores them.
 
+#### Project-level defaults
+
+Set defaults in `.sage/config.yaml` so the flags apply automatically
+to every `/build`, `/architect`, and `/fix` invocation:
+
+```yaml
+quality_locked: true        # always loop review until clean
+autonomous: false           # use interactive elicitation
+```
+
+The agent announces active modes and their source at workflow start:
+
+```
+Sage → build workflow.
+Modes: --quality-locked (from .sage/config.yaml)
+Goal: Ship dark mode
+```
+
+**Per-run override:** the `--no-quality-locked` and `--no-autonomous`
+flags disable a config default for a single run:
+
+```bash
+/build --no-quality-locked "quick typo fix"   # override config default
+```
+
+**Precedence (highest wins):** `--no-X` flag → `--X` flag → config
+default → off. Passing both `--X` and `--no-X` is an error.
+
 ### Interaction Patterns
 
 Sage communicates clearly at every step:
