@@ -521,6 +521,55 @@ All toggles default to `true` (except `command_prefix`). Set to `false` to disab
 | `independent_gate3` | Sub-agent code quality review at Gate 3 (falls back to self-review) |
 | `command_prefix` | Namespace all commands as `sage:build`, `sage:fix`, etc. (set via `--prefix` flag) |
 
+## Multi-Agent (optional)
+
+For non-trivial work where independent review changes your mind, Sage
+offers an **opt-in cross-model build cycle**. The host (Claude Code,
+Opus) keeps the planner role and orchestrates; external CLIs handle
+adversarial review and implementation:
+
+```
+brief → spec → external spec review (loop) → plan → external plan review
+      → external implement → external code review (loop) → reflect
+```
+
+Defaults: Codex CLI (`gpt-5-codex`) reviews specs/plans and code; Kimi
+CLI implements. All bindings live in a single config file you can edit:
+
+```toml
+# .sage/agents.toml — swap any role's tool with a one-line change
+[roles.code_reviewer]
+agent = "codex"
+model = "gpt-5-codex"
+mode  = "read-only"
+```
+
+Install per project (Python 3.11+, plus whatever CLIs you bind):
+
+```bash
+cd my-project
+sage setup multi-agent          # adds /build-x, /review-spec, /review-plan,
+                                # /implement, /review-code — never shadows /build
+sage setup multi-agent --remove # clean uninstall, user edits backed up
+```
+
+The augmented cycle re-uses Sage's existing `/architect`, `/research`,
+and `/design` workflows where they fit, then layers external review +
+external implementation on top. Survives `sage update` — your
+`.sage/agents.toml` and `.sage/prompts/` are never touched; framework-
+owned scripts and command files refresh from the template with drift
+detection (`[K]eep | [R]eplace | [D]iff` if you've edited locally).
+
+Claude Code only in v1.
+
+**Learn more:**
+- **[docs/multi-agent.md](docs/multi-agent.md)** — comprehensive user
+  guide (install, configure, daily use, customize, troubleshoot)
+- [runtime/multi-agent/README.md](runtime/multi-agent/README.md) —
+  contributor-facing (template layout, ownership split, how to test)
+- `.sage/docs/multi-agent.md` (post-install) — protocol contract,
+  schema, integration points
+
 ## Project State
 
 When Sage runs in your project, it manages state in `.sage/`:

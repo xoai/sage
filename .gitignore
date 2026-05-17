@@ -25,7 +25,6 @@ dist/
 .env.local
 
 # Internal Docs
-docs/
 .mcp.json
 .sage/
 .sage-memory/
@@ -36,3 +35,4 @@ CLAUDE.md
 # Python
 __pycache__/
 *.pyc
+.pytest_cache/

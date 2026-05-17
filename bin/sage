@@ -911,6 +911,25 @@ DECMD
   echo -e "  ${GREEN}✓${RESET} Platform files regenerated"
   echo -e "  ${GREEN}✓${RESET} .sage/ state preserved"
 
+  # ── Multi-Agent refresh (no-op unless installed) ──
+  # Check for multi_agent.enabled in .sage/config.yaml. If present, refresh
+  # framework-owned files (scripts, command files, sub-agents) from the
+  # template. User-owned files (.sage/agents.toml, .sage/prompts/*) are
+  # never touched.
+  if [ -f "$config_file" ] && grep -A2 '^multi_agent:' "$config_file" 2>/dev/null | grep -q 'enabled: true'; then
+    local ma_script="$SAGE_FRAMEWORK/runtime/tools/multi_agent_setup.py"
+    if [ -f "$ma_script" ] && command -v python3 >/dev/null 2>&1; then
+      # --yes preserves user-edited framework files. Pass --force on
+      # SAGE_UPDATE_FORCE_MULTI_AGENT_REPLACE=1 for CI-style headless updates.
+      local ma_flags=("--yes")
+      if [ "${SAGE_UPDATE_FORCE_MULTI_AGENT_REPLACE:-}" = "1" ]; then
+        ma_flags+=("--force")
+      fi
+      python3 "$ma_script" refresh "$SAGE_FRAMEWORK" "$target" "${ma_flags[@]}" || \
+        echo -e "  ${YELLOW}⚠ Multi-agent refresh exited non-zero${RESET}"
+    fi
+  fi
+
   sage_complete
 }
 
@@ -1001,16 +1020,33 @@ sage_skills() {
 # ═══════════════════════════════════════════════════════════════
 sage_setup() {
   local component="${1:-}"
+  shift 2>/dev/null || true
 
-  if [ "$component" != "memory" ]; then
-    echo ""
-    echo -e "  ${BOLD}Sage — Setup${RESET}"
-    echo ""
-    echo "  Usage: sage setup memory"
-    echo ""
-    return
-  fi
+  case "$component" in
+    memory)      sage_setup_memory "$@" ;;
+    multi-agent) sage_setup_multi_agent "$@" ;;
+    "")
+      echo ""
+      echo -e "  ${BOLD}Sage — Setup${RESET}"
+      echo ""
+      echo "  Usage:"
+      echo "    sage setup memory               Configure persistent memory (sage-memory MCP)"
+      echo "    sage setup multi-agent          Install the cross-model build cycle"
+      echo "    sage setup multi-agent --remove Uninstall it"
+      echo ""
+      return
+      ;;
+    *)
+      echo ""
+      echo -e "  ${RED}Unknown setup target: $component${RESET}"
+      echo "  Try: sage setup memory  |  sage setup multi-agent"
+      echo ""
+      return 1
+      ;;
+  esac
+}
 
+sage_setup_memory() {
   echo ""
   echo -e "  ${BOLD}Sage — Setup Memory${RESET}"
   echo ""
@@ -1066,6 +1102,64 @@ sage_setup() {
   echo -e "  ${DIM}Requires uv: curl -LsSf https://astral.sh/uv/install.sh | sh${RESET}"
   echo -e "  ${DIM}More info: https://github.com/xoai/sage-memory${RESET}"
   echo ""
+}
+
+# ═══════════════════════════════════════════════════════════════
+# COMMAND: setup multi-agent
+#
+# Installs the optional cross-model build cycle into the current
+# project. Delegates to runtime/tools/multi_agent_setup.py which
+# handles pre-flight, file copy, settings.json merge, config.yaml
+# update, and CLAUDE.md augmentation.
+#
+# Flags:
+#   --remove   uninstall (preserves user-edited files in a backup dir)
+#   --yes      bypass prompts (CI / scripts)
+#   --force    overwrite locally-modified framework files
+# ═══════════════════════════════════════════════════════════════
+sage_setup_multi_agent() {
+  require_python
+
+  # Python 3.11+ is required (tomllib). Surface a clear message early.
+  if ! python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' 2>/dev/null; then
+    echo ""
+    echo -e "  ${RED}Multi-agent requires Python 3.11+ (for tomllib).${RESET}"
+    echo "  Detected: $(python3 --version 2>&1)"
+    echo ""
+    return 5
+  fi
+
+  local target
+  target="$(pwd)"
+
+  local subcommand="install"
+  local pass_args=()
+  for arg in "$@"; do
+    case "$arg" in
+      --remove)  subcommand="remove" ;;
+      --refresh) subcommand="refresh" ;;
+      --status)  subcommand="status" ;;
+      *)         pass_args+=("$arg") ;;
+    esac
+  done
+
+  echo ""
+  case "$subcommand" in
+    install) echo -e "  ${BOLD}Sage — Setup Multi-Agent${RESET}" ;;
+    remove)  echo -e "  ${BOLD}Sage — Remove Multi-Agent${RESET}" ;;
+    refresh) echo -e "  ${BOLD}Sage — Refresh Multi-Agent${RESET}" ;;
+    status)  echo -e "  ${BOLD}Sage — Multi-Agent Status${RESET}" ;;
+  esac
+
+  local script="$SAGE_FRAMEWORK/runtime/tools/multi_agent_setup.py"
+  if [ ! -f "$script" ]; then
+    echo ""
+    echo -e "  ${RED}❌ multi_agent_setup.py not found at $script${RESET}"
+    echo "  Try: sage upgrade"
+    return 1
+  fi
+
+  python3 "$script" "$subcommand" "$SAGE_FRAMEWORK" "$target" "${pass_args[@]}"
 }
 
 # ═══════════════════════════════════════════════════════════════
@@ -1133,6 +1227,7 @@ sage_help() {
   echo "  sage upgrade                     Update Sage to the latest version"
   echo "  sage learn [path]                Learn a codebase or module"
   echo "  sage setup memory                Configure persistent memory"
+  echo "  sage setup multi-agent [--remove]  Install cross-model build cycle (optional)"
   echo ""
   echo "Skill management (powered by skills.sh):"
   echo "  sage find <query>                Search skills.sh catalog"

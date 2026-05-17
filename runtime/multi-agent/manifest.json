@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "framework_owned": {
+    ".sage/scripts/run-role.sh": {
+      "source": "scripts/run-role.sh",
+      "sha256": "102a63c98768b5a5a3ee023143fd620e477904c26e5332d8271ed916326987f9"
+    },
+    ".sage/scripts/validate-review.sh": {
+      "source": "scripts/validate-review.sh",
+      "sha256": "ff4358d54af9558fe960baf235abf8a419e9b544e0f3bf04557f1c909145fb9f"
+    },
+    ".sage/docs/multi-agent.md": {
+      "source": "docs/multi-agent.md",
+      "sha256": "c95f586d9fa267623f144e8bc489356a6ffb2b704e34b7e8ab0a513394c73bd1"
+    },
+    ".claude/commands/build-x.md": {
+      "source": "commands/build-x.md",
+      "sha256": "823470d14f13824cb245ce90417a897da0c79833e8cdb1d30a964dceb4414ce5"
+    },
+    ".claude/commands/review-spec.md": {
+      "source": "commands/review-spec.md",
+      "sha256": "f765a5e850fd8f8c25163fbea27eafa6974265c45cef26a0883eff942f0ba70d"
+    },
+    ".claude/commands/review-plan.md": {
+      "source": "commands/review-plan.md",
+      "sha256": "aae4233a0fcdd3668dac794a6a238a64176ce1dad7ac1f846069a71893ccfc1f"
+    },
+    ".claude/commands/implement.md": {
+      "source": "commands/implement.md",
+      "sha256": "6c588dec5f141902df8795591bf1e78881ed4040c81aa39bcb6870bb3859dcc7"
+    },
+    ".claude/commands/review-code.md": {
+      "source": "commands/review-code.md",
+      "sha256": "24ed4c014a2e31661c69df5dbdc838fd51998bc1808a957786d426b36ab3f259"
+    },
+    ".claude/agents/codex-reviewer.md": {
+      "source": "agents/codex-reviewer.md",
+      "sha256": "46dfd0240b2a7b1d0e4166db5e91af2d3592d916b2bde6a80e0bc38e5c941a27"
+    },
+    ".claude/agents/kimi-implementer.md": {
+      "source": "agents/kimi-implementer.md",
+      "sha256": "f00067183c611be3c22c1559667cb09832a17377448264fad728f45935386b91"
+    }
+  },
+  "user_owned": {
+    ".sage/agents.toml": {
+      "source": "agents.toml.template"
+    },
+    ".sage/prompts/_shared.md": {
+      "source": "prompts/_shared.md"
+    },
+    ".sage/prompts/planner.md": {
+      "source": "prompts/planner.md"
+    },
+    ".sage/prompts/spec_reviewer.md": {
+      "source": "prompts/spec_reviewer.md"
+    },
+    ".sage/prompts/implementer.md": {
+      "source": "prompts/implementer.md"
+    },
+    ".sage/prompts/code_reviewer.md": {
+      "source": "prompts/code_reviewer.md"
+    }
+  },
+  "settings_snippet": "settings.snippet.json"
+}

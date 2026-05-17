@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(.sage/scripts/run-role.sh:*)",
+      "Bash(.sage/scripts/validate-review.sh:*)",
+      "Bash(codex exec:*)",
+      "Bash(codex review:*)",
+      "Bash(kimi --print:*)",
+      "Bash(git diff:*)",
+      "Bash(git status:*)",
+      "Bash(git diff --stat)",
+      "Bash(git diff --stat:*)",
+      "Bash(ls -1t .sage/work/*)",
+      "Bash(ls -1t .sage/work/)",
+      "Bash(cat .sage/work/*)",
+      "Bash(mkdir -p .sage/work/*)"
+    ]
+  }
+}

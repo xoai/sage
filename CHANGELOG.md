@@ -2,6 +2,63 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [1.1.6] — Multi-Agent (optional cross-model build cycle)
+
+### New Capability
+- **Sage Multi-Agent**: an opt-in build cycle that augments the
+  in-session loop with externally-invoked agents — Claude Code (Opus)
+  plans and orchestrates, Codex CLI (gpt-5-codex) reviews specs/plans/
+  diffs adversarially, Kimi CLI implements. File-based handoff;
+  Claude Code stays the only interface.
+- Install per project: `sage setup multi-agent`. Remove cleanly with
+  `sage setup multi-agent --remove` (user files backed up to a
+  timestamped dir; framework files deleted).
+- Adds five additive slash commands: `/build-x`, `/review-spec`,
+  `/review-plan`, `/implement`, `/review-code`. Never shadows `/build`
+  or any other built-in.
+
+### Config
+- Tool bindings live in `.sage/agents.toml` — swap any role's (CLI,
+  model, mode) triple with a one-line edit. Four roles ship:
+  `planner` (host), `spec_reviewer`, `implementer`, `code_reviewer`.
+- New `multi_agent: { enabled: true, installed_version: <v> }` block
+  in `.sage/config.yaml`. Other Sage tooling can grep for it without
+  parsing TOML.
+
+### `sage update` integration
+- `sage update` detects the feature and refreshes framework-owned
+  files (scripts, command files, sub-agents) from
+  `runtime/multi-agent/` while never touching user-owned files
+  (`agents.toml`, `prompts/*.md`).
+- Drift detection via per-file SHA-256 hashes in `manifest.json`. If
+  you've locally edited a framework file, `sage update` prompts
+  `[K]eep | [R]eplace | [D]iff` before writing. `--force`-replaced
+  files get a timestamped `.replaced-*` backup.
+- CI-style headless updates: set `SAGE_UPDATE_FORCE_MULTI_AGENT_REPLACE=1`.
+
+### Workflow reuse
+- `/build-x` Phase 2 classifies the task and invokes Sage's existing
+  `/architect`, `/research`, or `/design` workflows where they fit,
+  rather than re-implementing planning prose. Spec.md then cites the
+  artefacts those workflows produced.
+
+### Constraints
+- Claude Code only in v1. Python 3.11+ required (for `tomllib` in the
+  dispatcher). Codex CLI and Kimi CLI are user-installed dependencies
+  — `sage setup multi-agent` warns if either is missing but does not
+  block install.
+
+### Documentation
+- **`docs/multi-agent.md`**: comprehensive user guide — install,
+  configure, daily use, customize, troubleshoot, FAQ.
+- `README.md`: new "Multi-Agent (optional)" section linking to the
+  full guide.
+- `runtime/multi-agent/README.md`: contributor-facing docs (template
+  layout, ownership split, how to test template changes).
+- `.sage/docs/multi-agent.md`: end-user protocol contract (deployed
+  to projects on install) covering the reviewer output schema,
+  iteration semantics, and sandbox guarantees.
+
 ## [1.1.5] — Project-level defaults for workflow flags
 
 ### Config Defaults
