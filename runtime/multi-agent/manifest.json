@@ -3,7 +3,7 @@
   "framework_owned": {
     ".sage/scripts/run-role.sh": {
       "source": "scripts/run-role.sh",
-      "sha256": "102a63c98768b5a5a3ee023143fd620e477904c26e5332d8271ed916326987f9"
+      "sha256": "80e782061f4711e456f9453ab069c32846f4c0acb51576703ead349edd391cc5"
     },
     ".sage/scripts/validate-review.sh": {
       "source": "scripts/validate-review.sh",

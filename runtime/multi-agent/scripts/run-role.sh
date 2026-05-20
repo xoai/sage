@@ -23,6 +23,10 @@
 
 set -euo pipefail
 
+# bash 3.2 compatibility (macOS /bin/bash): under `set -u`, expanding an
+# empty array via "${arr[@]}" aborts. Any array that can be empty MUST
+# use the empty-safe form  ${arr[@]+"${arr[@]}"}. See sage CONTRIBUTING.md.
+
 ROLE="${1:?role required}"
 KIND="${2:?kind required (doc|diff)}"
 SLUG="${3:?slug required}"
@@ -153,11 +157,11 @@ ARGS=()
 
 if [[ -n "${BASE_FLAGS}" ]]; then
   eval "BASE_ARR=(${BASE_FLAGS})"
-  ARGS+=("${BASE_ARR[@]}")
+  ARGS+=(${BASE_ARR[@]+"${BASE_ARR[@]}"})
 fi
 if [[ -n "${MODE_FLAGS}" ]]; then
   eval "MODE_ARR=(${MODE_FLAGS})"
-  ARGS+=("${MODE_ARR[@]}")
+  ARGS+=(${MODE_ARR[@]+"${MODE_ARR[@]}"})
 fi
 
 # ─── Run ──────────────────────────────────────────────────────────────────
@@ -165,29 +169,33 @@ command -v "${CMD}" >/dev/null 2>&1 || {
   echo "Agent CLI not on PATH: ${CMD}" >&2; exit 7;
 }
 
+# ARGS may be empty (an agent configured with no exec_subcommand,
+# no model_flag, no flags, and no modes). macOS /bin/bash 3.2 aborts
+# on "${ARGS[@]}" when ARGS is empty under `set -u`, so every
+# expansion below uses the empty-safe form ${ARGS[@]+"${ARGS[@]}"}.
 case "${PROMPT_STYLE:-argv}" in
   argv)
     if [[ -n "${OUTPUT_FLAG}" ]]; then
       ARGS+=("${OUTPUT_FLAG}" "${OUT}")
-      "${CMD}" "${ARGS[@]}" "${PROMPT}" > /dev/null
+      "${CMD}" ${ARGS[@]+"${ARGS[@]}"} "${PROMPT}" > /dev/null
     else
-      "${CMD}" "${ARGS[@]}" "${PROMPT}" > "${OUT}"
+      "${CMD}" ${ARGS[@]+"${ARGS[@]}"} "${PROMPT}" > "${OUT}"
     fi
     ;;
   flag)
     if [[ -n "${OUTPUT_FLAG}" ]]; then
       ARGS+=("${OUTPUT_FLAG}" "${OUT}")
-      "${CMD}" "${ARGS[@]}" --prompt "${PROMPT}" > /dev/null
+      "${CMD}" ${ARGS[@]+"${ARGS[@]}"} --prompt "${PROMPT}" > /dev/null
     else
-      "${CMD}" "${ARGS[@]}" --prompt "${PROMPT}" > "${OUT}"
+      "${CMD}" ${ARGS[@]+"${ARGS[@]}"} --prompt "${PROMPT}" > "${OUT}"
     fi
     ;;
   stdin)
     if [[ -n "${OUTPUT_FLAG}" ]]; then
       ARGS+=("${OUTPUT_FLAG}" "${OUT}")
-      printf '%s' "${PROMPT}" | "${CMD}" "${ARGS[@]}" > /dev/null
+      printf '%s' "${PROMPT}" | "${CMD}" ${ARGS[@]+"${ARGS[@]}"} > /dev/null
     else
-      printf '%s' "${PROMPT}" | "${CMD}" "${ARGS[@]}" > "${OUT}"
+      printf '%s' "${PROMPT}" | "${CMD}" ${ARGS[@]+"${ARGS[@]}"} > "${OUT}"
     fi
     ;;
   *)

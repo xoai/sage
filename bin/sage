@@ -11,6 +11,11 @@
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 
+# bash 3.2 compatibility (macOS /bin/bash): under `set -u`, expanding an
+# empty array via "${arr[@]}" aborts as an unbound variable (fixed in
+# bash 4.4+). Any array that can be empty MUST be expanded with the
+# empty-safe form  ${arr[@]+"${arr[@]}"}  instead. See CONTRIBUTING.md.
+
 # ── Colors ──
 BOLD='\033[1m'
 GREEN='\033[32m'
@@ -243,7 +248,9 @@ select_platform() {
   if [ -n "${PLATFORM_FLAG:-}" ]; then
     PLATFORMS=()
     IFS=', ' read -ra FLAG_LIST <<< "$PLATFORM_FLAG"
-    for p in "${FLAG_LIST[@]}"; do
+    # Empty-safe expansion — a separators-only flag value (e.g.
+    # `--platform ","`) yields an empty FLAG_LIST; bash 3.2 aborts.
+    for p in ${FLAG_LIST[@]+"${FLAG_LIST[@]}"}; do
       case "$p" in
         claude-code|antigravity|codex|opencode|gemini-cli)
           PLATFORMS+=("$p")
@@ -263,8 +270,8 @@ select_platform() {
 
   # If we detected something, use it; report and return
   if [ ${#PLATFORMS[@]} -gt 0 ]; then
-    PLATFORM=$(printf '%s\n' "${PLATFORMS[@]}" | tr '\n' '+' | sed 's/+$//')
-    echo -e "  ${GREEN}Platforms:${RESET} ${PLATFORMS[*]}"
+    PLATFORM=$(printf '%s\n' ${PLATFORMS[@]+"${PLATFORMS[@]}"} | tr '\n' '+' | sed 's/+$//')
+    echo -e "  ${GREEN}Platforms:${RESET} ${PLATFORMS[*]+"${PLATFORMS[*]}"}"
     return
   fi
 
@@ -290,7 +297,7 @@ select_platform() {
       6) PLATFORMS=("claude-code" "antigravity" "codex" "opencode" "gemini-cli") ;;
       *) PLATFORMS=("claude-code") ;;
     esac
-    PLATFORM=$(printf '%s\n' "${PLATFORMS[@]}" | tr '\n' '+' | sed 's/+$//')
+    PLATFORM=$(printf '%s\n' ${PLATFORMS[@]+"${PLATFORMS[@]}"} | tr '\n' '+' | sed 's/+$//')
   else
     PLATFORMS=("claude-code")
     PLATFORM="claude-code"
@@ -424,7 +431,7 @@ create_sage_state() {
   # Format PLATFORMS array as YAML list
   local platforms_yaml="[]"
   if [ -n "${PLATFORMS+set}" ] && [ ${#PLATFORMS[@]} -gt 0 ]; then
-    platforms_yaml="[$(printf '"%s", ' "${PLATFORMS[@]}" | sed 's/, $//')]"
+    platforms_yaml="[$(printf '"%s", ' ${PLATFORMS[@]+"${PLATFORMS[@]}"} | sed 's/, $//')]"
   fi
 
   cat > "$sage_dir/config.yaml" << YAML
@@ -518,7 +525,7 @@ run_generators() {
   # If PLATFORMS array is set, iterate; otherwise fall back to legacy PLATFORM string
   local platforms_to_run=()
   if [ -n "${PLATFORMS+set}" ] && [ ${#PLATFORMS[@]} -gt 0 ]; then
-    platforms_to_run=("${PLATFORMS[@]}")
+    platforms_to_run=(${PLATFORMS[@]+"${PLATFORMS[@]}"})
   else
     case "$PLATFORM" in
       both)        platforms_to_run=("claude-code" "antigravity") ;;
@@ -531,7 +538,7 @@ run_generators() {
     esac
   fi
 
-  for p in "${platforms_to_run[@]}"; do
+  for p in ${platforms_to_run[@]+"${platforms_to_run[@]}"}; do
     local script="$sage_path/runtime/platforms/$p/setup/generate-$p.sh"
     if [ -f "$script" ]; then
       echo ""
@@ -563,7 +570,7 @@ print_success() {
   # Build a per-platform instructions list from PLATFORMS array
   local plats_arr=()
   if [ -n "${PLATFORMS+set}" ] && [ ${#PLATFORMS[@]} -gt 0 ]; then
-    plats_arr=("${PLATFORMS[@]}")
+    plats_arr=(${PLATFORMS[@]+"${PLATFORMS[@]}"})
   else
     # Fall back to legacy PLATFORM string
     case "$PLATFORM" in
@@ -573,7 +580,7 @@ print_success() {
   fi
 
   local step=1
-  for plat in "${plats_arr[@]}"; do
+  for plat in ${plats_arr[@]+"${plats_arr[@]}"}; do
     case "$plat" in
       claude-code)
         echo "    $step. Claude Code: open the project — slash commands are in .claude/commands/"
@@ -773,7 +780,8 @@ sage_update() {
   if [ -n "${PLATFORM_FLAG:-}" ]; then
     PLATFORMS=()
     IFS=', ' read -ra FLAG_LIST <<< "$PLATFORM_FLAG"
-    for p in "${FLAG_LIST[@]}"; do
+    # Empty-safe expansion (see select_platform — same bash 3.2 guard).
+    for p in ${FLAG_LIST[@]+"${FLAG_LIST[@]}"}; do
       case "$p" in
         claude-code|antigravity|codex|opencode|gemini-cli)
           PLATFORMS+=("$p") ;;
@@ -784,8 +792,8 @@ sage_update() {
     done
   fi
 
-  PLATFORM=$(printf '%s\n' "${PLATFORMS[@]}" | tr '\n' '+' | sed 's/+$//')
-  echo -e "  ${GREEN}Platforms:${RESET} ${PLATFORMS[*]}"
+  PLATFORM=$(printf '%s\n' ${PLATFORMS[@]+"${PLATFORMS[@]}"} | tr '\n' '+' | sed 's/+$//')
+  echo -e "  ${GREEN}Platforms:${RESET} ${PLATFORMS[*]+"${PLATFORMS[*]}"}"
 
   # Detect community skills before updating
   local community_skills=""
@@ -961,7 +969,7 @@ DECMD
       if [ "${SAGE_UPDATE_FORCE_MULTI_AGENT_REPLACE:-}" = "1" ]; then
         ma_flags+=("--force")
       fi
-      python3 "$ma_script" refresh "$SAGE_FRAMEWORK" "$target" "${ma_flags[@]}" || \
+      python3 "$ma_script" refresh "$SAGE_FRAMEWORK" "$target" ${ma_flags[@]+"${ma_flags[@]}"} || \
         echo -e "  ${YELLOW}⚠ Multi-agent refresh exited non-zero${RESET}"
     fi
   fi
@@ -1210,7 +1218,9 @@ sage_setup_multi_agent() {
     return 1
   fi
 
-  python3 "$script" "$subcommand" "$SAGE_FRAMEWORK" "$target" "${pass_args[@]}"
+  # Empty-safe array expansion (macOS /bin/bash 3.2 aborts on
+  # "${arr[@]}" when the array is empty under `set -u`). See CONTRIBUTING.
+  python3 "$script" "$subcommand" "$SAGE_FRAMEWORK" "$target" ${pass_args[@]+"${pass_args[@]}"}
 }
 
 # ═══════════════════════════════════════════════════════════════

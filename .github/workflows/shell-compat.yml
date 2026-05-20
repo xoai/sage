@@ -1,0 +1,57 @@
+name: shell-compat
+
+# Guards against bash 3.2 incompatibilities. macOS ships /bin/bash 3.2.57
+# as the system shell; under `set -u` it aborts on empty-array expansion
+# ("${arr[@]}"). Sage's CLI and dispatcher must stay 3.2-safe.
+#
+# See CONTRIBUTING.md "Shell script conventions".
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  lint:
+    name: static lint + syntax (modern bash)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Syntax-check every shell script
+        run: |
+          fail=0
+          # bin/sage has no .sh extension — check it explicitly.
+          for f in bin/sage $(find . -name '*.sh' \
+                     -not -path './.git/*' \
+                     -not -path './node_modules/*'); do
+            if ! bash -n "$f"; then
+              echo "::error file=$f::syntax error"
+              fail=1
+            fi
+          done
+          exit $fail
+
+      - name: Lint for bash 3.2-unsafe array expansions
+        # Pure-Python (stdlib only) — no `grep -P`, so it behaves
+        # identically here, on macOS, and in any container. Catches
+        # quoted, embedded, unquoted, and [*] forms.
+        run: python3 develop/validators/check-bash-arrays.py
+
+  bash32:
+    name: bash 3.2 behavioral smoke (real macOS system-shell version)
+    runs-on: ubuntu-latest
+    steps:
+      # Checkout runs in the normal ubuntu host (not inside the minimal
+      # bash:3.2 image — that image is Alpine/musl and may lack what the
+      # checkout action needs). We then exec bash 3.2 via Docker only
+      # for the actual compatibility checks.
+      - uses: actions/checkout@v4
+
+      - name: Run bash32-smoke.sh inside the bash:3.2 container
+        run: |
+          docker run --rm \
+            -v "$PWD":/sage -w /sage \
+            bash:3.2 \
+            bash develop/validators/bash32-smoke.sh

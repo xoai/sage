@@ -78,11 +78,10 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-# Reconstitute the arguments string from positional (joined with single spaces).
-input=""
-if [ ${#positional[@]} -gt 0 ]; then
-  input="${positional[*]}"
-fi
+# Reconstitute the arguments string from positional (joined with single
+# spaces). Empty-safe form — bash 3.2 aborts on "${positional[*]}" when
+# the array is empty under `set -u`. See CONTRIBUTING.md.
+input="${positional[*]+"${positional[*]}"}"
 
 # ── Read config defaults (strict-match contract) ─────────────────────
 

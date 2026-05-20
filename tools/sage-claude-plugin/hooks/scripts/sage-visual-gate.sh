@@ -79,7 +79,7 @@ log "── Step 2: Screenshot integrity ──"
 EXPECTED_FILES=("gate6-mobile-375x812.png" "gate6-tablet-768x1024.png" "gate6-desktop-1440x900.png")
 BLANK_THRESHOLD=5000  # bytes — a truly blank page is < 5KB
 
-for expected in "${EXPECTED_FILES[@]}"; do
+for expected in ${EXPECTED_FILES[@]+"${EXPECTED_FILES[@]}"}; do
   filepath="$FEATURE_DIR/$expected"
   if [ ! -f "$filepath" ]; then
     fail "Missing: $expected"
