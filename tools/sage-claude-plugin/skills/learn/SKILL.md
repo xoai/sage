@@ -120,14 +120,14 @@ Tag entries appropriately:
 
 If `sage_memory_store` is not available, fall back to `.sage-memory/`
 files. For each finding, create a file using the format defined in the
-memory skill's Storage Priority section. Filename = kebab-case title.
+sage-memory skill's Storage Priority section. Filename = kebab-case title.
 
 
 ## Step 6: Generate Knowledge Report
 
 Save a human-readable report to `.sage/docs/memory-{name}.md`.
 
-Follow the memory skill's `references/knowledge-report.md` guide:
+Follow the sage-memory skill's `references/knowledge-report.md` guide:
 - Adapt structure to content (don't force a rigid template)
 - Include mermaid diagrams when they clarify architecture or data flow
 - Focus on insights, not inventory

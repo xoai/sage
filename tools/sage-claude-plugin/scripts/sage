@@ -919,7 +919,7 @@ sage_learn() {
   fi
 
   echo ""
-  echo "  The agent will follow the memory skill\'s learn workflow:"
+  echo "  The agent will follow the sage-memory skill\'s learn workflow:"
   echo "    1. Scan structure and key files"
   echo "    2. Identify patterns, conventions, architecture"
   echo "    3. Store focused memories in sage-memory"

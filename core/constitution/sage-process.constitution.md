@@ -140,7 +140,7 @@ items. Missing items mean the checkpoint is not ready.
 
 ## Rule 6: Capture Corrections
 
-When a learning moment occurs, store it via self-learning before
+When a learning moment occurs, store it via sage-self-learning before
 proceeding. This is automatic, not optional.
 
 Triggers:

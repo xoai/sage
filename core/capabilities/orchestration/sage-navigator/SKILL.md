@@ -63,7 +63,7 @@ If neither available → continue without memory.
 If nothing found, say nothing about memory — just proceed.
 
 For detailed guidance on search quality and memory patterns, read the
-memory skill at `skills/memory/SKILL.md`.
+sage-memory skill at `skills/sage-memory/SKILL.md`.
 
 ### State
 
@@ -394,9 +394,9 @@ call `sage_memory_store`. If not available, continue — don't block.
 trade-offs. A debugging session stores the root cause. A CSS fix
 probably stores nothing.
 
-For guidance on what makes a good memory, read `skills/memory/SKILL.md`.
+For guidance on what makes a good memory, read `skills/sage-memory/SKILL.md`.
 For self-learning patterns (storing mistakes), read
-`skills/self-learning/SKILL.md`.
+`skills/sage-self-learning/SKILL.md`.
 
 ### Bridging to Next
 

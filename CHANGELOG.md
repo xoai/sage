@@ -2,6 +2,105 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [1.1.7] — sage-memory integration (unified naming, auto-upgrade, auto-sync)
+
+### Renamed (BREAKING for custom prompts referencing old names)
+- `skills/memory/` → `skills/sage-memory/`
+- `skills/ontology/` → `skills/sage-ontology/`
+- `skills/self-learning/` → `skills/sage-self-learning/`
+- All workflow, constitution, navigator, and platform-generator
+  references updated to use new canonical names.
+- `tools/sage-claude-plugin/skills/` mirror got the same rename.
+- `skills/skills.json` registry keys updated.
+- SKILL.md frontmatter `name:` fields updated to match directories.
+- Tag values (`tags=["self-learning"]`, `tags=["ontology"]`,
+  `tags=["memory"]`) are **unchanged** — they're stored in users'
+  sage-memory databases; renaming would invalidate existing data.
+
+### Vendored fallback refreshed from sage-memory 0.10.0
+- The three vendored SKILL.md files + their `references/` directories
+  are now byte-synced from the sage-memory 0.10.0 wheel
+  (`/src/sage_memory/skills/sage-{memory,ontology,self-learning}/`),
+  with sage's fallback comment header re-applied at the top of each
+  SKILL.md. This brings the v0.9.0 / 0.10.0 capability table
+  (`sage_memory_set_project`, `sage_memory_graph`, `sage_memory_link`,
+  `entities`/`relations` params, `suggested_links`) into the
+  vendored prose — users without the MCP installed get the latest
+  guidance, not pre-0.8.0 vintage.
+- sage-memory 0.10.0 itself renamed its source folders + frontmatter
+  to match `sage-`-prefixed deployed names, eliminating the previous
+  upstream mismatch (deployed dir said `sage-memory/` but inside,
+  frontmatter said `name: memory`). Sync now produces a fully
+  consistent deployed state without post-processing.
+
+### Auto-upgrade (sage-memory PyPI package)
+- `sage upgrade` now detects sage-memory installations (via uv /
+  pipx / pip) and probes PyPI for the latest version. If a newer
+  version is available, it prompts `[Y/n]` (default Y) and runs
+  `uv tool upgrade sage-memory` when installed via uv. Other install
+  methods get a tailored upgrade hint.
+- PyPI version probe uses `urllib.request` with a hard 5-second
+  timeout. Offline machines see `(PyPI version check unavailable)`
+  and continue — `sage upgrade` never hangs on the network.
+
+### Auto-sync (wheel-canonical skill prose)
+- `sage init`, `sage new`, and `sage update` now run `sage-memory
+  install-skills` (when the package is installed and `install-skills`
+  CLI is available, v0.8.0+). This overlays the wheel's canonical
+  SKILL.md files onto sage's vendored fallback in
+  `.claude/skills/sage-{memory,ontology,self-learning}/`.
+- Users without sage-memory installed continue to get sage's
+  vendored fallback — the system degrades, doesn't break.
+- Each renamed SKILL.md starts with a "fallback" comment header
+  documenting the canonical source.
+
+### Migration (one-time backup of legacy skill dirs)
+- `sage update` and `sage init` automatically detect pre-v1.1.7
+  projects with `.claude/skills/{memory,ontology,self-learning}/`
+  directories and **back them up** to `.sage/.legacy-skills-<STAMP>/`
+  (mirrors the multi-agent uninstall pattern; never deletes user
+  content). Gated on a one-time marker (`memory.legacy_migrated:
+  true` in `.sage/config.yaml`) so subsequent runs skip the scan.
+
+### `sage setup memory` snippet
+- Printed MCP config snippet now uses `["--refresh", "sage-memory"]`
+  in `args`. The `--refresh` flag tells `uvx` to re-resolve the
+  package on every launch, keeping the MCP server current without
+  manual upgrades.
+
+### `--prefix` mode
+- Projects with `command_prefix: true` get the sync step skipped
+  (sage-memory's `install-skills` doesn't honor user prefixes; running
+  it would produce duplicate skill dirs). Vendored fallback under the
+  prefixed path continues to serve those users. Documented as a
+  known limitation; upstream contribution to sage-memory tracked as
+  future work.
+
+### New: `runtime/tools/memory_sync.py`
+- Single helper (~450 lines, Python stdlib only) for `detect`,
+  `upgrade`, `sync`, and `migrate-legacy`. Called from `bin/sage`.
+- `update_memory_block(config_path, key, value)` performs
+  merge-not-replace YAML edits — preserves user-added keys in the
+  `memory:` config block when setting the migration marker.
+
+### Constraints
+- Python 3.11+ required (for `urllib.request` + `tomllib` patterns).
+- sage-memory v0.8.0+ recommended (provides the `install-skills`
+  CLI). Older sage-memory versions still work — sync step prints a
+  clear message and continues with the vendored fallback.
+- Antigravity platform has no sage-memory adapter; vendored fallback
+  remains active. Other platforms (claude-code, cursor, codex,
+  gemini-cli, opencode) get auto-synced.
+
+### Documentation
+- Spec, plan, and four rounds of adversarial review at
+  `.sage/work/20260519-sage-memory-integration/`. Review cycle
+  caught: 3 BLOCKERs + 10 MAJORs + 5 MINORs (round 1) → 1 BLOCKER + 5
+  MAJORs + 3 MINORs (round 2) → 1 MAJOR + 4 MINORs (round 3) → 0
+  findings (round 4 APPROVE).
+- README "Memory That Compounds" section updated to use new skill
+  names; `sage setup memory` section gained the auto-sync note.
+
 ## [1.1.6] — Multi-Agent (optional cross-model build cycle)
 
 ### New Capability

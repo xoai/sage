@@ -133,7 +133,7 @@ approach-[N]: [hypothesis tried] — [what the evidence showed]
 ```
 
 If scratch.md has 3+ approaches, this is a `gotcha` trigger — store
-the finding via self-learning with WHEN/CHECK/BECAUSE format.
+the finding via sage-self-learning with WHEN/CHECK/BECAUSE format.
 
 Produce a root cause statement with evidence:
 

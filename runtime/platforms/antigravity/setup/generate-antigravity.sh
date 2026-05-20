@@ -224,7 +224,7 @@ and includes pasted test output.
 
 ### Rule 6: Capture Corrections
 
-When a learning moment occurs, store it via self-learning before
+When a learning moment occurs, store it via sage-self-learning before
 proceeding. This is automatic, not optional.
 
 **Compliance:** Every user correction is followed by a sage_memory_store
@@ -251,7 +251,7 @@ __CONSTITUTION_PLACEHOLDER__
 
 ## Learning Triggers
 
-Store via self-learning skill whenever these occur:
+Store via sage-self-learning skill whenever these occur:
 
 - **User corrects your approach** → `correction` (MANDATORY — never skip)
 - **You tried 3+ approaches before succeeding** → `gotcha`

@@ -90,9 +90,9 @@ Most agent frameworks are stateless. The agent that made a mistake
 yesterday makes it again today. Sage has three skills that build
 institutional memory — all backed by sage-memory MCP:
 
-- **Self-learning** captures mistakes as WHEN/CHECK/BECAUSE prevention rules. Every session starts by searching past mistakes before doing anything.
-- **Memory** stores project knowledge as focused prose insights — how your auth works, why billing uses event sourcing, what conventions the team follows.
-- **Ontology** maps entity relationships — not just "billing exists" but "billing depends on payments, which triggers webhooks, which notify users." Touch one module, know the blast radius.
+- **sage-self-learning** captures mistakes as WHEN/CHECK/BECAUSE prevention rules. Every session starts by searching past mistakes before doing anything.
+- **sage-memory** stores project knowledge as focused prose insights — how your auth works, why billing uses event sourcing, what conventions the team follows.
+- **sage-ontology** maps entity relationships — not just "billing exists" but "billing depends on payments, which triggers webhooks, which notify users." Touch one module, know the blast radius.
 
 Day 1, the agent knows nothing. Day 30, it knows your codebase's
 landmines, patterns, and conventions.
@@ -169,6 +169,11 @@ sage setup memory                # configures sage-memory MCP server
 sage learn                       # broad scan — architecture, patterns, conventions
 sage learn src/billing           # deep dive — learn a specific module
 ```
+
+After install, `sage upgrade` will prompt to upgrade the sage-memory
+package when a newer version is available on PyPI, and `sage update`
+syncs the latest skill prose into your project automatically — no
+manual `sage-memory install-skills` invocations required.
 
 After learning, Sage knows your conventions, architecture, and
 landmines. Every future session starts by searching this memory —

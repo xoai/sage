@@ -484,6 +484,32 @@ CONSTMD
   echo -e "  ${GREEN}✓${RESET} .sage/ initialized"
 }
 
+# ═══════════════════════════════════════════════════════════════
+# sage-memory integration hook
+#
+# Called from sage_init, sage_new, and sage_update after run_generators.
+# Two sequential calls to runtime/tools/memory_sync.py:
+#   1. migrate-legacy — backs up pre-v1.1.7 .claude/skills/{memory,
+#      ontology,self-learning}/ once (gated on memory.legacy_migrated
+#      marker in .sage/config.yaml).
+#   2. sync — overlays wheel-canonical SKILL.md via `sage-memory
+#      install-skills` if the package is installed and not in prefix
+#      mode.
+#
+# Best-effort: failures never abort sage's primary operation. Helper
+# itself returns 0 in all expected paths (no-op when sage-memory absent).
+# ═══════════════════════════════════════════════════════════════
+sage_memory_sync_hook() {
+  local target="$1"
+  local ms_script="$SAGE_FRAMEWORK/runtime/tools/memory_sync.py"
+
+  [ -f "$ms_script" ] || return 0
+  command -v python3 >/dev/null 2>&1 || return 0
+
+  python3 "$ms_script" migrate-legacy "$target" "$target" || true
+  python3 "$ms_script" sync "$SAGE_FRAMEWORK" "$target" --yes || true
+}
+
 run_generators() {
   local target="$1"
   local sage_path="$target/sage"
@@ -640,6 +666,7 @@ sage_new() {
   select_preset "$target"
   create_sage_state "$target"
   run_generators "$target"
+  sage_memory_sync_hook "$target"
   print_success "$target"
 }
 
@@ -691,6 +718,7 @@ sage_init() {
   select_preset "$target"
   create_sage_state "$target"
   run_generators "$target"
+  sage_memory_sync_hook "$target"
   print_success "$target"
 }
 
@@ -911,6 +939,14 @@ DECMD
   echo -e "  ${GREEN}✓${RESET} Platform files regenerated"
   echo -e "  ${GREEN}✓${RESET} .sage/ state preserved"
 
+  # ── sage-memory integration (no-op unless installed) ──
+  # Helper detects sage-memory and (a) backs up pre-v1.1.7 legacy skill
+  # directories one-time, (b) overlays wheel-canonical sage-memory /
+  # sage-ontology / sage-self-learning skills via `sage-memory
+  # install-skills`. User-owned skill prose under .sage/prompts/ is never
+  # touched. See .sage/work/20260519-sage-memory-integration/spec.md.
+  sage_memory_sync_hook "$target"
+
   # ── Multi-Agent refresh (no-op unless installed) ──
   # Check for multi_agent.enabled in .sage/config.yaml. If present, refresh
   # framework-owned files (scripts, command files, sub-agents) from the
@@ -973,6 +1009,16 @@ sage_upgrade() {
     echo "  Or download the latest release and run:"
     echo "    bash install.sh"
   fi
+
+  # ── sage-memory sibling upgrade (no-op unless installed) ──
+  # The helper detects sage-memory, compares vs PyPI latest, and
+  # prompts to upgrade if a newer version is available. Sage upgrade
+  # itself never fails because of memory-sync side effects.
+  local ms_script="$sage_home/framework/runtime/tools/memory_sync.py"
+  if [ -f "$ms_script" ] && command -v python3 >/dev/null 2>&1; then
+    python3 "$ms_script" upgrade "$sage_home/framework" || true
+  fi
+
   echo ""
 }
 
@@ -1065,7 +1111,7 @@ sage_setup_memory() {
     echo '    "mcpServers": {'
     echo '      "sage-memory": {'
     echo '        "command": "uvx",'
-    echo '        "args": ["sage-memory"]'
+    echo '        "args": ["--refresh", "sage-memory"]'
     echo '      }'
     echo '    }'
     echo '  }'
@@ -1076,7 +1122,7 @@ sage_setup_memory() {
     echo '    "mcpServers": {'
     echo '      "sage-memory": {'
     echo '        "command": "uvx",'
-    echo '        "args": ["sage-memory"]'
+    echo '        "args": ["--refresh", "sage-memory"]'
     echo '      }'
     echo '    }'
     echo '  }'
@@ -1087,7 +1133,7 @@ sage_setup_memory() {
     echo '    "mcpServers": {'
     echo '      "sage-memory": {'
     echo '        "command": "uvx",'
-    echo '        "args": ["sage-memory"]'
+    echo '        "args": ["--refresh", "sage-memory"]'
     echo '      }'
     echo '    }'
     echo '  }'
@@ -1098,6 +1144,11 @@ sage_setup_memory() {
   echo ""
   echo "  That's it. Sage will automatically search and store knowledge"
   echo "  as you work. No configuration needed."
+  echo ""
+  echo -e "  ${DIM}The --refresh arg keeps the MCP server current on every${RESET}"
+  echo -e "  ${DIM}launch. \`sage upgrade\` will prompt to upgrade the package${RESET}"
+  echo -e "  ${DIM}when a newer version is on PyPI, and \`sage update\` syncs${RESET}"
+  echo -e "  ${DIM}the latest skill prose into your project automatically.${RESET}"
   echo ""
   echo -e "  ${DIM}Requires uv: curl -LsSf https://astral.sh/uv/install.sh | sh${RESET}"
   echo -e "  ${DIM}More info: https://github.com/xoai/sage-memory${RESET}"

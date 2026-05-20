@@ -17,8 +17,8 @@ relationships (depends_on, calls, part_of) in sage-memory.
 **Prerequisite:** sage-memory MCP tools must be available. If not,
 announce: "sage-memory is required for /map. Install it first." and stop.
 
-Read `skills/ontology/SKILL.md` for entity encoding format and
-`skills/ontology/references/encoding.md` for full examples BEFORE
+Read `skills/sage-ontology/SKILL.md` for entity encoding format and
+`skills/sage-ontology/references/encoding.md` for full examples BEFORE
 creating any entities.
 
 ## Step 1: Determine Scope
@@ -196,7 +196,7 @@ Type a command, or describe what you want to do next.
 
 ## Rules
 
-- Read `skills/ontology/SKILL.md` BEFORE creating any entities
+- Read `skills/sage-ontology/SKILL.md` BEFORE creating any entities
 - Search existing ontology BEFORE creating — never duplicate
 - Present structure BEFORE storing — checkpoint is mandatory
 - sage-memory MCP is required — no file-based fallback for ontology

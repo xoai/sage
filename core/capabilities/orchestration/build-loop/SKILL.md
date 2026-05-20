@@ -108,7 +108,7 @@ at the completion checkpoint (Rule 7).
   ```
 
   If scratch.md has 3+ approaches for the same task, this is a
-  `gotcha` trigger — the self-learning skill MUST store the finding
+  `gotcha` trigger — the sage-self-learning skill MUST store the finding
   with WHEN/CHECK/BECAUSE format before continuing.
 
 **Sage:** Task [N] failed quality gates:

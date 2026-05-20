@@ -165,7 +165,7 @@ emit_preamble() {
 - Present findings to user BEFORE storing in memory
 - ONTOLOGY: After storing prose knowledge, create ontology entities for
   structural elements (modules, services, APIs, dependencies). This builds
-  a navigable knowledge graph. Read skills/ontology/SKILL.md for encoding.
+  a navigable knowledge graph. Read skills/sage-ontology/SKILL.md for encoding.
   Search ontology first to avoid duplicates.
 - Checkpoint: [A] Looks correct / [R] Some findings are wrong
 - Choices: present with [1] [2] [3] bracket notation
@@ -196,7 +196,7 @@ emit_preamble() {
     map)
       PREAMBLE='RULES (apply to every step — non-negotiable):
 - Announce: "Sage → map workflow." before starting work
-- Read skills/ontology/SKILL.md for entity encoding format BEFORE creating any entities
+- Read skills/sage-ontology/SKILL.md for entity encoding format BEFORE creating any entities
 - Search existing ontology BEFORE creating entities — no duplicates
 - Present discovered structure to user BEFORE storing — checkpoint mandatory
 - MCP parameter types: tags is array (not string), limit is integer (not string)
