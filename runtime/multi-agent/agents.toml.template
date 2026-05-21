@@ -21,7 +21,7 @@ mode  = "interactive"
 # Edits source code, runs tests, writes implementer-notes.md.
 # Must be a CLI that can modify the workspace.
 agent = "kimi"
-model = "kimi-for-coding"
+model = "kimi-k2.6"
 mode  = "yolo"          # --print implies --yolo
 
 [roles.spec_reviewer]

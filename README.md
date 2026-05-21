@@ -538,14 +538,14 @@ brief → spec → external spec review (loop) → plan → external plan review
       → external implement → external code review (loop) → reflect
 ```
 
-Defaults: Codex CLI (`gpt-5-codex`) reviews specs/plans and code; Kimi
+Defaults: Codex CLI (`gpt-5.5`) reviews specs/plans and code; Kimi
 CLI implements. All bindings live in a single config file you can edit:
 
 ```toml
 # .sage/agents.toml — swap any role's tool with a one-line change
 [roles.code_reviewer]
 agent = "codex"
-model = "gpt-5-codex"
+model = "gpt-5.5"
 mode  = "read-only"
 ```
 

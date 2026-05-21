@@ -106,7 +106,7 @@ All notable changes to Sage will be documented in this file.
 ### New Capability
 - **Sage Multi-Agent**: an opt-in build cycle that augments the
   in-session loop with externally-invoked agents — Claude Code (Opus)
-  plans and orchestrates, Codex CLI (gpt-5-codex) reviews specs/plans/
+  plans and orchestrates, Codex CLI (gpt-5.5) reviews specs/plans/
   diffs adversarially, Kimi CLI implements. File-based handoff;
   Claude Code stays the only interface.
 - Install per project: `sage setup multi-agent`. Remove cleanly with
