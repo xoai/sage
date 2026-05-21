@@ -37,6 +37,11 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+# Sibling helper in runtime/tools/ — resolvable because this script is
+# invoked as `python3 .../runtime/tools/memory_sync.py`, so its own
+# directory is sys.path[0].
+from sage_platforms import read_platforms
+
 
 # ── ANSI ──────────────────────────────────────────────────────────────
 class C:
@@ -286,20 +291,6 @@ def cmd_upgrade(framework_dir: Path, yes: bool = False) -> int:
 
 
 # ── Sync ──────────────────────────────────────────────────────────────
-def _read_platforms(project_dir: Path) -> list[str]:
-    """Parse `platforms:` line from .sage/config.yaml. Returns [] on error."""
-    config_path = project_dir / ".sage" / "config.yaml"
-    if not config_path.exists():
-        return []
-    for line in config_path.read_text().splitlines():
-        if line.strip().startswith("platforms:"):
-            # platforms: ["claude-code", "codex"]
-            raw = line.split(":", 1)[1].strip()
-            raw = raw.strip("[]")
-            return [p.strip().strip('"').strip("'") for p in raw.split(",") if p.strip()]
-    return []
-
-
 def _has_prefix_mode(project_dir: Path) -> bool:
     config_path = project_dir / ".sage" / "config.yaml"
     if not config_path.exists():
@@ -325,7 +316,7 @@ def cmd_sync(framework_dir: Path, project_dir: Path, yes: bool = False) -> int:
         info("prefix mode detected — skipping sage-memory skill sync (vendored fallback remains active)")
         return 0
 
-    platforms = _read_platforms(project_dir)
+    platforms = read_platforms(project_dir)
     if not platforms:
         return 0
 

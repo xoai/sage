@@ -33,6 +33,11 @@ import sys
 from pathlib import Path
 from typing import Any
 
+# Sibling helper in runtime/tools/ — resolvable because this script is
+# invoked as `python3 .../runtime/tools/multi_agent_setup.py`, so its
+# own directory is sys.path[0].
+from sage_platforms import detect_claude_code
+
 # Schema version of .sage/config.yaml :: multi_agent block we write.
 MULTI_AGENT_CONFIG_VERSION = "1.0.0"
 
@@ -108,20 +113,17 @@ def preflight(project_dir: Path, *, for_install: bool) -> tuple[bool, list[str]]
     else:
         ok(f"Python {sys.version_info.major}.{sys.version_info.minor} (≥3.11)")
 
-    # claude-code platform configured?
-    config_path = sage_dir / "config.yaml"
-    platforms_line = ""
-    if config_path.exists():
-        for line in config_path.read_text().splitlines():
-            if line.strip().startswith("platforms:"):
-                platforms_line = line
-                break
-    if "claude-code" not in platforms_line:
-        err("claude-code platform not configured in .sage/config.yaml")
-        err("multi-agent is Claude Code only in v1")
-        hard_fail = True
+    # claude-code project? Detect from project state (.claude/ dir,
+    # Sage CLAUDE.md, or config.yaml platforms) via the shared helper —
+    # not a brittle single-line config.yaml grep.
+    if detect_claude_code(project_dir):
+        ok("Claude Code project detected")
     else:
-        ok("claude-code platform configured")
+        err("not a Claude Code project — multi-agent is Claude Code "
+            "only in v1")
+        err("(no .claude/ directory, no Sage-generated CLAUDE.md, and "
+            ".sage/config.yaml does not list claude-code)")
+        hard_fail = True
 
     # CLIs on PATH (soft)
     if for_install:

@@ -957,6 +957,22 @@ DECMD
     migration_notes="${migration_notes}\n  ${GREEN}✓${RESET} decisions.md created"
   fi
 
+  # ── Migration: backfill platforms: into pre-v1.1.3 config.yaml ──
+  # The `platforms:` key was added in v1.1.3. Projects initialised
+  # before that have a config.yaml with no such key, which leaves
+  # platform metadata incomplete (sage's Python tools and this very
+  # function then fall back to filesystem detection on every run).
+  # Append one, derived from the platforms resolved for this run.
+  # Appending only when the key is absent is the idempotency guard —
+  # a later `sage update` finds the key via `grep '^platforms:'` and
+  # skips. PLATFORMS uses the empty-safe expansion (CONTRIBUTING.md).
+  if [ -f "$config_file" ] && ! grep -q '^platforms:' "$config_file" 2>/dev/null; then
+    local platforms_yaml
+    platforms_yaml="[$(printf '"%s", ' ${PLATFORMS[@]+"${PLATFORMS[@]}"} | sed 's/, $//')]"
+    echo "platforms: $platforms_yaml" >> "$config_file"
+    migration_notes="${migration_notes}\n  ${GREEN}✓${RESET} Backfilled platforms: ${platforms_yaml} into config.yaml"
+  fi
+
   if [ -n "$migration_notes" ]; then
     echo ""
     echo -e "$migration_notes"
