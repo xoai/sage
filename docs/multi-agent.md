@@ -174,7 +174,7 @@ or understand why something behaved a particular way.
 
 | Requirement   | Default role bound to it       | Where to get it                              |
 |---------------|--------------------------------|----------------------------------------------|
-| `codex` CLI   | `spec_reviewer`, `code_reviewer` | OpenAI Codex CLI (gpt-5-codex)             |
+| `codex` CLI   | `spec_reviewer`, `code_reviewer` | OpenAI Codex CLI (gpt-5.5)             |
 | `kimi`  CLI   | `implementer`                  | Moonshot Kimi CLI                            |
 
 You don't *have* to use those defaults. Edit `.sage/agents.toml` after
@@ -259,7 +259,7 @@ sage setup multi-agent --status
 If pre-flight warned about a missing CLI, install it now. The defaults:
 
 ```bash
-# Codex CLI (OpenAI gpt-5-codex)
+# Codex CLI (OpenAI gpt-5.5)
 npm install -g @openai/codex          # or whatever the install path is
 export OPENAI_API_KEY=...
 
@@ -309,7 +309,7 @@ mode  = "interactive"
 
 [roles.spec_reviewer]
 agent = "codex"
-model = "gpt-5-codex"
+model = "gpt-5.5"
 mode  = "read-only"
 
 # HOW each agent is invoked
@@ -378,7 +378,7 @@ Every `[agents.<name>]` block has:
 ```toml
 [roles.code_reviewer]
 agent = "kimi"
-model = "kimi-for-coding"
+model = "kimi-k2.6"
 mode  = "read-only"
 ```
 
@@ -390,17 +390,17 @@ No script edit needed.
 ```toml
 [roles.implementer]
 agent = "codex"
-model = "gpt-5-codex"
+model = "gpt-5.5"
 mode  = "workspace"      # Codex's edit-permitting mode
 
 [roles.spec_reviewer]
 agent = "codex"
-model = "gpt-5-codex"
+model = "gpt-5.5"
 mode  = "read-only"
 
 [roles.code_reviewer]
 agent = "codex"
-model = "gpt-5-codex"
+model = "gpt-5.5"
 mode  = "read-only"
 ```
 
@@ -1084,7 +1084,7 @@ the role to a CLI you do have — edit `.sage/agents.toml`:
 ```toml
 [roles.spec_reviewer]
 agent = "kimi"      # was "codex"
-model = "kimi-for-coding"
+model = "kimi-k2.6"
 mode  = "read-only"
 ```
 
