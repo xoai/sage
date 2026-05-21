@@ -130,14 +130,23 @@ spin() {
 # ── Resolve framework source ──
 # Priority: 1) SAGE_HOME env  2) ~/.sage/framework  3) script's own directory
 resolve_framework() {
+  # SAGE_FRAMEWORK is always resolved to a PHYSICAL path (pwd -P,
+  # symlinks dereferenced). This matters because copy_framework does
+  # `cp -a "$SAGE_FRAMEWORK" "$target/sage"`: if SAGE_FRAMEWORK were a
+  # symlink, `cp -a` would copy the LINK, making $target/sage a symlink
+  # back to the real framework — and prune_framework_copy's
+  # `rm -rf "$target/sage/.git"` would then delete the real repo's
+  # history through that link. Resolving to a physical path here makes
+  # the copy a true directory copy.
+
   # Global install
   if [ -n "${SAGE_HOME:-}" ] && [ -d "$SAGE_HOME/framework/core" ]; then
-    SAGE_FRAMEWORK="$SAGE_HOME/framework"
+    SAGE_FRAMEWORK="$(cd "$SAGE_HOME/framework" && pwd -P)"
     return
   fi
 
   if [ -d "$HOME/.sage/framework/core" ]; then
-    SAGE_FRAMEWORK="$HOME/.sage/framework"
+    SAGE_FRAMEWORK="$(cd "$HOME/.sage/framework" && pwd -P)"
     return
   fi
 
@@ -166,6 +175,16 @@ resolve_framework
 
 prune_framework_copy() {
   local sage_dir="$1"
+  # Safety: never `rm -rf` through a symlink. If $sage_dir is a
+  # symlink, "$sage_dir/.git" resolves into the link TARGET — which
+  # would delete a real repository's history, not a throwaway copy.
+  # resolve_framework() now hands back a physical path so the copy is
+  # always a real directory; this guard is defence-in-depth on the
+  # destructive operation itself.
+  if [ -L "$sage_dir" ]; then
+    echo -e "  ${YELLOW}⚠${RESET} Skipped pruning '$sage_dir' — it is a symlink, not a copy" >&2
+    return 0
+  fi
   rm -rf "$sage_dir/.git" "$sage_dir/.github" "$sage_dir/.tmp"
   rm -f "$sage_dir/.DS_Store"
 }
