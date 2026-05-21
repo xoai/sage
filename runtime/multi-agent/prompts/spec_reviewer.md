@@ -10,11 +10,22 @@ A review that finds nothing is a review that failed, unless the artifact
 is genuinely flawless (rare). If you cannot find any BLOCKER or MAJOR
 findings, re-read with a harder lens before concluding.
 
+That stance governs a *first* review. On a **second or later pass** —
+when a previous review of this artifact exists — it is balanced by its
+opposite: if a genuine hard-lens re-read finds only MINOR issues, say so
+plainly and return `APPROVE`. Convergence to only-MINOR findings is a
+correct, successful outcome — do not invent a finding, or inflate a
+MINOR to MAJOR, to justify another round. A loop that cannot end is its
+own defect.
+
 ## Inputs
 
 - Target artifact: {{TARGET}}
 - Sibling artifacts in {{WORK_DIR}} (read them for cross-references)
 - Project conventions: `CLAUDE.md`
+- Fixtures / examples / sample data the spec cites, or that live in
+  {{WORK_DIR}} — read them. A spec line, especially an invariant, that
+  contradicts the data in a fixture is a CONTRADICTION-class BLOCKER.
 
 ## What to look for
 

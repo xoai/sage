@@ -545,7 +545,7 @@ continuing:
 
 **Artefacts:** `spec.md` (+ optional architecture / research artefacts)
 
-### Phase 3 — External spec review (loop, max 3 iterations)
+### Phase 3 — External spec review (severity-gated loop)
 
 The host invokes `/review-spec <slug>` which dispatches to the
 configured `spec_reviewer`. The reviewer reads `spec.md` (and sibling
@@ -553,17 +553,25 @@ artefacts), runs against the AMBIGUITIES / MISSING_CASES / UNTESTABLE /
 UNSTATED_ASSUMPTIONS / CONTRADICTIONS / SCOPE_DRIFT checklist, and
 writes a timestamped review to `.sage/work/<slug>/reviews/`.
 
-Verdict handling:
-- **APPROVE** → continue to Phase 4
-- **REVISE** → planner patches `spec.md` per findings, re-runs review
-- **REJECT** → stops; escalates to you with the reviewer summary
+The loop is **severity-gated**, not verdict-gated. After each review
+the host counts the `### [BLOCKER]` / `### [MAJOR]` findings and:
+- **0 BLOCKER / 0 MAJOR** (verdict `APPROVE` or `REVISE`) → continue to
+  Phase 4; open MINORs are logged as deferred. The loop never re-runs
+  on a MINOR-only review.
+- **`REJECT`**, a review whose verdict contradicts its counts, or one
+  that fails schema validation → stop and escalate to you.
+- **BLOCKER/MAJOR remain** → the planner patches `spec.md` and re-runs,
+  until the stakes-tier cap (`prototype` 2, `production` 3) is reached
+  — then the host stops and asks you. A user-granted extra round is
+  exactly one round; the cap re-arms.
+- The trajectory is watched: once three reviews exist, a
+  `BLOCKER + MAJOR` count that stops decreasing means the loop is not
+  converging — the host escalates rather than spending more rounds.
 
 On iteration 2+, the dispatcher injects the previous review into the
-prompt with "do not soften standards" framing. Round-2 missing what
-round-1 caught is logged as a regression but doesn't block.
-
-If 3 rounds exhaust without APPROVE, the brief itself is probably
-unclear — the planner returns to Phase 1 to revise.
+prompt: confirm prior findings are resolved, hunt for new ones, do not
+soften standards — but equally do not escalate trivia to keep the loop
+alive.
 
 Every iteration is logged to `.sage/decisions.md`:
 
@@ -698,7 +706,8 @@ needed.
 The `/build-x` command file (`.claude/commands/build-x.md`) declares
 the iteration caps:
 
-- Phase 3 (spec review): max 3 iterations
+- Phase 3 (spec review): cap set by the stakes tier — 2 (`prototype`)
+  or 3 (`production`); re-arms on a user-granted extra round
 - Phase 5 (plan review): max 2 iterations
 - Phase 7 (code review): no fixed cap, soft escalation after 3 rounds
 

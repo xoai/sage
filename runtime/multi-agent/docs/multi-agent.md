@@ -57,7 +57,10 @@ to: (a) confirm prior BLOCKERs/MAJORs are resolved or re-raise them,
 (b) hunt for new issues introduced by the fix, (c) not soften standards.
 
 A regressing review (round 2 misses what round 1 caught) is treated as
-worse than no review.
+worse than no review. Conversely, the reviewer must not escalate trivia
+to keep the loop alive: converging to only-MINOR findings is a
+legitimate `APPROVE`. `/build-x` Phase 3 stops the loop on a
+severity-gated basis (0 BLOCKER / 0 MAJOR), not on the verdict word.
 
 ## Sandbox guarantees
 

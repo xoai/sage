@@ -15,7 +15,8 @@ didn't look hard enough at boundaries, error paths, and tests.
 - Plan (the roadmap): {{PLAN}}
 - The uncommitted diff (run `git diff` in the workspace)
 - Implementer's notes: {{WORK_DIR}}/implementer-notes.md
-- Test command(s) defined in `CLAUDE.md`
+- Test command(s) defined in `CLAUDE.md` — or, if the project has none,
+  the implementer's smoke procedure in `implementer-notes.md`
 
 ## Mandatory check sequence
 
@@ -58,6 +59,15 @@ Concrete bug classes to look for:
 - Are tests deterministic? Sleep-based or wall-clock-dependent → MAJOR.
 - Did any existing tests get deleted or weakened? If yes, justify or
   BLOCKER.
+
+**No test harness?** If the project has no test framework, "no tests" is
+neither an automatic pass nor an automatic BLOCKER. Evaluate the
+implementer's smoke procedure in `implementer-notes.md` instead: is it
+reproducible, does it actually exercise the spec's observable behaviour,
+and are the requirements the implementer marked "inspection only"
+genuinely acceptable — or are they findings? A missing or
+behaviour-blind smoke procedure on a no-harness project is itself a
+MAJOR.
 
 ### 6. PRINCIPLES
 - **Clarity over cleverness:** names that need a comment to explain → MINOR
