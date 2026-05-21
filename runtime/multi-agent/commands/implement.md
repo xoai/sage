@@ -16,9 +16,20 @@ any pre-existing dirty state would contaminate the review.
 
 If non-empty, stop and ask the user to commit or stash before continuing.
 
-Delegate the implementation pass to the `kimi-implementer` sub-agent. It
-isolates the implementer's stdout (which is large) from the main context
-and returns only a short summary.
+Determine how the configured `implementer` role runs:
+
+! .sage/scripts/run-role.sh probe-kind implementer
+
+If this prints **`host`**, stop here. `/implement` cannot run a host
+implementer — its `allowed-tools` grant no write access, and the
+`kimi-implementer` sub-agent (`Bash`, `Read` only) cannot author code
+either. Tell the user: the `implementer` role is a host agent; run the
+implementation through `/build-x` (its Phase 6 runs a host implementer
+in-session), or implement directly. Then exit without changes.
+
+If it prints **`cli`**, continue. Delegate the implementation pass to the
+`kimi-implementer` sub-agent. It isolates the implementer's stdout (which
+is large) from the main context and returns only a short summary.
 
 The sub-agent runs:
 

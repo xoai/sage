@@ -11,7 +11,8 @@ You are not done when the code compiles. You are done when:
 - The spec's observable requirements are met by code
 - Every new public behavior has at least one test that would fail without
   the code change
-- The full test suite passes
+- The full test suite passes — or, on a project with no harness, the
+  smoke procedure from Step 0 passes
 - Your notes file documents anything a reviewer would otherwise have to ask
 
 ## Inputs
@@ -31,6 +32,15 @@ Read {{SPEC}} and {{PLAN}} fully before touching code. Read `CLAUDE.md`
 for conventions. Run the existing test suite once to confirm a green
 baseline. If the baseline is red, stop and write to notes — do not
 implement on a red tree.
+
+**No test harness?** If `CLAUDE.md` defines no test command and the
+artifact has no test framework, verification does not collapse to reading
+your own code. Design a **reproducible smoke procedure** instead:
+concrete commands (or, where unavoidable, documented manual steps) that
+exercise the spec's *observable* behaviour. Record it in {{NOTES}} under
+"## Smoke procedure", run it in place of the suite at Steps 1–3, and
+report the results. Any spec requirement you can verify *only* by reading
+the code is not a silent pass — list it explicitly for the code reviewer.
 
 ### Step 1 — Per plan step
 For each numbered step in {{PLAN}}:
@@ -57,7 +67,8 @@ requirement, confirm a test or code path covers it. Anything uncovered →
 implement it or escalate in notes.
 
 ### Step 3 — Final test pass
-Run the full suite once more. All green, or stop and document.
+Run the full suite once more — or the Step 0 smoke procedure, on a
+project with no harness. All green, or stop and document.
 
 ## Anti-patterns to avoid
 
@@ -98,6 +109,12 @@ Write to {{NOTES}} as you go. Final structure:
 | 12 — retries | src/http.py:88    | tests/test_http.py::test_retries       |
 | 24 — backoff | src/http.py:104   | tests/test_http.py::test_backoff       |
 
+## Smoke procedure
+(No-test-harness projects only — omit when a real suite exists.)
+- The exact commands or manual steps that exercise each observable
+  behaviour, with results. Mark any requirement checked only by code
+  inspection — those are findings for the code reviewer, not passes.
+
 ## Questions for the planner
 (Things you had to guess at. Each becomes a spec clarification next cycle.)
 - spec.md:88 says "the client should retry" — count? max delay? Assumed 3 / 10s.
@@ -108,7 +125,7 @@ Write to {{NOTES}} as you go. Final structure:
 
 ## Final check before exit
 
-1. Test suite green?
+1. Test suite green — or, with no harness, the Step 0 smoke procedure green?
 2. Notes file written with all four sections?
 3. No `git commit` or `git add` ran?
 4. Spec coverage matrix has a row for every spec requirement, not just the

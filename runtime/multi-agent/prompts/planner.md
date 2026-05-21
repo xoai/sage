@@ -87,6 +87,10 @@ After drafting, read your own output as if you were the `spec_reviewer`:
    plan step satisfies it. Gaps are silent bugs.
 5. **Plan step size.** Any step that touches more than 3 files or 150 lines
    of code is too big. Split.
+6. **Spec vs fixtures.** For every fixture, example, or sample the spec is
+   built from, confirm no spec line — especially an invariant — contradicts
+   the data in that fixture. A rule the provided data already violates is a
+   defect; catch it before the reviewer does.
 
 You are not done planning until self-check finds nothing.
 
@@ -99,8 +103,27 @@ Run `/review-spec <slug>` and read its findings. For each BLOCKER and MAJOR:
 - UNTESTABLE → replace with an observable threshold.
 - CONTRADICTIONS → resolve, don't paper over.
 
-Iterate. Three review rounds is normal; more than five means the brief
-itself is unclear and you should go back a layer.
+Before re-dispatching the patched spec, do two things — each prevents a
+wasted (paid) review round:
+- **Re-run the self-check.** Apply the "Adversarial self-check" above to
+  the *patched* `spec.md`. A regression the patch introduced must be
+  caught here, not in the next review.
+- **Propagate to siblings.** A `spec.md` patch can make `brief.md` or
+  `plan.md` stale. Re-read both and update any statement the patch
+  contradicted, in the same pass — a spec patch is not complete while a
+  sibling still describes the old behaviour.
+
+Iterate. `/build-x` Phase 3 owns when the loop stops — a severity-gated
+exit (0 BLOCKER / 0 MAJOR), a stakes-tier cap, and stall detection. Do
+not keep your own round budget; follow Phase 3's rules.
+
+## When the user says "skip a review"
+
+A directive to skip one gate covers only the gate the user named. Do not
+extend it — "stop reviewing the spec" does not authorise skipping plan
+review or code review. If a directive's scope is unclear, name the gate
+you are about to skip and confirm first. Every skipped gate goes into the
+degraded-run summary (`/build-x` emits it before Phase 8).
 
 ## What to write to `.sage/decisions.md`
 

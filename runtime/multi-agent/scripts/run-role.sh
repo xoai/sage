@@ -5,6 +5,7 @@
 #
 # Usage:
 #   run-role.sh <role> <kind> <slug> [target]
+#   run-role.sh probe-kind <role>
 #
 #   role:   key under [roles.*] in .sage/agents.toml
 #           (planner | implementer | spec_reviewer | code_reviewer | …)
@@ -14,10 +15,14 @@
 #   slug:   subdir under .sage/work/  (e.g. 20260517-payment-retry)
 #   target: filename under work dir   (only when kind=doc, e.g. spec.md)
 #
+#   probe-kind <role>  prints the role's resolved agent kind (host|cli)
+#                      and exits 0 — no slug, no prompt, no agent run.
+#
 # Examples:
 #   run-role.sh spec_reviewer doc  20260517-payment spec.md
 #   run-role.sh code_reviewer diff 20260517-payment
 #   run-role.sh implementer   doc  20260517-payment plan.md
+#   run-role.sh probe-kind    implementer
 #
 # Output: prints the path to the produced artifact on stdout.
 
@@ -27,28 +32,18 @@ set -euo pipefail
 # empty array via "${arr[@]}" aborts. Any array that can be empty MUST
 # use the empty-safe form  ${arr[@]+"${arr[@]}"}. See sage CONTRIBUTING.md.
 
-ROLE="${1:?role required}"
-KIND="${2:?kind required (doc|diff)}"
-SLUG="${3:?slug required}"
-TARGET="${4:-}"
-
-CONFIG=".sage/agents.toml"
-[[ -f "${CONFIG}" ]] || { echo "Missing ${CONFIG}" >&2; exit 2; }
-
-WORK_DIR=".sage/work/${SLUG}"
-REVIEWS_DIR="${WORK_DIR}/reviews"
-STAMP="$(date +%Y%m%d-%H%M%S)"
-mkdir -p "${REVIEWS_DIR}"
-
 # ─── Config reader ────────────────────────────────────────────────────────
 # One python call returns all settings as shell-safe KEY=VALUE lines.
+# Defined before argument parsing so the `probe-kind` sub-command can reuse
+# it. Reads the role from the global ROLE; callers set ROLE before invoking.
 read_role_cfg() {
   python3 - "$ROLE" <<'PY'
 import sys, pathlib, shlex
 try:
     import tomllib
 except ImportError:
-    sys.stderr.write("Need Python 3.11+ (for tomllib). Install with: brew install python@3.11\n")
+    sys.stderr.write("Python 3.11+ is required (for tomllib). "
+                     "Run 'sage setup multi-agent', which checks this.\n")
     sys.exit(5)
 
 role = sys.argv[1]
@@ -84,7 +79,43 @@ emit("MODE_FLAGS",   shlex.join(a.get("modes", {}).get(mode, [])))
 PY
 }
 
-eval "$(read_role_cfg)"
+# ─── probe-kind sub-command ───────────────────────────────────────────────
+# `run-role.sh probe-kind <role>` prints the resolved agent kind (host|cli)
+# for <role> and exits 0 — no slug, no prompt, no agent invocation. Used by
+# /implement and /build-x Phase 6 to decide whether to delegate to a CLI
+# sub-agent or run the implementer in the host session. Handled here, before
+# the positional-argument checks below, because a probe call has no slug.
+if [[ "${1:-}" == "probe-kind" ]]; then
+  ROLE="${2:?role required for probe-kind}"
+  CONFIG=".sage/agents.toml"
+  [[ -f "${CONFIG}" ]] || { echo "Missing ${CONFIG}" >&2; exit 2; }
+  # Plain assignment (never local/declare/export) so `set -e` aborts the
+  # script if read_role_cfg exits non-zero (Python <3.11, or unknown role).
+  ROLE_CFG="$(read_role_cfg)"
+  eval "${ROLE_CFG}"
+  echo "${AGENT_KIND}"
+  exit 0
+fi
+
+ROLE="${1:?role required}"
+KIND="${2:?kind required (doc|diff)}"
+SLUG="${3:?slug required}"
+TARGET="${4:-}"
+
+CONFIG=".sage/agents.toml"
+[[ -f "${CONFIG}" ]] || { echo "Missing ${CONFIG}" >&2; exit 2; }
+
+WORK_DIR=".sage/work/${SLUG}"
+REVIEWS_DIR="${WORK_DIR}/reviews"
+STAMP="$(date +%Y%m%d-%H%M%S)"
+mkdir -p "${REVIEWS_DIR}"
+
+# Read the role config. Plain assignment (never local/declare/export) so
+# `set -e` aborts here if read_role_cfg exits non-zero. Eval-ing the
+# command substitution directly would swallow that failure, and the script
+# would crash later on an unbound AGENT_KIND instead of reporting the cause.
+ROLE_CFG="$(read_role_cfg)"
+eval "${ROLE_CFG}"
 
 if [[ "${AGENT_KIND}" == "host" ]]; then
   echo "Role '${ROLE}' uses the host agent ('${AGENT}'); invoke it from the host session, not via this script." >&2
@@ -131,6 +162,10 @@ MAJOR, confirm it is resolved; if not, re-raise it. Look for new issues
 introduced by the fix. Do not soften standards on round 2 — a regressing
 review is worse than no review.
 
+Equally, do not escalate trivia to keep the loop alive: if a hard-lens
+re-read finds only MINOR issues, say so and APPROVE. Convergence to
+only-MINOR findings is a success, not a failure to look harder.
+
 Previous review:
 $(cat "${PREV}")
 "
@@ -149,6 +184,12 @@ case "${KIND}" in
   *)
     echo "Unknown kind: ${KIND} (expected: doc | diff)" >&2; exit 2 ;;
 esac
+
+# ─── Persist the assembled prompt (best-effort) ───────────────────────────
+# Write the exact prompt next to the output file so a /build-x cycle is
+# reproducible from the work dir. Fires for every dispatched role (reviewer
+# and implementer alike). Guarded so a failed write never aborts the run.
+{ printf '%s\n' "${PROMPT}" > "${OUT%.md}.prompt.txt"; } 2>/dev/null || true
 
 # ─── Build argv ───────────────────────────────────────────────────────────
 ARGS=()

@@ -27,13 +27,17 @@ mode  = "yolo"          # --print implies --yolo
 [roles.spec_reviewer]
 # Adversarial review of spec.md / plan.md. Read-only.
 agent = "codex"
-model = "gpt-5-codex"
+# Empty → run-role.sh omits --model and codex uses its own configured
+# default. Pin a model here only if your codex auth supports it (an
+# API-key account); a ChatGPT-account codex rejects some model names.
+model = ""
 mode  = "read-only"
 
 [roles.code_reviewer]
 # Adversarial review of the uncommitted diff against spec + plan. Read-only.
 agent = "codex"
-model = "gpt-5-codex"
+# See [roles.spec_reviewer] above — empty model = codex's own default.
+model = ""
 mode  = "read-only"
 
 # ─────────────────────────────────────────────────────────────────────
