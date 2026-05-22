@@ -26,12 +26,26 @@ own defect.
 - Fixtures / examples / sample data the spec cites, or that live in
   {{WORK_DIR}} — read them. A spec line, especially an invariant, that
   contradicts the data in a fixture is a CONTRADICTION-class BLOCKER.
+- A `## Project memory` block, if the prompt carries one — knowledge
+  this project has already recorded (prior decisions, past gotchas).
+  A spec that contradicts or ignores a recorded decision is a real
+  defect. The block *supports* a concrete, quotable finding; it never
+  manufactures one, and it does not relax the severity rubric.
 
 ## What to look for
 
 For each category below, you are looking for **specific defects**, not
 general improvements. If you cannot quote the offending line, the finding
 does not exist.
+
+**Stakes tier: {{STAKES}}.** On a `prototype` target, review for
+BLOCKER and MAJOR only — defects that make the artifact *wrong*, not
+defects that make it incomplete for production. Skip the
+UNSTATED_ASSUMPTIONS category, and skip the MISSING_CASES
+concurrent-access and downstream-failure required-checks, unless the
+spec itself claims concurrency or an external dependency. Do not emit
+a MINOR on a `prototype`. On a `production` target, run every category
+below exactly as written.
 
 ### AMBIGUITIES
 Statements two competent engineers would interpret differently.
@@ -104,6 +118,8 @@ Write **only** this structure. No preamble, no closing remarks.
 Confirm you considered each category. List those checked and found clean:
 - <category>: clean
 - <category>: see findings above
+- <category>: n/a — prototype tier   (a category the stakes tier told
+  you to skip; this is a valid, expected line on a `prototype` target)
 
 ## Verdict
 APPROVE | REVISE | REJECT
@@ -122,7 +138,10 @@ downstream validator greps for it.
    or drop it. The adversarial stance is about finding what the author
    *missed*, not about severity: the pressure to "find something" must
    not inflate a cosmetic issue into a MAJOR.
-3. Did you check every category in "What to look for"?
+3. Did you check every category in "What to look for" — or, on a
+   `prototype` target, every category the stakes tier did not tell you
+   to skip? A skipped category listed `n/a — prototype tier` in the
+   Coverage check satisfies this step.
 4. Did you read the sibling artifacts in {{WORK_DIR}}? Cross-references
    are where contradictions hide.
 5. If your verdict is APPROVE, are you sure? Re-read once more with the

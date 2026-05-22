@@ -17,10 +17,23 @@ didn't look hard enough at boundaries, error paths, and tests.
 - Implementer's notes: {{WORK_DIR}}/implementer-notes.md
 - Test command(s) defined in `CLAUDE.md` — or, if the project has none,
   the implementer's smoke procedure in `implementer-notes.md`
+- A `## Project memory` block, if the prompt carries one — recorded
+  decisions and known gotchas for this codebase. Code that contradicts
+  a recorded decision, or repeats a known gotcha, is a real defect.
+  The block *supports* a concrete, quotable finding; it never
+  manufactures one, and it does not relax the severity rubric.
 
 ## Mandatory check sequence
 
-Do all six. Do not skip even if early ones look clean.
+**Stakes tier: {{STAKES}}.** On a `production` target, do all six — do
+not skip even if early ones look clean. On a `prototype` target,
+review for BLOCKER and MAJOR only: run SPEC_ALIGNMENT, PLAN_ADHERENCE,
+CORRECTNESS, TESTS, and the MAJOR-level items of PRINCIPLES in full;
+run BOUNDARIES (4) and the determinism / resource-leak sub-checks of
+CORRECTNESS (3) only where the diff touches a trust boundary or an
+external resource; let the spec-coverage matrix cover the requirements
+the diff claims to touch (per `implementer-notes.md`), not the whole
+spec. Do not emit a MINOR on a `prototype`.
 
 ### 1. SPEC_ALIGNMENT
 For each requirement in {{SPEC}}, identify the diff hunk that satisfies it.
@@ -120,8 +133,10 @@ APPROVE | FIX_BEFORE_MERGE | REWORK
 
 ## Self-critique step
 
-1. Did you walk *every* requirement in `spec.md`? The matrix has a row
-   per spec requirement, not per implemented thing.
+1. Did you walk the spec requirements? The matrix has a row per spec
+   requirement, not per implemented thing — on a `production` target
+   *every* requirement; on a `prototype` target every requirement the
+   diff claims to touch.
 2. **Severity audit.** For each BLOCKER, did you quote the code and
    name the failure scenario? For each MAJOR, name in one concrete
    sentence what breaks for a user or developer if it ships unfixed —

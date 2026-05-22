@@ -21,7 +21,11 @@ treat it as your operating charter for the cycle.
 ## Phase 1 — Establish work directory
 
 Create `.sage/work/$(date +%Y%m%d)-<slug>/` from the task. Pick a short,
-descriptive slug. Write `brief.md` following the planner charter.
+descriptive slug. Write `brief.md` following the planner charter —
+which begins with a sage-memory recall (planner "Step 0"): when memory
+is available the planner recalls this project's prior decisions and
+gotchas, cites them in the brief/spec, and writes a compact
+`memory-context.md` to the work dir for the downstream roles.
 
 Update `.sage/progress.md` so `/continue` can pick this up later.
 
@@ -51,7 +55,10 @@ the task-shape classification above:
 
 Propose a tier from the task; let the user override. The tier is the
 **single source of the spec-review cap** — Phase 3 refers to it and
-never restates a number. Record it in `.sage/progress.md`.
+never restates a number. Record it in `.sage/progress.md`, and write
+the tier word (`prototype` or `production`) to
+`.sage/work/<slug>/stakes` — `run-role.sh` reads that file to scale
+each reviewer's depth (a missing file defaults to `production`).
 
 Then write `spec.md` following the planner charter. Stop and ask the
 user to confirm before continuing:
@@ -240,6 +247,17 @@ degraded.
 Run Sage's built-in `/reflect`. It reads `.sage/decisions.md`, the
 review files, and `implementer-notes.md` to extract WHEN/CHECK/BECAUSE
 learnings for the next cycle.
+
+Then, **after `/reflect` returns**, if sage-memory is available
+(attempt a `sage_memory_*` tool; skip on absence or error), store the
+cycle's durable **decisions** with `sage_memory_store` — project
+scope, tagged `build-x-decision` plus a domain tag. Source them from
+the planner's per-iteration entries in `.sage/decisions.md` — the
+architectural choices made in `spec.md`, the stakes tier and why, any
+contested-and-resolved invariant — **not** `/reflect`'s prepended
+reflection summary, which is already captured under `self-learning`.
+Store the *why*, not what is re-readable from `spec.md`. This is what
+the next cycle's planner Step 0 recalls.
 
 ## Throughout
 

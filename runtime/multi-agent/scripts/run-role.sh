@@ -114,6 +114,17 @@ REVIEWS_DIR="${WORK_DIR}/reviews"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 mkdir -p "${REVIEWS_DIR}"
 
+# Stakes tier (prototype|production) — drives reviewer depth; the
+# reviewer templates carry a {{STAKES}} token. Normalise to a known
+# tier: a missing, empty, or malformed stakes file defaults to
+# production (review fully when the tier is unclear), so only a clean
+# known word ever reaches the sed substitution below.
+STAKES="$(cat "${WORK_DIR}/stakes" 2>/dev/null || true)"
+case "${STAKES}" in
+  prototype|production) ;;
+  *) STAKES="production" ;;
+esac
+
 # Read the role config. Plain assignment (never local/declare/export) so
 # `set -e` aborts here if read_role_cfg exits non-zero. Eval-ing the
 # command substitution directly would swallow that failure, and the script
@@ -153,6 +164,7 @@ ROLE_PROMPT="$(sed \
   -e "s|{{PLAN}}|${WORK_DIR}/plan.md|g" \
   -e "s|{{NOTES}}|${WORK_DIR}/implementer-notes.md|g" \
   -e "s|{{REVIEW}}|${REVIEW_PATH}|g" \
+  -e "s|{{STAKES}}|${STAKES}|g" \
   "${PROMPT_FILE}")"
 
 PROMPT="${SHARED}
@@ -185,6 +197,27 @@ Previous review:
 $(cat "${PREV}")
 "
   fi
+fi
+
+# ─── Inject project memory (recalled by the host; skipped for fix) ────────
+# memory-context.md is written by the planner when sage-memory is
+# available. The dispatcher carries it into the CLI implementer and
+# reviewer prompts — those agents have no MCP access of their own. It is
+# skipped for a fix dispatch: a fix pass is narrowly scoped to the
+# review's findings, so the digest is not re-paid on each fix round.
+if [[ "${KIND}" != "fix" && -s "${WORK_DIR}/memory-context.md" ]]; then
+  PROMPT="${PROMPT}
+
+---
+
+## Project memory
+
+Knowledge this project has already recorded (codebase facts, prior
+decisions, past gotchas), recalled for this cycle. Use it per your
+role's instructions for a 'Project memory' block.
+
+$(cat "${WORK_DIR}/memory-context.md")
+"
 fi
 
 # ─── Output path ──────────────────────────────────────────────────────────
