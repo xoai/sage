@@ -9,11 +9,14 @@
 #
 #   role:   key under [roles.*] in .sage/agents.toml
 #           (planner | implementer | spec_reviewer | code_reviewer | …)
-#   kind:   doc | diff
+#   kind:   doc | diff | fix
 #             doc  = review or operate on a file (requires <target>)
 #             diff = review the current uncommitted diff
+#             fix  = implementer addresses a review file's findings
+#                    (implementer role only; <target> = the review file)
 #   slug:   subdir under .sage/work/  (e.g. 20260517-payment-retry)
-#   target: filename under work dir   (only when kind=doc, e.g. spec.md)
+#   target: filename under work dir (kind=doc: e.g. spec.md;
+#           kind=fix: e.g. reviews/diff-code_reviewer-<stamp>.md)
 #
 #   probe-kind <role>  prints the role's resolved agent kind (host|cli)
 #                      and exits 0 — no slug, no prompt, no agent run.
@@ -22,6 +25,7 @@
 #   run-role.sh spec_reviewer doc  20260517-payment spec.md
 #   run-role.sh code_reviewer diff 20260517-payment
 #   run-role.sh implementer   doc  20260517-payment plan.md
+#   run-role.sh implementer   fix  20260517-payment reviews/diff-code_reviewer-X.md
 #   run-role.sh probe-kind    implementer
 #
 # Output: prints the path to the produced artifact on stdout.
@@ -98,7 +102,7 @@ if [[ "${1:-}" == "probe-kind" ]]; then
 fi
 
 ROLE="${1:?role required}"
-KIND="${2:?kind required (doc|diff)}"
+KIND="${2:?kind required (doc|diff|fix)}"
 SLUG="${3:?slug required}"
 TARGET="${4:-}"
 
@@ -132,12 +136,23 @@ PROMPT_FILE=".sage/prompts/${ROLE}.md"
 TARGET_PATH=""
 [[ -n "${TARGET}" ]] && TARGET_PATH="${WORK_DIR}/${TARGET}"
 
+# kind=fix carries a <review-file> as TARGET; validate early so a bad
+# invocation fails before any prompt is assembled or persisted.
+REVIEW_PATH=""
+if [[ "${KIND}" == "fix" ]]; then
+  [[ "${ROLE}" == "implementer" ]] || { echo "kind=fix is valid only for the implementer role" >&2; exit 2; }
+  [[ -n "${TARGET}" ]] || { echo "kind=fix requires a <review-file> argument" >&2; exit 2; }
+  [[ -f "${TARGET_PATH}" ]] || { echo "Review file not found: ${TARGET_PATH}" >&2; exit 2; }
+  REVIEW_PATH="${PWD}/${TARGET_PATH}"
+fi
+
 ROLE_PROMPT="$(sed \
   -e "s|{{WORK_DIR}}|${WORK_DIR}|g" \
   -e "s|{{TARGET}}|${TARGET_PATH}|g" \
   -e "s|{{SPEC}}|${WORK_DIR}/spec.md|g" \
   -e "s|{{PLAN}}|${WORK_DIR}/plan.md|g" \
   -e "s|{{NOTES}}|${WORK_DIR}/implementer-notes.md|g" \
+  -e "s|{{REVIEW}}|${REVIEW_PATH}|g" \
   "${PROMPT_FILE}")"
 
 PROMPT="${SHARED}
@@ -181,9 +196,19 @@ case "${KIND}" in
   diff)
     OUT="${REVIEWS_DIR}/diff-${ROLE}-${STAMP}.md"
     ;;
+  fix)
+    # Implementer fix pass — OUT is the implementer's transcript, NOT a
+    # review. It lives in the work-dir root (never reviews/) so nothing
+    # scanning reviews/ can mistake it for a review file.
+    OUT="${WORK_DIR}/fix-implementer-${STAMP}.md"
+    ;;
   *)
-    echo "Unknown kind: ${KIND} (expected: doc | diff)" >&2; exit 2 ;;
+    echo "Unknown kind: ${KIND} (expected: doc | diff | fix)" >&2; exit 2 ;;
 esac
+
+# The agent's diagnostic output goes beside OUT, so a failed dispatch
+# is debuggable (see the run block below).
+LOG="${OUT%.md}.log"
 
 # ─── Persist the assembled prompt (best-effort) ───────────────────────────
 # Write the exact prompt next to the output file so a /build-x cycle is
@@ -214,40 +239,61 @@ command -v "${CMD}" >/dev/null 2>&1 || {
 # no model_flag, no flags, and no modes). macOS /bin/bash 3.2 aborts
 # on "${ARGS[@]}" when ARGS is empty under `set -u`, so every
 # expansion below uses the empty-safe form ${ARGS[@]+"${ARGS[@]}"}.
+#
+# The agent's diagnostic output is captured to ${LOG} so a failed
+# dispatch is debuggable. When OUTPUT_FLAG is set the agent writes the
+# artifact via that flag and its stdout is chatter → stdout+stderr go
+# to the log. When OUTPUT_FLAG is empty the agent's stdout *is* the
+# artifact (→ OUT) and must not be touched → only stderr goes to the log.
 case "${PROMPT_STYLE:-argv}" in
   argv)
     if [[ -n "${OUTPUT_FLAG}" ]]; then
       ARGS+=("${OUTPUT_FLAG}" "${OUT}")
-      "${CMD}" ${ARGS[@]+"${ARGS[@]}"} "${PROMPT}" > /dev/null
+      "${CMD}" ${ARGS[@]+"${ARGS[@]}"} "${PROMPT}" > "${LOG}" 2>&1
     else
-      "${CMD}" ${ARGS[@]+"${ARGS[@]}"} "${PROMPT}" > "${OUT}"
+      "${CMD}" ${ARGS[@]+"${ARGS[@]}"} "${PROMPT}" > "${OUT}" 2> "${LOG}"
     fi
     ;;
   flag)
     if [[ -n "${OUTPUT_FLAG}" ]]; then
       ARGS+=("${OUTPUT_FLAG}" "${OUT}")
-      "${CMD}" ${ARGS[@]+"${ARGS[@]}"} --prompt "${PROMPT}" > /dev/null
+      "${CMD}" ${ARGS[@]+"${ARGS[@]}"} --prompt "${PROMPT}" > "${LOG}" 2>&1
     else
-      "${CMD}" ${ARGS[@]+"${ARGS[@]}"} --prompt "${PROMPT}" > "${OUT}"
+      "${CMD}" ${ARGS[@]+"${ARGS[@]}"} --prompt "${PROMPT}" > "${OUT}" 2> "${LOG}"
     fi
     ;;
   stdin)
     if [[ -n "${OUTPUT_FLAG}" ]]; then
       ARGS+=("${OUTPUT_FLAG}" "${OUT}")
-      printf '%s' "${PROMPT}" | "${CMD}" ${ARGS[@]+"${ARGS[@]}"} > /dev/null
+      printf '%s' "${PROMPT}" | "${CMD}" ${ARGS[@]+"${ARGS[@]}"} > "${LOG}" 2>&1
     else
-      printf '%s' "${PROMPT}" | "${CMD}" ${ARGS[@]+"${ARGS[@]}"} > "${OUT}"
+      printf '%s' "${PROMPT}" | "${CMD}" ${ARGS[@]+"${ARGS[@]}"} > "${OUT}" 2> "${LOG}"
     fi
     ;;
   *)
     echo "Unknown prompt_style: ${PROMPT_STYLE}" >&2; exit 8 ;;
 esac
 
-# ─── Validate reviewer output (non-fatal, warns only) ─────────────────────
-if [[ "${ROLE}" == *_reviewer ]] && [[ -x .sage/scripts/validate-review.sh ]]; then
+# ─── Verify reviewer output (fatal for reviewer roles) ────────────────────
+# A *_reviewer dispatch MUST hand back a fresh, schema-valid review — or
+# fail loudly. Exit 9 is reserved for reviewer-output-integrity failures:
+# missing/empty OUT, a missing validator, or a schema failure. Never echo
+# a path to an absent/invalid review — the orchestrator would otherwise
+# fall back to a stale prior-iteration file.
+if [[ "${ROLE}" == *_reviewer ]]; then
+  if [[ ! -s "${OUT}" ]]; then
+    echo "Reviewer '${ROLE}' produced no usable review at ${OUT}" >&2
+    echo "      agent log: ${LOG}" >&2
+    exit 9
+  fi
+  if [[ ! -x .sage/scripts/validate-review.sh ]]; then
+    echo "Cannot verify reviewer '${ROLE}' output: .sage/scripts/validate-review.sh missing or not executable" >&2
+    exit 9
+  fi
   if ! .sage/scripts/validate-review.sh "${OUT}" >/dev/null 2>&1; then
-    echo "WARN: review output failed schema validation: ${OUT}" >&2
-    echo "      The orchestrator should surface the malformed output to the user." >&2
+    echo "Reviewer '${ROLE}' output failed schema validation: ${OUT}" >&2
+    echo "      agent log: ${LOG}" >&2
+    exit 9
   fi
 fi
 

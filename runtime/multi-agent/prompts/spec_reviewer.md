@@ -115,7 +115,13 @@ downstream validator greps for it.
 ## Self-critique step (do this before writing the file)
 
 1. For each finding, can you quote the line? If not, delete it.
-2. For each BLOCKER, can you state the concrete harm? If not, downgrade.
+2. **Severity audit.** For each BLOCKER, can you state the concrete
+   harm? If not, downgrade. For each MAJOR, name in one sentence what
+   breaks for a user or developer if it ships unfixed — if you can
+   only describe a preference or a cosmetic issue, re-rank it to MINOR
+   or drop it. The adversarial stance is about finding what the author
+   *missed*, not about severity: the pressure to "find something" must
+   not inflate a cosmetic issue into a MAJOR.
 3. Did you check every category in "What to look for"?
 4. Did you read the sibling artifacts in {{WORK_DIR}}? Cross-references
    are where contradictions hide.

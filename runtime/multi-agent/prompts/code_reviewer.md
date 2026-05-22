@@ -122,7 +122,12 @@ APPROVE | FIX_BEFORE_MERGE | REWORK
 
 1. Did you walk *every* requirement in `spec.md`? The matrix has a row
    per spec requirement, not per implemented thing.
-2. For each BLOCKER, did you quote the code and name the failure scenario?
+2. **Severity audit.** For each BLOCKER, did you quote the code and
+   name the failure scenario? For each MAJOR, name in one concrete
+   sentence what breaks for a user or developer if it ships unfixed —
+   if you can only point to a preference or a cosmetic issue, re-rank
+   it to MINOR or drop it. Severity reflects shipped impact, not the
+   effort spent finding the issue.
 3. For each "Confidence: low" finding, would you bet on it? If no, remove
    it or downgrade severity.
 4. If your verdict is APPROVE, search for tests that look right but don't
