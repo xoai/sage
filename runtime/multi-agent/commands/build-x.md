@@ -124,6 +124,12 @@ it satisfies.
 Run `/review-plan <slug>`. Same verdict semantics as Phase 3, but the
 common findings here are SCOPE_DRIFT and PLAN_ADHERENCE issues.
 
+**Review-integrity precondition.** Act on a plan review only if the
+dispatcher produced a fresh, schema-valid review for this iteration. A
+review that is missing, fails validation, or came back as a dispatch
+failure is **not** acted on — stop, and handle it per "Reviewer-failure
+fallback" below; never reuse a prior iteration's review.
+
 A user directive to skip review applies only to the gate the user
 **named**. Never silently extend it — if the instruction does not
 explicitly cover plan review, name this gate and confirm before skipping
@@ -152,15 +158,34 @@ re-implement only the affected steps.
 
 ## Phase 7 — Code review (loop)
 
-Run `/review-code <slug>`. Verdicts:
+Run `/review-code <slug>`.
 
-- **APPROVE** → proceed to Phase 8
-- **FIX_BEFORE_MERGE** → present findings to the user with options:
-    - `[F]` Fix small things yourself (only for trivial corrections)
-    - `[K]` Send fix list back to `/implement` with the review file in
-            the prompt
-    - `[D]` Show the full review and decide
-- **REWORK** → return to Phase 4 (plan), possibly Phase 2 (spec)
+**Review-integrity precondition.** Act on the code review only if the
+dispatcher produced a fresh, schema-valid review. A missing, invalid,
+or dispatch-failed review is **not** acted on — stop, and handle it
+per "Reviewer-failure fallback" below; never reuse a prior review.
+
+On a valid review, act on the verdict. Phase 7 presents the **single**
+interactive decision menu — `/review-code` itself only reports a
+recommendation, it does not prompt:
+
+- **APPROVE** → proceed to Phase 8.
+- **FIX_BEFORE_MERGE** → present the user `[F]` / `[K]` / `[D]`:
+    - `[F]` Fix trivial things yourself (only trivial corrections).
+    - `[K]` Route the findings to the implementer. `<code-review-file>`
+      below is the review-file path `/review-code` reported for this
+      iteration. Probe the implementer kind —
+      `! .sage/scripts/run-role.sh probe-kind implementer` — then:
+      **`cli`** → delegate to the `kimi-implementer` sub-agent to run
+      `.sage/scripts/run-role.sh implementer fix <slug> <code-review-file>`
+      (the `fix` dispatch carries the review file to the implementer);
+      **`host`** → tell the host implementer, in-session, "you are in
+      implementer fix mode (`.sage/prompts/implementer.md`); the
+      code-review file is <code-review-file>" and have it fix per that
+      charter. After the fix pass, re-run `/review-code <slug>` — the
+      loop continues.
+    - `[D]` Show the full review and decide.
+- **REWORK** → return to Phase 4 (plan), possibly Phase 2 (spec).
 
 Do not auto-merge. Even APPROVE just means "no blocking findings" — the
 user decides whether to commit.
@@ -169,6 +194,32 @@ A user directive to skip code review counts only if the user named
 *this* gate. A directive about an earlier phase (e.g. "skip the spec
 review") does not authorise skipping code review — name it and confirm
 first. A skipped gate is recorded in the degraded-run summary below.
+
+## Reviewer-failure fallback
+
+A reviewer dispatch can fail outright — `run-role.sh` exits non-zero
+(exit 9 = it produced no usable / schema-valid review), or the
+`codex-reviewer` sub-agent reports a dispatch failure. When that
+happens in any review phase (3, 5, or 7):
+
+1. Surface the failure to the user, with the agent-log path from
+   `run-role.sh`'s stderr.
+2. You **may** fall back to reviewing **in-session** — the host
+   following the relevant `.sage/prompts/<role>.md` charter — but this
+   is a **degraded run**: record it in `.sage/decisions.md` and name
+   it in the degraded-run summary. Name the degradation precisely:
+   - A **code-review** fallback (Phase 7): the host runs the
+     `code_reviewer` charter against `git diff` — it loses the
+     cross-model second opinion but is still a review by an agent that
+     did not write the diff.
+   - A **spec/plan-review** fallback (Phase 3 / 5): the host *is* the
+     planner that wrote the artifact, so an in-session fallback is
+     **self-review by the author model** — the weakest possible
+     review. Prefer to stop and let the user choose; if you do
+     self-review, the `decisions.md` entry must say "self-review by
+     the author — no independent review occurred".
+3. Never reuse a prior iteration's review file as a substitute for a
+   failed dispatch.
 
 ## Before reflecting — degraded-run summary
 

@@ -22,6 +22,36 @@ You are not done when the code compiles. You are done when:
 - Project conventions: `CLAUDE.md` at the repo root
 - Test command(s): defined in `CLAUDE.md`
 - Your notes go here: {{NOTES}}
+- Code-review file to address (fix mode only — see below): {{REVIEW}}
+
+## Fix mode
+
+You are in **fix mode** when you have been given a code-review file to
+address — either because the "Code-review file" input above names a
+file (a CLI `fix` dispatch substitutes its path), or because the
+orchestrator (`/build-x` Phase 7) has told you in-session that you are
+in implementer fix mode and named the review file. If neither holds —
+no review file — ignore this section and follow ## Process below (the
+normal plan-driven implementation). Fix mode is strictly additive: an
+ordinary `doc` dispatch is unchanged.
+
+In fix mode:
+
+- **Read the code-review file.** It lists findings against the
+  *current uncommitted diff* — the implementation already in the tree.
+- **Address every BLOCKER and MAJOR finding** by editing that existing
+  diff. A MINOR is addressed only when the fix is a one-line change
+  with no behavioural risk; otherwise leave it.
+- **Do not re-walk {{PLAN}}'s steps.** The plan is already built — fix
+  mode corrects the diff, it does not re-run the build. A dirty
+  working tree is the *expected* input here, not an error.
+- **Do not broaden scope** — fix what the review flagged, nothing else.
+- Append a **"Fix pass"** entry to {{NOTES}}: list every finding as
+  addressed (with the `file:line` changed) or deferred (with a
+  reason). Then re-run the test suite — or the smoke procedure on a
+  no-harness project — and report the result.
+- Leave the diff uncommitted for the re-review (the "Committing"
+  anti-pattern below still applies).
 
 ## Process
 
@@ -114,6 +144,11 @@ Write to {{NOTES}} as you go. Final structure:
 - The exact commands or manual steps that exercise each observable
   behaviour, with results. Mark any requirement checked only by code
   inspection — those are findings for the code reviewer, not passes.
+
+## Fix pass
+(Fix-mode dispatches only — one block per pass; omit otherwise.)
+- Review file: <path> · Addressed: <finding → file:line> ·
+  Deferred: <finding → reason>
 
 ## Questions for the planner
 (Things you had to guess at. Each becomes a spec clarification next cycle.)

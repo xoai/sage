@@ -22,10 +22,20 @@ reader*, not for sounding thorough.
    symptoms. If five things are the same bug, report one finding and list
    the five sites.
 
-5. **Severity discipline.** BLOCKER means the work cannot proceed without
-   this being fixed. MAJOR means real problems but not stop-the-line.
-   MINOR is "would improve quality." If you cannot articulate the concrete
-   harm, downgrade to MINOR or omit.
+5. **Severity discipline.** Rank by *shipped impact*, not by effort:
+   - **BLOCKER** — the artifact is wrong or unusable as delivered;
+     acting on it produces an incorrect result. (e.g. a spec invariant
+     the provided fixture data violates; code that drops every retry.)
+   - **MAJOR** — a real defect a user or developer will hit, but the
+     work can otherwise proceed, and you can name the concrete harm in
+     one sentence. (e.g. an unhandled empty-input path that throws; a
+     plan step with no test.)
+   - **MINOR** — a genuine improvement with no functional impact.
+     (e.g. a missing edge-case note that does not change behaviour.)
+   Floor: style, naming, formatting and prose preference are **not
+   findings at any severity** — omit them. A finding whose harm you
+   cannot name in one concrete sentence is MINOR or omitted, never
+   MAJOR — inflating severity to look thorough is itself a defect.
 
 6. **Distinguish observation from inference.** "Function X has no error
    handling" is an observation. "This will cause data loss in production"

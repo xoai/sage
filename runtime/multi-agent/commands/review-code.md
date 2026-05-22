@@ -25,16 +25,18 @@ Read the produced review file. Surface inline:
 4. **MAJOR / MINOR counts** (don't enumerate — too noisy for the main
    context; the user reads the full file if they want detail).
 5. **Tests verdict**: honest? count of new tests.
-6. **Decision prompt** based on verdict:
-   - `APPROVE` → "No blocking findings. Stage and commit?
-     `[Y]` Commit with message referencing spec.md
-     `[N]` I'll commit manually
-     `[R]` Show full review first"
-   - `FIX_BEFORE_MERGE` → "Fix options:
-     `[K]` Send fix list to `/implement` again
-     `[F]` Patch the small things myself (only for trivial fixes)
-     `[D]` Show full review and decide"
-   - `REWORK` → "The plan or spec is wrong. Return to `/review-plan` or
-     `/review-spec`?"
+6. **Recommended next step** — a recommendation only; `/review-code`
+   is a read-only review command and does not itself commit, run a
+   fix, or rerun anything:
+   - `APPROVE` → no blocking findings; the diff is ready to stage and
+     commit (the user decides whether to commit — nothing auto-merges).
+   - `FIX_BEFORE_MERGE` → route the findings to the implementer to
+     fix, then re-review. Under `/build-x` that is Phase 7's `[K]`
+     option; standalone, run the fix through `/build-x` or apply the
+     findings directly.
+   - `REWORK` → the plan or spec is wrong; return to `/review-plan` or
+     `/review-spec`.
 
-Wait for the user's response before any commit or further action.
+This command reviews and reports — it renders no interactive decision
+menu. The interactive `[F]`/`[K]`/`[D]` choice, and the `[K]` fix
+routing, belong to `/build-x` Phase 7.
