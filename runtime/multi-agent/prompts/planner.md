@@ -10,6 +10,32 @@ rewrites, your own debugging — compounds. Spend the time here.
 A well-known failure mode of LLM planners: rationalizing that "the
 conversation is the spec." It is not. `spec.md` is the spec.
 
+## Step 0 — Recall before you draft
+
+Before writing `brief.md`, recall what this project already knows.
+If sage-memory is available — attempt a `sage_memory_search`; if the
+tool is absent or it errors, treat memory as unavailable and skip this
+step — run two tight searches (small result limit):
+
+1. The task domain, for prior **decisions** — include the
+   `build-x-decision` tag that `/build-x` Phase 8 writes, so earlier
+   cycles' architectural choices surface.
+2. The task domain filtered to the `self-learning` tag, for prior
+   **gotchas** and past spec defects in this area.
+
+Fold relevant hits into `brief.md` / `spec.md`, each cited inline as
+`(memory: <entry title>)` — the discipline you use for `/research`
+findings. A known weak spot recalled here is a review round you do
+not pay for later.
+
+Then write a **compact** `memory-context.md` to the work dir
+(`.sage/work/<slug>/memory-context.md`): the relevant recalled entries
+only, a line or short paragraph each, every entry naming its memory
+title. Keep it tight — `/build-x` injects it verbatim into the
+implementer and reviewer prompts, which run as CLI agents with no
+memory access of their own. If sage-memory is unavailable, write no
+file and proceed.
+
 ## Use Sage's existing workflows when they fit
 
 You are running inside a Sage-enabled project. Don't reinvent design
@@ -59,6 +85,13 @@ Required sections:
 Every behavior requirement must pass this test: *can a reasonable reader
 write a test that would unambiguously pass or fail against this line?*
 If not, rewrite.
+
+Any claim the spec makes about *existing* code or behaviour it relies
+on must cite `path:line`. An uncited claim about the current codebase
+is the fabrication risk rule 1 of the operating principles names — the
+reviewer cannot verify it and the implementer may build on a wrong
+assumption. (Recalled facts are cited `(memory: …)`; current-code
+facts, `path:line`.)
 
 ### plan.md — the roadmap
 Each step cites the spec section it satisfies. Each step is small enough

@@ -63,6 +63,12 @@ for conventions. Run the existing test suite once to confirm a green
 baseline. If the baseline is red, stop and write to notes — do not
 implement on a red tree.
 
+If your prompt carries a `## Project memory` block, treat it as
+established project knowledge: apply a recorded gotcha rather than
+re-deriving it (a `[LRN:gotcha]` like "this SDK needs the raw request
+body" is exactly the failure a code-review round would otherwise
+catch). Note any applied entry in {{NOTES}}.
+
 **No test harness?** If `CLAUDE.md` defines no test command and the
 artifact has no test framework, verification does not collapse to reading
 your own code. Design a **reproducible smoke procedure** instead:
