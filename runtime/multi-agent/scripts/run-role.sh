@@ -269,12 +269,25 @@ fi
 # judgment a second time). Skipped silently when the artifact has
 # no frontmatter or no `handoff:` key — invariant I1 (inert by
 # absence).
-if [[ "${KIND}" != "fix" && -n "${TARGET_PATH}" && -f "${TARGET_PATH}" ]]; then
+#
+# Per spec §D3, injected into both `doc` and `diff` dispatches. For
+# `doc` the source is the artifact named in TARGET; for `diff` (the
+# code-review dispatch) there is no TARGET, so the source falls back
+# to `implementer-notes.md` — the code reviewer's primary judgment
+# input from the implementer that just produced the diff.
+HANDOFF_SOURCE=""
+case "${KIND}" in
+  doc)  [[ -n "${TARGET_PATH}" && -f "${TARGET_PATH}" ]] && HANDOFF_SOURCE="${TARGET_PATH}" ;;
+  diff) [[ -f "${WORK_DIR}/implementer-notes.md" ]]      && HANDOFF_SOURCE="${WORK_DIR}/implementer-notes.md" ;;
+  # fix: no handoff injection (see comment block above).
+esac
+
+if [[ -n "${HANDOFF_SOURCE}" ]]; then
   # Extract the YAML frontmatter (between the first two `---` lines)
   # then pull just the `handoff: |` literal block. Python is already a
   # hard dependency of this script (the config reader); reusing it
   # keeps the extraction robust across YAML edge cases.
-  HANDOFF_BODY="$(python3 - "${TARGET_PATH}" <<'PY' 2>/dev/null || true
+  HANDOFF_BODY="$(python3 - "${HANDOFF_SOURCE}" <<'PY' 2>/dev/null || true
 import sys, pathlib
 text = pathlib.Path(sys.argv[1]).read_text(errors="replace")
 if not text.startswith("---"):
@@ -321,6 +334,13 @@ print("\n".join(out).strip())
 PY
 )"
   if [[ -n "${HANDOFF_BODY}" ]]; then
+    # Render the body as a markdown blockquote (each line prefixed
+    # `> `) so headers / `---` separators inside the body cannot
+    # corrupt the surrounding prompt structure or impersonate
+    # dispatcher-injected sections. The reviewer prompt's
+    # `## Handoff` clause already tells the reader this is context,
+    # not authority — the blockquote rendering makes that visual.
+    HANDOFF_QUOTED="$(printf '%s\n' "${HANDOFF_BODY}" | sed 's/^/> /')"
     PROMPT="${PROMPT}
 
 ---
@@ -332,7 +352,7 @@ why, what remains open, what you should prioritise. This is the
 cross-model bridge; treat it as established context. It does
 **not** relax your role's severity rubric.
 
-${HANDOFF_BODY}
+${HANDOFF_QUOTED}
 "
   fi
 fi
