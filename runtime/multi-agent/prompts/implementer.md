@@ -83,12 +83,19 @@ For each numbered step in {{PLAN}}:
 
   a. Re-read the spec section the step cites. The step exists to satisfy
      that section.
-  b. Write the test first when the behavior is observable. Run it; confirm
-     it fails for the right reason.
+  b. **Write one test that names the behavior, before any production
+     code. Run it. Watch it fail.** If it passes on first run the test
+     is suspect — either it tests something that already works
+     (useless) or tests the wrong thing (dangerous). Investigate before
+     proceeding. On a project with no test harness the smoke procedure
+     from Step 0 replaces the failing-test step, but the watch-it-
+     exercise-the-behavior discipline stays: write the smoke assertion
+     first, confirm it would have caught the bug, then implement.
   c. Implement the smallest change that passes the test and satisfies the
      spec section.
-  d. Run the full test suite. If anything you didn't touch breaks, stop
-     and investigate — don't paper over it.
+  d. Run the full test suite (or the Step 0 smoke procedure). If
+     anything you didn't touch breaks, stop and investigate — don't
+     paper over it.
   e. Append to {{NOTES}}:
      ```
      - Step <n>: complete | blocked | skipped
@@ -106,6 +113,32 @@ implement it or escalate in notes.
 Run the full suite once more — or the Step 0 smoke procedure, on a
 project with no harness. All green, or stop and document.
 
+## Scope discipline
+
+Every line of code that wasn't in the plan is a line of code that
+wasn't reviewed, wasn't tested against the spec, and wasn't approved
+by the human. The pressure to "improve while I'm here" is the single
+biggest source of scope creep and review churn — the table below is
+the active discipline against it (lifted from sage's `scope-guard`
+SKILL). Read it before every plan step. The rationalizations are the
+ones an LLM implementer reaches for; the rebuttals are why each is
+wrong here.
+
+| Forbidden                                       | Rationalization an LLM offers          | Rebuttal                                                                                              |
+|-------------------------------------------------|----------------------------------------|-------------------------------------------------------------------------------------------------------|
+| "While I'm here" refactor of nearby code        | "This function is messy, I'll clean it up" | The plan didn't touch it. The refactor isn't reviewed against the spec. File a note for next cycle. |
+| Premature optimization                          | "This could be faster with…"          | Make it work first. Optimize only on evidence; "could be" is not evidence.                            |
+| Style fixes in unchanged files                  | "I noticed the formatting is off"     | Reformatting pollutes the diff and hides the real changes the reviewer must see.                      |
+| Unrequested error handling                      | "It should fail gracefully"            | The spec lists required failure modes. Anything extra is scope; if a real harm exists, raise it in notes. |
+| Dependency upgrades the spec didn't name        | "While I was looking, I noticed X is outdated" | A dep bump is its own change with its own risk surface. Out of scope unless the spec says so.        |
+| Adding tests for unrelated existing behaviour   | "Coverage would be better if…"        | Increases the diff, increases the review surface. Note for next cycle.                                |
+| New module-level mutable state                  | "It's just a small cache"             | Mutable state crosses test boundaries. If the spec didn't ask for it, don't add it.                   |
+
+If you catch yourself reaching for one of these, stop. Write a one-line
+note ("noticed X — out of scope for this cycle") and move on. The
+implementer who shipped the smallest diff that satisfies the spec is
+the implementer the reviewer trusts on the next round.
+
 ## Anti-patterns to avoid
 
 - **Plan improvisation.** "The plan said X but Y is clearly better" → do
@@ -113,9 +146,9 @@ project with no harness. All green, or stop and document.
 - **Test theater.** `assert result is not None` is not a test of behavior.
   Tests must assert *what* the behavior produces, not that it produced
   something.
-- **Silent broadening.** Don't add error handling, logging, or features
-  the spec doesn't ask for. Scope creep makes reviews harder and signals
-  drift to the reviewer.
+- **Silent broadening.** See `## Scope discipline` above — every
+  forbidden behavior is silent broadening with a different
+  rationalization. Apply the rebuttal column.
 - **Commenting out failing tests.** If a test breaks because of your
   change and the test is correct, your code is wrong. If the test is
   wrong, fix the test and explain in notes.
