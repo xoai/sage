@@ -31,18 +31,40 @@ Update `.sage/progress.md` so `/continue` can pick this up later.
 
 ## Phase 2 — Spec
 
-Before drafting `spec.md`, classify the task and reuse Sage workflows
-where they fit (see `.sage/prompts/planner.md` for full guidance):
+Before drafting `spec.md`, classify the **task shape** and reuse Sage
+workflows where they fit (see `.sage/prompts/planner.md` for full
+guidance). The classification is one of four named words; **propose
+the class to the user and confirm before writing**, exactly mirroring
+the stakes-tier propose-confirm flow below:
 
-- Architecture-shaped (new module, cross-cutting refactor, storage
-  change, integration) → run `/architect` first; spec.md then cites
-  the ADRs it produces.
-- Knowledge-gap or unfamiliar domain → run `/research`; spec.md cites
-  findings from `.sage/docs/`.
-- UX-shaped (user-facing flow, new screen, accessibility) → run
+- `architecture-shaped` — new module, cross-cutting refactor,
+  storage change, integration → run `/architect` first; spec.md
+  then cites the ADRs it produces.
+- `knowledge-gap` — unfamiliar domain or research needed → run
+  `/research`; spec.md cites findings from `.sage/docs/`.
+- `ux-shaped` — user-facing flow, new screen, accessibility → run
   `/design`.
-- Mechanical (config tweak, rename sweep) → skip the above; draft
-  spec.md directly.
+- `mechanical` — config tweak, rename sweep, single-pattern
+  refactor → skip the above; draft spec.md directly.
+
+**Anti-downgrade.** When the task description is ambiguous between
+two classes, propose the more expensive (more rigorous) one —
+`architecture-shaped` beats `knowledge-gap` beats `ux-shaped` beats
+`mechanical`. The same discipline `core/workflows/build.workflow.md`
+applies to scope assessment ("When in doubt, classify as Standard,
+not Lightweight"). After the user confirms, write the chosen word
+(no spaces, no quotes) to `.sage/work/<slug>/task-class`:
+
+```
+echo architecture-shaped > .sage/work/<slug>/task-class
+```
+
+`run-role.sh` reads that file and, for any role whose
+`agents.toml` declares `[roles.<role>.tiers.<task-class>]`,
+substitutes the override model for that role's default. A missing
+file or a class with no override = the role's default model wins.
+The resolution is logged at the head of each dispatch's `.log`
+file so a reviewer can verify which model ran.
 
 **Classify the stakes** — this sets review rigor, and is separate from
 the task-shape classification above:
