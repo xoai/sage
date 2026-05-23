@@ -132,6 +132,29 @@ check_python() {
     # In-repo module (file or package at the top level).
     if [[ -f "${top}.py" || -d "${top}" ]]; then continue; fi
 
+    # PyPI distribution name ≠ Python import name for a known set of
+    # popular packages. Map the import name to its distribution name
+    # before the manifest grep — otherwise `import yaml` flags as
+    # unresolved on a manifest declaring `PyYAML`. Each row is a real
+    # gotcha from the top PyPI packages; new entries land in MINOR
+    # follow-ups as users hit them.
+    case "${top}" in
+      yaml)         dist_names="PyYAML pyyaml" ;;
+      cv2)          dist_names="opencv-python opencv-python-headless" ;;
+      PIL)          dist_names="Pillow" ;;
+      dateutil)     dist_names="python-dateutil" ;;
+      bs4)          dist_names="beautifulsoup4" ;;
+      sklearn)      dist_names="scikit-learn" ;;
+      OpenSSL)      dist_names="pyOpenSSL" ;;
+      Crypto)       dist_names="pycryptodome pycryptodomex" ;;
+      magic)        dist_names="python-magic" ;;
+      jose)         dist_names="python-jose" ;;
+      docx)         dist_names="python-docx" ;;
+      pptx)         dist_names="python-pptx" ;;
+      attr)         dist_names="attrs" ;;
+      *)            dist_names="${top}" ;;
+    esac
+
     # Look in the manifest's dependency lists. Match the package name
     # as a whole token — preceded and followed by a non-name char (or
     # line boundary). The negated bracket-expression form is portable
@@ -139,7 +162,14 @@ check_python() {
     # `["'\[ ]`-style classes parse subtly differently. Conservative
     # by design (spec acknowledges false-positive avoidance over
     # false-negative pickup).
-    if grep -qE "(^|[^a-zA-Z0-9_-])${top}([^a-zA-Z0-9_-]|\$)" "${manifest}" 2>/dev/null; then
+    resolved=0
+    for dist in ${dist_names}; do
+      if grep -qE "(^|[^a-zA-Z0-9_-])${dist}([^a-zA-Z0-9_-]|\$)" "${manifest}" 2>/dev/null; then
+        resolved=1
+        break
+      fi
+    done
+    if [[ "${resolved}" -eq 1 ]]; then
       continue
     fi
 
