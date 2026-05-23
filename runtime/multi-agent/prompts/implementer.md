@@ -242,9 +242,19 @@ handoff: |
 **Final test status:** all green | <X failures, see below>
 
 ## Step log
-- Step 1: complete · files: src/foo.py · tests: tests/test_foo.py::test_retry
-- Step 2: blocked  · reason: spec.md:88 ambiguous, see questions
+- Step 1: complete
+  Files: src/foo.py
+  Tests: tests/test_foo.py::test_retry
+- Step 2: blocked
+  Files:
+  Notes: spec.md:88 ambiguous, see questions
 - ...
+
+(The multi-line `Files: <list>` form is canonical — the per-step
+validator (`validate-step.sh`) parses for an anchored `Files:` line
+under each `- Step <n>:` block. An inline `· files: ...` form will
+cause the validator to emit `INVESTIGATE` with reason "empty in
+implementer-notes.md — Step N claims complete but lists no files".)
 
 ## Spec coverage
 | spec.md line | satisfied by      | test                                   |
