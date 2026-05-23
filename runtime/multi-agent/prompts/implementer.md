@@ -103,6 +103,20 @@ For each numbered step in {{PLAN}}:
        Tests:  <list>
        Notes:  <optional, only if non-obvious>
      ```
+  f. **Run the per-step validator.** Invoke
+     `.sage/scripts/validate-step.sh <slug> <n>` and read its
+     6-bullet report. On `INVESTIGATE` (any sub-check flagged: empty
+     files-touched on a "complete" step, unresolved spec citation,
+     smoke broken on the touched files, or item-F unresolved
+     imports), **do not proceed to the next plan step**. Either fix
+     the surfaced issue and re-run the validator, or escalate to
+     `{{NOTES}}` under a `## Validator escalations` heading (e.g. a
+     legitimate cross-step refactor that genuinely touched no files
+     this step). The script is bash-only and runs in under a
+     second; the per-step cost is amortised by every downstream
+     review round it saves. If the script is absent (older
+     deployed `.sage/`), skip this sub-step with a one-line note —
+     invariant I1.
 
 ### Step 2 — Spec sweep
 After all plan steps are done, walk the spec end-to-end. For each
