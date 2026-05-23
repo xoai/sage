@@ -1,7 +1,7 @@
 ---
 description: Run the configured code_reviewer on the current uncommitted diff
 argument-hint: [slug]
-allowed-tools: Bash(.sage/scripts/run-role.sh:*), Bash(git diff --stat), Bash(git diff:*), Bash(ls -1t .sage/work/*), Read
+allowed-tools: Bash(.sage/scripts/run-role.sh:*), Bash(.sage/scripts/hallucination-check.sh:*), Bash(git diff --stat), Bash(git diff:*), Bash(ls -1t .sage/work/*), Read
 ---
 
 # /review-code — adversarial review of the uncommitted diff
@@ -12,7 +12,24 @@ Show diff scope first so the user knows what's being reviewed:
 
 ! git diff --stat
 
-Delegate to `codex-reviewer` sub-agent:
+**Hallucination-check precondition.** Before paying for the codex
+pass, run the deterministic phantom-import check. It walks the diff,
+resolves each new `import`/`require`/`use`/`from X` against the
+per-language manifest, and reports unresolved entries. Cheap
+(sub-second), per-file by extension, polyglot-safe:
+
+! .sage/scripts/hallucination-check.sh "$ARGUMENTS"
+
+Exit codes:
+- `0` — clean. Proceed.
+- `1` — unresolved imports present (printed to stdout). Surface them
+  to the user *before* dispatching codex; they are pre-filed
+  findings for the code-reviewer. The codex pass still runs (it
+  catches what `grep` cannot), but the user has seen the script's
+  output first.
+- `2` — no diff or not a git repo. Continue to codex.
+
+Then delegate to `codex-reviewer` sub-agent:
 
 ! .sage/scripts/run-role.sh code_reviewer diff "$ARGUMENTS"
 
