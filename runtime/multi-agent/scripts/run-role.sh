@@ -257,6 +257,86 @@ $(cat "${WORK_DIR}/memory-context.md")
 "
 fi
 
+# ─── Inject handoff judgment (the author's frontmatter for this artifact) ─
+# Every artifact under .sage/work/<slug>/ may carry a `handoff:` YAML
+# frontmatter block — what the prior role decided and why, what
+# remains open, what the next role should prioritise. This block is
+# the cross-model bridge: CLI roles have no session memory of the
+# planner's, so the file IS the judgment channel.
+#
+# Skipped for fix dispatches (the fix dispatch carries the review
+# file directly — the implementer doesn't need the spec author's
+# judgment a second time). Skipped silently when the artifact has
+# no frontmatter or no `handoff:` key — invariant I1 (inert by
+# absence).
+if [[ "${KIND}" != "fix" && -n "${TARGET_PATH}" && -f "${TARGET_PATH}" ]]; then
+  # Extract the YAML frontmatter (between the first two `---` lines)
+  # then pull just the `handoff: |` literal block. Python is already a
+  # hard dependency of this script (the config reader); reusing it
+  # keeps the extraction robust across YAML edge cases.
+  HANDOFF_BODY="$(python3 - "${TARGET_PATH}" <<'PY' 2>/dev/null || true
+import sys, pathlib
+text = pathlib.Path(sys.argv[1]).read_text(errors="replace")
+if not text.startswith("---"):
+    sys.exit(0)
+# Find the closing `---` of the frontmatter block.
+lines = text.splitlines()
+end = None
+for i in range(1, len(lines)):
+    if lines[i].strip() == "---":
+        end = i
+        break
+if end is None:
+    sys.exit(0)
+fm = lines[1:end]
+# Walk for `handoff:` (with `|` or `>` indicator).
+out = []
+in_block = False
+indent = None
+for line in fm:
+    stripped = line.lstrip(" ")
+    if not in_block:
+        if stripped.startswith("handoff:"):
+            in_block = True
+            # If inline value after `handoff:` (no |/>), grab it directly.
+            rest = stripped[len("handoff:"):].strip()
+            if rest and rest not in ("|", ">", "|-", ">-", "|+", ">+"):
+                out.append(rest)
+                in_block = False
+        continue
+    # Inside the block — determine the block indent from the first
+    # non-empty line and stop when the indent breaks.
+    if indent is None:
+        if not line.strip():
+            continue
+        indent = len(line) - len(line.lstrip(" "))
+        if indent == 0:
+            # No-indented next line == the block ended without content.
+            break
+    cur_indent = len(line) - len(line.lstrip(" "))
+    if line.strip() and cur_indent < indent:
+        break
+    out.append(line[indent:] if line.startswith(" " * indent) else line)
+print("\n".join(out).strip())
+PY
+)"
+  if [[ -n "${HANDOFF_BODY}" ]]; then
+    PROMPT="${PROMPT}
+
+---
+
+## Handoff
+
+The author's judgment for this artifact — what was decided and
+why, what remains open, what you should prioritise. This is the
+cross-model bridge; treat it as established context. It does
+**not** relax your role's severity rubric.
+
+${HANDOFF_BODY}
+"
+  fi
+fi
+
 # ─── Output path ──────────────────────────────────────────────────────────
 case "${KIND}" in
   doc)

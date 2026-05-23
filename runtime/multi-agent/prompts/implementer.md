@@ -157,9 +157,29 @@ the implementer the reviewer trusts on the next round.
 
 ## Notes file format
 
-Write to {{NOTES}} as you go. Final structure:
+Write to {{NOTES}} as you go. The file begins with a YAML frontmatter
+block mirroring the planner's frontmatter contract — the
+`handoff:` body is the bridge the code-reviewer's prompt reads as
+`## Handoff`, so the code-reviewer sees your judgment without
+needing to chase it through the diff. Final structure:
 
 ```
+---
+title: "Implementation notes — <cycle slug>"
+status: in-progress | completed
+phase: implement
+created: YYYY-MM-DD
+updated: YYYY-MM-DD
+handoff: |
+  Key decisions: <2+ sentences of judgment a code-reviewer needs —
+    which spec sections were tight vs guessed, what you deferred,
+    what the next implementer would inherit. Not a copy of the test
+    command or first paragraph.>
+  Open questions: <spec ambiguities the next cycle should resolve>
+  Risks: <what to watch for in review or production>
+  Next role should: <one specific instruction for the code reviewer>
+---
+
 # Implementation notes · {{WORK_DIR}}
 
 **Started:**  <ISO timestamp>
