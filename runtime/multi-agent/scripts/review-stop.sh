@@ -55,10 +55,21 @@ case "${STAKES}" in
   prototype|production) ;;
   *) STAKES="production" ;;
 esac
-# Per build-x.md Phase 2: prototype cap 2, production cap 3.
+
+# ── Cap resolution: stakes tier × phase ──
+# Per build-x.md:
+#   - spec  review: prototype cap 2, production cap 3 (stakes-driven).
+#   - plan  review: cap pinned to 2 (regardless of stakes — plan
+#                   issues are tighter in scope than spec issues).
+#   - code  review: cap pinned to 2 (a third iteration would
+#                   re-implement twice against the same code-review
+#                   file, which is usually a re-scope signal).
 case "${STAKES}" in
   prototype)  CAP=2 ;;
   production) CAP=3 ;;
+esac
+case "${PHASE}" in
+  plan|code) CAP=2 ;;
 esac
 
 # ── Find the phase's review files (chronological by stamp) ──
@@ -75,11 +86,13 @@ esac
 FILES="$(ls -1 ${GLOB} 2>/dev/null | sort || true)"
 
 if [[ -z "${FILES}" ]]; then
-  emit() {
-    printf '{"action":"%s","iteration":0,"blocker":0,"major":0,"minor":0,"cap":%d,"stakes":"%s","reason":"%s"}\n' \
-      "INCONSISTENT" "${CAP}" "${STAKES}" "no review file for phase=${PHASE}"
-  }
-  emit
+  # `MISSING` (exit 2) is "the planner has nothing to act on yet";
+  # `INCONSISTENT` (exit 9) is "the reviewer produced an unusable
+  # file". The two are distinct recovery paths per spec §A1 — the
+  # orchestrator re-dispatches the reviewer on MISSING and falls
+  # through to the reviewer-failure fallback on INCONSISTENT.
+  printf '{"action":"%s","iteration":0,"blocker":0,"major":0,"minor":0,"cap":%d,"stakes":"%s","reason":"%s"}\n' \
+    "MISSING" "${CAP}" "${STAKES}" "no review file for phase=${PHASE}"
   exit 2
 fi
 
@@ -101,13 +114,16 @@ while IFS= read -r FILE; do
   ITER=$((ITER + 1))
 
   # ── Check rule 1 of validate-review.sh: a terminal verdict line.
-  # If missing → file is half-written / mid-flush per spec §F1 → exit 2.
+  # If missing → file is half-written / mid-flush per spec §F1 → exit 2
+  # with action MISSING (same recovery path as "no review file": the
+  # planner re-dispatches the reviewer, not the reviewer-failure
+  # fallback).
   LAST="$(grep -v '^[[:space:]]*$' "${FILE}" 2>/dev/null | tail -1 | tr -d '[:space:]')"
   case "${LAST}" in
     APPROVE|REVISE|REJECT|FIX_BEFORE_MERGE|REWORK) ;;
     *)
       printf '{"action":"%s","iteration":%d,"blocker":0,"major":0,"minor":0,"cap":%d,"stakes":"%s","reason":"%s"}\n' \
-        "INCONSISTENT" "${ITER}" "${CAP}" "${STAKES}" \
+        "MISSING" "${ITER}" "${CAP}" "${STAKES}" \
         "review file present but no terminal verdict (half-written): $(basename "${FILE}")"
       exit 2
       ;;
@@ -184,16 +200,13 @@ if [[ "${BM}" -eq 0 ]]; then
     "severity-gated exit: 0 BLOCKER, 0 MAJOR (verdict=${LATEST_VERDICT}, ${LATEST_MINOR} MINOR deferred)"
 fi
 
-# ── Rule 4 (cap reached).
-if [[ "${ITER}" -ge "${CAP}" ]]; then
-  emit_and_exit "CAP" \
-    "iteration=${ITER} >= cap=${CAP} (${STAKES}) with BLOCKER+MAJOR=${BM} remaining"
-fi
-
-# ── Rule 6 (stall detection — once ≥3 reviews exist, BLOCKER+MAJOR must
-# strictly decrease across two consecutive iterations, AND the BLOCKER
-# count must not rise). Note: this is rare with cap=3, but is real on
-# cap=2 prototype runs that the user has extended via one-grant-one-round.
+# ── Rule 6 (stall detection) — evaluated BEFORE Rule 4 (cap). A stall
+# at iter=3 is a more informative signal to the planner than "ran out
+# of rounds": a converging loop is salvageable with one-grant-one-round,
+# a stalled loop is not. Under production cap=3, an iter=3 review with
+# non-decreasing BLOCKER+MAJOR is now correctly classified as STALL,
+# not CAP. (Under prototype cap=2 the loop hits CAP before iter=3 and
+# STALL stays unreachable — same as before.)
 if [[ "${ITER}" -ge 3 ]]; then
   PREV_BM=$((PREV_BLOCKER + PREV_MAJOR))
   PREV_PREV_BM=$((PREV_PREV_BLOCKER + PREV_PREV_MAJOR))
@@ -205,6 +218,12 @@ if [[ "${ITER}" -ge 3 ]]; then
     emit_and_exit "STALL" \
       "BLOCKER count rose: ${PREV_BLOCKER} → ${LATEST_BLOCKER}"
   fi
+fi
+
+# ── Rule 4 (cap reached).
+if [[ "${ITER}" -ge "${CAP}" ]]; then
+  emit_and_exit "CAP" \
+    "iteration=${ITER} >= cap=${CAP} (${STAKES}) with BLOCKER+MAJOR=${BM} remaining"
 fi
 
 # ── Default: keep iterating (REVISE).
