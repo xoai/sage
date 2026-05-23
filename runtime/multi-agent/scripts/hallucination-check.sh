@@ -132,9 +132,14 @@ check_python() {
     # In-repo module (file or package at the top level).
     if [[ -f "${top}.py" || -d "${top}" ]]; then continue; fi
 
-    # Look in the manifest's dependency lists. Cheap grep is sufficient
-    # for the common case (the spec acknowledges this is conservative).
-    if grep -qE "(^|[\"'\[ ])${top}([\"'\] =<>~,]|\$)" "${manifest}" 2>/dev/null; then
+    # Look in the manifest's dependency lists. Match the package name
+    # as a whole token — preceded and followed by a non-name char (or
+    # line boundary). The negated bracket-expression form is portable
+    # across grep flavors (GNU grep, BSD grep, ugrep) where the
+    # `["'\[ ]`-style classes parse subtly differently. Conservative
+    # by design (spec acknowledges false-positive avoidance over
+    # false-negative pickup).
+    if grep -qE "(^|[^a-zA-Z0-9_-])${top}([^a-zA-Z0-9_-]|\$)" "${manifest}" 2>/dev/null; then
       continue
     fi
 
@@ -222,8 +227,9 @@ check_rust() {
     # `crate`, `self`, `super` are language constructs.
     case "${crate}" in crate|self|super|std|core|alloc) continue ;; esac
 
-    # Look in Cargo.toml dependencies.
-    if grep -qE "(^|[\"'])${crate}([\"' =])" "${manifest}" 2>/dev/null; then
+    # Look in Cargo.toml dependencies — same robust token-boundary
+    # pattern as the Python check.
+    if grep -qE "(^|[^a-zA-Z0-9_-])${crate}([^a-zA-Z0-9_-]|\$)" "${manifest}" 2>/dev/null; then
       continue
     fi
 
