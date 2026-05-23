@@ -248,6 +248,62 @@ sage_memory_link(
 body if the connection is important: "Related: see jwt-auth-refresh-tokens
 for the authentication layer this service uses."
 
+### Cross-Reference Scanned Code (0.11+)
+
+If `sage-memory scan-codebase` has run, every source file in the
+project is also a memory tagged `["codebase", "file", "<lang>"]`.
+Use this BEFORE storing prose to enrich the knowledge graph.
+
+**Workflow when storing architecture / design memories:**
+
+1. **Run the scan once at session start** (if not already done):
+   ```
+   sage-memory scan-codebase
+   ```
+   Or invoke via MCP: `sage_memory_scan_codebase`.
+
+2. **Locate the files your memory references:**
+   ```
+   sage_memory_search(
+     query: "PaymentOrchestrator",
+     filter_tags: ["codebase"],
+     limit: 5
+   )
+   ```
+
+3. **Store the prose memory** as usual:
+   ```
+   sage_memory_store(
+     title: "Payment saga orchestration via PaymentOrchestrator",
+     content: "PaymentOrchestrator coordinates StripeGateway, ...",
+     tags: ["billing", "saga", "architecture"]
+   )
+   ```
+
+4. **Link to each referenced file** so the graph surfaces this
+   prose when an agent later touches one of those files:
+   ```
+   sage_memory_link(
+     source_id: "<prose_memory_id>",
+     target_id: "<file_memory_id>",  // from step 2
+     relation: "describes"
+   )
+   ```
+
+**Why bother:** file-memory ids are stable across renames (the
+content_hash is path-salted, but moving a file with unchanged
+content keeps the same row across re-scans IF the path is the
+same; renames create new rows but the old row stays around for
+search until pruned). Linking to file-memories beats embedding
+file paths in prose — paths rot when files move, edges don't.
+
+**When NOT to cross-reference:** for memories about decisions /
+processes / external systems with no code anchor, skip the link.
+Forcing every memory to point at code is noise.
+
+**With files:** Skip — without MCP, no graph edges. Continue using
+filenames in the prose content; accept that they may go stale.
+
 ### Writing Retrievable Content
 
 **Title:** 5-15 words, specific. Good: "Payment saga orchestration via

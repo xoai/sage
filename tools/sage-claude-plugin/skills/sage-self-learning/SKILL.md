@@ -208,6 +208,55 @@ sage_memory_link(
 if the connection is important: "Related entity: task_a1b2 (Fix payment
 timeout)."
 
+### Link to Code Symbols (0.11+ Codebase Scan)
+
+When a learning applies to a SPECIFIC function or class — not just
+"the payment system" but `PaymentOrchestrator.charge` on line 47 —
+link it to the actual symbol so the recall surfaces during code work
+on that exact symbol.
+
+**Detect availability:** if `sage-memory scan-codebase --help` exits
+0 and a recent scan has run, code-symbol memories exist in the
+project DB.
+
+**Workflow:**
+
+1. **Find the symbol's memory id:**
+   ```
+   sage_memory_search(
+     query: "PaymentOrchestrator.charge",
+     filter_tags: ["codebase"],
+     limit: 3
+   )
+   ```
+   The file-memory result's `id` field is the parent for all symbols
+   in that file. For symbol-level linkage, query `code_symbols`
+   directly via the MCP search (filter on the qualified name in tags
+   or content), or accept the file-level link as the v1 granularity.
+
+2. **Link the learning to the file memory:**
+   ```
+   sage_memory_link(
+     source_id: "<learning_memory_id>",
+     target_id: "<file_memory_id>",
+     relation: "applies_to"
+   )
+   ```
+
+3. **Future recall:** when an agent works on the same file, the
+   graph channel surfaces this learning even if the query doesn't
+   mention the file by name — entity-mediated proximity at work.
+
+**Why bother:** "show me past mistakes on `PaymentOrchestrator`" is
+the single most valuable self-learning query, and it ONLY works when
+learnings are linked to the code structure, not just to free-text
+file paths that drift when files move.
+
+**With files:** Skip — relative paths in prose go stale; the
+file-memory id is stable across renames as long as content_hash
+doesn't change. Without MCP, document the path in the content and
+re-find the file each session.
+
 ### When a Learning Causes a Bug
 
 When you follow a stored self-learning entry and it leads to incorrect

@@ -348,6 +348,42 @@ type: ontology
 {"type":"Sprint","required":["name","start","end"],"enums":{"status":["planning","active","closed"]}}
 ```
 
+## Codebase Scan (0.11+)
+
+For projects where code symbols (functions, classes, modules) are a
+recurring discovery target, sage-memory can pre-index the source tree
+via tree-sitter.
+
+**If `sage-memory scan-codebase --help` exits 0:** the `[codebase]`
+extra is installed. Run `sage-memory scan-codebase` (default: project
+root) at session start or after notable code changes. Then use:
+
+  - `sage_memory_search(query: "...", filter_tags: ["codebase"])` —
+    surface files matching the query.
+  - `sage_memory_scan_codebase(...)` MCP tool — same as the CLI.
+
+**If the extra is NOT installed:** the CLI / MCP tool errors with an
+install hint. Fall back to extracting code entities yourself via
+your existing AST tools and the 0.9.0 `entities` / `relations`
+payload on `sage_memory_store`.
+
+The pre-indexed codebase saves 10-50× tokens on cross-file queries
+("where is X called?", "what imports Y?", "what functions exist in
+this module?"). For line-level edits, you still need to read source.
+
+**10 languages supported:** Python, TypeScript (incl. TSX), JavaScript
+(incl. JSX), Go, Rust, Java, Ruby, PHP, C, C++. Symbol kinds
+captured: `FUNCTION`, `CLASS`, `METHOD`, `INTERFACE`, `STRUCT`,
+`ENUM`. Relations captured: `imports`, `calls` — with
+`confidence: resolved | unresolved` so you can filter for
+high-signal cross-file links.
+
+**Safety guards (T10b):** scans are project-scoped (different
+projects can scan in parallel), refuse to run against `$HOME`,
+respect `--limit` (default 5000) BEFORE writes happen, and hold a
+600s-recovery advisory lock that prevents two scans from racing on
+the same project.
+
 ## References
 
 - `references/encoding.md` — Full format, examples, search patterns
