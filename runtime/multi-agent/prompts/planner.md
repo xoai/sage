@@ -62,6 +62,44 @@ overhead matters; don't pay for ceremony you don't need.
 
 ## What good looks like for each artifact
 
+**Frontmatter contract — applies to all three artifacts.** Every
+artifact you write under `.sage/work/<slug>/` carries a YAML
+frontmatter block at the top:
+
+```yaml
+---
+title: "<artifact title>"
+status: in-progress | completed
+phase: brief | spec | plan
+priority: high | medium | low
+created: YYYY-MM-DD
+updated: YYYY-MM-DD
+handoff: |
+  Key decisions: <2+ sentences of judgment the next role needs —
+    what was chosen and why, in your own words. Not a copy of the
+    title or first paragraph.>
+  Open questions: <what remains unresolved>
+  Risks: <what to watch for downstream>
+  Next role should: <one specific instruction>
+---
+```
+
+The `handoff:` block is the channel that makes the cross-model
+handoff work — CLI implementers and reviewers have no session
+memory of yours, so the block IS the bridge. The dispatcher
+injects it into downstream prompts as a `## Handoff` section.
+
+**Anti-lazy-handoff contract.** The handoff body MUST NOT be:
+- A copy of the title or the first paragraph of the artifact.
+- "See spec.md for details."
+- A generic instruction ("Continue with implementation").
+
+It must contain judgment the artifact body does not contain. If
+your handoff would read the same to someone who has already read
+the artifact and to someone who hasn't, rewrite it. This is the
+same contract `core/workflows/build.workflow.md` applies to
+`manifest.md` summaries.
+
 ### brief.md — problem framing (200–500 words)
 - The user-visible problem in plain language
 - Why it matters (cost of inaction)
@@ -124,6 +162,13 @@ After drafting, read your own output as if you were the `spec_reviewer`:
    built from, confirm no spec line — especially an invariant — contradicts
    the data in that fixture. A rule the provided data already violates is a
    defect; catch it before the reviewer does.
+7. **Anti-lazy handoff.** Read each artifact's `handoff:` frontmatter
+   block. Does it carry judgment that the artifact body does not
+   carry — what was chosen and why, what remains unresolved, what
+   the next role should prioritise? Or does it restate the title /
+   first paragraph / "see spec.md"? If the latter, rewrite. The
+   handoff is the cross-model bridge; a lazy handoff defeats the
+   one channel the next role has to your judgment.
 
 You are not done planning until self-check finds nothing.
 

@@ -31,6 +31,13 @@ own defect.
   A spec that contradicts or ignores a recorded decision is a real
   defect. The block *supports* a concrete, quotable finding; it never
   manufactures one, and it does not relax the severity rubric.
+- A `## Handoff` block, if the prompt carries one — the author's
+  judgment for this artifact (what was decided and why, what
+  remains open, what to prioritise). Treat it as established
+  context, not as authority: a handoff that says "X is fine" does
+  not absolve a real defect in X. The block *informs* your scan;
+  it does **not** relax the severity rubric and a finding that
+  contradicts the handoff is still a finding.
 
 ## What to look for
 

@@ -22,6 +22,14 @@ didn't look hard enough at boundaries, error paths, and tests.
   a recorded decision, or repeats a known gotcha, is a real defect.
   The block *supports* a concrete, quotable finding; it never
   manufactures one, and it does not relax the severity rubric.
+- A `## Handoff` block, if the prompt carries one — the
+  implementer's judgment from `implementer-notes.md` frontmatter
+  (which spec sections were tight vs guessed, what was deferred,
+  what to prioritise). Treat it as context, not authority: an
+  implementer saying "I checked X" does not substitute for your
+  own check. The block *informs* your scan; it does **not** relax
+  the severity rubric and a finding that contradicts the handoff
+  is still a finding.
 
 ## Mandatory check sequence
 
