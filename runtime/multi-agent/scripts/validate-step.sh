@@ -63,9 +63,31 @@ FILES_LINE="$(awk -v n="${STEP_NUM}" '
 # Pull the comma- or space-separated file list from the Files: line.
 FILES_RAW="$(printf '%s\n' "${FILES_LINE}" | sed -E 's/.*Files:[[:space:]]*//; s/[[:space:]]*Notes:.*$//' || true)"
 # Normalise: comma → space, collapse whitespace.
-FILES_LIST="$(printf '%s' "${FILES_RAW}" | tr ',' ' ' | tr -s '[:space:]' ' ' | sed -E 's/^[[:space:]]+|[[:space:]]+$//g')"
+FILES_LIST_RAW="$(printf '%s' "${FILES_RAW}" | tr ',' ' ' | tr -s '[:space:]' ' ' | sed -E 's/^[[:space:]]+|[[:space:]]+$//g')"
 
-if [[ -z "${FILES_LIST}" ]]; then
+# Sanitize each path: implementer-notes.md is written by a CLI agent
+# under YOLO mode, and its content is consumed downstream by the
+# single-file smoke branch (which uses `bash -c <cmd> _ <file>` —
+# safe by construction — but we still reject metachar-bearing paths
+# as defense in depth and to surface CLI hallucinations early). A
+# legitimate source path matches the strict allowlist of letters,
+# digits, `.`, `_`, `-`, `/`. Any other character (including
+# `;`, `|`, `&`, `$`, backtick, `<`, `>`, `\`, quotes, whitespace)
+# trips the rejection.
+FILES_LIST=""
+REJECTED=""
+for raw in ${FILES_LIST_RAW}; do
+  if printf '%s' "${raw}" | grep -qE '^[A-Za-z0-9._/-]+$'; then
+    FILES_LIST="${FILES_LIST:+${FILES_LIST} }${raw}"
+  else
+    REJECTED="${REJECTED:+${REJECTED} }${raw}"
+  fi
+done
+
+if [[ -n "${REJECTED}" ]]; then
+  echo "- **Files touched this step.** (rejected unsafe paths: ${REJECTED} — sanitized)"
+  fail
+elif [[ -z "${FILES_LIST}" ]]; then
   echo "- **Files touched this step.** (empty in implementer-notes.md — Step ${STEP_NUM} claims complete but lists no files)"
   fail
 else
@@ -139,11 +161,16 @@ if [[ -z "${SMOKE_CMD}" ]]; then
 else
   case "${SMOKE_MODE}" in
     single-file)
-      # Substitute {file} for each touched file and run.
+      # Substitute {file} per touched file. Use bash -c with a
+      # positional argument so the substituted path is quoted by the
+      # shell, not interpolated by sed — paths with whitespace work,
+      # and the path sanitization above (which rejects shell
+      # metachars) provides defense in depth against
+      # implementer-notes-driven command injection.
+      cmd_template="$(printf '%s' "${SMOKE_CMD}" | sed -E 's|\{file\}|"$1"|g')"
       smoke_ok=1
       for f in ${FILES_LIST}; do
-        cmd="$(printf '%s' "${SMOKE_CMD}" | sed -E "s|\\{file\\}|${f}|g")"
-        if ! eval "${cmd}" >/dev/null 2>&1; then smoke_ok=0; break; fi
+        if ! bash -c "${cmd_template}" _ "${f}" >/dev/null 2>&1; then smoke_ok=0; break; fi
       done
       if [[ "${smoke_ok}" -eq 1 ]]; then
         echo "- **Smoke pass.** pass"
@@ -162,7 +189,10 @@ else
       fi
       ;;
     whole-suite)
-      if eval "${SMOKE_CMD}" >/dev/null 2>&1; then
+      # SMOKE_CMD is read from CLAUDE.md (project-controlled, more
+      # trusted than implementer-notes), but use bash -c uniformly for
+      # consistency with the single-file branch.
+      if bash -c "${SMOKE_CMD}" >/dev/null 2>&1; then
         echo "- **Smoke pass.** ${SMOKE_PREFIX}pass"
       else
         echo "- **Smoke pass.** ${SMOKE_PREFIX}fail"
@@ -175,8 +205,15 @@ fi
 # ── 5. Hallucination quick-check (item F integration) ──
 HC=".sage/scripts/hallucination-check.sh"
 if [[ -x "${HC}" ]]; then
-  HC_OUT="$("${HC}" "${SLUG}" 2>/dev/null || true)"
-  HC_EXIT=$?
+  # Capture output; preserve the script's exit code on the *outer*
+  # statement so HC_EXIT sees what hallucination-check.sh actually
+  # returned. The earlier `|| true` inside the command substitution
+  # masked the script's exit code to 0, making the case-1 branch
+  # (unresolved imports → fail) dead. Set HC_EXIT defensively so
+  # `set -u` doesn't trip on the clean (exit 0) path where the
+  # `|| HC_EXIT=$?` clause never fires.
+  HC_EXIT=0
+  HC_OUT="$("${HC}" "${SLUG}" 2>/dev/null)" || HC_EXIT=$?
   case "${HC_EXIT}" in
     0) echo "- **Hallucination quick-check.** clean" ;;
     1) echo "- **Hallucination quick-check.** unresolved imports:"; printf '%s\n' "${HC_OUT}" | sed 's/^/    /'; fail ;;
