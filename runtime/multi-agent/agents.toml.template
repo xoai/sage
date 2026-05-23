@@ -24,20 +24,24 @@ agent = "kimi"
 model = "kimi-k2.6"
 mode  = "yolo"          # --print implies --yolo
 
+# agent = "cursor"
+# model = "composer-2.5"
+# mode  = "yolo"          # --print implies --yolo
+
 [roles.spec_reviewer]
 # Adversarial review of spec.md / plan.md. Read-only.
 agent = "codex"
 # Empty → run-role.sh omits --model and codex uses its own configured
 # default. Pin a model here only if your codex auth supports it (an
 # API-key account); a ChatGPT-account codex rejects some model names.
-model = ""
+model = "gpt-5.5"
 mode  = "read-only"
 
 [roles.code_reviewer]
 # Adversarial review of the uncommitted diff against spec + plan. Read-only.
 agent = "codex"
 # See [roles.spec_reviewer] above — empty model = codex's own default.
-model = ""
+model = "gpt-5.5"
 mode  = "read-only"
 
 # ─────────────────────────────────────────────────────────────────────
@@ -104,3 +108,16 @@ read-only = ["--plan"]         # kimi has no separate review mode
 # [agents.gemini.modes]
 # read-only = ["--read-only"]
 # yolo      = ["--auto-approve"]
+#
+# [agents.cursor]
+# kind         = "cli"
+# command      = "agent"
+# prompt_style = "argv"
+# flags        = ["-p"]
+# model_flag   = "--model"
+# output_flag  = ""
+#
+# [agents.cursor.modes]
+# plan      = ["--plan"]
+# yolo      = ["--yolo"]
+# read-only = ["--plan"]
