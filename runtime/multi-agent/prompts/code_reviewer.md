@@ -30,6 +30,15 @@ didn't look hard enough at boundaries, error paths, and tests.
   own check. The block *informs* your scan; it does **not** relax
   the severity rubric and a finding that contradicts the handoff
   is still a finding.
+- Pre-filed hallucination findings, if any — `/review-code` runs a
+  deterministic `hallucination-check.sh` precondition before
+  dispatching you. Any unresolved imports it found are surfaced to
+  the user as pre-filed findings before this prompt is assembled.
+  Confirm or rebut them in your output as part of CORRECTNESS:
+  a real phantom import is a BLOCKER (the code does not run);
+  a false positive (the manifest declares the package but the
+  script's grep missed it) is itself worth a MINOR note so the
+  next cycle can tighten the script.
 
 ## Mandatory check sequence
 
