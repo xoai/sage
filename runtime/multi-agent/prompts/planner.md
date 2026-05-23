@@ -36,6 +36,61 @@ implementer and reviewer prompts, which run as CLI agents with no
 memory access of their own. If sage-memory is unavailable, write no
 file and proceed.
 
+## Step 0.5 — Refresh after plan (called from /build-x Phase 5 exit)
+
+By the time plan review exits, the *plan* has introduced domain
+words the brief did not name. The implementer's `## Project memory`
+block (injected verbatim from `memory-context.md`) is still keyed on
+the brief — re-running the recall against the plan keeps the
+injection plan-relevant.
+
+If sage-memory is unavailable, or `memory-context.md` was never
+written in Step 0, this step is a no-op.
+
+**Keyword extraction.** Take the words from `plan.md`'s `## Phase` /
+`## Step` headers and any `**Goal:**` lines. Lowercase, deduplicate,
+then drop stop-words:
+
+- **General English:** `the`, `a`, `an`, `and`, `or`, `of`, `for`,
+  `to`, `in`, `on`, `with`, `by`, `is`, `are`, `be`, `as`, `at`,
+  `from`.
+- **Multi-agent workflow vocabulary** (cycle-control words that
+  would otherwise dominate a plan's headers): `phase`, `step`,
+  `item`, `goal`, `spec`, `plan`, `test`, `done`, `when`, `cycle`,
+  `build`, `implement`, `review`, `smoke`, `commit`, `tier`.
+
+**Anti-lazy-recall guard.** If the resulting keyword set is a
+subset of the brief's Step-0 keywords (i.e. the plan introduced no
+new domain word), the refresh is a **no-op** — log "Step 0.5: no-op
+— plan-keyed query reuses brief keywords" to `.sage/decisions.md`
+and proceed. The refresh exists to capture *new* words the plan
+introduces; reusing the brief query would just churn the file.
+
+**Search and merge.** Same `sage_memory_search` shape as Step 0:
+- Search 1: the plan keywords, including the `build-x-decision`
+  tag.
+- Search 2: the plan keywords filtered to `self-learning`.
+
+**Zero-result branch.** If both searches return empty, leave
+`memory-context.md` **unchanged** from Step 0 — the brief-keyed
+snapshot survives. Clobbering a legitimate Step-0 recall with empty
+plan-recall is the failure this clause prevents.
+
+**Merge rule** (when the plan-keyed query returns ≥1 entry). An
+entry from the original brief-keyed recall **stays** if either:
+(a) its memory title or tags intersect any keyword the plan-keyed
+query just produced — it is plan-relevant; OR
+(b) it is marked as a *general project gotcha* — its memory body or
+tags include `scope: project-wide`, or the entry's content does not
+name a specific file/module. (These are valuable to the implementer
+regardless of plan-step keywords.)
+
+Plan-keyed entries that the brief query missed are **appended**.
+On a title collision (same memory title from both queries), the
+plan-keyed entry wins (it surfaced because it matched plan content,
+which is more specific than the brief). Write the merged result
+back to `memory-context.md`.
+
 ## Use Sage's existing workflows when they fit
 
 You are running inside a Sage-enabled project. Don't reinvent design
