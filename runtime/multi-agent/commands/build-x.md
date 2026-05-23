@@ -200,6 +200,18 @@ explicitly cover plan review, name this gate and confirm before skipping
 it. A skipped gate is recorded in the degraded-run summary (before
 Phase 8).
 
+**Refresh memory-context after the plan-review APPROVE/REVISE exit.**
+By the time plan review exits, the plan has introduced domain words
+the brief did not name — and the implementer's `## Project memory`
+block (injected from `memory-context.md`) is still keyed on the brief.
+If sage-memory is available, follow the planner charter's "Step 0.5 —
+Refresh after plan" subsection: run the recall again against the
+plan's headers + Goal lines, merge into `memory-context.md` per the
+H2 rule. If sage-memory is unavailable, or the plan-keyed query
+returns zero results, leave the file unchanged (the brief-keyed
+snapshot survives). No-op if `memory-context.md` was never written
+in the first place — invariant I1.
+
 ## Phase 6 — Implementation
 
 First determine how the configured `implementer` role runs:
