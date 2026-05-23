@@ -127,6 +127,46 @@ implement it or escalate in notes.
 Run the full suite once more — or the Step 0 smoke procedure, on a
 project with no harness. All green, or stop and document.
 
+## Stuck handling
+
+When a plan step does not go green, you will be tempted to retry the
+same approach. The trigger to stop is **technique repetition**, not
+attempt count — counting attempts is the kind of prose arithmetic the
+review-stop script externalised; do not reintroduce it here.
+
+**The technique-switch rule.** Before starting a third attempt on the
+same plan step, compare the technique you are about to try against
+the previous two attempts (which you have just written to
+`{{NOTES}}`). If all three would use the same technique, **stop the
+current technique** and switch — do not start a third attempt under
+the same approach.
+
+When you switch, name the pattern in one sentence using the four-way
+dispatch table (lifted from sage's `problem-solving` SKILL):
+
+| Stuck pattern                                    | Switch to            |
+|--------------------------------------------------|----------------------|
+| Growing special cases; 3+ "just one more if"     | **Simplification**   |
+| Forced solution; "this is the only way"          | **Inversion**        |
+| Works small / breaks at real scale or real data  | **Scale Testing**    |
+| Can't isolate the cause                          | **Minimal Reproduction** |
+
+Then:
+
+1. Write the prior two attempts to `{{NOTES}}` under a `## Stuck
+   attempts` section: each attempt as one bullet — what was tried
+   and why it failed. The pattern you named is the first line.
+2. **Try one attempt under the new technique.** Name the new
+   technique in the attempt's bullet.
+3. If that *also* fails: stop and escalate in notes — "Step N
+   blocked — pattern: X, switched to technique: Y, still failed."
+   Do not start a fifth attempt on your own.
+
+A step that legitimately takes more than two attempts of **varied**
+techniques (e.g. isolating a flaky test with Minimal Reproduction
+under a Scale Testing wrapper) is allowed; pattern-naming on the
+third attempt is what is required, not a hard attempt cap.
+
 ## Scope discipline
 
 Every line of code that wasn't in the plan is a line of code that
@@ -223,6 +263,14 @@ handoff: |
 - Review file: <path> · Addressed: <finding → file:line> ·
   Deferred: <finding → reason>
 
+## Stuck attempts
+(Only present when stuck-handling fired on a step. One block per
+triggered step.)
+- Step <n> — pattern: <Simplification|Inversion|Scale Testing|Minimal Reproduction>
+  - Attempt 1 (<technique>): <what was tried> → <why it failed>
+  - Attempt 2 (<technique>): <what was tried> → <why it failed>
+  - Attempt 3 (<new technique>): <what was tried> → <result>
+
 ## Questions for the planner
 (Things you had to guess at. Each becomes a spec clarification next cycle.)
 - spec.md:88 says "the client should retry" — count? max delay? Assumed 3 / 10s.
@@ -234,7 +282,11 @@ handoff: |
 ## Final check before exit
 
 1. Test suite green — or, with no harness, the Step 0 smoke procedure green?
-2. Notes file written with all four sections?
+2. Notes file written with all four sections (plus `## Stuck attempts`
+   if applicable)?
 3. No `git commit` or `git add` ran?
 4. Spec coverage matrix has a row for every spec requirement, not just the
    ones the plan called out?
+5. If any step entered stuck handling, did `## Stuck attempts` record
+   the named pattern, the prior attempts, and the chosen new
+   technique?
