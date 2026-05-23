@@ -161,6 +161,11 @@ degraded-run summary (`/build-x` emits it before Phase 8).
 ## What to write to `.sage/decisions.md`
 
 After each iteration, log:
+- The `review-stop.sh` JSON's `action` and counts — used **verbatim**.
+  Do not re-derive `blocker` / `major` / `minor` from the review file;
+  the script is canonical. (If the script and a manual count disagree,
+  the script wins — flag the disagreement and check whether the
+  review file is malformed.)
 - What the reviewer found (BLOCKERs only — MAJOR/MINOR are noise here)
 - What you changed in response
 - Anything you intentionally did not change, with reasoning

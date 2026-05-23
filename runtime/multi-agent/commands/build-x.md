@@ -67,41 +67,51 @@ user to confirm before continuing:
 
 ## Phase 3 — External spec review (severity-gated loop)
 
-Run `/review-spec <slug>`, then evaluate the stop rules below after
-**every** review iteration. The *iteration count* is the number of
-completed `spec_reviewer` review files for this slug's `spec.md` under
-`.sage/work/<slug>/reviews/` (equivalently, "spec review iteration N"
-entries in `.sage/decisions.md`).
+Run `/review-spec <slug>`. After **every** review iteration, invoke
+the stop-rule script and dispatch on its `action` value:
 
-Count findings yourself from the review file: lines matching
-`### [BLOCKER]` and `### [MAJOR]` inside its `## Findings` section. A
-`## Findings` section with no such headers counts as 0 BLOCKER /
-0 MAJOR.
+```
+! .sage/scripts/review-stop.sh <slug> spec
+```
 
-1. **Proceed (severity-gated exit).** If the latest review has
-   **0 BLOCKER and 0 MAJOR** and its verdict is `APPROVE` or `REVISE`,
-   exit the loop and continue to Phase 4 — regardless of how many
-   MINOR findings remain. Append open MINORs to `.sage/decisions.md`
-   as deferred items. Never re-run the loop on a MINOR-only review.
-2. **`REJECT` → stop.** A `REJECT` verdict always escalates to the
-   user, regardless of finding counts.
-3. **Distrust an inconsistent review.** If the review file fails
-   `.sage/scripts/validate-review.sh`, or its verdict contradicts its
-   counts (`APPROVE` with any BLOCKER/MAJOR, or `REJECT` with none),
-   none of the other rules apply — stop and surface the inconsistency
-   to the user.
-4. **Cap → escalate.** If the iteration count reaches the spec-review
-   cap set by the stakes tier (Phase 2) while any BLOCKER or MAJOR
-   remains, stop and surface the trajectory to the user with
-   `AskUserQuestion`.
+The script is **canonical** for the loop's verdict — it reads the
+timestamped review files under `.sage/work/<slug>/reviews/`, counts
+severities, and applies the seven rules below. The planner does
+**not** re-derive counts; use the script's `blocker`/`major`/`minor`
+values verbatim in `.sage/decisions.md`. In case of disagreement
+between this prose and the script, the script wins (it is the
+determinism this command exists to introduce); flag the doc as the
+defect.
+
+The seven rules the script implements:
+
+1. **Proceed (severity-gated exit) → `PROCEED`.** If the latest
+   review has **0 BLOCKER and 0 MAJOR** and its verdict is
+   `APPROVE`, `REVISE`, or `FIX_BEFORE_MERGE` (the consistent
+   no-finding cases), exit the loop and continue to Phase 4 —
+   regardless of how many MINOR findings remain. Append open MINORs
+   to `.sage/decisions.md` as deferred items. Never re-run the loop
+   on a MINOR-only review.
+2. **`REJECT` / `REWORK` → `REJECT`.** A `REJECT` or `REWORK`
+   verdict always escalates to the user, regardless of finding
+   counts.
+3. **Inconsistent review → `INCONSISTENT`.** If the review file
+   fails `validate-review.sh`, or its verdict contradicts its counts
+   (`APPROVE` / `FIX_BEFORE_MERGE` with any BLOCKER/MAJOR;
+   `REJECT` / `REWORK` with none), stop and handle per
+   "Reviewer-failure fallback" below.
+4. **Cap → `CAP`.** If the iteration count reaches the spec-review
+   cap set by the stakes tier (Phase 2 — `prototype`=2,
+   `production`=3) while any BLOCKER or MAJOR remains, stop and
+   surface the trajectory to the user with `AskUserQuestion`.
 5. **One grant, one round.** If the user authorises "one more round",
-   that is exactly one iteration; re-evaluate these rules after it and
-   ask again if still not exited. The cap re-arms every round.
-6. **Stall → escalate.** Once at least three reviews exist, if
+   that is exactly one iteration; the script re-evaluates on the
+   next dispatch. The cap re-arms every round.
+6. **Stall → `STALL`.** Once at least three reviews exist, if
    `BLOCKER + MAJOR` fails to strictly decrease across two consecutive
-   iterations, or the BLOCKER count rises, stop and escalate: the
-   trajectory is not converging, and the spec scope or the brief is
-   the likely cause. A single flat round is normal.
+   iterations, or the BLOCKER count rises, stop and escalate. A
+   single flat round is normal; the script only fires `STALL` after
+   the third iteration.
 7. **The loop-ending edit is itself unreviewed.** Any edit to
    `spec.md` made after the review that triggered the exit (including
    patches applied because the user said "stop and just fix") is an
@@ -109,14 +119,25 @@ Count findings yourself from the review file: lines matching
    it in the degraded-run summary. Preferred: run one more review pass
    on the final state instead.
 
-If none of rules 1–7 ends the loop — a BLOCKER or MAJOR remains and the
+**Script exit codes** (the planner consumes both):
+- `0` — clean parse; dispatch on the JSON `action`.
+- `2` — no review file yet, or the file is half-written (no terminal
+  verdict line) per spec §F1. Treat as "re-dispatch the reviewer";
+  not a reviewer-failure fallback.
+- `9` — a review file is complete but malformed (passes the verdict
+  check, fails validate-review.sh rules 2–4). Fall through to
+  Reviewer-failure fallback at "Reviewer-failure fallback" below.
+
+If the script returns `REVISE` — a BLOCKER or MAJOR remains and the
 cap is not yet reached — patch `spec.md` per the findings and re-run
 `/review-spec`.
 
-Log each iteration to `.sage/decisions.md`:
+Log each iteration to `.sage/decisions.md`, using the script's
+counts verbatim:
 ```
 ## <ISO timestamp> · spec review iteration N
-- Verdict: <verdict>
+- Verdict: <script-returned action> (<reviewer verdict word>)
+- Counts: BLOCKER=<n> MAJOR=<n> MINOR=<n>
 - BLOCKERs addressed: <list>
 - Intentional non-changes: <list with reasoning>
 ```
@@ -128,14 +149,28 @@ it satisfies.
 
 ## Phase 5 — Plan review (loop, max 2 iterations)
 
-Run `/review-plan <slug>`. Same verdict semantics as Phase 3, but the
-common findings here are SCOPE_DRIFT and PLAN_ADHERENCE issues.
+Run `/review-plan <slug>`. After each iteration, invoke the same
+canonical stop-rule script as Phase 3:
+
+```
+! .sage/scripts/review-stop.sh <slug> plan
+```
+
+Dispatch on the script's `action`; the same seven rules apply, with
+the cap pinned to **2 iterations** for plan review (regardless of
+the stakes tier — plan-review issues are tighter in scope than
+spec-review). The script reads the cap from the stakes file via the
+same allowlist; if your project needs the plan cap independent of
+spec cap, the script's `cap` field is the source of truth — read it
+from the JSON. The common plan-review findings are SCOPE_DRIFT and
+PLAN_ADHERENCE issues.
 
 **Review-integrity precondition.** Act on a plan review only if the
-dispatcher produced a fresh, schema-valid review for this iteration. A
-review that is missing, fails validation, or came back as a dispatch
-failure is **not** acted on — stop, and handle it per "Reviewer-failure
-fallback" below; never reuse a prior iteration's review.
+dispatcher produced a fresh, schema-valid review for this iteration —
+which `review-stop.sh` checks via its exit-9 path. A review that is
+missing (exit 2) or malformed (exit 9) is **not** acted on; handle
+per "Reviewer-failure fallback" below. Never reuse a prior iteration's
+review.
 
 A user directive to skip review applies only to the gate the user
 **named**. Never silently extend it — if the instruction does not
@@ -165,16 +200,30 @@ re-implement only the affected steps.
 
 ## Phase 7 — Code review (loop)
 
-Run `/review-code <slug>`.
+Run `/review-code <slug>`. After each iteration, invoke the canonical
+stop-rule script:
 
-**Review-integrity precondition.** Act on the code review only if the
-dispatcher produced a fresh, schema-valid review. A missing, invalid,
-or dispatch-failed review is **not** acted on — stop, and handle it
-per "Reviewer-failure fallback" below; never reuse a prior review.
+```
+! .sage/scripts/review-stop.sh <slug> code
+```
 
-On a valid review, act on the verdict. Phase 7 presents the **single**
-interactive decision menu — `/review-code` itself only reports a
-recommendation, it does not prompt:
+Dispatch on the script's `action`. Same seven rules as Phases 3 / 5;
+the cap pins to **2 iterations** for code review by default (a third
+iteration would have re-implemented twice on the same code-review
+file, which is usually a re-scope signal). The script reads code-
+review files matching `reviews/diff-code_reviewer-*.md`.
+
+**Review-integrity precondition.** Act on the code review only if
+the dispatcher produced a fresh, schema-valid review — which
+`review-stop.sh` checks via its exit-2 (no file / mid-write) and
+exit-9 (malformed) paths. A missing or malformed review is **not**
+acted on; handle per "Reviewer-failure fallback" below. Never reuse
+a prior review.
+
+On a valid review (action ∈ `PROCEED` | `REVISE` | `CAP` | `STALL`),
+act on the verdict. Phase 7 presents the **single** interactive
+decision menu — `/review-code` itself only reports a recommendation,
+it does not prompt:
 
 - **APPROVE** → proceed to Phase 8.
 - **FIX_BEFORE_MERGE** → present the user `[F]` / `[K]` / `[D]`:
