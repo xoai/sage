@@ -16,11 +16,14 @@ Show diff scope first so the user knows what's being reviewed:
 pass, run the deterministic phantom-import check. It walks the diff,
 resolves each new `import`/`require`/`use`/`from X` against the
 per-language manifest, and reports unresolved entries. Cheap
-(sub-second), per-file by extension, polyglot-safe:
+(sub-second), per-file by extension, polyglot-safe. Skip silently
+on a legacy deployment that has not yet refreshed
+`.sage/scripts/hallucination-check.sh` — invariant I1 (inert by
+absence):
 
-! .sage/scripts/hallucination-check.sh "$ARGUMENTS"
+! test -x .sage/scripts/hallucination-check.sh && .sage/scripts/hallucination-check.sh "$ARGUMENTS" || true
 
-Exit codes:
+Exit codes (when the script is present):
 - `0` — clean. Proceed.
 - `1` — unresolved imports present (printed to stdout). Surface them
   to the user *before* dispatching codex; they are pre-filed

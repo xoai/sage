@@ -141,14 +141,18 @@ The seven rules the script implements:
    it in the degraded-run summary. Preferred: run one more review pass
    on the final state instead.
 
-**Script exit codes** (the planner consumes both):
-- `0` — clean parse; dispatch on the JSON `action`.
-- `2` — no review file yet, or the file is half-written (no terminal
-  verdict line) per spec §F1. Treat as "re-dispatch the reviewer";
-  not a reviewer-failure fallback.
-- `9` — a review file is complete but malformed (passes the verdict
-  check, fails validate-review.sh rules 2–4). Fall through to
-  Reviewer-failure fallback at "Reviewer-failure fallback" below.
+**Script exit codes** (the planner consumes both the exit code and
+the JSON `action`):
+- `0` — clean parse; dispatch on the JSON `action` value
+  (`PROCEED` | `REVISE` | `CAP` | `STALL` | `REJECT`).
+- `2` — `action: MISSING`. Either no review file exists for this
+  phase yet, or the file is half-written (no terminal verdict line)
+  per spec §F1. Treat as "re-dispatch the reviewer"; not a
+  reviewer-failure fallback.
+- `9` — `action: INCONSISTENT`. A review file is complete (verdict
+  line present) but malformed (fails validate-review.sh rules 2–4)
+  or contradicts its own counts. Fall through to Reviewer-failure
+  fallback at "Reviewer-failure fallback" below.
 
 If the script returns `REVISE` — a BLOCKER or MAJOR remains and the
 cap is not yet reached — patch `spec.md` per the findings and re-run
@@ -254,8 +258,10 @@ exit-9 (malformed) paths. A missing or malformed review is **not**
 acted on; handle per "Reviewer-failure fallback" below. Never reuse
 a prior review.
 
-On a valid review (action ∈ `PROCEED` | `REVISE` | `CAP` | `STALL`),
-act on the verdict. Phase 7 presents the **single** interactive
+On a valid review (action ∈ `PROCEED` | `REVISE` | `CAP` | `STALL` |
+`REJECT`), act on the verdict. On `MISSING` (exit 2), re-dispatch
+the reviewer; on `INCONSISTENT` (exit 9), handle per
+"Reviewer-failure fallback" below. Phase 7 presents the **single** interactive
 decision menu — `/review-code` itself only reports a recommendation,
 it does not prompt:
 
