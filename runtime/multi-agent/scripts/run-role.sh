@@ -80,6 +80,16 @@ emit("PROMPT_STYLE", a.get("prompt_style", "argv"))
 # Flags as a single shell-quoted string — eval back into an array.
 emit("BASE_FLAGS",   shlex.join(a.get("flags", [])))
 emit("MODE_FLAGS",   shlex.join(a.get("modes", {}).get(mode, [])))
+
+# Per-task-class model overrides (optional). Each class becomes a
+# TIER_<CLASS> variable. Empty string == "no override" — the role's
+# default model wins. Bash resolves the right one based on the
+# .sage/work/<slug>/task-class file. Hyphens in class names become
+# underscores in shell variable names.
+tiers = r.get("tiers", {}) or {}
+for cls in ("mechanical", "architecture-shaped", "knowledge-gap", "ux-shaped"):
+    safe = "TIER_" + cls.replace("-", "_").upper()
+    emit(safe, tiers.get(cls, ""))
 PY
 }
 
@@ -125,12 +135,39 @@ case "${STAKES}" in
   *) STAKES="production" ;;
 esac
 
+# Task class (mechanical|architecture-shaped|knowledge-gap|ux-shaped)
+# — written by /build-x Phase 2. Drives the per-role model override
+# via [roles.<role>.tiers.<class>]. Same allowlist-normalise pattern
+# as STAKES: a missing, empty, or unknown class disables the override
+# (the role's default model wins). The model resolution itself
+# happens after read_role_cfg below.
+TASK_CLASS="$(cat "${WORK_DIR}/task-class" 2>/dev/null || true)"
+case "${TASK_CLASS}" in
+  mechanical|architecture-shaped|knowledge-gap|ux-shaped) ;;
+  *) TASK_CLASS="" ;;
+esac
+
 # Read the role config. Plain assignment (never local/declare/export) so
 # `set -e` aborts here if read_role_cfg exits non-zero. Eval-ing the
 # command substitution directly would swallow that failure, and the script
 # would crash later on an unbound AGENT_KIND instead of reporting the cause.
 ROLE_CFG="$(read_role_cfg)"
 eval "${ROLE_CFG}"
+
+# Resolve effective model: a non-empty TIER_<CLASS> override wins; else
+# fall back to the role's default MODEL. The resolution is logged below
+# (after LOG is computed) so a reviewer can verify what actually ran.
+EFFECTIVE_MODEL="${MODEL}"
+TIER_OVERRIDE_SOURCE=""
+if [[ -n "${TASK_CLASS}" ]]; then
+  # TIER_MECHANICAL / TIER_ARCHITECTURE_SHAPED / TIER_KNOWLEDGE_GAP / TIER_UX_SHAPED
+  CLS_KEY="TIER_$(printf '%s' "${TASK_CLASS}" | tr 'a-z-' 'A-Z_')"
+  TIER_OVERRIDE_VAL="${!CLS_KEY:-}"
+  if [[ -n "${TIER_OVERRIDE_VAL}" ]]; then
+    EFFECTIVE_MODEL="${TIER_OVERRIDE_VAL}"
+    TIER_OVERRIDE_SOURCE="tiers.${TASK_CLASS}"
+  fi
+fi
 
 if [[ "${AGENT_KIND}" == "host" ]]; then
   echo "Role '${ROLE}' uses the host agent ('${AGENT}'); invoke it from the host session, not via this script." >&2
@@ -243,6 +280,18 @@ esac
 # is debuggable (see the run block below).
 LOG="${OUT%.md}.log"
 
+# Record the resolved model + the override source (if any) at the head
+# of the log, so a reviewer can verify which model ran without parsing
+# the agent's chatter. The log file is appended to by the dispatched
+# CLI below; this header line lands first.
+{
+  if [[ -n "${TIER_OVERRIDE_SOURCE}" ]]; then
+    printf 'model: %s (override from %s)\n' "${EFFECTIVE_MODEL}" "${TIER_OVERRIDE_SOURCE}"
+  else
+    printf 'model: %s\n' "${EFFECTIVE_MODEL:-<default>}"
+  fi
+} > "${LOG}" 2>/dev/null || true
+
 # ─── Persist the assembled prompt (best-effort) ───────────────────────────
 # Write the exact prompt next to the output file so a /build-x cycle is
 # reproducible from the work dir. Fires for every dispatched role (reviewer
@@ -252,7 +301,7 @@ LOG="${OUT%.md}.log"
 # ─── Build argv ───────────────────────────────────────────────────────────
 ARGS=()
 [[ -n "${EXEC_SUB}" ]] && ARGS+=("${EXEC_SUB}")
-[[ -n "${MODEL_FLAG}" && -n "${MODEL}" ]] && ARGS+=("${MODEL_FLAG}" "${MODEL}")
+[[ -n "${MODEL_FLAG}" && -n "${EFFECTIVE_MODEL}" ]] && ARGS+=("${MODEL_FLAG}" "${EFFECTIVE_MODEL}")
 
 if [[ -n "${BASE_FLAGS}" ]]; then
   eval "BASE_ARR=(${BASE_FLAGS})"
@@ -282,25 +331,25 @@ case "${PROMPT_STYLE:-argv}" in
   argv)
     if [[ -n "${OUTPUT_FLAG}" ]]; then
       ARGS+=("${OUTPUT_FLAG}" "${OUT}")
-      "${CMD}" ${ARGS[@]+"${ARGS[@]}"} "${PROMPT}" > "${LOG}" 2>&1
+      "${CMD}" ${ARGS[@]+"${ARGS[@]}"} "${PROMPT}" >> "${LOG}" 2>&1
     else
-      "${CMD}" ${ARGS[@]+"${ARGS[@]}"} "${PROMPT}" > "${OUT}" 2> "${LOG}"
+      "${CMD}" ${ARGS[@]+"${ARGS[@]}"} "${PROMPT}" > "${OUT}" 2>> "${LOG}"
     fi
     ;;
   flag)
     if [[ -n "${OUTPUT_FLAG}" ]]; then
       ARGS+=("${OUTPUT_FLAG}" "${OUT}")
-      "${CMD}" ${ARGS[@]+"${ARGS[@]}"} --prompt "${PROMPT}" > "${LOG}" 2>&1
+      "${CMD}" ${ARGS[@]+"${ARGS[@]}"} --prompt "${PROMPT}" >> "${LOG}" 2>&1
     else
-      "${CMD}" ${ARGS[@]+"${ARGS[@]}"} --prompt "${PROMPT}" > "${OUT}" 2> "${LOG}"
+      "${CMD}" ${ARGS[@]+"${ARGS[@]}"} --prompt "${PROMPT}" > "${OUT}" 2>> "${LOG}"
     fi
     ;;
   stdin)
     if [[ -n "${OUTPUT_FLAG}" ]]; then
       ARGS+=("${OUTPUT_FLAG}" "${OUT}")
-      printf '%s' "${PROMPT}" | "${CMD}" ${ARGS[@]+"${ARGS[@]}"} > "${LOG}" 2>&1
+      printf '%s' "${PROMPT}" | "${CMD}" ${ARGS[@]+"${ARGS[@]}"} >> "${LOG}" 2>&1
     else
-      printf '%s' "${PROMPT}" | "${CMD}" ${ARGS[@]+"${ARGS[@]}"} > "${OUT}" 2> "${LOG}"
+      printf '%s' "${PROMPT}" | "${CMD}" ${ARGS[@]+"${ARGS[@]}"} > "${OUT}" 2>> "${LOG}"
     fi
     ;;
   *)

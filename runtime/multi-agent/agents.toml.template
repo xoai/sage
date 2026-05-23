@@ -37,12 +37,32 @@ agent = "codex"
 model = "gpt-5.5"
 mode  = "read-only"
 
+# Optional: per-task-class model overrides. /build-x Phase 2 writes a
+# `task-class` file (one of `mechanical` / `architecture-shaped` /
+# `knowledge-gap` / `ux-shaped`); the dispatcher picks the override
+# below for the matching class. Empty string or missing key = the
+# role's default `model` above. Lets you pay for opus on
+# architecture-shaped review and a cheaper model on chore-shaped
+# review. Opt-in by uncommenting and filling in.
+# [roles.spec_reviewer.tiers]
+# mechanical          = "gpt-5.5-mini"
+# architecture-shaped = ""              # explicit default
+# knowledge-gap       = ""
+# ux-shaped           = ""
+
 [roles.code_reviewer]
 # Adversarial review of the uncommitted diff against spec + plan. Read-only.
 agent = "codex"
 # See [roles.spec_reviewer] above — empty model = codex's own default.
 model = "gpt-5.5"
 mode  = "read-only"
+
+# Per-task-class overrides — same shape as [roles.spec_reviewer.tiers].
+# [roles.code_reviewer.tiers]
+# mechanical          = "gpt-5.5-mini"
+# architecture-shaped = ""
+# knowledge-gap       = ""
+# ux-shaped           = ""
 
 # ─────────────────────────────────────────────────────────────────────
 # Agents — how each CLI is invoked.
