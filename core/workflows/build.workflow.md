@@ -43,8 +43,14 @@ The disk is the source of truth. Not your memory.
 [2] Continue [initiative B] — [phase]
 [3] Start something new
 
-Read `.sage/decisions.md` for recent context. Read the `handoff`
-field in the most recent artifact's frontmatter if present.
+**Branch check (git projects):** when resuming, compare the current
+branch against the initiative's recorded `branch:` manifest field
+(see git-discipline); if they differ, surface it before proceeding.
+Prefer the initiative whose recorded branch matches HEAD.
+
+Read the initiative's decision log for recent context (global
+`.sage/decisions.md` for cross-initiative context). Read the
+`handoff` field in the most recent artifact's frontmatter if present.
 
 **Upstream context:** Also scan `.sage/docs/` for research and
 analysis artifacts (jtbd-*, ux-audit-*, opportunity-*, ux-evaluate-*).
@@ -77,6 +83,12 @@ Context summary MUST NOT be:
 - "See spec.md for details"
 - Generic guidance ("Continue with implementation")
 The summary must contain judgment the spec doesn't contain.
+
+**Decision-log target (Rule 7):** in this workflow, "decisions.md"
+means the initiative's log at `.sage/work/[initiative]/decisions.md`.
+The global `.sage/decisions.md` is only for cross-initiative
+decisions. Readers check the initiative log first, then fall back to
+the global file.
 
 ## Phase Announcements
 
@@ -131,6 +143,18 @@ If the user explicitly asks to skip a required step, write a minimal
 5-line spec anyway (WHAT, WHY, HOW, DONE-WHEN), present [A]/[R], and
 record the skip rationale in decisions.md.
 
+## Step 2.5: Branch Setup (Standard+ scope, git projects)
+
+For Standard or Comprehensive scope in a git repository, create the
+initiative branch before any artifact or code work: read and follow
+`sage/core/capabilities/execution/git-discipline/SKILL.md` — propose
+`feat/<slug>`, confirm with the user, create from the default branch,
+and record the branch name in the initiative's manifest frontmatter
+(`branch:`). The capability owns dirty-tree, already-on-a-branch,
+detached-HEAD, and decline handling. Lightweight scope skips
+branching (it produces no multi-commit initiative). Not a git
+repository → skip silently.
+
 ## Step 3: Brief (Standard with unclear scope, or Comprehensive)
 
 If scope is unclear or the task is Comprehensive, elicit requirements
@@ -174,7 +198,7 @@ updated: YYYY-MM-DD
 🔒 **CHECKPOINT:**
 
 Sage: Brief saved to .sage/work/YYYYMMDD-slug/brief.md
-Decision: [key scope decisions]. (prepend to .sage/decisions.md)
+Decision: [key scope decisions]. (prepend to the initiative's decisions.md)
 
 [A] Approve — continue to spec in this session
 [R] Revise — tell me what to change
@@ -213,7 +237,7 @@ updated: YYYY-MM-DD
 
 🔒 **CHECKPOINT:**
 Sage: Spec saved to .sage/work/YYYYMMDD-slug/spec.md
-Decision: [key technical decisions]. (prepend to .sage/decisions.md)
+Decision: [key technical decisions]. (prepend to the initiative's decisions.md)
 
 [A] Review — sub-agent reviews spec, then continue to plan
 [S] Skip review — approve without independent review
@@ -383,18 +407,27 @@ defer planned work without the user's explicit decision.
 🔒 **CHECKPOINT:**
 
 Sage: Build complete. [summary of what was built]
-Decision: [key implementation decisions]. (prepend to .sage/decisions.md)
+Decision: [key implementation decisions]. (prepend to the
+initiative's decisions.md)
 
-[A] Approve — merge/ship
+[A] Approve — accept the work; branch stays unmerged
+[M] Merge to [default] — user-gated merge per git-discipline
 [R] Revise — here's what needs fixing
 [V] Verify — type /review for independent verification
 
-Pick A/R/V, or tell me what to change.
+Pick A/M/R/V, or tell me what to change.
+
+[M] is the ONLY merge path — [A] never merges. On [M], apply the
+merge protocol from
+`sage/core/capabilities/execution/git-discipline/SKILL.md` —
+preconditions, the merge, conflict handling, and the deletion offer
+all live there; do not restate them here. (No git repository or no
+initiative branch → omit [M].)
 
 **On approval — checkpoint state (Rule 7):**
 1. Walk through plan.md and check completed tasks in bulk
 2. Update plan.md frontmatter: `status: completed`
-3. Prepend completion summary to `.sage/decisions.md`
+3. Prepend completion summary to the initiative's decisions.md
 4. Write `handoff` field in plan.md frontmatter with key decisions,
    open questions, and risks for the next agent
 5. Store key findings in memory if sage-memory available

@@ -71,7 +71,10 @@ For the current task:
    - Verify it passes
    - Refactor if needed
 3. **Self-review** using the implement skill's checklist
-4. **Commit** with semantic message
+4. **Commit** with semantic message — on the initiative branch
+   (git-discipline: created at the workflow's Branch Setup step;
+   commits never land on the default branch unless the user
+   declined branching there)
 
 The `scope-guard` skill monitors throughout — flags if implementation
 drifts beyond the task spec.
@@ -156,21 +159,31 @@ Tests: [count] passing
 Commits: [count]
 Quality: All 5 gates passed on final review.
 
-[A] Approve — merge/ship
+[A] Approve — accept the work; branch stays unmerged
+[M] Merge to [default] — user-gated merge per git-discipline
 [R] Revise — needs changes
 [P] PR — create a pull request
 
 🔒 **MANDATORY CHECKPOINT:** Wait for human decision.
 
+[M] is the ONLY merge path — [A] never merges. Omit [M] when not a
+git repository or no initiative branch exists.
+
 ### Step 7: Wrap Up
 
 Based on human's choice:
-- **Merge:** Merge the branch (if using branches)
+- **Merge ([M] only):** apply the merge protocol from
+  `sage/core/capabilities/execution/git-discipline/SKILL.md` —
+  preconditions, the merge itself, conflict handling, and the
+  deletion offer all live there; do not restate them here. Omit
+  [M] when not a git repository or no initiative branch exists.
 - **PR:** Create a pull request with the spec as description
 - **Keep working:** Note what needs to change, update plan
 - **Discard:** Revert and clean up
 
-Update `.sage/decisions.md` if significant:
+Update the initiative's decisions.md
+(`.sage/work/[initiative]/decisions.md`) if significant —
+cross-initiative decisions go to the global `.sage/decisions.md`:
 ```markdown
 # Progress
 
