@@ -27,8 +27,13 @@ Resume at the phase indicated.
 
 If not found: start new investigation at Step 1.
 
-Read `.sage/decisions.md` for context — previous root cause analyses
+Read the initiative's decisions.md (fall back to the global
+`.sage/decisions.md`) for context — previous root cause analyses
 and fix patterns may be relevant.
+
+**Decision-log target (Rule 7):** in this workflow, "decisions.md"
+means the initiative's log at `.sage/work/[fix-initiative]/decisions.md`;
+the global `.sage/decisions.md` is only for cross-initiative decisions.
 
 ### Manifest Lifecycle (fix workflow)
 
@@ -223,6 +228,16 @@ Impact: [N files, M interfaces, architectural concern]
 If the user chooses [3], write a fix plan (same as Moderate)
 and record the decision in decisions.md.
 
+**Branch setup (git projects):** after classification, before any
+fix code, create the initiative branch per
+`sage/core/capabilities/execution/git-discipline/SKILL.md` —
+propose `fix/<slug>`, confirm with the user, record `branch:` in
+the manifest. Moderate and Systemic fixes always branch. **Surgical
+fixes branch by default too**; the user may skip with explicit
+consent, recorded in the initiative decision log — "branch overhead
+exceeds the fix" is the user's call, never the agent's. Not a git
+repository → skip silently.
+
 **Escalation signals** (any ONE makes it Moderate or above):
 - Fix touches more than 2 files
 - Fix changes a function signature or API contract
@@ -329,16 +344,25 @@ Sage: Fix verified.
 - Scope: [Surgical/Moderate/Systemic]
 - Change: [what was changed, in which files]
 - Tests: [X passed, 0 failed — from actual output]
-Decision: [root cause + fix approach]. (prepend to .sage/decisions.md)
+Decision: [root cause + fix approach]. (prepend to the initiative's
+decisions.md)
 
-[A] Approve — commit and close
+[A] Approve — commit and close; branch stays unmerged
+[M] Merge to [default] — user-gated merge per git-discipline
 [R] Revise — something's not right
 [V] Verify — type /review for independent check
 
-Pick A/R/V, or tell me what to change.
+Pick A/M/R/V, or tell me what to change.
+
+[M] is the ONLY merge path — [A] never merges. On [M], apply the
+merge protocol from `sage/core/capabilities/execution/git-discipline/
+SKILL.md` — preconditions, the merge, conflict handling, and the
+deletion offer all live there; do not restate them here. Omit [M]
+when not a git repository or no initiative branch exists.
 
 **On approval — Post-Flight (Rule 7):**
-1. Prepend root cause and fix to `.sage/decisions.md`
+1. Prepend root cause and fix to the initiative's decisions.md
+   (cross-initiative decisions go to the global `.sage/decisions.md`)
 2. Update artifact frontmatter if relevant
 3. Store root cause and fix in memory (tagged `self-learning`)
    with WHEN/CHECK/BECAUSE prevention rule
