@@ -16,8 +16,11 @@ Look back. Extract learnings. Seed the next cycle.
 
 Scan `.sage/work/` for recently completed initiatives
 (status: completed in frontmatter). Scan `.sage/docs/` for
-research and analysis artifacts. Read `.sage/decisions.md`
-for the full decision trail.
+research and analysis artifacts. For the decision trail, read the
+initiative's own log first —
+`.sage/work/[initiative]/decisions.md` — then fall back to the
+global `.sage/decisions.md` (cross-initiative decisions live
+there; older projects may have only the global file).
 
 If no completed work exists: "Sage: No completed initiatives
 found. /reflect works best after a deliver cycle. Describe

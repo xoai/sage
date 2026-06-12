@@ -148,6 +148,18 @@ BEFORE implementing, verify BOTH files exist on disk:
   .sage/work/[initiative]/plan.md — with status: completed
 If EITHER file is missing → create it first. No exceptions.
 
+**Branch gate (Standard+ scope, git projects):**
+BEFORE implementation commits begin, verify HEAD is not the default
+branch — unless a branching decline is recorded in the initiative's
+decision log. If HEAD is on the default branch with no recorded
+decline: propose the initiative branch (`feat/`, `fix/`, or
+`arch/` per workflow),
+confirm with the user, create it. The full protocol lives in
+`sage/core/capabilities/execution/git-discipline/SKILL.md`; this
+gate carries only the observable check. Merging is ALWAYS a
+user-gated [M] menu action — no workflow path merges on its own.
+Not a git repository → this gate does not exist.
+
 Do NOT rationalize skipping:
 - "The design is clear from previous discussion" → NOT a spec file
 - "The user described what they want" → NOT a spec file
@@ -183,8 +195,9 @@ DO NOT batch-implement milestones without per-milestone checkpoints.
 ### Rule 1: State First
 
 Before any substantial response, scan `.sage/work/` frontmatter
-(status, phase) for active initiatives. Read `.sage/decisions.md`
-for recent context. Never start fresh when there is existing context.
+(status, phase) for active initiatives. Read the active initiative's
+decisions.md, then the global `.sage/decisions.md`, for recent
+context. Never start fresh when there is existing context.
 
 **Compliance:** Active work is acknowledged before new work begins.
 
@@ -250,21 +263,33 @@ call with self-learning tag before continuing.
 
 ### Rule 7: Record Decisions at Checkpoints
 
-At each checkpoint, **prepend** significant decisions to
-`.sage/decisions.md` (insert after the `# Decisions` header, before
-existing entries) — newest first. Record what was decided, why, and
-what alternatives were considered.
+At each checkpoint, **prepend** significant decisions to the
+**initiative's decision log** —
+`.sage/work/[initiative]/decisions.md` (insert after the
+`# Decisions` header, before existing entries) — newest first.
+Record what was decided, why, and what alternatives were
+considered. Writers switch immediately, including for initiatives
+already in flight; readers check the initiative log first and fall
+back to the global file, so the switch is safe.
 
-**Archive rotation:** When decisions.md exceeds ~200 lines, at the
-next workflow close: keep the 20 most recent entries, move the rest
-to `decisions-{YYYY-MM-DD}.md`. Archives are read-only reference.
+The **global** `.sage/decisions.md` remains for cross-initiative
+decisions only (constitution choices, conventions, project-wide
+calls). Two parallel initiative branches prepending to one global
+file is a guaranteed merge conflict — the per-initiative split is
+what makes parallel sessions safe.
+
+**Archive rotation:** When the global decisions.md exceeds ~200
+lines, at the next workflow close: keep the 20 most recent entries,
+move the rest to `decisions-{YYYY-MM-DD}.md`. Archives are
+read-only reference. (Initiative logs live with their work dir —
+no rotation.)
 
 The file system — what artifacts exist in `.sage/work/` and their
-frontmatter — is the source of truth for state. decisions.md is
+frontmatter — is the source of truth for state. Decision logs are
 the source of truth for reasoning and context.
 
-**Compliance:** decisions.md has a new entry (prepended) after each
-checkpoint that involved a decision.
+**Compliance:** the active initiative's decisions.md has a new
+entry (prepended) after each checkpoint that involved a decision.
 
 __CONSTITUTION_PLACEHOLDER__
 
