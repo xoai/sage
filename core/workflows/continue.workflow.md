@@ -16,7 +16,13 @@ to remember which workflow or initiative was in progress.
 ## Step 1: Scan for Active Cycles
 
 Scan `.sage/work/*/manifest.md` for cycles where
-`status: in-progress` or `status: paused`.
+`status: in-progress` or `status: paused`. Skip cycles whose
+manifest carries `status: abandoned`, and skip cycles owned by a
+different checkout — an `owner:` field that does not match this
+session's `git rev-parse --show-toplevel` after path normalization
+(they belong to another worktree's session; see git-discipline).
+In a git project, prefer the cycle whose recorded `branch:` field
+matches the current branch.
 
 ### One cycle found (Zone 2: Approval)
 

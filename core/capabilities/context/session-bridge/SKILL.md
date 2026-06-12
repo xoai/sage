@@ -40,9 +40,11 @@ Two levels of state, each with a different purpose:
 **This is always accurate** because artifacts are created and updated
 as part of the workflow. No separate "save" action needed.
 
-### Context: decisions.md
+### Context: decision logs
 
-`.sage/decisions.md` is a shared log where both the agent and human
+Each initiative's `.sage/work/[initiative]/decisions.md` is the
+per-cycle log; the global `.sage/decisions.md` is a shared
+cross-initiative log. Both are places where the agent and human
 write significant decisions and context. It provides reasoning that
 artifact frontmatter doesn't capture — WHY decisions were made,
 what alternatives were considered, and what the human's priorities are.
@@ -54,18 +56,37 @@ When resuming work, follow this priority order:
 ### Step 1: Scan artifacts for state
 
 Scan `.sage/work/` for active initiatives. Read frontmatter from
-brief.md, spec.md, or plan.md (whichever exists). Note title, status,
-phase. If a plan exists, scan the task checkboxes to understand how
-far implementation progressed.
+manifest.md, brief.md, spec.md, or plan.md (whichever exists). Note
+title, status, phase. If a plan exists, scan the task checkboxes to
+understand how far implementation progressed.
 
 This is the source of truth — what artifacts exist tells you where
 the project stands.
 
+**Branch matching (git projects):** read the current branch and
+match it against the **recorded `branch:` field** in each
+initiative's manifest frontmatter (git-discipline records it at
+branch creation — match on the recorded field, never re-derive from
+branch or directory names). Prefer the initiative whose recorded
+branch matches HEAD in the resume menu; if HEAD is on the default
+branch while initiative branches exist, list them.
+
+**Owner exclusion (parallel worktrees):** exclude initiatives whose
+manifest carries an `owner:` pointing at a different checkout —
+compare `git rev-parse --show-toplevel` against the recorded
+`owner:` after path normalization (trailing slashes, symlinks).
+They belong to another worktree's session. A session opened inside
+a worktree auto-resumes that worktree's checked-out initiative by
+the same branch-matching rule.
+
 ### Step 2: Read decisions for context
 
-If `.sage/decisions.md` exists, read the last 3-5 entries. These
-capture recent decisions and direction changes — WHY the project is
-in its current state, not just WHAT state it's in.
+Read the matched initiative's own decision log first —
+`.sage/work/[initiative]/decisions.md` — then the global
+`.sage/decisions.md` (cross-initiative decisions; older projects
+may have only the global file). Read the last 3-5 entries of each.
+These capture recent decisions and direction changes — WHY the
+project is in its current state, not just WHAT state it's in.
 
 ### Step 3: Verify against the codebase
 
@@ -84,7 +105,9 @@ State updates happen ONLY at checkpoints (Rule 7), not per-task:
 
 ### At each checkpoint:
 
-Prepend significant decisions to `.sage/decisions.md`:
+Prepend significant decisions to the initiative's decision log
+(`.sage/work/[initiative]/decisions.md`; cross-initiative decisions
+go to the global `.sage/decisions.md`):
 ```markdown
 ### 2025-03-13 — Token storage decision
 Chose httpOnly cookies over localStorage for JWT storage.
@@ -108,7 +131,8 @@ All route handlers throw typed errors; the middleware formats the response.
 If the session is ending gracefully (human says "stop", "done for now"):
 
 1. Update artifact frontmatter to reflect current phase
-2. Prepend session summary to decisions.md if significant work was done
+2. Prepend session summary to the initiative's decisions.md if
+   significant work was done
 3. Report: "**Sage:** Session saved. Type /build to resume next time."
 
 **If the session ends abruptly:** the artifacts in `.sage/work/` and
