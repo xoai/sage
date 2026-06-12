@@ -34,8 +34,13 @@ Create manifest.md from inferred state before proceeding (backfill).
 You MUST follow this routing. Do not override it.
 
 Scan `.sage/docs/` for existing research, ADRs, or decisions.
-Read `.sage/decisions.md` for context. Read `handoff` field in
+Read the initiative's decisions.md first, then the global
+`.sage/decisions.md`, for context. Read `handoff` field in
 the most recent artifact if present.
+
+**Decision-log target (Rule 7):** in this workflow, "decisions.md"
+means the initiative's log at `.sage/work/[initiative]/decisions.md`;
+the global `.sage/decisions.md` is only for cross-initiative decisions.
 
 ### Manifest Lifecycle (architect workflow)
 
@@ -160,7 +165,7 @@ Save the full design to `.sage/work/YYYYMMDD-slug/spec.md` with frontmatter.
 If ANY fails → go back and create the missing artifact.
 
 Sage: Architecture design saved. ADRs in .sage/docs/decision-*.md
-Decision: [key architecture decisions]. (prepend to .sage/decisions.md)
+Decision: [key architecture decisions]. (prepend to the initiative's decisions.md)
 
 [A] Review — sub-agent reviews ADRs, then continue to plan
 [S] Skip review — approve without independent review
@@ -262,6 +267,14 @@ Type a command, or describe what you want to do next.
 
 ## Step 5: Phased Build
 
+**Branch setup (git projects):** before the first milestone's
+implementation begins, create the initiative branch per
+`sage/core/capabilities/execution/git-discipline/SKILL.md` —
+propose `arch/<slug>`, confirm with the user, record `branch:` in
+the manifest. **One branch per initiative across all milestones**
+(the design steps 2–4 produce only `.sage/` artifacts and need no
+branch). Not a git repository → skip silently.
+
 Execute milestone by milestone. **Each milestone MUST follow the build
 workflow gates independently:**
 
@@ -283,11 +296,22 @@ See `quality-gates.workflow.md` for the full sequence including Gate 8.
 
 **At each milestone completion checkpoint:**
 Sage: Milestone [N] complete — [summary]
-Decision: [what was learned during implementation]. (prepend to decisions.md)
+Decision: [what was learned during implementation]. (prepend to the
+initiative's decisions.md)
 
 [C] Continue to milestone [N+1]
+[M] Merge to [default] — user-gated merge per git-discipline
 [R] Revise — adjust before continuing
 [P] Pause — type /build to continue next session
+
+[M] is optional at every milestone — the user may merge
+per-milestone or hold the branch across milestones, their call each
+time. After a per-milestone merge, development **continues on the
+same branch** (the next merge picks up the delta); the
+branch-deletion offer is suppressed until the initiative completes
+(per git-discipline — deleting mid-initiative would strand later
+milestones on the default branch). Omit [M] when not a git
+repository or no initiative branch exists.
 
 **Re-validate after each milestone:** Check architecture assumptions
 against what implementation revealed. If the architecture needs
