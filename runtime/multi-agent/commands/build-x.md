@@ -27,7 +27,29 @@ is available the planner recalls this project's prior decisions and
 gotchas, cites them in the brief/spec, and writes a compact
 `memory-context.md` to the work dir for the downstream roles.
 
-Update `.sage/progress.md` so `/continue` can pick this up later.
+**Branch setup (git projects).** Create the initiative branch per
+`sage/core/capabilities/execution/git-discipline/SKILL.md`: propose
+`feat/<slug>` (feature work) or `fix/<slug>` (defect work) from the
+task description, let the user confirm or rename, create from the
+default branch. (This confirm may be bundled with Phase 2's
+task-class menu if the user hasn't confirmed earlier — but the
+branch must exist before any implementation commits.) The implementer's clean-tree
+precondition is then evaluated *on the initiative branch*. Not a git
+repository → skip silently.
+
+**Create `manifest.md`** in the work dir (build-x cycles previously
+had none): frontmatter carries `title`, `status: in-progress`,
+`phase`, `branch:` (the recorded actual branch name —
+git-discipline's resume matching reads this field, never derives
+from names), and `owner:`/`status:` when the worktree machinery
+sets them. This makes build-x initiatives visible to the manifest
+scan that `/continue` and session-bridge use.
+
+Update `.sage/progress.md` so `/continue` can pick this up later —
+**upsert one entry per active initiative** keyed by slug (slug,
+phase, branch, updated); never overwrite the whole file with a
+single pointer, so a parallel build-x session does not clobber
+another's entry.
 
 ## Phase 2 — Spec
 
@@ -100,7 +122,8 @@ The script is **canonical** for the loop's verdict — it reads the
 timestamped review files under `.sage/work/<slug>/reviews/`, counts
 severities, and applies the seven rules below. The planner does
 **not** re-derive counts; use the script's `blocker`/`major`/`minor`
-values verbatim in `.sage/decisions.md`. In case of disagreement
+values verbatim in the initiative's decision log
+(`.sage/work/<slug>/decisions.md`). In case of disagreement
 between this prose and the script, the script wins (it is the
 determinism this command exists to introduce); flag the doc as the
 defect.
@@ -112,7 +135,7 @@ The seven rules the script implements:
    `APPROVE`, `REVISE`, or `FIX_BEFORE_MERGE` (the consistent
    no-finding cases), exit the loop and continue to Phase 4 —
    regardless of how many MINOR findings remain. Append open MINORs
-   to `.sage/decisions.md` as deferred items. Never re-run the loop
+   to `.sage/work/<slug>/decisions.md` as deferred items. Never re-run the loop
    on a MINOR-only review.
 2. **`REJECT` / `REWORK` → `REJECT`.** A `REJECT` or `REWORK`
    verdict always escalates to the user, regardless of finding
@@ -137,7 +160,7 @@ The seven rules the script implements:
 7. **The loop-ending edit is itself unreviewed.** Any edit to
    `spec.md` made after the review that triggered the exit (including
    patches applied because the user said "stop and just fix") is an
-   unreviewed delta — log it verbatim to `.sage/decisions.md` and name
+   unreviewed delta — log it verbatim to `.sage/work/<slug>/decisions.md` and name
    it in the degraded-run summary. Preferred: run one more review pass
    on the final state instead.
 
@@ -158,7 +181,7 @@ If the script returns `REVISE` — a BLOCKER or MAJOR remains and the
 cap is not yet reached — patch `spec.md` per the findings and re-run
 `/review-spec`.
 
-Log each iteration to `.sage/decisions.md`, using the script's
+Log each iteration to `.sage/work/<slug>/decisions.md`, using the script's
 counts verbatim:
 ```
 ## <ISO timestamp> · spec review iteration N
@@ -286,6 +309,32 @@ it does not prompt:
 Do not auto-merge. Even APPROVE just means "no blocking findings" — the
 user decides whether to commit.
 
+**Commit-then-merge gate (git-discipline).** When the loop exits on
+**PROCEED** — any 0-BLOCKER/0-MAJOR verdict, not only the literal
+`APPROVE` word — the implementation is still an *uncommitted diff*
+on the initiative branch (the implementer charter forbids
+committing). The sequence is:
+
+1. Offer a **user-gated commit** onto the initiative branch (the
+   user decides whether to commit, as above).
+2. Only once `git status --porcelain` is empty AND
+   `git rev-list <default>..<branch>` is non-empty, offer
+   `[M] Merge to <default>` per
+   `sage/core/capabilities/execution/git-discipline/SKILL.md` —
+   suite gated on its own exit code (or the cycle's smoke procedure
+   on a no-harness project), diff-stat shown, `--no-ff`, conflicts
+   handed to the user. Skipping step 1 is structurally impossible —
+   the preconditions fail on an uncommitted tree.
+3. After the commit (and after `[M]`, if taken), **update the
+   initiative manifest** — `status:` and phase — so a finished
+   build-x cycle does not sit `in-progress` in `/continue`'s scan
+   forever.
+
+The ordering is safe for the `[K]` fix loop: fix mode requires the
+diff uncommitted, and `[K]` fires only on FIX_BEFORE_MERGE *with
+findings* — before any PROCEED exit. Not a git repository or the
+user declined branching → the commit offer stands alone, no [M].
+
 A user directive to skip code review counts only if the user named
 *this* gate. A directive about an earlier phase (e.g. "skip the spec
 review") does not authorise skipping code review — name it and confirm
@@ -302,7 +351,7 @@ happens in any review phase (3, 5, or 7):
    `run-role.sh`'s stderr.
 2. You **may** fall back to reviewing **in-session** — the host
    following the relevant `.sage/prompts/<role>.md` charter — but this
-   is a **degraded run**: record it in `.sage/decisions.md` and name
+   is a **degraded run**: record it in `.sage/work/<slug>/decisions.md` and name
    it in the degraded-run summary. Name the degradation precisely:
    - A **code-review** fallback (Phase 7): the host runs the
      `code_reviewer` charter against `git diff` — it loses the
@@ -328,12 +377,14 @@ reviewer, emit an explicit summary before Phase 8:
   received **no independent review**.
 
 Show it to the user and get an explicit acknowledgement, then append it
-to `.sage/decisions.md` so `/reflect` and future cycles see the run was
+to `.sage/work/<slug>/decisions.md` so `/reflect` and future cycles see the run was
 degraded.
 
 ## Phase 8 — Reflect
 
-Run Sage's built-in `/reflect`. It reads `.sage/decisions.md`, the
+Run Sage's built-in `/reflect`. It reads the initiative's decision log
+(`.sage/work/<slug>/decisions.md`, falling back to the global
+`.sage/decisions.md`), the
 review files, and `implementer-notes.md` to extract WHEN/CHECK/BECAUSE
 learnings for the next cycle.
 
@@ -341,7 +392,7 @@ Then, **after `/reflect` returns**, if sage-memory is available
 (attempt a `sage_memory_*` tool; skip on absence or error), store the
 cycle's durable **decisions** with `sage_memory_store` — project
 scope, tagged `build-x-decision` plus a domain tag. Source them from
-the planner's per-iteration entries in `.sage/decisions.md` — the
+the planner's per-iteration entries in `.sage/work/<slug>/decisions.md` — the
 architectural choices made in `spec.md`, the stakes tier and why, any
 contested-and-resolved invariant — **not** `/reflect`'s prepended
 reflection summary, which is already captured under `self-learning`.
@@ -350,7 +401,9 @@ the next cycle's planner Step 0 recalls.
 
 ## Throughout
 
-- Update `.sage/progress.md` after each phase transition.
+- Update `.sage/progress.md` after each phase transition — always
+  as a per-slug upsert (one entry per active initiative), never a
+  whole-file overwrite.
 - All reviewer outputs are timestamped under
   `.sage/work/<slug>/reviews/`; never overwrite, always append a new
   timestamped file.

@@ -3,7 +3,7 @@
   "framework_owned": {
     ".sage/scripts/run-role.sh": {
       "source": "scripts/run-role.sh",
-      "sha256": "80e782061f4711e456f9453ab069c32846f4c0acb51576703ead349edd391cc5"
+      "sha256": "214ee6dc66cb78a95209de1dabc6a72112769aef1a74f4bddc5fba83c9748337"
     },
     ".sage/scripts/validate-review.sh": {
       "source": "scripts/validate-review.sh",
@@ -11,11 +11,11 @@
     },
     ".sage/docs/multi-agent.md": {
       "source": "docs/multi-agent.md",
-      "sha256": "c95f586d9fa267623f144e8bc489356a6ffb2b704e34b7e8ab0a513394c73bd1"
+      "sha256": "19d6aa1ca247fd7724923de56fdfd298e3a149e09de9cdd38051f35604d08e17"
     },
     ".claude/commands/build-x.md": {
       "source": "commands/build-x.md",
-      "sha256": "823470d14f13824cb245ce90417a897da0c79833e8cdb1d30a964dceb4414ce5"
+      "sha256": "01d609274c4a9e0e7cf055fd422819c9e3e91ab8987bdb3f7f2515c1206803f2"
     },
     ".claude/commands/review-spec.md": {
       "source": "commands/review-spec.md",
@@ -27,19 +27,19 @@
     },
     ".claude/commands/implement.md": {
       "source": "commands/implement.md",
-      "sha256": "6c588dec5f141902df8795591bf1e78881ed4040c81aa39bcb6870bb3859dcc7"
+      "sha256": "17afefc8bba500e276dd63b1c71d890011d577f8efd49519801a9bf933a5c789"
     },
     ".claude/commands/review-code.md": {
       "source": "commands/review-code.md",
-      "sha256": "24ed4c014a2e31661c69df5dbdc838fd51998bc1808a957786d426b36ab3f259"
+      "sha256": "b1aeae33c2da64e9e65c1ee3ad562b3e3daf4b530166e10c7ab5a44fc59b82d8"
     },
     ".claude/agents/codex-reviewer.md": {
       "source": "agents/codex-reviewer.md",
-      "sha256": "46dfd0240b2a7b1d0e4166db5e91af2d3592d916b2bde6a80e0bc38e5c941a27"
+      "sha256": "b5fc8a80d48516c444513dbaeb9bcff1d4faccbb3b09876c66dbab654b761a90"
     },
     ".claude/agents/kimi-implementer.md": {
       "source": "agents/kimi-implementer.md",
-      "sha256": "f00067183c611be3c22c1559667cb09832a17377448264fad728f45935386b91"
+      "sha256": "47d2260f42e610efd6801dc265c22c1288897b3897b672ac296112740f42458a"
     }
   },
   "user_owned": {
