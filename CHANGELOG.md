@@ -2,6 +2,96 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [1.1.8] — Git discipline + parallel-session worktrees
+
+Every delivery workflow now works on its own branch, merges only when
+you say so, and can run in an isolated `git worktree` so multiple
+Claude Code sessions develop in parallel without clobbering each
+other. All of it is opt-in or degrades silently in non-git projects —
+nothing changes for a single sequential session in a repo that doesn't
+opt in.
+
+### Branch discipline (all delivery workflows)
+- `/build`, `/fix`, `/architect`, and the multi-agent `/build-x` now
+  create a branch per initiative before implementation commits —
+  `feat/<slug>`, `fix/<slug>`, `arch/<slug>` respectively (extending
+  the conventional-commit convention to branch names). Propose-confirm:
+  the branch is never created silently; dirty-tree, already-on-a-branch,
+  and detached-HEAD states are each handled.
+- **Merge is always user-gated.** Completion checkpoints add an
+  `[M] Merge to <default>` option; `[A]` no longer merges. Before a
+  merge: the test suite is gated on its own exit code, the tree must be
+  clean (`git status --porcelain`) and the branch must have commits
+  (`git rev-list`), and the merge is `--no-ff`. No workflow path ever
+  merges, pushes, or opens a PR on its own.
+- **Per-initiative decision logs.** Checkpoint decisions now go to
+  `.sage/work/<slug>/decisions.md` (the global `.sage/decisions.md` is
+  reserved for cross-initiative decisions) — two parallel branches no
+  longer collide on one append-only file. Readers check the initiative
+  log first and fall back to the global one; older projects keep
+  working.
+- The new single-source-of-truth capability
+  `core/capabilities/execution/git-discipline/SKILL.md` defines naming,
+  creation, the user-gated merge protocol, worktrees, and cleanup;
+  workflows cite it, never restate it.
+
+### Parallel sessions — opt-in worktree isolation
+- New `isolation: branch | worktree` key in `.sage/config.yaml`
+  (default `branch`). Branches isolate *history* (enough for one
+  session at a time); worktrees isolate the *working tree* (required
+  for simultaneous sessions, because two `claude` processes in one
+  checkout share one working tree and one HEAD).
+- New **`sage worktree <slug>`** launcher — the front door for a
+  parallel task. Creates the branch + a sibling worktree directory,
+  copies the gitignored runtime into it (real `cp -R`, never symlinks),
+  and prints the `cd … && claude` line to open an isolated session.
+  Flags `--from`, `--prefix feat|fix|arch`, `--launch`; plus
+  `sage worktree list` and `sage worktree prune`.
+- **Collision guard.** A second `claude` opened in the *same* checkout
+  is warned (never blocked) by the session-init hook —
+  "Another Sage session appears active in this checkout … run
+  `sage worktree <name>`" — instead of silently clobbering. Liveness
+  is grounded on the hook's parent process id (`$PPID` + `kill -0`),
+  with a 6-hour staleness backstop; non-git projects skip it entirely.
+- **Workflow bounce.** Under `isolation: worktree`, a delivery workflow
+  started in the main checkout offers a guided menu (set up a worktree
+  / proceed here / sequential this once) — never a hard refusal.
+- See **[docs/parallel-sessions.md](docs/parallel-sessions.md)** for
+  the full guide.
+
+### Multi-agent `/build-x` — quality + efficiency
+- **Deterministic stop-rule.** Review-loop verdicts (Phase 3/5/7) are
+  computed by `review-stop.sh`, not counted in-head — the script reads
+  the review files, applies the seven rules, and returns the action.
+- **Per-task-class cost tier.** `[roles.<role>.tiers]` in `agents.toml`
+  lets a `mechanical` cycle review with a cheaper model than an
+  `architecture-shaped` one; the planner proposes the class and the
+  user confirms.
+- **Iron-law TDD + active scope-guard** in the implementer charter;
+  a **per-step validator** (`validate-step.sh`) and a
+  **hallucination-check precondition** (`hallucination-check.sh`,
+  per-file polyglot manifest resolution) catch defects before the
+  full code-review pass pays for them.
+- **Structured `handoff:` frontmatter** on every artifact, injected
+  into downstream CLI-role prompts as the cross-model bridge.
+- **Stuck-handling** (technique-switch, not attempt-count) and a
+  **plan-keyed memory-context refresh** between plan and implementation.
+
+### sage-memory 0.11+ codebase-scan docs
+- The `sage-memory`, `sage-ontology`, and `sage-self-learning` skills
+  document the `scan-codebase` CLI / `sage_memory_scan_codebase` MCP
+  tool (tree-sitter source indexing) — cross-referencing scanned code,
+  linking learnings to code symbols, 10–50× token savings on cross-file
+  queries. Mirrored in the plugin tree.
+
+### Notes
+- All git behavior is conditional on `git rev-parse --git-dir` — a
+  non-git project sees no branching, no worktree prompts, no collision
+  warnings.
+- Claude Code is the verified platform for the collision warning (a
+  session-init hook); the config switch and launcher are
+  platform-agnostic.
+
 ## [1.1.7] — sage-memory integration (unified naming, auto-upgrade, auto-sync)
 
 ### Renamed (BREAKING for custom prompts referencing old names)

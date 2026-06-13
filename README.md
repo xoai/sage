@@ -229,6 +229,7 @@ Run in your terminal:
 | `sage remove <skill>` | Remove a skill from project |
 | `sage skills` | List installed skills |
 | `sage update [target]` | Update community skills to latest |
+| `sage worktree <slug>` | Create an isolated worktree + branch for a parallel session ([guide](docs/parallel-sessions.md)) |
 
 ## How Sage Works
 
@@ -508,16 +509,17 @@ relationships) for smarter integration.
 Sage configuration lives in `.sage/config.yaml`:
 
 ```yaml
-sage-version: "1.1.1"
+sage-version: "1.1.8"
 project-name: "my-app"
 detected-stack: [react, typescript]
 auto_review: true          # sub-agent review after spec/plan approval
 auto_qa: true              # sub-agent QA after quality gates
 independent_gate3: true    # sub-agent code quality review (Gate 3)
 command_prefix: false      # prefix commands as sage:build, sage:fix, etc.
+isolation: branch          # branch | worktree — how parallel work is isolated
 ```
 
-All toggles default to `true` (except `command_prefix`). Set to `false` to disable:
+All toggles default to `true` (except `command_prefix` and `isolation`). Set to `false` to disable:
 
 | Setting | What It Controls |
 |---------|-----------------|
@@ -525,6 +527,7 @@ All toggles default to `true` (except `command_prefix`). Set to `false` to disab
 | `auto_qa` | Sub-agent code verification after quality gates pass |
 | `independent_gate3` | Sub-agent code quality review at Gate 3 (falls back to self-review) |
 | `command_prefix` | Namespace all commands as `sage:build`, `sage:fix`, etc. (set via `--prefix` flag) |
+| `isolation` | `branch` (default, sequential) or `worktree` (parallel sessions). See [Parallel Sessions](#parallel-sessions-optional). |
 
 ## Multi-Agent (optional)
 
@@ -574,6 +577,37 @@ Claude Code only in v1.
   contributor-facing (template layout, ownership split, how to test)
 - `.sage/docs/multi-agent.md` (post-install) — protocol contract,
   schema, integration points
+
+## Parallel Sessions (optional)
+
+Every delivery workflow works on its own branch (`feat/<slug>`,
+`fix/<slug>`, `arch/<slug>`) and merges only when you choose `[M]` at
+the completion checkpoint — never on its own. That gives you clean,
+reviewable, one-PR-per-initiative history out of the box, with no new
+steps for a single sequential session.
+
+To run **two tasks at once** — one session fixing a bug, another
+building a feature — branches alone aren't enough: two `claude`
+sessions in the same directory share one working tree and clobber each
+other's files. The isolation that simultaneous sessions need is a
+`git worktree` — a directory per session. One command sets it up:
+
+```bash
+sage worktree payment-retry          # creates ../<repo>-payment-retry on
+                                     # branch feat/payment-retry, copies the
+                                     # runtime, prints: cd … && claude
+cd ../<repo>-payment-retry && claude  # an isolated session; /build works as normal
+```
+
+Opt in with `isolation: worktree` in `.sage/config.yaml` to make the
+workflows offer this automatically. If you forget and open a second
+session in the same checkout, Sage warns you (it can't silently move a
+running session into a worktree — that's a launch-time action).
+
+**Learn more:** **[docs/parallel-sessions.md](docs/parallel-sessions.md)**
+— when to use a branch vs a worktree, the full `sage worktree`
+reference, the collision guard, and the tracked-vs-gitignored `.sage/`
+details.
 
 ## Project State
 
