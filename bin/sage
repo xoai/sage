@@ -1475,6 +1475,13 @@ sage_worktree() {
     _wt_copy_ignored "$root" "$dir" ".sage/config.yaml"
     _wt_copy_ignored "$root" "$dir" ".sage/constitution.md"
     _wt_copy_ignored "$root" "$dir" ".sage/gates"
+    # Multi-agent runtime — present only if `sage setup multi-agent`
+    # ran; _wt_copy_ignored no-ops when absent or tracked. Without
+    # these a /build-x cycle's first dispatcher call fails in the
+    # worktree (spec W2.3.6).
+    _wt_copy_ignored "$root" "$dir" ".sage/agents.toml"
+    _wt_copy_ignored "$root" "$dir" ".sage/prompts"
+    _wt_copy_ignored "$root" "$dir" ".sage/scripts"
     # Platform dir(s) + instructions file(s) per platforms: in config.
     local plats; plats=$( { grep '^platforms:' "$root/.sage/config.yaml" 2>/dev/null || true; } | sed 's/^platforms:[[:space:]]*\[//; s/\]//; s/"//g; s/,/ /g')
     [ -z "$plats" ] && plats="claude-code"
