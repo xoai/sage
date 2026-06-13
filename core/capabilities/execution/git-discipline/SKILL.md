@@ -31,6 +31,30 @@ creation, merging, worktrees, and cleanup. Workflows cite it — they
 never restate its rules. If a workflow's text and this file disagree,
 this file wins; flag the workflow as the defect.
 
+## Branch vs worktree — the decision rule
+
+These solve different problems; pick by how many sessions run at once:
+
+- **Branch** isolates *history* — one initiative's commits don't
+  interleave with the default branch. A branch is **sufficient for
+  one session at a time** (sequential initiatives). This is the
+  default (`isolation: branch` in `.sage/config.yaml`).
+- **Worktree** isolates the *working tree* — its own directory on
+  disk. A worktree is **required for simultaneous sessions**: two
+  `claude` processes in one checkout share one working tree and one
+  HEAD, so they clobber each other's files regardless of branch, and
+  `git checkout -b` in one moves HEAD for the other. Branches cannot
+  fix a working-tree race; only a directory-per-session can.
+
+**The hard constraint.** A Claude session is bound to the directory
+it was launched in and **cannot relocate itself** into a worktree it
+creates. So the parallel path is always launch-time: create the
+worktree *first*, then start a session *inside* it. The front door is
+**`sage worktree <slug>`** (creates branch + worktree + copies the
+gitignored runtime + prints the `cd … && claude` line). Opt in with
+`isolation: worktree`; until then, sequential branch-in-place is
+unchanged.
+
 ## Availability check
 
 Activate only when `git rev-parse --git-dir` exits 0. On failure
@@ -58,6 +82,29 @@ an existing branch without the user's explicit choice (see
 
 The naming extends the project's conventional-commit convention
 (feat, fix, chore, docs) to branch names.
+
+## Worktree bounce (`isolation: worktree` in the main checkout)
+
+Read `isolation:` from `.sage/config.yaml` (default `branch`). When
+it is `worktree` AND the workflow is starting in the **main checkout**
+(not a linked worktree — the test is `git rev-parse --git-dir` ==
+`git rev-parse --git-common-dir`; equal → main checkout), do not
+branch in place. Present a **guided menu** (never a hard refusal — a
+lone sequential session must still be able to proceed):
+
+- `[1]` **Set up an isolated worktree** (recommended for parallel) —
+  run / instruct `sage worktree <slug>`; open a session in the new
+  directory and continue there. This session stops here.
+- `[2]` **Proceed here in the shared checkout (not isolated)** — fall
+  back to the normal in-place branch flow below; record the choice in
+  the initiative decision log.
+- `[3]` **Sequential, this once** — same as `[2]`, noting
+  `isolation: worktree` was overridden for this initiative.
+
+When already running **in a linked worktree** (the user launched via
+`sage worktree`), skip the bounce and branch/commit in place as usual
+— the session is already isolated. With `isolation: branch` (default),
+the bounce never fires.
 
 ## Branch creation (propose-confirm)
 
@@ -178,7 +225,16 @@ derive `feat/auth`). The naming-table derivation is only the
 
 ## Worktrees (parallel sessions)
 
-When the user wants a second concurrent initiative, offer:
+**Front door: `sage worktree <slug>`.** When the user wants a second
+concurrent initiative — or `isolation: worktree` is set — the launcher
+is how a parallel session starts: it creates the branch + worktree,
+copies the gitignored runtime, and prints the `cd … && claude` line to
+open an isolated session. The user runs one command; the session is
+born isolated. (A running session cannot relocate itself — see the
+decision rule above — so this is always launch-time.)
+
+The manual recipe below is what the launcher does, kept as
+documentation and as the fallback when `sage worktree` is unavailable:
 
 ```
 git worktree add ../<project>-<slug> <branch>

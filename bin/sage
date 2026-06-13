@@ -429,6 +429,20 @@ apply_prefix_config() {
   fi
 }
 
+# read_isolation <project-root> — echo the isolation mode.
+# Allowlist-normalised: an absent key, empty value, or any unknown
+# value resolves to "branch" (the safe sequential default). Same
+# discipline as the task-class/stakes readers in run-role.sh.
+read_isolation() {
+  local config="$1/.sage/config.yaml"
+  local val=""
+  [ -f "$config" ] && val=$(grep '^isolation:' "$config" 2>/dev/null | head -1 | sed 's/^isolation:[[:space:]]*//; s/[[:space:]]*#.*$//; s/[[:space:]]*$//')
+  case "$val" in
+    branch|worktree) echo "$val" ;;
+    *) echo "branch" ;;
+  esac
+}
+
 create_sage_state() {
   local target="$1"
   local project_name
@@ -462,6 +476,10 @@ auto_review: true
 auto_qa: true
 independent_gate3: true
 command_prefix: $prefix_val
+# isolation: how delivery workflows isolate an initiative.
+#   branch   — (default) branch in place; one session at a time.
+#   worktree — a worktree per initiative; for parallel sessions.
+isolation: branch
 YAML
 
   cat > "$sage_dir/decisions.md" << MD
@@ -1354,10 +1372,147 @@ sage_help() {
 }
 
 # ═══════════════════════════════════════════════════════════════
+# COMMAND: worktree
+# ═══════════════════════════════════════════════════════════════
+# Front door for parallel sessions: create an isolated worktree
+# (branch + directory) so a second Claude session runs without
+# clobbering the first. Branches isolate history; worktrees isolate
+# the working tree — which is what simultaneous sessions need.
+
+# Resolve the default branch (git-discipline's documented chain).
+_wt_default_branch() {
+  local d
+  d=$( { git symbolic-ref --quiet refs/remotes/origin/HEAD 2>/dev/null || true; } | sed 's|^refs/remotes/origin/||')
+  if [ -n "$d" ] && git show-ref --verify --quiet "refs/heads/$d"; then echo "$d"; return; fi
+  d=$(git config --get init.defaultBranch 2>/dev/null)
+  if [ -n "$d" ] && git show-ref --verify --quiet "refs/heads/$d"; then echo "$d"; return; fi
+  for d in main master; do
+    git show-ref --verify --quiet "refs/heads/$d" && { echo "$d"; return; }
+  done
+  # Last resort: the current branch. The capability says never to
+  # SILENTLY use it — so emit a notice (stderr; stdout is captured).
+  local cur; cur=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+  echo "  Note: no default branch resolved; basing on current branch '$cur'. Pass --from to override." >&2
+  echo "$cur"
+}
+
+# Copy one gitignored runtime path into the worktree (cp -R, never
+# symlink — WSL drvfs has no POSIX symlinks). Skips tracked paths
+# (git already carried them) and absent paths.
+_wt_copy_ignored() {
+  local src_root="$1" dst_root="$2" path="$3"
+  [ -e "$src_root/$path" ] || return 0
+  git -C "$src_root" check-ignore -q "$path" 2>/dev/null || return 0   # tracked → skip
+  local parent; parent=$(dirname "$path")
+  mkdir -p "$dst_root/$parent"
+  cp -R "$src_root/$path" "$dst_root/$parent/"
+}
+
+sage_worktree() {
+  local sub="${1:-}"
+  case "$sub" in
+    list)
+      git rev-parse --git-dir >/dev/null 2>&1 || { echo -e "  ${RED}Not a git repository.${RESET}"; exit 2; }
+      git worktree list
+      return ;;
+    prune)
+      git rev-parse --git-dir >/dev/null 2>&1 || { echo -e "  ${RED}Not a git repository.${RESET}"; exit 2; }
+      git worktree prune -v
+      echo -e "  ${DIM}Worktrees with uncommitted changes are never auto-removed — use 'git worktree remove' yourself.${RESET}"
+      return ;;
+    ""|-*)
+      echo -e "  ${RED}Usage: sage worktree <slug> [--from <base>] [--prefix feat|fix|arch] [--launch]${RESET}"
+      echo -e "         sage worktree list | prune"
+      exit 2 ;;
+  esac
+
+  # ── Create flow ──
+  local slug="$sub"; shift
+  local from="" prefix="feat" launch="false"
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --from)   from="${2:-}"; shift 2 ;;
+      --prefix) prefix="${2:-feat}"; shift 2 ;;
+      --launch) launch="true"; shift ;;
+      *)        echo -e "  ${RED}Unknown option: $1${RESET}"; exit 2 ;;
+    esac
+  done
+  case "$prefix" in feat|fix|arch) ;; *) echo -e "  ${RED}--prefix must be feat|fix|arch${RESET}"; exit 2 ;; esac
+
+  git rev-parse --git-dir >/dev/null 2>&1 || {
+    echo -e "  ${RED}Not a git repository — worktrees need git.${RESET}"; exit 2; }
+
+  local root base branch dir repo
+  root=$(git rev-parse --show-toplevel)
+  repo=$(basename "$root")
+  base="${from:-$(_wt_default_branch)}"
+  git rev-parse --verify --quiet "$base" >/dev/null 2>&1 || {
+    echo -e "  ${RED}Base ref not found: $base${RESET}"; exit 2; }
+
+  # Branch name with collision suffix (git-discipline SKILL.md:55).
+  branch="$prefix/$slug"
+  local n=2
+  while git show-ref --verify --quiet "refs/heads/$branch"; do branch="$prefix/$slug-$n"; n=$((n+1)); done
+
+  # Target dir with collision suffix; never delete an existing dir
+  # (git-discipline SKILL.md:190).
+  dir="$(dirname "$root")/$repo-$slug"
+  n=2
+  while [ -e "$dir" ]; do dir="$(dirname "$root")/$repo-$slug-$n"; n=$((n+1)); done
+
+  echo -e "  ${BOLD}Sage — Worktree${RESET}"
+  echo -e "  Branch: ${CYAN}$branch${RESET}  from ${DIM}$base${RESET}"
+  echo -e "  Dir:    ${DIM}$dir${RESET}"
+
+  if ! git worktree add -b "$branch" "$dir" "$base"; then
+    echo -e "  ${RED}git worktree add failed (see above).${RESET}"
+    [ -e "$dir" ] && git worktree remove --force "$dir" 2>/dev/null
+    exit 3
+  fi
+
+  # ── Runtime copy (two-worlds): only when .sage/ is gitignored ──
+  if git -C "$root" check-ignore -q .sage 2>/dev/null; then
+    _wt_copy_ignored "$root" "$dir" ".sage/config.yaml"
+    _wt_copy_ignored "$root" "$dir" ".sage/constitution.md"
+    _wt_copy_ignored "$root" "$dir" ".sage/gates"
+    # Platform dir(s) + instructions file(s) per platforms: in config.
+    local plats; plats=$( { grep '^platforms:' "$root/.sage/config.yaml" 2>/dev/null || true; } | sed 's/^platforms:[[:space:]]*\[//; s/\]//; s/"//g; s/,/ /g')
+    [ -z "$plats" ] && plats="claude-code"
+    local p
+    for p in $plats; do
+      case "$p" in
+        claude-code) _wt_copy_ignored "$root" "$dir" ".claude"; _wt_copy_ignored "$root" "$dir" "CLAUDE.md" ;;
+        antigravity) _wt_copy_ignored "$root" "$dir" ".agent" ;;
+        codex)       _wt_copy_ignored "$root" "$dir" ".codex"; _wt_copy_ignored "$root" "$dir" "AGENTS.md" ;;
+        opencode)    _wt_copy_ignored "$root" "$dir" ".opencode" ;;
+        gemini-cli)  _wt_copy_ignored "$root" "$dir" ".gemini"; _wt_copy_ignored "$root" "$dir" "GEMINI.md" ;;
+      esac
+    done
+    echo -e "  ${GREEN}✓${RESET} Copied gitignored runtime into the worktree."
+  fi
+
+  echo ""
+  echo -e "  ${BOLD}Open an isolated session there:${RESET}"
+  echo -e "    cd \"$dir\" && claude"
+  echo ""
+
+  if [ "$launch" = "true" ]; then
+    cd "$dir" || exit 3
+    command -v claude >/dev/null 2>&1 || { echo -e "  ${YELLOW}claude not on PATH — run 'claude' here to start the session.${RESET}"; exit 0; }
+    exec claude
+  fi
+}
+
+# ═══════════════════════════════════════════════════════════════
 # MAIN
 # ═══════════════════════════════════════════════════════════════
 COMMAND="${1:-}"
 shift 2>/dev/null || true
+
+# Preserve raw args for subcommands that own their own flag parsing
+# (e.g. `worktree --prefix fix`), before the global flag loop below
+# consumes shared flags like --prefix.
+WORKTREE_ARGS=("$@")
 
 # Parse flags from remaining args
 PRESET_FLAG=""
@@ -1391,6 +1546,7 @@ case "$COMMAND" in
   update)           sage_update ;;
   upgrade)          sage_upgrade ;;
   learn)            sage_learn "$@" ;;
+  worktree)         sage_worktree ${WORKTREE_ARGS[@]+"${WORKTREE_ARGS[@]}"} ;;
   setup)            sage_setup "$@" ;;
   find)             sage_find "$@" ;;
   add)              sage_add "$@" ;;

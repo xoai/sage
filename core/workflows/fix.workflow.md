@@ -238,6 +238,13 @@ consent, recorded in the initiative decision log — "branch overhead
 exceeds the fix" is the user's call, never the agent's. Not a git
 repository → skip silently.
 
+**Parallel-session note (`isolation: worktree`).** If
+`isolation:` in `.sage/config.yaml` is `worktree` and this session is
+in the main checkout (not a linked worktree), apply the **worktree
+bounce** from git-discipline (offer `sage worktree <slug>` as a
+guided menu) before branching in place. With `isolation: branch`
+(default), ignore this — branch in place as below.
+
 **Escalation signals** (any ONE makes it Moderate or above):
 - Fix touches more than 2 files
 - Fix changes a function signature or API contract

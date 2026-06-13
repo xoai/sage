@@ -158,7 +158,11 @@ confirm with the user, create it. The full protocol lives in
 `sage/core/capabilities/execution/git-discipline/SKILL.md`; this
 gate carries only the observable check. Merging is ALWAYS a
 user-gated [M] menu action — no workflow path merges on its own.
-Not a git repository → this gate does not exist.
+Under `isolation: worktree` in `.sage/config.yaml`, a Standard+
+workflow in the main checkout offers the worktree bounce
+(`sage worktree <slug>`) before branching in place; `isolation: branch`
+(default) branches in place. Not a git repository → this gate does
+not exist.
 
 Do NOT rationalize skipping:
 - "The design is clear from previous discussion" → NOT a spec file

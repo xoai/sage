@@ -37,6 +37,13 @@ branch must exist before any implementation commits.) The implementer's clean-tr
 precondition is then evaluated *on the initiative branch*. Not a git
 repository → skip silently.
 
+**Parallel-session note (`isolation: worktree`).** If `isolation:` in
+`.sage/config.yaml` is `worktree` and this session is in the main
+checkout (not a linked worktree), apply the **worktree bounce** from
+git-discipline — offer `sage worktree <slug>` as a guided menu before
+branching in place. With `isolation: branch` (default), branch in
+place as above.
+
 **Create `manifest.md`** in the work dir (build-x cycles previously
 had none): frontmatter carries `title`, `status: in-progress`,
 `phase`, `branch:` (the recorded actual branch name —
