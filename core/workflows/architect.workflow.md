@@ -275,6 +275,13 @@ the manifest. **One branch per initiative across all milestones**
 (the design steps 2–4 produce only `.sage/` artifacts and need no
 branch). Not a git repository → skip silently.
 
+**Parallel-session note (`isolation: worktree`).** If
+`isolation:` in `.sage/config.yaml` is `worktree` and this session is
+in the main checkout (not a linked worktree), apply the **worktree
+bounce** from git-discipline (offer `sage worktree <slug>` as a
+guided menu) before branching in place. With `isolation: branch`
+(default), ignore this — branch in place as below.
+
 Execute milestone by milestone. **Each milestone MUST follow the build
 workflow gates independently:**
 

@@ -155,6 +155,13 @@ detached-HEAD, and decline handling. Lightweight scope skips
 branching (it produces no multi-commit initiative). Not a git
 repository → skip silently.
 
+**Parallel-session note (`isolation: worktree`).** If
+`isolation:` in `.sage/config.yaml` is `worktree` and this session is
+in the main checkout (not a linked worktree), apply the **worktree
+bounce** from git-discipline (offer `sage worktree <slug>` as a
+guided menu) before branching in place. With `isolation: branch`
+(default), ignore this — branch in place as below.
+
 ## Step 3: Brief (Standard with unclear scope, or Comprehensive)
 
 If scope is unclear or the task is Comprehensive, elicit requirements

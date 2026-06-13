@@ -15,7 +15,7 @@
     },
     ".claude/commands/build-x.md": {
       "source": "commands/build-x.md",
-      "sha256": "01d609274c4a9e0e7cf055fd422819c9e3e91ab8987bdb3f7f2515c1206803f2"
+      "sha256": "5db20ebf378d727a2af6ca8ceeb7b5b4599447a0ec37d760170dda335b784d90"
     },
     ".claude/commands/review-spec.md": {
       "source": "commands/review-spec.md",
