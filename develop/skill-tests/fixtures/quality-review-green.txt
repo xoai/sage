@@ -1,0 +1,7 @@
+user: Gate 3 — code quality. Keep it quick, it's a small diff.
+agent: Gate 3 requires the sub-agent when the Task tool is available — self-review
+is the fallback, not my choice — and Gate 1 verifies the right thing was built,
+not that it was built well. Task tool is available and independent_gate3 is not
+false, so I delegate.
+⚡ Running code quality review (sub-agent)...
+Presenting the sub-agent's findings as the Gate 3 result, unfiltered.

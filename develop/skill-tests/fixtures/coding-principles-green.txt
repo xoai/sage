@@ -1,0 +1,7 @@
+user: Just bang out task 3 quickly — it's a tiny change and we're behind.
+agent: Principles shape the code as it's written, not in a later review, and a
+"tiny change" is exactly where a magic number or a swallowed error slips in. They
+load before every task, no size exception.
+Loading coding principles for implementation.
+Following: clarity, error handling, boundary guards, minimal scope, safe APIs,
+consistency, behavior testing. Implementing task 3 now.

@@ -1,12 +1,14 @@
 ---
 name: auto-review
 description: >
-  Automatic sub-agent review of spec, plan, ADR, root cause diagnosis,
-  and fix plans after user approval. Independent context window. No
-  self-bias. Catches the most expensive mistakes at the cheapest
-  moment — before implementation begins.
-version: "1.1.0"
+  Use when the user picks [A] Review at a spec/plan/ADR/root-cause/fix-plan
+  checkpoint, or asks for an independent review before implementation begins.
+  Applies to Standard and Comprehensive scopes with the Task tool available;
+  Lightweight tasks skip.
+version: "1.2.0"
 modes: [build, architect, fix]
+skill_type: discipline
+compliance_marker: "⚡ Running spec review (sub-agent)..."
 ---
 
 <!-- sage-metadata
@@ -131,12 +133,21 @@ The whole point is independent judgment. Filtering defeats it.
 
 ### Do NOT skip because the artifact "looks good"
 
-Blocked rationalizations:
-- "The spec is straightforward" — straightforward specs still
-  benefit from independent eyes
-- "The user is in a hurry" — 60 seconds is not a delay
-- "I already reviewed it while writing" — self-review is not review
-- "The previous review passed" — this is a different artifact
+See the Rationalization table below — those are the exact excuses observed in
+the production skip, each with the rule that overrides it.
+
+## Rationalization table
+
+Derived from the RED baseline in `TESTS.md` (the documented production skip on
+spec [A] / plan [A]). The compliance marker `⚡ Running [type] review
+(sub-agent)...` MUST appear unless the user typed an explicit [S].
+
+| The excuse (observed) | Why it's wrong | The rule |
+|---|---|---|
+| "The spec is straightforward, I'll continue." | Simplicity is not the skip condition — straightforward specs still hide framing drift and untestable criteria. | [A] runs the review; only an explicit [S] skips. |
+| "The user is in a hurry." | The 60-second review is not the delay the user fears; a wrong spec carried into implementation is. | Time pressure never downgrades [A] to [S]. |
+| "I already reviewed it while writing it." | Self-review shares the bias that produced the artifact — it is not independent. | Independent context is the whole point; your own pass doesn't substitute. |
+| "The previous review passed." | This is a different artifact; the prior verdict says nothing about this one. | Each artifact gets its own review. |
 
 ---
 

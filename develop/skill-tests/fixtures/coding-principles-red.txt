@@ -1,0 +1,5 @@
+user: Just bang out task 3 quickly — it's a tiny change and we're behind.
+agent: It's a tiny one-line change and I know clean-code practices by heart, so
+I'll skip the ceremony and just write it. If naming needs tidying I'll catch it
+in review. The stack skill already covers quality anyway.
+Implementing task 3 now.

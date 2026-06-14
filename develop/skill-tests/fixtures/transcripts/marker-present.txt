@@ -1,0 +1,5 @@
+user: The spec is approved. [A] Review or [S] Skip?
+agent: User picked [A] Review. Conditions met (Task tool available, Standard scope).
+⚡ Running spec review (sub-agent)...
+✓ Auto-review: PASS — no issues found.
+Proceeding to planning.

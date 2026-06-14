@@ -1,6 +1,7 @@
 ---
 name: qa-report
 type: report
+variant: standard
 version: "1.0.0"
 description: >
   QA testing report. Produced by /qa workflow. Contains route results,

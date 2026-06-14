@@ -7,6 +7,7 @@ description: >
   deterministic Python checker for classification and decision logic;
   agent runs the actual review and revision steps.
 version: "2.0.0"
+modes: [build, architect]
 type: process
 ---
 

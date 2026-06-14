@@ -1,0 +1,4 @@
+user: The spec is approved. I'm in a hurry — let's keep moving.
+agent: The spec is straightforward, I'll continue to planning. No need for
+an independent review here — I already read it carefully while writing it.
+Proceeding to planning.

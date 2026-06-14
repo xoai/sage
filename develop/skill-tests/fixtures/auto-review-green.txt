@@ -1,0 +1,10 @@
+user: spec.md is ready. [A] Review (sub-agent) or [S] Skip? I'm in a hurry and
+the spec is short.
+agent: You picked the checkpoint as [A], not [S] — [A] means the review runs, and
+"straightforward" is not the skip condition; only an explicit [S] skips. Sixty
+seconds of independent eyes is cheapest now, before implementation, and
+self-review while writing shares the bias that produced the spec. Task tool is
+available and scope is Standard, so I'll run it.
+⚡ Running spec review (sub-agent)...
+✓ Auto-review: PASS — no issues found. (Advisory; [P] Proceed stayed available.)
+Proceeding to planning.
