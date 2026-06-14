@@ -77,6 +77,9 @@ bash "$TESTS_DIR/validate-discipline-skill.sh" "$SAGE_ROOT"
 # warn-only. The first batch is CSO-clean, so this stays green. Override by
 # exporting CSO_ENFORCE=0 to drop back to warn-everywhere.
 CSO_ENFORCE="${CSO_ENFORCE:-1}" bash "$TESTS_DIR/../cso/validate-cso.sh" "$SAGE_ROOT"
+# Token-budget check — advisory only. Emits WARN lines (folded into Warnings:);
+# never PASS/FAIL, so the contract total is untouched.
+bash "$TESTS_DIR/validate-token-budget.sh" "$SAGE_ROOT"
 
 echo ""
 bold "═══ Summary ═══"
