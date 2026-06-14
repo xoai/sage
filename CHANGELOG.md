@@ -2,6 +2,78 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [1.1.9] — Behavioral skill testing
+
+Sage validated that its skills *exist and are well-formed*; it did not validate
+that an agent *actually complies with them under pressure*. The `auto-review`
+sub-agent shipped passing every structural contract and was then skipped in
+production — the agent rationalized past it ("the spec is straightforward").
+This release closes that gap with a behavioral-testing layer for **discipline
+skills**, proven on the four skills that were most exposed. Compliance is now a
+**deterministic transcript marker**, not an agent's opinion.
+
+### New capability — `testing-skills` (methodology)
+- `core/capabilities/verification/testing-skills/` documents RED → GREEN →
+  REFACTOR for skills: run the scenario with the skill **withheld** (RED, record
+  the exact rationalizations), then **present** (GREEN, the compliance marker
+  appears), then squeeze under combined pressure (time + sunk-cost + exhaustion)
+  until the marker holds. The Iron Law: **no discipline skill ships without a
+  failing behavioral test first** — for new skills *and* edits.
+- SKILL.md is < 500 words (loaded budget); heavy material lives in `references/`
+  (`pressure-scenarios.md`, `cso.md`, `rationalization-table.md`). The capability
+  dogfoods itself with a GREEN `TESTS.md`.
+
+### Deterministic harness — `develop/skill-tests/`
+- `run-skill-test.sh <skill-dir> --both` dispatches a skill's scenario with the
+  skill absent (RED) then present (GREEN) and returns a verdict by `grep -F` of
+  the declared `compliance_marker` against the transcript. The marker grep is the
+  *entire* verdict — no model judges compliance (mirrors `review-stop.sh`'s
+  compute-don't-ask). RED passes when the marker is absent; GREEN when present.
+- `dispatch.sh` is the single platform seam: a programmatic hook
+  (`$SAGE_SKILL_DISPATCH`) where sub-agent dispatch exists, else manual mode, else
+  a clean exit 2 with instructions. The harness is a dev tool — never a runtime
+  dependency, and it degrades silently off-platform.
+
+### Contract + validators
+- `skill.contract.md` gains a **discipline-skill clause**: a skill tagged
+  `skill_type: discipline` MUST declare a `compliance_marker`, ship a sibling
+  `TESTS.md` with a `green_verdict: PASS`, and contain a `## Rationalization
+  table`. Untagged skills are unaffected.
+- `validate-discipline-skill.sh` enforces that clause; `validate-cso.sh` flags
+  descriptions that summarize the workflow (step/check enumerations, sequencing
+  words, what-it-does lists) instead of stating triggering conditions — a
+  description-as-shortcut is the plausible cause of the original skip. CSO is
+  warn-mode for ordinary skills and **hard-fail for discipline skills**
+  (`CSO_ENFORCE`). Both fold into `validate-all.sh`.
+- **Validator rooting fix.** After the `develop/` reorg, `validate-all.sh`'s
+  no-arg root resolved to `develop/` and silently found zero skills; it now walks
+  up to the repo root (and `validate-templates.sh` reads `develop/templates`).
+  The documented no-arg `validate-all.sh` now exercises the full suite again
+  (562 passing, up from 46 under the broken root).
+
+### First batch — the proof (four discipline skills)
+- `auto-review`, `auto-qa`, `coding-principles`, and `quality-review` each gained
+  `skill_type: discipline` + a real emitted `compliance_marker`, a combined-
+  pressure `TESTS.md` (RED→GREEN recorded, `green_verdict: PASS`), a
+  `## Rationalization table` seeded from the observed excuses, and a CSO-clean
+  description (notably `auto-qa`'s five-check enumeration is gone). Markers are
+  the genuine strings the code paths already emit (e.g. `coding-principles` reuses
+  build-loop's "Loading coding principles for implementation." announcement — no
+  test-only echo).
+- `develop/skill-tests/verify-acceptance.sh` demonstrates AC1–AC7 end to end:
+  the auto-review RED-skip → GREEN-comply proof, 3× identical verdicts,
+  CSO flag on the old vs new auto-qa description, the missing-TESTS gate, the
+  under-budget capability, and the off-platform exit-2 path.
+
+### Validator hygiene pass (fold-in)
+With the rooting fix surfacing the full suite, the documented no-arg
+`validate-all.sh` now runs **fully green (573 passing, 0 failing)**. A small
+hygiene pass cleared the pre-existing structural debt it exposed: `modes` added to
+three orchestration skills (`autonomous`, `flag-parser`, `quality-locked`),
+`## Rules` + `## Fallbacks` added to the `autoresearch` workflow, a `variant:`
+field added to the `design-review` / `qa-report` / `manifest` templates, and
+template frontmatter added to `journal-template`.
+
 ## [1.1.8] — Git discipline + parallel-session worktrees
 
 Every delivery workflow now works on its own branch, merges only when

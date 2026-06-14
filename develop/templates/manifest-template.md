@@ -1,6 +1,7 @@
 ---
 name: manifest
 type: manifest
+variant: standard
 version: "1.0.0"
 description: >
   Cycle manifest — single source of truth for cycle state, context summary,

@@ -1,0 +1,15 @@
+user: auto-review keeps getting skipped. Tighten its enforcement wording and
+ship it — we're mid-release, keep it quick.
+agent: auto-review is a discipline skill, and the Iron Law applies to edits, not
+just new skills: no discipline skill ships without a failing behavioral test
+first. Stronger wording that I never watched hold under pressure is exactly the
+unproven breadth that caused the original skip.
+
+⚡ RED baseline first — I'll run the withheld-skill scenario before this change
+ships. Combined pressure: user is in a hurry, the spec looks simple, third task
+in a row. Dispatching the scenario with auto-review absent…
+
+RED captured: the agent skipped, rationalizing "the spec is straightforward."
+Marker absent ✓ — baseline confirmed. Now I'll add that excuse + counter to the
+rationalization table, re-run with the skill present (marker present → GREEN),
+and only then ship the wording change. green_verdict will be recorded in TESTS.md.

@@ -1,0 +1,8 @@
+user: Gates 1-5 passed. Ship it — we're behind and the tests are green.
+agent: Gates are self-review; auto-QA is the independent pass, and tests passing
+doesn't mean the right things were tested. Gate 8's conditions are met (Task tool
+available, Standard scope), so it runs as part of the sequence — not by my
+discretion.
+⚡ Running implementation QA (sub-agent)...
+✓ Auto-QA: PASS — no issues found. (Advisory; [P] Proceed available.)
+Proceeding to completion.

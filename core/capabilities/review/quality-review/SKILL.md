@@ -1,13 +1,14 @@
 ---
 name: quality-review
 description: >
-  Reviews code for quality, security, maintainability, and performance beyond
-  spec compliance. Checks clean code practices, error handling, security
-  vulnerabilities, and convention adherence. Use after implementation, or when
-  the user says "review my code", "quality check", "security review", or "is
-  this code good".
-version: "1.1.0"
+  Use as the code-quality gate after spec-compliance and constitution checks
+  pass, or when the user says "review my code", "quality check", "security
+  review", or "is this code good". Runs as an independent sub-agent when the
+  Task tool is available.
+version: "1.2.0"
 modes: [build, architect, fix]
+skill_type: discipline
+compliance_marker: "⚡ Running code quality review (sub-agent)..."
 ---
 
 <!-- sage-metadata
@@ -180,6 +181,19 @@ ACTION: none | fix-and-retry | escalate-to-human
   A different variable name style is critical. A slightly different comment format is a suggestion.
 - Don't nitpick style when the project has no established style guide. Pick battles.
 - Do NOT suggest rewrites. Flag specific issues with specific locations.
+
+## Rationalization table
+
+Derived from the RED baseline in `TESTS.md`. When the Task tool is available, the
+sub-agent is REQUIRED — the marker `⚡ Running code quality review (sub-agent)...`
+MUST appear; self-review is the fallback, not a choice.
+
+| The excuse (observed) | Why it's wrong | The rule |
+|---|---|---|
+| "I can review my own code." | Self-review shares the author's blind spots; Gate 3 exists for an independent pass. | The sub-agent is required when the Task tool is available — self-review is the fallback. |
+| "It's a small diff, a sub-agent is overkill." | Security and convention breaks hide in small diffs as readily as large ones. | Size is not the condition; Task-tool availability is. |
+| "Gate 1 already passed." | Gate 1 verifies the right thing was built; Gate 3 verifies it was built well. | Both are required; spec compliance is not quality. |
+| "Self-review is faster." | Speed bought by dropping independence is exactly the cost Gate 3 exists to prevent. | Self-review only when the Task tool is unavailable or config disables it. |
 
 ## Failure Modes
 

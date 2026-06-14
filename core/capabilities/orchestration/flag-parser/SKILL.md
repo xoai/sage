@@ -7,6 +7,7 @@ description: >
   if neither runtime is available. Returns a strict JSON contract that
   the agent trusts unconditionally.
 version: "1.1.0"
+modes: [build, architect]
 type: process
 ---
 

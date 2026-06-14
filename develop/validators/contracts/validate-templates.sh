@@ -12,7 +12,11 @@ warn() { WARN=$((WARN + 1)); echo "  $(echo -e '\033[33m⚠\033[0m') $1"; }
 echo ""
 echo -e "\033[1m── Template Contract Validation ──\033[0m"
 
-FILES=$(find "$SAGE_ROOT/templates" -type f -name "*template*" -not -name "README*" 2>/dev/null | sort)
+# Templates live under develop/templates after the repo reorg. Fall back to the
+# old top-level templates/ path for older trees.
+TEMPLATES_DIR="$SAGE_ROOT/develop/templates"
+[ -d "$TEMPLATES_DIR" ] || TEMPLATES_DIR="$SAGE_ROOT/templates"
+FILES=$(find "$TEMPLATES_DIR" -type f -name "*template*" -not -name "README*" 2>/dev/null | sort)
 COUNT=$(echo "$FILES" | grep -c "template" || echo "0")
 echo "  Found $COUNT templates"
 echo ""

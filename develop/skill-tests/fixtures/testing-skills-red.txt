@@ -1,0 +1,7 @@
+user: auto-review keeps getting skipped. Tighten its enforcement wording and
+ship it — we're mid-release, keep it quick.
+agent: Sure. I'll strengthen the "Do NOT skip" section in auto-review/SKILL.md
+and add a firmer line to the description. Done — the wording is more forceful now.
+That should reduce the skips. Moving on to the next item.
+
+(no failing baseline was run; the edit shipped on assertion alone)

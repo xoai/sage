@@ -7,6 +7,7 @@ description: >
   cites its source. Substantive decisions with no signal fall back
   to asking the user.
 version: "1.0.0"
+modes: [build, architect]
 type: process
 ---
 

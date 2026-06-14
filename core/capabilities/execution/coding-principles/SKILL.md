@@ -1,12 +1,14 @@
 ---
 name: coding-principles
 description: >
-  Seven universal coding principles applied during implementation.
-  Language-agnostic quality standards that shape every line of code
-  as it's written. Loaded by build-loop before each task. Not a
-  review checklist — a mindset active during implementation.
-version: "1.0.0"
+  Use during implementation — loaded by build-loop before each task — whenever
+  code is being written and should hold to universal quality standards,
+  regardless of language or stack. Active while writing, not a post-hoc review
+  checklist.
+version: "1.1.0"
 modes: [build, architect]
+skill_type: discipline
+compliance_marker: "Loading coding principles for implementation."
 ---
 
 <!-- sage-metadata
@@ -173,6 +175,22 @@ safe APIs, consistency, behavior testing.
 These principles are active for every line written during the task.
 They are NOT a post-hoc checklist — they shape the code as it's
 written.
+
+The announcement `Loading coding principles for implementation.` is the
+compliance marker: it MUST appear before each task's implementation, making the
+standard active and observable rather than assumed.
+
+## Rationalization table
+
+Derived from the RED baseline in `TESTS.md` — the excuses for skipping the load
+step and just coding. The marker must appear on every task, no size exception.
+
+| The excuse (observed) | Why it's wrong | The rule |
+|---|---|---|
+| "It's a tiny change, principles don't matter." | Small changes are exactly where magic numbers and swallowed errors slip in unnoticed. | Principles load before every task — there is no size exception. |
+| "I know clean code by heart." | The load isn't a reminder for you; it makes the standard active and observable for the task. | Announce and apply on every task, not only when you feel you need it. |
+| "I'll clean it up in review." | Principles shape code as it's written; review only catches what shaping would have prevented. | They are a mindset during implementation, not a post-hoc checklist. |
+| "The stack skill already covers quality." | Stack idioms sit on top of the universal foundation — they don't replace it. | Both apply; principles are the foundation. |
 
 ## Relationship to Other Capabilities
 

@@ -118,4 +118,33 @@ Sage: Autoresearch complete.
    Branch: autoresearch/[slug]. Top change: [best iteration description].
    ```
 
+## Rules
+
+- **Stay in scope.** Change only files matching the writable globs; never touch
+  the frozen globs. A change that needs a frozen file is out of scope — discard it.
+- **Branch isolation.** Every iteration commits to the dedicated
+  `autoresearch/<slug>` branch. The loop never commits to the default branch.
+- **The metric decides, not the agent.** keep/discard/crash is determined by the
+  parsed METRIC compared to the current best — never by agent opinion about
+  whether a change "looks better."
+- **One change per iteration.** IDEATE proposes exactly one change (≤1 sentence)
+  so each metric delta is attributable to a single cause.
+- **Respect the budget.** Seconds-per-verify and max-iterations are hard limits.
+  When either is reached, terminate the loop and go to Step 4.
+- **Merge is user-gated.** Only the Step 4 `[M]` choice merges the branch. The
+  loop never merges, pushes, or opens a PR on its own.
+
+## Fallbacks
+
+- **Verify crashes or times out** → record the iteration as a crash, discard the
+  change, and continue. A single bad iteration never halts the loop.
+- **Metric line missing from verify output** → treat as a crash; do not guess a
+  value or infer success.
+- **5+ consecutive discards/crashes** → read
+  `skills/autoresearch/references/stuck-recovery.md` before the next IDEATE.
+- **Python runtime unavailable** → run the COMMIT/VERIFY/DECIDE/LOG/REPEAT phases
+  inline using the bash equivalents in Step 3.
+- **User interrupts ("stop" / "I'm satisfied")** → exit the loop cleanly to
+  Step 4 with the current best; do not start another iteration.
+
 $ARGUMENTS

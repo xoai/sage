@@ -251,6 +251,36 @@ To disable a skill without replacing it, add its name to `disabled` in `.sage/co
 
 ---
 
+## Discipline Skills (`skill_type: discipline`)
+
+A **discipline skill** enforces a rule an agent could rationalize past (a
+mandatory review, a quality gate, a process step). Because such skills are
+silently skippable under pressure, they carry a stronger, *behaviorally proven*
+contract on top of the structural one above. A skill opts in by declaring
+`skill_type: discipline` in its frontmatter. Skills that do not declare it are
+unaffected by this section.
+
+IF `skill_type: discipline` THEN the skill MUST:
+
+1. **Declare a non-empty `compliance_marker`** — an exact observable string the
+   skill emits when followed (an announcement, a required file write, or a
+   specific tool call). The marker MUST be produced by the genuine code path,
+   not added only so a test passes. It is the deterministic pass/fail signal.
+2. **Ship a sibling `TESTS.md`** beside `SKILL.md` whose latest recorded
+   `green_verdict:` is `PASS`. `TESTS.md` documents the RED baseline (the skill
+   withheld, marker absent, rationalizations recorded verbatim), the GREEN
+   expectation (marker present), and any REFACTOR log entries.
+3. **Contain a `## Rationalization table`** section seeded from observed RED
+   runs — the excuses the agent actually used, each with a counter.
+4. **Keep its `description` CSO-clean** — triggering conditions only, no
+   workflow summary (see the CSO standard in the `testing-skills` capability).
+
+These are verified deterministically by
+`develop/validators/contracts/validate-discipline-skill.sh` (folded into
+`validate-all.sh`) and the marker grep in `develop/skill-tests/run-skill-test.sh`.
+The methodology — RED → GREEN → REFACTOR for skills — lives in the
+`testing-skills` capability (`core/capabilities/verification/testing-skills/`).
+
 ## Testing Requirement
 
 Skills that are submitted to `community/` or promoted to default MUST include tests

@@ -1,12 +1,15 @@
 ---
 name: auto-qa
 description: >
-  Automatic sub-agent code verification after quality gates pass.
-  Independent context window. Checks spec-implementation alignment,
-  test coverage, error handling, boundary conditions, and integration
-  consistency. 60 seconds, code-only, advisory.
-version: "1.1.0"
+  Use after implementation passes the quality gates, when a change needs an
+  independent pass over the code before it ships, or when the user asks to
+  "QA this", "check the implementation", or "verify it matches the spec".
+  Applies to Standard and Comprehensive scopes with the Task tool available;
+  Lightweight tasks skip.
+version: "1.2.0"
 modes: [build, architect, fix]
+skill_type: discipline
+compliance_marker: "⚡ Running implementation QA (sub-agent)..."
 ---
 
 <!-- sage-metadata
@@ -208,15 +211,21 @@ them. Do NOT remove, downgrade, or dismiss findings.
 
 ### Do NOT skip because gates passed
 
-Blocked rationalizations:
-- "Quality gates already passed" — gates are self-review, auto-QA
-  is independent review
-- "The implementation is straightforward" — straightforward code
-  still has integration gaps
-- "The tests all pass" — tests passing doesn't mean the RIGHT
-  things are tested
-- "I already checked this during implementation" — self-check is
-  not independent check
+See the Rationalization table — these are the excuses observed when Gate 8 gets
+skipped, each with the rule that overrides it.
+
+## Rationalization table
+
+Derived from the RED baseline in `TESTS.md`. Gate 8 runs as part of the sequence
+when its conditions hold; the marker `⚡ Running implementation QA (sub-agent)...`
+MUST appear — it is not the agent's discretion.
+
+| The excuse (observed) | Why it's wrong | The rule |
+|---|---|---|
+| "Quality gates already passed." | Gates 1-5 are self-review; Gate 8 is the *independent* pass that catches semantic drift the structural gates can't. | Gate 8 runs after the gates pass, not instead of running. |
+| "The implementation is straightforward." | Straightforward code still has integration gaps, missing handlers, and boundary holes. | Simplicity is not a skip condition. |
+| "The tests all pass." | Passing tests don't mean the *right* things were tested against the spec's criteria. | Green tests do not substitute for independent verification. |
+| "I already checked this during implementation." | Self-check shares the author's blind spots — it is not independent. | Independent context is the point; your own check doesn't count. |
 
 ## Failure Modes
 

@@ -5,7 +5,20 @@
 
 set -euo pipefail
 
-SAGE_ROOT="${1:-$(cd "$(dirname "$0")/../.." && pwd)}"
+# Resolve the Sage root. An explicit first arg wins. Otherwise walk up from the
+# script dir to the nearest ancestor that contains core/capabilities — this keeps
+# the documented no-arg invocation working regardless of how deeply the validators
+# are nested (they live at develop/validators/contracts/ after the repo reorg).
+resolve_root() {
+  if [ -n "${1:-}" ]; then printf '%s' "$1"; return; fi
+  local d; d="$(cd "$(dirname "$0")" && pwd)"
+  while [ "$d" != "/" ]; do
+    [ -d "$d/core/capabilities" ] && { printf '%s' "$d"; return; }
+    d="$(dirname "$d")"
+  done
+  (cd "$(dirname "$0")/../../.." && pwd)   # fallback: repo root from this script
+}
+SAGE_ROOT="$(resolve_root "${1:-}")"
 TESTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 PASS=0
 FAIL=0
@@ -58,6 +71,12 @@ bash "$TESTS_DIR/validate-personas.sh" "$SAGE_ROOT"
 bash "$TESTS_DIR/validate-templates.sh" "$SAGE_ROOT"
 bash "$TESTS_DIR/validate-cross-refs.sh" "$SAGE_ROOT"
 bash "$TESTS_DIR/validate-structure.sh" "$SAGE_ROOT"
+bash "$TESTS_DIR/validate-discipline-skill.sh" "$SAGE_ROOT"
+# CSO description check. CSO_ENFORCE=1 promotes a workflow-summary in a
+# `skill_type: discipline` description to a hard FAIL; non-discipline skills stay
+# warn-only. The first batch is CSO-clean, so this stays green. Override by
+# exporting CSO_ENFORCE=0 to drop back to warn-everywhere.
+CSO_ENFORCE="${CSO_ENFORCE:-1}" bash "$TESTS_DIR/../cso/validate-cso.sh" "$SAGE_ROOT"
 
 echo ""
 bold "═══ Summary ═══"

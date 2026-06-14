@@ -1,6 +1,7 @@
 ---
 name: design-review-report
 type: report
+variant: standard
 version: "1.0.0"
 description: >
   Design review report. Produced by /design-review workflow. Contains
