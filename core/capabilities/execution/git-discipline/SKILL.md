@@ -254,13 +254,16 @@ an existing directory.
   conflicts between branches. The offer proceeds as above.
 - **Gitignored** (as in sage's own repo): state does NOT travel — a
   fresh worktree contains no `.sage/` at all. The offer still
-  proceeds, with a copy step: after `git worktree add`, copy
-  `.sage/work/<slug>/` (plus `.sage/config.yaml` and
-  `.sage/constitution.md` if present; for a `/build-x` initiative
-  additionally `.sage/scripts/`, `.sage/prompts/`, and
-  `.sage/agents.toml` — the multi-agent runtime, without which the
-  first dispatcher invocation in the new worktree fails) into the
-  new worktree.
+  proceeds, with a copy step: after `git worktree add`, copy the
+  shared runtime (`.sage/config.yaml`, `.sage/constitution.md`,
+  `.sage/gates/`; for a `/build-x` initiative also `.sage/scripts/`,
+  `.sage/prompts/`, and `.sage/agents.toml` — the multi-agent runtime,
+  without which the first dispatcher invocation fails) into the new
+  worktree. The seeded set is the `worktree_copy` config list (it
+  deliberately does NOT seed `.sage/work/` — a fresh worktree starts a
+  fresh initiative); on teardown, `sage worktree remove` harvests the
+  `worktree_harvest` list (default `.sage/work/*`) back to the main
+  checkout. Both lists are project-configurable in `.sage/config.yaml`.
 
 **The platform runtime needs the same treatment.** The same
 `.gitignore` that ignores `.sage/` typically also ignores `.claude/`
@@ -281,6 +284,17 @@ A worktree session without a platform runtime is an inert checkout —
 no slash commands, no skills, not even the degraded CLAUDE.md gates.
 **The offer must not complete without one of the two remedies.**
 
+**The MCP config and the memory store.** `.mcp.json` is in the default
+`worktree_copy` set, so the sage-memory (and other) MCP servers are
+configured in the worktree. The memory **database** is different from the
+rest of `.sage/`: it is a single shared store, **not** a per-worktree copy.
+A SQLite file cannot be merged, so `.sage-memory/` is never seeded into a
+worktree and never harvested back. Instead the worktree session points at
+the main checkout's store by calling `sage_memory_set_project(<main root>)`
+(`dirname "$(git rev-parse --git-common-dir)"`); the session-init hook
+surfaces that call automatically when it detects a linked worktree. Result:
+one brain, shared by main and every worktree — nothing to reconcile.
+
 **Ownership record.** Record `owner: <worktree-path>` in the **main
 checkout's** copy of the initiative manifest (recording in both
 copies is acceptable; the main checkout's copy is the one exclusion
@@ -296,28 +310,36 @@ editing first and copying back after re-imports the stale `owner:`
 from the worktree copy and permanently locks the initiative out of
 every resume surface.
 
-**Cleanup after merge:** `git worktree remove <path>` — offered,
-user-gated, never automatic.
+**Cleanup after merge:** `sage worktree remove <slug|dir>` — offered,
+user-gated, never automatic. It harvests the gitignored `.sage/work/<slug>/`
+back into the main checkout, then removes the worktree (refusing on dirty
+*tracked* files unless `--force`). Prefer it over bare `git worktree remove`,
+which skips the harvest and silently drops the docs (see Abandonment cleanup).
 
 ## Abandonment cleanup
 
 Closing an initiative without merging offers — never performs — the
-cleanup pair: `git worktree remove <path>` (if a worktree exists) and
-branch deletion.
+cleanup pair: `sage worktree remove <slug|dir>` (if a worktree exists)
+and branch deletion.
 
 **Ignored-world ordering is mandatory.** When `.sage/` is gitignored,
-`git worktree remove` silently deletes the worktree's untracked
-`.sage/` state with it. The abandonment sequence is therefore:
+a bare `git worktree remove` silently deletes the worktree's untracked
+`.sage/` state with it — the brief/spec/plan are gone, never merged
+(untracked) and never recoverable via git (gitignored files never enter
+the object store). `sage worktree remove` exists to prevent exactly this:
+it harvests `.sage/work/<slug>/` back into the main checkout **before**
+removing the worktree. The abandonment sequence is therefore:
 
-1. Copy back `.sage/work/<slug>/` to the main checkout.
-2. Clear `owner:` and write `status: abandoned` in the **main
-   checkout's** copy of the manifest.
-3. Only then offer `git worktree remove`.
+1. `sage worktree remove <slug|dir>` — harvests the work dir back, then
+   removes the worktree.
+2. In the **main checkout's** harvested manifest, clear `owner:` and write
+   `status: abandoned` — after the harvest, never before (see Ownership
+   return).
 
-In the tracked world, steps 1–2 collapse to a manifest edit + commit
-on the initiative branch. Declining the cleanup leaves the branch for
-later; `status: abandoned` is recorded either way so resume surfaces
-stop offering the initiative.
+In the tracked world, the harvest is unnecessary (git carries `.sage/`) and
+step 2 collapses to a manifest edit + commit on the initiative branch.
+Declining the cleanup leaves the branch for later; `status: abandoned` is
+recorded either way so resume surfaces stop offering the initiative.
 
 ## What this capability never does
 

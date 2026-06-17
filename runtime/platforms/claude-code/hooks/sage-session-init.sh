@@ -70,6 +70,28 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
   } > "$LOCK" 2>/dev/null || true
 fi
 
+# ── Worktree memory directive ─────────────────────────────────────
+# In a linked worktree, sage-memory defaults its project database to the
+# session's working directory — an empty store separate from the main
+# checkout. The DB is a single shared store, not a per-worktree copy (a
+# SQLite file cannot be merged, so it is never copied in or harvested
+# back). Point this session at the main checkout's store with
+# set_project so reads and writes land in the one shared brain.
+WORKTREE_MEMORY=""
+if git rev-parse --git-dir >/dev/null 2>&1; then
+  GD=$(cd "$(git rev-parse --git-dir 2>/dev/null)" 2>/dev/null && pwd)
+  GCD=$(cd "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null && pwd)
+  if [ -n "$GD" ] && [ -n "$GCD" ] && [ "$GD" != "$GCD" ]; then
+    # Main checkout root = the first worktree git lists (canonical; matches what
+    # `sage worktree` uses). Fall back to the parent of the common git dir.
+    MAIN_ROOT=$(git worktree list --porcelain 2>/dev/null | awk '/^worktree /{print $2; exit}')
+    [ -n "$MAIN_ROOT" ] || MAIN_ROOT=$(dirname "$GCD")
+    # Emit the bare path (the agent quotes it) — never a pre-quoted literal, which
+    # would break on a path containing an apostrophe.
+    WORKTREE_MEMORY="Memory (worktree): before any other sage_memory tool, call sage_memory_set_project with this MAIN checkout root as the path: ${MAIN_ROOT} — so reads and writes share the main checkout's store. This worktree's own .sage-memory is empty and disposable; never copy or harvest it."
+  fi
+fi
+
 # ── Scan active work via frontmatter ──
 ACTIVE_WORK=""
 WORK_COUNT=0
@@ -114,6 +136,11 @@ echo ""
 
 if [ -n "$COLLISION_WARNING" ]; then
   echo "$COLLISION_WARNING"
+  echo ""
+fi
+
+if [ -n "$WORKTREE_MEMORY" ]; then
+  echo "$WORKTREE_MEMORY"
   echo ""
 fi
 

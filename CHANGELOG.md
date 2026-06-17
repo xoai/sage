@@ -2,6 +2,53 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [1.1.10] — Worktree doc-harvest + planning/validator hygiene
+
+### `sage worktree remove` — stop losing `.sage/work` docs (data-loss fix)
+- Removing a worktree the old way (`git worktree remove`) silently destroyed
+  the initiative's `.sage/work/<slug>/` brief, spec, and plan: `.sage/` is
+  gitignored, so a merge never carried those docs to `main` (untracked) **and**
+  `git worktree remove` deletes ignored paths without the refusal it gives for
+  untracked ones. The only copy lived in the worktree and went with it.
+- New `sage worktree remove <slug|dir> [--force]` **harvests** the gitignored
+  work state back into the main checkout (kept local, still un-pushed) **before**
+  removing the worktree. Resolves a slug or a path; refuses to touch the main
+  checkout or the directory you're standing in; still refuses on dirty *tracked*
+  files unless `--force`; a name already present in `main` is kept separate as
+  `<name>--harvested/` rather than overwritten. `git-discipline` and the
+  parallel-sessions guide now point cleanup at this command.
+- **What is seeded into a worktree and harvested back is now configurable** —
+  `worktree_copy` and `worktree_harvest` in `.sage/config.yaml` (defaulting to
+  today's behavior: the `.sage/*` runtime set, and `.sage/work/*` respectively).
+  A trailing `/*` in `worktree_harvest` harvests each child independently; add
+  e.g. `.sage/decisions.md` to bring more back. Platform runtime is always
+  seeded; tracked paths are skipped in both directions (git carries them).
+- **sage-memory now works in worktrees, and is shared with main.** `.mcp.json`
+  (gitignored) is in the default seed set, so the memory MCP server is actually
+  configured in the worktree — previously it was absent, so memory tools didn't
+  exist there. And because a SQLite store can't be merged, `.sage-memory/` is
+  deliberately **not** copied in or harvested back; instead the session-init hook
+  detects a linked worktree and directs the session to
+  `sage_memory_set_project(<main checkout root>)`, so reads/writes land in the one
+  shared store. One brain across main and every worktree — nothing to reconcile.
+
+### Plan self-check (fresh-eyes pass)
+- The `plan` skill gained **Step 4.5**: a self-run pass over the finished plan
+  (spec coverage, placeholder scan, identifier/type consistency) that fixes
+  defects inline and records a `Self-check:` result line. Complementary to the
+  independent `[A]`-checkpoint auto-review — mechanical defects vs judgment.
+
+### Token-budget validator (advisory)
+- New `validate-token-budget.sh` surfaces over-long skills as warnings (body-only
+  count, frontmatter + fenced blocks excluded; per-`skill_type` budgets). Folded
+  into `validate-all.sh`; never a hard failure — the contract total is untouched.
+
+### Validator suite, fully green
+- Fixed the post-reorg root resolution so the documented no-arg `validate-all.sh`
+  exercises the whole suite again, and cleared the pre-existing structural debt it
+  surfaced (skill `modes`, an `autoresearch` Rules section, template `variant`
+  fields, `journal-template` frontmatter). `validate-all.sh` now passes clean.
+
 ## [1.1.9] — Behavioral skill testing
 
 Sage validated that its skills *exist and are well-formed*; it did not validate

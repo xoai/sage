@@ -43,6 +43,7 @@ fi
 
 # ─── Gather scenario + marker for the human ─────────────────────────────────
 marker="$(awk '
+  { sub(/\r$/, "") }
   NR==1 && $0=="---" { infm=1; next }
   infm && $0=="---" { exit }
   infm && /^compliance_marker:/ { sub(/^compliance_marker:[[:space:]]*/, ""); print; exit }

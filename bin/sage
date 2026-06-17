@@ -480,6 +480,15 @@ command_prefix: $prefix_val
 #   branch   — (default) branch in place; one session at a time.
 #   worktree — a worktree per initiative; for parallel sessions.
 isolation: branch
+# worktree_copy / worktree_harvest: which gitignored paths (relative to the repo
+# root) `sage worktree` seeds INTO a new worktree, and which `sage worktree
+# remove` harvests BACK to the main checkout. Tracked paths are skipped (git
+# already carries them). A trailing /* in worktree_harvest harvests each child
+# independently (per-initiative). Platform runtime (.claude/CLAUDE.md, etc.) is
+# always seeded from your platforms: list. Edit these to match your project's
+# gitignored state (e.g. add .sage/decisions.md to harvest).
+worktree_copy: [.sage/config.yaml, .sage/constitution.md, .sage/gates, .sage/agents.toml, .sage/prompts, .sage/scripts, .mcp.json]
+worktree_harvest: [.sage/work/*]
 YAML
 
   cat > "$sage_dir/decisions.md" << MD
@@ -1399,6 +1408,45 @@ _wt_default_branch() {
 # Copy one gitignored runtime path into the worktree (cp -R, never
 # symlink — WSL drvfs has no POSIX symlinks). Skips tracked paths
 # (git already carried them) and absent paths.
+# Read a list-valued key from a checkout's .sage/config.yaml. Supports BOTH
+# flow style (`key: [a, b, c]`) and block style (`key:` then `  - a` lines).
+# Echoes space-separated tokens. Distinguishes three cases:
+#   - key absent              → the passed defaults
+#   - key present, empty list → empty (an intentional "copy/harvest nothing")
+#   - key present, malformed  → defaults, with a stderr warning (never a garbage
+#                               token — that previously caused silent data loss)
+_wt_config_list() {
+  local root="$1" key="$2"; shift 2
+  local cfg="$root/.sage/config.yaml"
+  if [ ! -f "$cfg" ] || ! grep -qE "^${key}:([[:space:]]|\$)" "$cfg" 2>/dev/null; then
+    printf '%s' "$*"; return 0                       # key absent → defaults
+  fi
+  local line val
+  line=$(grep -E "^${key}:" "$cfg" 2>/dev/null | head -1 || true)
+  val=${line#*:}
+  val=$(printf '%s' "$val" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' || true)
+  case "$val" in
+    \[*)                                             # flow-style [ ... ] (maybe [])
+      printf '%s' "$val" | sed 's/^\[//; s/\]//; s/"//g; s/,/ /g' \
+        | tr -s '[:space:]' ' ' | sed 's/^ //; s/ $//' || true
+      return 0 ;;
+    "")                                              # block-style "- item" lines (maybe none)
+      awk -v k="^${key}:[[:space:]]*\$" '
+        $0 ~ k { grab=1; next }
+        grab && /^[[:space:]]+-[[:space:]]*/ {
+          sub(/^[[:space:]]+-[[:space:]]*/, ""); gsub(/"/, ""); sub(/[[:space:]]*$/, "");
+          printf "%s ", $0; next
+        }
+        grab { exit }
+      ' "$cfg" 2>/dev/null | sed 's/ *$//' || true
+      return 0 ;;
+    *)                                               # scalar / malformed → defaults (loud)
+      echo "  worktree config '$key' is not a list ([...] or block form) — using defaults." >&2
+      printf '%s' "$*"; return 0 ;;
+  esac
+}
+
+WT_COPIED=0
 _wt_copy_ignored() {
   local src_root="$1" dst_root="$2" path="$3"
   [ -e "$src_root/$path" ] || return 0
@@ -1406,6 +1454,147 @@ _wt_copy_ignored() {
   local parent; parent=$(dirname "$path")
   mkdir -p "$dst_root/$parent"
   cp -R "$src_root/$path" "$dst_root/$parent/"
+  WT_COPIED=$((WT_COPIED + 1))
+}
+
+# Copy one path from the worktree back into the main checkout. Skip ONLY paths
+# git already carries to main via merge — i.e. TRACKED paths. Gitignored AND
+# untracked-not-ignored paths both need harvesting (neither travels with a
+# merge). A name already present in main is preserved (never overwritten): the
+# copy lands at <name>--harvested, or --harvested-2, -3… so a prior un-reconciled
+# harvest is never clobbered. Updates HARVEST_N / COLLIDE_N.
+HARVEST_N=0; COLLIDE_N=0
+_wt_harvest_one() {
+  local src="$1" dst="$2" main_root="$3" rel="$4"
+  [ -e "$src" ] || return 0
+  if git -C "$main_root" ls-files --error-unmatch -- "$rel" >/dev/null 2>&1; then
+    return 0   # tracked in main → git carries it via merge; nothing to harvest
+  fi
+  mkdir -p "$(dirname "$dst")"
+  if [ -e "$dst" ]; then
+    local h="${dst}--harvested" n=2
+    while [ -e "$h" ]; do h="${dst}--harvested-${n}"; n=$((n + 1)); done
+    cp -R "$src" "$h"
+    COLLIDE_N=$((COLLIDE_N + 1))
+    echo -e "  ${YELLOW}⚠${RESET} $rel already exists in the main checkout — harvested to $(basename "$h") (reconcile manually)."
+  else
+    cp -R "$src" "$dst"
+    HARVEST_N=$((HARVEST_N + 1))
+  fi
+}
+
+# Harvest the configured gitignored state from a worktree back into the main
+# checkout before removal. Because .sage/ is gitignored, `git worktree remove`
+# deletes it without warning and a merge never carries it (untracked) — so these
+# docs would otherwise be lost with the worktree. The path list is
+# `worktree_harvest` in config (default `.sage/work/*`); a trailing /* harvests
+# each child independently (per-initiative). No-op for tracked paths.
+_wt_harvest_work() {
+  local wt_dir="$1" main_root="$2"
+  local entries; entries=$(_wt_config_list "$main_root" worktree_harvest ".sage/work/*")
+  HARVEST_N=0; COLLIDE_N=0
+  local entry base child name
+  for entry in $entries; do
+    case "$entry" in
+      */\*)                                   # per-child: harvest each entry under <base>
+        base="${entry%/\*}"
+        [ -d "$wt_dir/$base" ] || continue
+        # Both globs so dot-children (e.g. .gitignore) are not silently missed;
+        # nullglob is not set, so an unmatched glob stays literal and the -e guard skips it.
+        for child in "$wt_dir/$base"/* "$wt_dir/$base"/.[!.]*; do
+          [ -e "$child" ] || continue
+          name=$(basename "$child")
+          _wt_harvest_one "$child" "$main_root/$base/$name" "$main_root" "$base/$name"
+        done ;;
+      *)                                      # whole path harvested as a unit
+        _wt_harvest_one "$wt_dir/$entry" "$main_root/$entry" "$main_root" "$entry" ;;
+    esac
+  done
+  if [ "$HARVEST_N" -gt 0 ] || [ "$COLLIDE_N" -gt 0 ]; then
+    echo -e "  ${GREEN}✓${RESET} Harvested $HARVEST_N path(s) into the main checkout$( [ "$COLLIDE_N" -gt 0 ] && echo " (${COLLIDE_N} kept separate for reconciliation)")."
+  else
+    echo -e "  ${DIM}Nothing to harvest (no gitignored worktree_harvest paths present).${RESET}"
+  fi
+}
+
+# `sage worktree remove <slug|dir> [--force]` — harvest then remove.
+_wt_remove() {
+  local target="" force="false"
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --force) force="true"; shift ;;
+      -*)      echo -e "  ${RED}Unknown option: $1${RESET}"; exit 2 ;;
+      *)       target="$1"; shift ;;
+    esac
+  done
+  [ -n "$target" ] || { echo -e "  ${RED}Usage: sage worktree remove <slug|dir> [--force]${RESET}"; exit 2; }
+  git rev-parse --git-dir >/dev/null 2>&1 || { echo -e "  ${RED}Not a git repository.${RESET}"; exit 2; }
+
+  # Main checkout = the first worktree git lists.
+  local main_root
+  main_root=$(git worktree list --porcelain | awk '/^worktree /{print $2; exit}')
+
+  # Resolve the target worktree directory: an existing dir, else a slug matched
+  # against the worktree list (path ending in -<slug> with optional -N suffix).
+  local wt_dir=""
+  if [ -d "$target" ]; then
+    wt_dir=$(cd "$target" && pwd -P)
+  else
+    # Match by basename suffix LITERALLY (case-glob, so $target is never a regex —
+    # no metacharacter injection). Prefer an exact `-<slug>` suffix; only fall
+    # back to the `-<slug>-N` collision variants when there is no exact match, so
+    # a bare slug still resolves when an `-N` sibling exists.
+    local exact="" suffixed="" p bn chosen count
+    while IFS= read -r p; do
+      [ -n "$p" ] || continue
+      bn=$(basename "$p")
+      case "$bn" in
+        *-"$target")        exact="${exact}${p}"$'\n' ;;
+        *-"$target"-*[0-9]) suffixed="${suffixed}${p}"$'\n' ;;
+      esac
+    done <<EOF
+$(git worktree list --porcelain | awk '/^worktree /{print $2}')
+EOF
+    if [ -n "$exact" ]; then chosen="$exact"; else chosen="$suffixed"; fi
+    count=$(printf '%s' "$chosen" | grep -c . || true)
+    if [ "${count:-0}" -eq 1 ]; then
+      wt_dir=$(cd "$(printf '%s' "$chosen" | head -1)" && pwd -P)
+    elif [ "${count:-0}" -eq 0 ]; then
+      echo -e "  ${RED}No worktree matches '$target'. Pass the directory path, or see 'sage worktree list'.${RESET}"; exit 2
+    else
+      echo -e "  ${RED}'$target' matches multiple worktrees — pass the exact path:${RESET}"
+      printf '    %s\n' $chosen; exit 2
+    fi
+  fi
+
+  # Guards: never the main checkout; never the directory we are standing in.
+  if [ "$wt_dir" = "$(cd "$main_root" && pwd -P)" ]; then
+    echo -e "  ${RED}Refusing to remove the main checkout.${RESET}"; exit 2
+  fi
+  local here; here=$(pwd -P)
+  case "$here" in
+    "$wt_dir"|"$wt_dir"/*)
+      echo -e "  ${RED}You are inside $wt_dir.${RESET} Run this from the main checkout so the directory can be removed."
+      exit 2 ;;
+  esac
+
+  echo -e "  ${BOLD}Sage — Worktree remove${RESET}"
+  echo -e "  Dir: ${DIM}$wt_dir${RESET}"
+
+  # 1) Harvest gitignored docs back first — so they survive the removal.
+  _wt_harvest_work "$wt_dir" "$main_root"
+
+  # 2) Remove the worktree. Without --force, git still refuses for modified or
+  #    untracked TRACKED files — that safety is intact (only ignored .sage/ is
+  #    treated as disposable, which we have already harvested).
+  local fflag=""; [ "$force" = "true" ] && fflag="--force"
+  if git worktree remove $fflag "$wt_dir"; then
+    echo -e "  ${GREEN}✓${RESET} Removed worktree."
+    git worktree prune >/dev/null 2>&1 || true
+  else
+    echo -e "  ${YELLOW}Worktree not removed${RESET} (uncommitted tracked changes?). Your docs are already harvested; re-run with --force to remove anyway."
+    exit 3
+  fi
 }
 
 sage_worktree() {
@@ -1418,10 +1607,15 @@ sage_worktree() {
     prune)
       git rev-parse --git-dir >/dev/null 2>&1 || { echo -e "  ${RED}Not a git repository.${RESET}"; exit 2; }
       git worktree prune -v
-      echo -e "  ${DIM}Worktrees with uncommitted changes are never auto-removed — use 'git worktree remove' yourself.${RESET}"
+      echo -e "  ${DIM}Worktrees with uncommitted changes are never auto-removed — use 'sage worktree remove' (harvests .sage/work first) or 'git worktree remove'.${RESET}"
+      return ;;
+    remove)
+      shift
+      _wt_remove "$@"
       return ;;
     ""|-*)
       echo -e "  ${RED}Usage: sage worktree <slug> [--from <base>] [--prefix feat|fix|arch] [--launch]${RESET}"
+      echo -e "         sage worktree remove <slug|dir> [--force]"
       echo -e "         sage worktree list | prune"
       exit 2 ;;
   esac
@@ -1470,33 +1664,34 @@ sage_worktree() {
     exit 3
   fi
 
-  # ── Runtime copy (two-worlds): only when .sage/ is gitignored ──
-  if git -C "$root" check-ignore -q .sage 2>/dev/null; then
-    _wt_copy_ignored "$root" "$dir" ".sage/config.yaml"
-    _wt_copy_ignored "$root" "$dir" ".sage/constitution.md"
-    _wt_copy_ignored "$root" "$dir" ".sage/gates"
-    # Multi-agent runtime — present only if `sage setup multi-agent`
-    # ran; _wt_copy_ignored no-ops when absent or tracked. Without
-    # these a /build-x cycle's first dispatcher call fails in the
-    # worktree (spec W2.3.6).
-    _wt_copy_ignored "$root" "$dir" ".sage/agents.toml"
-    _wt_copy_ignored "$root" "$dir" ".sage/prompts"
-    _wt_copy_ignored "$root" "$dir" ".sage/scripts"
-    # Platform dir(s) + instructions file(s) per platforms: in config.
-    local plats; plats=$( { grep '^platforms:' "$root/.sage/config.yaml" 2>/dev/null || true; } | sed 's/^platforms:[[:space:]]*\[//; s/\]//; s/"//g; s/,/ /g')
-    [ -z "$plats" ] && plats="claude-code"
-    local p
-    for p in $plats; do
-      case "$p" in
-        claude-code) _wt_copy_ignored "$root" "$dir" ".claude"; _wt_copy_ignored "$root" "$dir" "CLAUDE.md" ;;
-        antigravity) _wt_copy_ignored "$root" "$dir" ".agent" ;;
-        codex)       _wt_copy_ignored "$root" "$dir" ".codex"; _wt_copy_ignored "$root" "$dir" "AGENTS.md" ;;
-        opencode)    _wt_copy_ignored "$root" "$dir" ".opencode" ;;
-        gemini-cli)  _wt_copy_ignored "$root" "$dir" ".gemini"; _wt_copy_ignored "$root" "$dir" "GEMINI.md" ;;
-      esac
-    done
-    echo -e "  ${GREEN}✓${RESET} Copied gitignored runtime into the worktree."
-  fi
+  # ── Runtime copy (two-worlds): seed gitignored runtime into the worktree ──
+  # `worktree_copy` (config) controls the .sage/* set; _wt_copy_ignored self-skips
+  # any path that is tracked (git already carried it) or absent, so this no-ops
+  # cleanly in the tracked world. The multi-agent runtime (.sage/agents.toml,
+  # prompts, scripts — present only after `sage setup multi-agent`) is in the
+  # default set so a /build-x dispatcher works in the worktree (spec W2.3.6).
+  WT_COPIED=0
+  local cpath
+  for cpath in $(_wt_config_list "$root" worktree_copy \
+      ".sage/config.yaml" ".sage/constitution.md" ".sage/gates" \
+      ".sage/agents.toml" ".sage/prompts" ".sage/scripts" ".mcp.json"); do
+    _wt_copy_ignored "$root" "$dir" "$cpath"
+  done
+  # Platform dir(s) + instructions file(s) are always seeded (per platforms:);
+  # without them the harness can't load in the worktree. Each self-skips if tracked.
+  local plats; plats=$( { grep '^platforms:' "$root/.sage/config.yaml" 2>/dev/null || true; } | sed 's/^platforms:[[:space:]]*\[//; s/\]//; s/"//g; s/,/ /g')
+  [ -z "$plats" ] && plats="claude-code"
+  local p
+  for p in $plats; do
+    case "$p" in
+      claude-code) _wt_copy_ignored "$root" "$dir" ".claude"; _wt_copy_ignored "$root" "$dir" "CLAUDE.md" ;;
+      antigravity) _wt_copy_ignored "$root" "$dir" ".agent" ;;
+      codex)       _wt_copy_ignored "$root" "$dir" ".codex"; _wt_copy_ignored "$root" "$dir" "AGENTS.md" ;;
+      opencode)    _wt_copy_ignored "$root" "$dir" ".opencode" ;;
+      gemini-cli)  _wt_copy_ignored "$root" "$dir" ".gemini"; _wt_copy_ignored "$root" "$dir" "GEMINI.md" ;;
+    esac
+  done
+  [ "$WT_COPIED" -gt 0 ] && echo -e "  ${GREEN}✓${RESET} Copied $WT_COPIED gitignored runtime path(s) into the worktree."
 
   echo ""
   echo -e "  ${BOLD}Open an isolated session there:${RESET}"

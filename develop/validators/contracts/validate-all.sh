@@ -62,6 +62,14 @@ bold "╚═══════════════════════�
 echo ""
 echo "Root: $SAGE_ROOT"
 
+# Result files are aggregated by glob below. Clear any stragglers from a prior
+# run (or a standalone validator/.test.sh invocation) BEFORE we start, so an
+# orphaned file can never inflate this run's totals. A trap guarantees cleanup
+# on every exit path — the previous inline `rm` could be skipped when `set -e`
+# aborted the error-print loop, leaving stale files that poisoned the next run.
+rm -f /tmp/sage-test-results-* 2>/dev/null || true
+trap 'rm -f /tmp/sage-test-results-* 2>/dev/null || true' EXIT
+
 # Run each validator
 bash "$TESTS_DIR/validate-skills.sh" "$SAGE_ROOT"
 bash "$TESTS_DIR/validate-gates.sh" "$SAGE_ROOT"
@@ -98,14 +106,14 @@ echo ""
 if [ "$TOTAL_FAIL" -gt 0 ]; then
   red "RESULT: FAIL — $TOTAL_FAIL contract violations found"
   echo ""
-  # Print collected errors
+  # Print collected errors. `|| true` so a file with no ERR line never trips
+  # set -e and aborts the loop (the EXIT trap handles cleanup either way).
   for f in /tmp/sage-test-results-*; do
-    [ -f "$f" ] && grep "^ERR:" "$f" 2>/dev/null | sed 's/^ERR:/  ✗ /'
+    [ -f "$f" ] || continue
+    grep "^ERR:" "$f" 2>/dev/null | sed 's/^ERR:/  ✗ /' || true
   done
-  rm -f /tmp/sage-test-results-*
   exit 1
 else
   green "RESULT: PASS — all modules satisfy their contracts"
-  rm -f /tmp/sage-test-results-*
   exit 0
 fi

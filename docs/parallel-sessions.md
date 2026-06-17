@@ -250,7 +250,18 @@ after `sage setup multi-agent`), plus the platform directory and
 instructions file for the platforms in your `platforms:` config
 (`.claude/` + `CLAUDE.md` for Claude Code, etc.). Per-initiative state
 under `.sage/work/` is **not** bulk-copied — a fresh worktree starts a
-fresh initiative.
+fresh initiative, and `sage worktree remove` harvests that state back
+when you're done (see *Merging and cleanup*).
+
+**Both sets are configurable.** `worktree_copy` in `.sage/config.yaml`
+lists what gets seeded into a new worktree; `worktree_harvest` lists what
+`sage worktree remove` brings back (a trailing `/*` harvests each child
+independently). They default to the lists above / `.sage/work/*`; edit
+them to match your project's gitignored state — e.g. add
+`.sage/decisions.md` to `worktree_harvest`. Platform runtime
+(`.claude/`, `CLAUDE.md`, …) is always seeded regardless, since the
+harness can't load without it. Tracked paths are skipped in both
+directions — git already carries them.
 
 Two details worth knowing:
 
@@ -263,6 +274,26 @@ Two details worth knowing:
   worktrees as **short-lived** — create one per task, remove it after
   merge, re-create next time. (When `.sage/` is tracked this is a
   non-issue; git carries updates.)
+
+### Memory is shared, not copied
+
+`sage-memory`'s database (`.sage-memory/`) is the exception to copy-in /
+harvest-back: a SQLite file can't be merged, so forking it per worktree
+would lose whichever side wrote last. Instead the worktree uses the **main
+checkout's** store directly. Two pieces make that work:
+
+- `.mcp.json` (gitignored) is in the default `worktree_copy`, so the
+  sage-memory server is actually configured in the worktree — without it
+  the worktree has no memory tools at all.
+- The session-init hook detects a linked worktree and tells the session to
+  call `sage_memory_set_project(<main checkout root>)`, so every read and
+  write lands in the one shared store. Nothing is harvested on removal —
+  the memory was main's all along.
+
+One caveat: a shared SQLite store across truly simultaneous writers relies
+on WAL locking, which can be flaky on a Windows drive over WSL (drvfs). For
+heavy parallel memory writes, prefer staggering the sessions; normal
+interleaved use is fine.
 
 ---
 
@@ -298,10 +329,10 @@ cd ../myapp-saved-views && claude
 # The two sessions never touch the same files — separate directories.
 # Merge each from its own worktree when ready (always user-gated).
 
-# Clean up after merging:
-git worktree remove ../myapp-login-timeout
-git worktree remove ../myapp-saved-views
-sage worktree prune     # tidy bookkeeping
+# Clean up after merging (harvests .sage/work back into the main checkout first):
+sage worktree remove login-timeout
+sage worktree remove saved-views
+sage worktree prune     # tidy bookkeeping for any you rm'd by hand
 ```
 
 ---
@@ -318,12 +349,23 @@ After a merge, Sage **offers** branch deletion (never performs it), and
 only at initiative completion — so a multi-milestone `/architect` run
 keeps its branch across milestones.
 
-For the worktree directory itself, remove it when you're done:
+For the worktree directory itself, remove it when you're done — use
+`sage worktree remove`, not bare `git worktree remove`:
 
 ```bash
-git worktree remove ../myapp-saved-views   # refuses if there are uncommitted changes
-sage worktree prune                        # clears bookkeeping for any you rm'd manually
+sage worktree remove saved-views   # harvests .sage/work back, then removes
+sage worktree prune                # clears bookkeeping for any you rm'd by hand
 ```
+
+**Why not plain `git worktree remove`?** Because `.sage/` is gitignored, it
+never travels with a merge (it's untracked) and `git worktree remove` deletes
+it **without the usual refusal** — git treats ignored files as disposable, so
+the brief/spec/plan written under `.sage/work/<slug>/` vanish with the
+directory, and they aren't recoverable via git. `sage worktree remove` copies
+`.sage/work/<slug>/` back into your main checkout first (kept local and still
+un-pushed), then removes the worktree. It still refuses on dirty *tracked*
+files unless you pass `--force`. You can also pass the directory path instead
+of the slug: `sage worktree remove ../myapp-saved-views`.
 
 ---
 
