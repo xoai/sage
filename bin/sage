@@ -1463,7 +1463,7 @@ _wt_copy_ignored() {
 # merge). A name already present in main is preserved (never overwritten): the
 # copy lands at <name>--harvested, or --harvested-2, -3… so a prior un-reconciled
 # harvest is never clobbered. Updates HARVEST_N / COLLIDE_N.
-HARVEST_N=0; COLLIDE_N=0
+HARVEST_N=0; COLLIDE_N=0; SAME_N=0
 _wt_harvest_one() {
   local src="$1" dst="$2" main_root="$3" rel="$4"
   [ -e "$src" ] || return 0
@@ -1472,11 +1472,18 @@ _wt_harvest_one() {
   fi
   mkdir -p "$(dirname "$dst")"
   if [ -e "$dst" ]; then
+    # Already present in main. If byte-identical, there is genuinely nothing to
+    # harvest — skip silently (no pointless --harvested copy). Only when the
+    # worktree's copy DIFFERS do we keep it for reconciliation, and never clobber
+    # a prior un-reconciled harvest.
+    if diff -rq "$src" "$dst" >/dev/null 2>&1; then
+      SAME_N=$((SAME_N + 1)); return 0
+    fi
     local h="${dst}--harvested" n=2
     while [ -e "$h" ]; do h="${dst}--harvested-${n}"; n=$((n + 1)); done
     cp -R "$src" "$h"
     COLLIDE_N=$((COLLIDE_N + 1))
-    echo -e "  ${YELLOW}⚠${RESET} $rel already exists in the main checkout — harvested to $(basename "$h") (reconcile manually)."
+    echo -e "  ${YELLOW}⚠${RESET} $rel differs from the main checkout — harvested to $(basename "$h") (reconcile manually)."
   else
     cp -R "$src" "$dst"
     HARVEST_N=$((HARVEST_N + 1))
@@ -1492,9 +1499,14 @@ _wt_harvest_one() {
 _wt_harvest_work() {
   local wt_dir="$1" main_root="$2"
   local entries; entries=$(_wt_config_list "$main_root" worktree_harvest ".sage/work/*")
-  HARVEST_N=0; COLLIDE_N=0
-  local entry base child name
-  for entry in $entries; do
+  HARVEST_N=0; COLLIDE_N=0; SAME_N=0
+  local entry base child name entries_arr
+  # Split on spaces with globbing OFF: a literal `.sage/work/*` entry must reach
+  # the per-child case below, NOT be expanded here against the current directory
+  # (which is the main checkout — that would harvest main's own dirs and miss the
+  # worktree's new ones). The per-child glob inside the loop runs with globbing on.
+  set -f; entries_arr=( $entries ); set +f
+  for entry in ${entries_arr[@]+"${entries_arr[@]}"}; do
     case "$entry" in
       */\*)                                   # per-child: harvest each entry under <base>
         base="${entry%/\*}"
@@ -1510,8 +1522,8 @@ _wt_harvest_work() {
         _wt_harvest_one "$wt_dir/$entry" "$main_root/$entry" "$main_root" "$entry" ;;
     esac
   done
-  if [ "$HARVEST_N" -gt 0 ] || [ "$COLLIDE_N" -gt 0 ]; then
-    echo -e "  ${GREEN}✓${RESET} Harvested $HARVEST_N path(s) into the main checkout$( [ "$COLLIDE_N" -gt 0 ] && echo " (${COLLIDE_N} kept separate for reconciliation)")."
+  if [ "$HARVEST_N" -gt 0 ] || [ "$COLLIDE_N" -gt 0 ] || [ "$SAME_N" -gt 0 ]; then
+    echo -e "  ${GREEN}✓${RESET} Harvested $HARVEST_N new path(s) into the main checkout$( [ "$SAME_N" -gt 0 ] && echo "; ${SAME_N} already current")$( [ "$COLLIDE_N" -gt 0 ] && echo "; ${COLLIDE_N} differ — kept as --harvested for reconciliation")."
   else
     echo -e "  ${DIM}Nothing to harvest (no gitignored worktree_harvest paths present).${RESET}"
   fi
@@ -1671,10 +1683,15 @@ sage_worktree() {
   # prompts, scripts — present only after `sage setup multi-agent`) is in the
   # default set so a /build-x dispatcher works in the worktree (spec W2.3.6).
   WT_COPIED=0
-  local cpath
-  for cpath in $(_wt_config_list "$root" worktree_copy \
+  local cpath cpaths_arr
+  # Split with globbing off so a configured path is never expanded against the
+  # main checkout (each path is copied verbatim by _wt_copy_ignored).
+  set -f
+  cpaths_arr=( $(_wt_config_list "$root" worktree_copy \
       ".sage/config.yaml" ".sage/constitution.md" ".sage/gates" \
-      ".sage/agents.toml" ".sage/prompts" ".sage/scripts" ".mcp.json"); do
+      ".sage/agents.toml" ".sage/prompts" ".sage/scripts" ".mcp.json") )
+  set +f
+  for cpath in ${cpaths_arr[@]+"${cpaths_arr[@]}"}; do
     _wt_copy_ignored "$root" "$dir" "$cpath"
   done
   # Platform dir(s) + instructions file(s) are always seeded (per platforms:);

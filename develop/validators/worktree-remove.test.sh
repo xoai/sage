@@ -158,7 +158,44 @@ WT="$(add_wt "$T/main" kappa)"
 { [ ! -e "$T/main/.sage/work/kappa" ] && [ ! -d "$WT" ]; } && check "empty harvest list [] harvests nothing (intentional)" 0 || check "empty harvest list [] harvests nothing (intentional)" 1
 rm -rf "$T"
 
-# 13) Main-checkout guard exits with the specific code 2 (not just any non-zero).
+# 14) Identical content already in main → skipped silently (no --harvested noise).
+T="$(mktemp -d)"; new_repo "$T/main"; mkdir -p "$T/main/.sage/work/dup"
+echo "SAME" > "$T/main/.sage/work/dup/spec.md"
+WT="$(add_wt "$T/main" lam)"
+mkdir -p "$WT/.sage/work/dup"; echo "SAME" > "$WT/.sage/work/dup/spec.md"   # byte-identical to main
+out="$( cd "$T/main" && bash "$BIN" worktree remove lam 2>&1 )"
+[ ! -e "$T/main/.sage/work/dup--harvested" ] && check "identical content: no pointless --harvested copy" 0 || check "identical content: no pointless --harvested copy" 1
+printf '%s' "$out" | grep -q "already current" && check "identical content: reported as 'already current'" 0 || check "identical content: reported as 'already current'" 1
+rm -rf "$T"
+
+# 15) DIFFERING content already in main → kept as --harvested (real divergence).
+T="$(mktemp -d)"; new_repo "$T/main"; mkdir -p "$T/main/.sage/work/div"
+echo "MAIN-VERSION" > "$T/main/.sage/work/div/spec.md"
+WT="$(add_wt "$T/main" mu)"
+mkdir -p "$WT/.sage/work/div"; echo "WORKTREE-VERSION" > "$WT/.sage/work/div/spec.md"
+( cd "$T/main" && bash "$BIN" worktree remove mu ) >/dev/null 2>&1
+{ grep -q MAIN-VERSION "$T/main/.sage/work/div/spec.md" && grep -q WORKTREE-VERSION "$T/main/.sage/work/div--harvested/spec.md"; } \
+  && check "differing content: main intact + worktree copy kept as --harvested" 0 || check "differing content: main intact + worktree copy kept as --harvested" 1
+rm -rf "$T"
+
+# 16) THE REGRESSION: main already has initiatives AND the worktree has a
+#     genuinely-new one. The new dir MUST be harvested; the existing identical
+#     ones must NOT be expanded against main (the `for entry in $entries` glob bug).
+T="$(mktemp -d)"; new_repo "$T/main"
+mkdir -p "$T/main/.sage/work/keep-1" "$T/main/.sage/work/keep-2"
+echo same > "$T/main/.sage/work/keep-1/spec.md"; echo same > "$T/main/.sage/work/keep-2/spec.md"
+WT="$(add_wt "$T/main" nu)"            # add_wt also creates .sage/work/nu in the worktree
+mkdir -p "$WT/.sage/work/keep-1" "$WT/.sage/work/keep-2"  # identical copies of main's
+echo same > "$WT/.sage/work/keep-1/spec.md"; echo same > "$WT/.sage/work/keep-2/spec.md"
+mkdir -p "$WT/.sage/work/brand-new"; echo fresh > "$WT/.sage/work/brand-new/spec.md"  # only in worktree
+out="$( cd "$T/main" && bash "$BIN" worktree remove nu 2>&1 )"
+[ -f "$T/main/.sage/work/brand-new/spec.md" ] && check "new worktree initiative IS harvested (the reported bug)" 0 || check "new worktree initiative IS harvested (the reported bug)" 1
+[ -f "$T/main/.sage/work/nu/spec.md" ] && check "the worktree's own initiative dir is harvested too" 0 || check "the worktree's own initiative dir is harvested too" 1
+{ [ ! -e "$T/main/.sage/work/keep-1--harvested" ] && [ ! -e "$T/main/.sage/work/keep-2--harvested" ]; } \
+  && check "identical existing dirs make no --harvested noise" 0 || check "identical existing dirs make no --harvested noise" 1
+rm -rf "$T"
+
+# 17) Main-checkout guard exits with the specific code 2 (not just any non-zero).
 T="$(mktemp -d)"; new_repo "$T/main"
 ( cd "$T/main" && bash "$BIN" worktree remove "$T/main" ) >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 2 ] && check "main-checkout guard exits 2 (specific)" 0 || check "main-checkout guard exits 2 (got $rc)" 1
