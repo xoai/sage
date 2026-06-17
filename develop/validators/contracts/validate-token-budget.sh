@@ -44,10 +44,11 @@ fi
 # Body word count: drop the first frontmatter block and every fenced ``` block.
 count_body_words() {
   awk '
+    { sub(/\r$/, "") }
     NR==1 && $0=="---" { fm=1; next }
     fm && $0=="---"    { fm=0; next }
     fm                 { next }
-    /^[[:space:]]*```/ { fence=!fence; next }
+    /^[[:space:]]*(```|~~~)/ { fence=!fence; next }
     fence              { next }
     { print }
   ' "$1" | wc -w | tr -d ' '
@@ -56,6 +57,7 @@ count_body_words() {
 skill_type_of() {
   local t
   t="$(awk '
+    { sub(/\r$/, "") }
     NR==1 && $0=="---" { fm=1; next }
     fm && $0=="---" { exit }
     fm && /^skill_type:/ { sub(/^skill_type:[[:space:]]*/, ""); print; exit }

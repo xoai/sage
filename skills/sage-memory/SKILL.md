@@ -50,6 +50,15 @@ of the session. If the call fails or the tool doesn't exist, fall back to
 `.sage-memory/` files. Don't announce either outcome — just use whichever
 works.
 
+**In a git worktree, pass the MAIN checkout root, not the worktree path.**
+sage-memory keys its project database by the path you pass, and the worktree's
+own `.sage-memory/` is a separate empty store. Point at the main checkout —
+`dirname "$(git rev-parse --git-common-dir)"` — so reads and writes land in the
+one shared store. The DB is a single SQLite file: it is never copied into a
+worktree or harvested back (a SQLite file cannot be merged). The Sage
+session-init hook surfaces the exact `set_project(<main root>)` call when it
+detects a worktree.
+
 ## File Fallback Format
 
 All three skills (sage-memory, sage-ontology, sage-self-learning) share the same

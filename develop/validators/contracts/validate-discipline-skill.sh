@@ -38,6 +38,7 @@ fi
 # Read a frontmatter field's raw value (first --- … --- block).
 fm_value() { # fm_value <file> <field>
   awk -v field="$2" '
+    { sub(/\r$/, "") }
     NR==1 && $0=="---" { infm=1; next }
     infm && $0=="---" { exit }
     infm && index($0, field":")==1 {

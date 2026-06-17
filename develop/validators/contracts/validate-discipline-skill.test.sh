@@ -64,6 +64,13 @@ mk_skill  disc-no-table       discipline  "X MARKER X"  1     PASS    0
 mk_skill  disc-tests-not-pass discipline  "X MARKER X"  1     FAIL    1
 mk_skill  ref-skill           ""          ""            0     PASS    0
 
+# CRLF-endings complete discipline skill: must still be recognized and pass.
+# Regression: a CRLF frontmatter delimiter (`---\r`) used to make fm_value return
+# empty, so the skill was silently treated as NON-discipline and skipped —
+# fail-silent non-enforcement. It must appear as a recognized PASS here.
+mk_skill  disc-crlf           discipline  "X MARKER X"  1     PASS    1
+sed -i 's/$/\r/' "$CAP/disc-crlf/SKILL.md" "$CAP/disc-crlf/TESTS.md"
+
 OUT="$(bash "$VALIDATOR" "$ROOT" 2>&1)"
 
 echo ""
@@ -78,6 +85,9 @@ printf '%s' "$OUT" | grep -qE "✗.*disc-tests-not-pass";  check "green_verdict�
 # ref-skill is exempt: it must NOT appear as a failure.
 if printf '%s' "$OUT" | grep -qE "✗.*ref-skill"; then ref_rc=1; else ref_rc=0; fi
 check "non-discipline skill exempt (no FAIL)" "$ref_rc"
+
+# CRLF discipline skill is recognized and enforced (passes here, not silently skipped).
+printf '%s' "$OUT" | grep -qE "✓.*disc-crlf"; check "CRLF discipline skill recognized + enforced (not skipped)" $?
 
 # Tally: exactly 4 FAIL lines were written to the results file.
 nfail="$(grep -c "^ERR:" /tmp/sage-test-results-discipline 2>/dev/null || echo 0)"

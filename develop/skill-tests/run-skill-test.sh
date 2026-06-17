@@ -76,6 +76,7 @@ SKILL_NAME="$(basename "$SKILL_PATH")"
 # Read compliance_marker from the SKILL.md frontmatter (first --- … --- block).
 extract_marker() {
   awk '
+    { sub(/\r$/, "") }                              # tolerate CRLF checkouts
     NR==1 && $0=="---" { infm=1; next }
     infm && $0=="---" { exit }
     infm && /^compliance_marker:/ {
@@ -152,6 +153,13 @@ run_phase() {
   # Propagate it as a real setup-error exit (2) rather than verdict-grepping an
   # empty transcript.
   if ! transcript="$(obtain_transcript "$phase" "$supplied")"; then
+    exit 2
+  fi
+  # An empty/whitespace-only transcript means the dispatch produced no output
+  # (sub-agent crashed/timed out yet returned success). That is a setup error,
+  # NOT a valid RED baseline — otherwise "marker absent" would pass vacuously.
+  if [ ! -s "$transcript" ] || ! grep -q '[^[:space:]]' "$transcript" 2>/dev/null; then
+    echo "run-skill-test.sh: transcript is empty ($transcript) — dispatch produced no output (setup error)." >&2
     exit 2
   fi
   emit_verdict "$phase" "$transcript"

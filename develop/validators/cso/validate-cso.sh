@@ -49,6 +49,7 @@ fi
 # Join the (possibly folded) description: block into a single line.
 extract_description() {
   awk '
+    { sub(/\r$/, "") }
     NR==1 && $0=="---" { infm=1; next }
     infm && $0=="---" { exit }
     infm && /^description:/ {
@@ -67,6 +68,7 @@ extract_description() {
 
 frontmatter_field() {
   awk -v field="$2" '
+    { sub(/\r$/, "") }
     NR==1 && $0=="---" { infm=1; next }
     infm && $0=="---" { exit }
     infm && index($0, field":")==1 { sub("^"field":[[:space:]]*", ""); print; exit }
@@ -95,6 +97,9 @@ while IFS= read -r skill_file; do
   [ -z "$skill_file" ] && continue
   name="$(basename "$(dirname "$skill_file")")"
   desc="$(extract_description "$skill_file")"
+  # strip one layer of surrounding quotes from a quoted one-line description so a
+  # phrase anchored at string start isn't hidden behind a leading quote
+  case "$desc" in \"*\") desc="${desc#\"}"; desc="${desc%\"}" ;; \'*\') desc="${desc#\'}"; desc="${desc%\'}" ;; esac
   [ -z "$desc" ] && continue
 
   phrase="$(cso_violation_phrase "$desc")" || phrase=""

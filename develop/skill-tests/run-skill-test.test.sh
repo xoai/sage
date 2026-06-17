@@ -80,6 +80,16 @@ assert_case "marker_present:false on absent" 0 '"marker_present":false' \
 assert_case "dispatch unavailable → exit 2 (manual mode)" 2 'run-skill-test.sh' \
   "$FIX/skill-ok" --green </dev/null
 
+# 9. An EMPTY transcript is a setup error (exit 2), not a vacuous RED pass —
+#    a dispatch that produced no output must not read as "baseline skip confirmed".
+EMPTY="$(mktemp)"; : > "$EMPTY"
+assert_case "empty transcript → exit 2 (no vacuous RED pass)" 2 '' \
+  "$FIX/skill-ok" --red --transcript "$EMPTY"
+WS="$(mktemp)"; printf '   \n\t\n' > "$WS"
+assert_case "whitespace-only transcript → exit 2" 2 '' \
+  "$FIX/skill-ok" --red --transcript "$WS"
+rm -f "$EMPTY" "$WS"
+
 echo ""
 echo "  run-skill-test: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
