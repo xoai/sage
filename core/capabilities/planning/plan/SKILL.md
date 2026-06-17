@@ -190,6 +190,34 @@ Task 4 [P]: Create auth middleware   (depends on: Task 1)
 Task 5:     Integrate auth with user (depends on: Task 3, Task 4)
 ```
 
+### Step 4.5: Plan self-check (fresh eyes)
+
+After the task list is complete and before presenting it, re-read the plan
+against the spec as if seeing it for the first time. Run these three checks and
+fix anything inline — no re-review, just fix and move on. This is a **self-run**
+check, not a sub-agent dispatch: independent review is auto-review's job at the
+`[A]` checkpoint, and the two are complementary — this pass catches mechanical
+defects, auto-review catches judgment defects.
+
+1. **Spec coverage.** Walk each spec requirement (R1…Rn / FR1…FRn). Can you point
+   to a task that implements it? List any requirement with no task and add the
+   missing task. A requirement with no task is the most expensive plan defect —
+   it ships as a silent gap.
+2. **Placeholder scan.** Search the task bodies for red flags: `TODO`, `TBD`,
+   `...`, `[fill in]`, "implement X here", or a Done-criterion that restates the
+   task name instead of a verifiable condition. Replace each with a concrete file
+   path, criterion, or code reference.
+3. **Type / name consistency.** Identifiers, function signatures, file paths, and
+   config keys referenced across tasks must match exactly. A function called
+   `clearLayers()` in one task and `clearFullLayers()` in another is a latent
+   bug. A file written as `config.yaml` in Task 2 and `config.yml` in Task 5 is
+   the same file — reconcile to one spelling.
+
+Record one line at the end of the plan: `Self-check: spec-coverage ✓ ·
+placeholders ✓ · consistency ✓ (N fixes)`. If a check could not be completed
+(e.g. the spec does not enumerate requirements), say so explicitly rather than
+claiming ✓.
+
 ### Step 5: Output Plan
 
 Save to `.sage/work/<YYYYMMDD>-<slug>/plan.md` using the plan template.
@@ -251,6 +279,8 @@ Delivers: [PRD requirements]
 |------|:---:|:---:|:---:|:---:|:---:|
 | Task 1 | | | | | |
 | Task 2 | | | | | |
+
+Self-check: spec-coverage ✓ · placeholders ✓ · consistency ✓ (N fixes)
 ```
 
 For plans without a PRD source (standard elicitation), milestones are
@@ -288,6 +318,12 @@ Show the plan to the human. Wait for approval before implementation begins.
 - MUST get human approval on the plan before starting implementation.
 - MUST map every PRD acceptance scenario to at least one task's done criteria
   (when a PRD exists). If a scenario isn't covered, the plan is incomplete.
+- MUST run the Step 4.5 self-check (fresh eyes) on every Standard+ plan and
+  include its one-line `Self-check:` result in the output plan. This self-check
+  catches mechanical defects (a requirement with no task, a leftover placeholder,
+  an identifier that drifts between tasks); it is distinct from and complementary
+  to the independent auto-review that fires at the `[A]` checkpoint, which catches
+  judgment defects. The two are not redundant — neither replaces the other.
 
 **SHOULD (violation = suboptimal but workable):**
 - SHOULD keep BUILD mode plans to 3-10 tasks. If you have 30 tasks,
