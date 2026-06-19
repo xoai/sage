@@ -2,6 +2,29 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [1.1.11] — Seamless built-in memory
+
+`sage-memory` is a built-in capability, but enabling it used to mean pasting an
+MCP snippet by hand — so it was often left off, and the agent silently ran
+without persistent knowledge. `sage init` now wires it up automatically.
+
+- **`sage init` configures sage-memory by default** — it adds the server to the
+  project's MCP config for the selected platform (`.mcp.json` for Claude Code,
+  `.cursor/mcp.json` for Cursor) and ensures `.gitignore` covers `.sage-memory/`
+  so the SQLite store is never committed. Opt out with `sage init --no-memory`.
+- **Idempotent and non-destructive.** Re-running never duplicates the entry, and
+  an existing MCP config is never overwritten — other servers (and secrets) are
+  preserved. A structural merge into an existing file uses `jq`; without `jq`,
+  or for a platform with no safe auto-merge, it falls back to printing the
+  snippet rather than risk corrupting the file. Missing `uv` is detected and
+  surfaced with the install hint (setup degrades gracefully — the memory skill
+  still falls back to `.sage-memory/` files when the server is absent).
+- **`sage setup memory` now performs the setup** (idempotent merge) instead of
+  only printing instructions; use it to (re)configure or for non-default clients.
+- The `.sage-memory/` directory itself is created lazily by the server on first
+  write — `init` doesn't pre-create an empty one; it just guarantees it stays
+  gitignored.
+
 ## [1.1.10] — Worktree doc-harvest + planning/validator hygiene
 
 ### `sage worktree remove` — stop losing `.sage/work` docs (data-loss fix)
