@@ -772,6 +772,15 @@ sage_init() {
   create_sage_state "$target"
   run_generators "$target"
   sage_memory_sync_hook "$target"
+
+  # sage-memory is a built-in capability — wire it up seamlessly (idempotent,
+  # never overwrites other MCP servers). Opt out with `sage init --no-memory`.
+  if [ "${NO_MEMORY_FLAG:-}" != "true" ]; then
+    echo ""
+    echo -e "  ${BOLD}Memory${RESET}"
+    _sage_memory_install "$target" 0 || true
+  fi
+
   print_success "$target"
 }
 
@@ -1162,66 +1171,112 @@ sage_setup() {
   esac
 }
 
+# Ensure a .gitignore in <target> contains <pattern> (idempotent).
+_ensure_gitignore() {
+  local target="$1" pat="$2" gi="$1/.gitignore"
+  [ -f "$gi" ] || : > "$gi"
+  grep -qxF "$pat" "$gi" 2>/dev/null && return 0
+  # keep the user's last rule intact — add a newline first if the file lacks one
+  if [ -s "$gi" ] && [ -n "$(tail -c1 "$gi" 2>/dev/null)" ]; then printf '\n' >> "$gi"; fi
+  printf '%s\n' "$pat" >> "$gi"
+}
+
+# Idempotently add the sage-memory server to an MCP config JSON file.
+#   rc 0 = already present / created / merged (config is good)
+#   rc 2 = could not safely auto-edit (caller should print the manual snippet)
+# Never overwrites an existing file's other servers; a structural merge into an
+# existing file needs jq (a hand-rolled JSON edit would risk corrupting it).
+_mcp_add_sage_memory() {
+  local cfg="$1"
+  if [ -f "$cfg" ] && grep -q '"sage-memory"' "$cfg" 2>/dev/null; then
+    return 0   # already configured — idempotent no-op
+  fi
+  if [ ! -f "$cfg" ]; then
+    mkdir -p "$(dirname "$cfg")" 2>/dev/null || true
+    cat > "$cfg" <<'JSON'
+{
+  "mcpServers": {
+    "sage-memory": {
+      "command": "uvx",
+      "args": ["--refresh", "sage-memory"]
+    }
+  }
+}
+JSON
+    return 0
+  fi
+  # File exists but has no sage-memory entry → structural merge (preserve the rest).
+  if command -v jq >/dev/null 2>&1; then
+    local tmp; tmp="$(mktemp)"
+    if jq '.mcpServers["sage-memory"] = {"command":"uvx","args":["--refresh","sage-memory"]}' \
+         "$cfg" >"$tmp" 2>/dev/null && [ -s "$tmp" ]; then
+      cat "$tmp" > "$cfg"; rm -f "$tmp"; return 0
+    fi
+    rm -f "$tmp"
+  fi
+  return 2   # no jq, or malformed JSON — don't risk it
+}
+
+# Configure sage-memory for the project at <target>. Idempotent and
+# non-destructive. quiet=1 suppresses the per-config success line (used by init).
+# Returns 2 if any platform needs a manual snippet (caller may print it).
+_sage_memory_install() {
+  local target="$1" quiet="${2:-0}"
+  local platforms
+  platforms=$( { grep '^platforms:' "$target/.sage/config.yaml" 2>/dev/null || true; } \
+    | sed 's/^platforms:[[:space:]]*\[//; s/\]//; s/"//g; s/,/ /g')
+  [ -z "$platforms" ] && platforms="claude-code"
+
+  # The SQLite store must never be committed (it's a binary the server manages).
+  _ensure_gitignore "$target" ".sage-memory/"
+
+  local p cfg need_manual=0
+  for p in $platforms; do
+    case "$p" in
+      claude-code) cfg="$target/.mcp.json" ;;
+      cursor)      cfg="$target/.cursor/mcp.json" ;;
+      *)           cfg="" ;;   # other platforms: no safe auto-merge → manual
+    esac
+    if [ -z "$cfg" ]; then need_manual=1; continue; fi
+    if _mcp_add_sage_memory "$cfg"; then
+      [ "$quiet" = 1 ] || echo -e "  ${GREEN}✓${RESET} sage-memory ready in ${cfg#"$target"/}"
+    else
+      need_manual=1
+    fi
+  done
+
+  if ! command -v uvx >/dev/null 2>&1 && ! command -v uv >/dev/null 2>&1; then
+    echo -e "  ${YELLOW}⚠${RESET} uv not found — the memory server needs it:"
+    echo -e "      ${DIM}curl -LsSf https://astral.sh/uv/install.sh | sh${RESET}"
+  fi
+  [ "$need_manual" = 1 ] && return 2
+  return 0
+}
+
 sage_setup_memory() {
   echo ""
   echo -e "  ${BOLD}Sage — Setup Memory${RESET}"
   echo ""
-  echo "  sage-memory gives your AI agent persistent knowledge across sessions."
-  echo "  It remembers architecture decisions, conventions, debugging insights,"
-  echo "  and project patterns — so the agent never starts from scratch."
-  echo ""
-  echo -e "  ${BOLD}Step 1:${RESET} Add to your MCP config"
+  echo "  sage-memory gives your AI agent persistent knowledge across sessions —"
+  echo "  architecture decisions, conventions, debugging insights, project patterns."
   echo ""
 
-  # Detect platform
-  if [ -d ".claude" ] || [ -f "$HOME/.claude.json" ]; then
-    echo -e "  ${CYAN}Claude Code${RESET} — add to ~/.claude.json:"
+  if _sage_memory_install "$(pwd)" 0; then
     echo ""
-    echo '  {'
-    echo '    "mcpServers": {'
-    echo '      "sage-memory": {'
-    echo '        "command": "uvx",'
-    echo '        "args": ["--refresh", "sage-memory"]'
-    echo '      }'
-    echo '    }'
-    echo '  }'
-  elif [ -d ".cursor" ]; then
-    echo -e "  ${CYAN}Cursor${RESET} — add to .cursor/mcp.json:"
-    echo ""
-    echo '  {'
-    echo '    "mcpServers": {'
-    echo '      "sage-memory": {'
-    echo '        "command": "uvx",'
-    echo '        "args": ["--refresh", "sage-memory"]'
-    echo '      }'
-    echo '    }'
-    echo '  }'
+    echo -e "  ${BOLD}Restart your IDE${RESET} to load the server. That's it — Sage searches"
+    echo "  and stores knowledge automatically as you work."
   else
-    echo "  Add to your MCP client config:"
+    # A platform without a safe auto-merge (or no jq) — show the manual snippet.
+    echo -e "  Add this to your MCP client config, then restart your IDE:"
     echo ""
-    echo '  {'
-    echo '    "mcpServers": {'
-    echo '      "sage-memory": {'
-    echo '        "command": "uvx",'
-    echo '        "args": ["--refresh", "sage-memory"]'
-    echo '      }'
+    echo '    "sage-memory": {'
+    echo '      "command": "uvx",'
+    echo '      "args": ["--refresh", "sage-memory"]'
     echo '    }'
-    echo '  }'
   fi
-
   echo ""
-  echo -e "  ${BOLD}Step 2:${RESET} Restart your IDE"
-  echo ""
-  echo "  That's it. Sage will automatically search and store knowledge"
-  echo "  as you work. No configuration needed."
-  echo ""
-  echo -e "  ${DIM}The --refresh arg keeps the MCP server current on every${RESET}"
-  echo -e "  ${DIM}launch. \`sage upgrade\` will prompt to upgrade the package${RESET}"
-  echo -e "  ${DIM}when a newer version is on PyPI, and \`sage update\` syncs${RESET}"
-  echo -e "  ${DIM}the latest skill prose into your project automatically.${RESET}"
-  echo ""
-  echo -e "  ${DIM}Requires uv: curl -LsSf https://astral.sh/uv/install.sh | sh${RESET}"
-  echo -e "  ${DIM}More info: https://github.com/xoai/sage-memory${RESET}"
+  echo -e "  ${DIM}--refresh keeps the server current each launch; \`sage upgrade\`${RESET}"
+  echo -e "  ${DIM}prompts when a newer package is on PyPI. More: https://github.com/xoai/sage-memory${RESET}"
   echo ""
 }
 
@@ -1345,11 +1400,11 @@ sage_help() {
   echo ""
   echo "Project commands:"
   echo "  sage new <n>                  Create a new project with Sage"
-  echo "  sage init [--prefix]             Add Sage to the current directory"
+  echo "  sage init [--prefix] [--no-memory]  Add Sage to the current directory"
   echo "  sage update                      Regenerate platform files"
   echo "  sage upgrade                     Update Sage to the latest version"
   echo "  sage learn [path]                Learn a codebase or module"
-  echo "  sage setup memory                Configure persistent memory"
+  echo "  sage setup memory                (Re)configure persistent memory"
   echo "  sage setup multi-agent [--remove]  Install cross-model build cycle (optional)"
   echo ""
   echo "Skill management (powered by skills.sh):"
@@ -1737,6 +1792,7 @@ WORKTREE_ARGS=("$@")
 PRESET_FLAG=""
 PREFIX_FLAG=""
 PLATFORM_FLAG=""
+NO_MEMORY_FLAG=""
 REMAINING_ARGS=()
 NEXT_IS=""
 for arg in "$@"; do
@@ -1754,6 +1810,7 @@ for arg in "$@"; do
     --platform=*) PLATFORM_FLAG="${arg#--platform=}" ;;
     --platform)   NEXT_IS="platform" ;;
     --prefix)     PREFIX_FLAG="true" ;;
+    --no-memory)  NO_MEMORY_FLAG="true" ;;
     *)            REMAINING_ARGS+=("$arg") ;;
   esac
 done
