@@ -17,14 +17,31 @@ if [ -n "$PAYLOAD" ] && command -v python3 >/dev/null 2>&1; then
 fi
 
 if [ ! -f "$SESSION_INIT" ]; then
-  printf '{}\n'
-  exit 0
+  CONTEXT=""
+else
+  CONTEXT="$(printf '%s' "$PAYLOAD" | SAGE_SESSION_INIT_RAW=1 bash "$SESSION_INIT" 2>/dev/null || true)"
 fi
 
-CONTEXT="$(printf '%s' "$PAYLOAD" | SAGE_SESSION_INIT_RAW=1 bash "$SESSION_INIT" 2>/dev/null || true)"
+ROUTING_CONTEXT="$(cat <<'EOF'
+## Sage Routing Reminder (Hermes always-on)
+
+Before answering the user, classify the latest ask. Do not wait for an explicit slash command.
+
+- fix/bug/broken/error/crash/failing/debug/not working -> start `Sage -> fix workflow`
+- build/implement/add/create/develop/ship/code/feature -> start `Sage -> build workflow`
+- check/verify/make sure/test/QA -> verify with evidence
+- explicit `/fix`, `/build`, `/qa`, etc. wins
+
+For coding work: inspect real files/logs first, patch narrowly, verify with actual output, and restart/check services when runtime behavior changes.
+EOF
+)"
+
 if [ -z "$CONTEXT" ]; then
-  printf '{}\n'
-  exit 0
+  CONTEXT="$ROUTING_CONTEXT"
+else
+  CONTEXT="$ROUTING_CONTEXT
+
+$CONTEXT"
 fi
 
 if command -v python3 >/dev/null 2>&1; then

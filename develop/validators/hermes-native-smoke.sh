@@ -164,6 +164,24 @@ import sys
 data = json.loads(open(sys.argv[1], encoding="utf-8").read())
 if "Sage Context" not in data.get("context", ""):
     raise SystemExit("pre_llm_call hook did not emit JSON context")
+if "Sage Routing Reminder" not in data.get("context", ""):
+    raise SystemExit("pre_llm_call hook did not prepend always-on routing reminder")
+PY
+
+NON_SAGE_DIR="$WORK/non-sage"
+mkdir -p "$NON_SAGE_DIR"
+INJECT_FALLBACK_OUT="$WORK/sage-inject-fallback.out"
+printf '{"cwd":"%s","hook_event_name":"pre_llm_call","session_id":"smoke"}\n' "$NON_SAGE_DIR" \
+  | bash "$HERMES_HOME_SMOKE/hooks/sage-inject.sh" >"$INJECT_FALLBACK_OUT"
+python3 - "$INJECT_FALLBACK_OUT" <<'PY'
+import json
+import sys
+data = json.loads(open(sys.argv[1], encoding="utf-8").read())
+context = data.get("context", "")
+if "Sage Routing Reminder" not in context:
+    raise SystemExit("pre_llm_call hook did not emit always-on routing reminder outside a Sage project")
+if "Sage Context" in context:
+    raise SystemExit("pre_llm_call fallback unexpectedly emitted project context outside a Sage project")
 PY
 
 printf '{"cwd":"%s","hook_event_name":"post_tool_call","session_id":"smoke","tool_name":"write_file"}\n' "$PROJECT" \
