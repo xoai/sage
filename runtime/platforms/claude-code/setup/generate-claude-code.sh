@@ -425,6 +425,13 @@ else
   echo "  ⚠ Gate scripts not found at $GATE_SCRIPTS"
 fi
 
+SCREENSHOT_TOOL="$SAGE_DIR/runtime/tools/sage-screenshot.sh"
+if [ -f "$SCREENSHOT_TOOL" ]; then
+  cp "$SCREENSHOT_TOOL" "$PROJECT_SAGE/gates/scripts/sage-screenshot.sh"
+  chmod +x "$PROJECT_SAGE/gates/scripts/sage-screenshot.sh"
+  echo "  ✓ sage-screenshot.sh"
+fi
+
 # Deploy gate activation config
 GATE_CONFIG="$CORE/gates/_config/gate-modes.yaml"
 if [ -f "$GATE_CONFIG" ]; then
@@ -485,7 +492,53 @@ fi
 SETTINGS_LOCAL="$CLAUDE_DIR/settings.local.json"
 mkdir -p "$CLAUDE_DIR"
 TEMP_SETTINGS=$(mktemp "${SETTINGS_LOCAL}.XXXXXX" 2>/dev/null || echo "${SETTINGS_LOCAL}.tmp")
-cat > "$TEMP_SETTINGS" << 'HOOKEOF'
+if command -v python3 >/dev/null 2>&1; then
+  python3 - "$SETTINGS_LOCAL" "$TEMP_SETTINGS" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+settings_path = Path(sys.argv[1])
+temp_path = Path(sys.argv[2])
+
+if settings_path.exists():
+    try:
+        data = json.loads(settings_path.read_text(encoding="utf-8"))
+    except Exception:
+        data = {}
+else:
+    data = {}
+if not isinstance(data, dict):
+    data = {}
+
+hooks = data.setdefault("hooks", {})
+if not isinstance(hooks, dict):
+    hooks = {}
+    data["hooks"] = hooks
+
+session = hooks.setdefault("SessionStart", [])
+if not isinstance(session, list):
+    session = []
+
+session = [
+    item for item in session
+    if "sage-session-init.sh" not in json.dumps(item, sort_keys=True)
+]
+session.append({
+    "matcher": "startup|resume|clear|compact",
+    "hooks": [
+        {
+            "type": "command",
+            "command": "bash .claude/hooks/sage-session-init.sh",
+        }
+    ],
+})
+hooks["SessionStart"] = session
+
+temp_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+PY
+else
+  cat > "$TEMP_SETTINGS" << 'HOOKEOF'
 {
   "hooks": {
     "SessionStart": [
@@ -502,6 +555,7 @@ cat > "$TEMP_SETTINGS" << 'HOOKEOF'
   }
 }
 HOOKEOF
+fi
 
 if mv "$TEMP_SETTINGS" "$SETTINGS_LOCAL" 2>/dev/null; then
   echo "  ✓ settings.local.json (session hook)"

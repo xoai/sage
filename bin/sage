@@ -217,38 +217,41 @@ select_platform() {
   PLATFORMS=()  # additive list — multiple platforms can coexist
 
   # Auto-detect from existing files
-  local has_agent=false has_claude=false has_codex=false has_opencode=false has_gemini=false
+  local has_agent=false has_claude=false has_codex=false has_opencode=false has_gemini=false has_hermes=false
   [ -d "$target/.agent" ] && has_agent=true
   [ -d "$target/.claude" ] && has_claude=true
   [ -d "$target/.codex" ] && has_codex=true
   [ -d "$target/.opencode" ] && has_opencode=true
   [ -d "$target/.gemini" ] && has_gemini=true
+  [ -d "$target/.hermes" ] && has_hermes=true
   # GEMINI.md alone is ambiguous (Antigravity vs Gemini CLI); only count it
   # toward Antigravity if .agent/ also exists (or if .gemini/ doesn't exist).
   if [ -f "$target/GEMINI.md" ] && [ "$has_gemini" = false ]; then
     has_agent=true
   fi
 
-  # AGENTS.md alone is ambiguous (Codex vs Opencode). If neither .codex/ nor
-  # .opencode/ exists, ask once. Only triggers when no other platform is
+  # AGENTS.md alone is ambiguous (Codex vs Opencode vs Hermes). If neither
+  # .codex/, .opencode/, nor .hermes/ exists, ask once. Only triggers when no other platform is
   # clearly detected, to avoid interrupting auto-detection flows.
   local agents_alone=false
-  if [ -f "$target/AGENTS.md" ] && [ "$has_codex" = false ] && [ "$has_opencode" = false ]; then
+  if [ -f "$target/AGENTS.md" ] && [ "$has_codex" = false ] && [ "$has_opencode" = false ] && [ "$has_hermes" = false ]; then
     agents_alone=true
   fi
   if [ "$agents_alone" = true ] && [ "$has_claude" = false ] && [ "$has_agent" = false ] && [ "$has_gemini" = false ] && [ -z "${PLATFORM_FLAG:-}" ] && [ -t 0 ]; then
     echo ""
-    echo "  AGENTS.md exists, but no .codex/ or .opencode/ directory."
+    echo "  AGENTS.md exists, but no .codex/, .opencode/, or .hermes/ directory."
     echo "  Which platform is using this AGENTS.md?"
     echo "    [1] Codex (OpenAI)"
     echo "    [2] Opencode"
-    echo "    [3] Both"
+    echo "    [3] Hermes"
+    echo "    [4] All three"
     printf "  > "
     read -r choice
     case "$choice" in
       1) has_codex=true ;;
       2) has_opencode=true ;;
-      3) has_codex=true; has_opencode=true ;;
+      3) has_hermes=true ;;
+      4) has_codex=true; has_opencode=true; has_hermes=true ;;
     esac
   fi
   # Check if CLAUDE.md is Sage-generated
@@ -262,6 +265,7 @@ select_platform() {
   [ "$has_codex" = true ] && PLATFORMS+=("codex")
   [ "$has_opencode" = true ] && PLATFORMS+=("opencode")
   [ "$has_gemini" = true ] && PLATFORMS+=("gemini-cli")
+  [ "$has_hermes" = true ] && PLATFORMS+=("hermes")
 
   # Honor --platform flag (one or more, space- or comma-separated)
   if [ -n "${PLATFORM_FLAG:-}" ]; then
@@ -271,17 +275,17 @@ select_platform() {
     # `--platform ","`) yields an empty FLAG_LIST; bash 3.2 aborts.
     for p in ${FLAG_LIST[@]+"${FLAG_LIST[@]}"}; do
       case "$p" in
-        claude-code|antigravity|codex|opencode|gemini-cli)
+        claude-code|antigravity|codex|opencode|gemini-cli|hermes)
           PLATFORMS+=("$p")
           ;;
         both)
           PLATFORMS+=("claude-code" "antigravity")
           ;;
         all)
-          PLATFORMS=("claude-code" "antigravity" "codex" "opencode" "gemini-cli")
+          PLATFORMS=("claude-code" "antigravity" "codex" "opencode" "gemini-cli" "hermes")
           ;;
         *)
-          echo -e "  ${YELLOW}Unknown platform: $p (supported: claude-code, antigravity, codex, opencode, gemini-cli)${RESET}"
+          echo -e "  ${YELLOW}Unknown platform: $p (supported: claude-code, antigravity, codex, opencode, gemini-cli, hermes)${RESET}"
           ;;
       esac
     done
@@ -305,7 +309,8 @@ select_platform() {
     echo "    [3] Codex (OpenAI)"
     echo "    [4] Opencode"
     echo "    [5] Gemini CLI"
-    echo "    [6] Multiple — install for all"
+    echo "    [6] Hermes"
+    echo "    [7] Multiple — install for all"
     printf "  > "
     read -r choice
     case "$choice" in
@@ -313,7 +318,8 @@ select_platform() {
       3) PLATFORMS=("codex") ;;
       4) PLATFORMS=("opencode") ;;
       5) PLATFORMS=("gemini-cli") ;;
-      6) PLATFORMS=("claude-code" "antigravity" "codex" "opencode" "gemini-cli") ;;
+      6) PLATFORMS=("hermes") ;;
+      7) PLATFORMS=("claude-code" "antigravity" "codex" "opencode" "gemini-cli" "hermes") ;;
       *) PLATFORMS=("claude-code") ;;
     esac
     PLATFORM=$(printf '%s\n' ${PLATFORMS[@]+"${PLATFORMS[@]}"} | tr '\n' '+' | sed 's/+$//')
@@ -580,6 +586,7 @@ run_generators() {
       codex)       platforms_to_run=("codex") ;;
       opencode)    platforms_to_run=("opencode") ;;
       gemini-cli)  platforms_to_run=("gemini-cli") ;;
+      hermes)      platforms_to_run=("hermes") ;;
       *)           platforms_to_run=("claude-code") ;;
     esac
   fi
@@ -643,13 +650,20 @@ print_success() {
       gemini-cli)
         echo "    $step. Gemini CLI: run \`gemini\` — TOML commands in .gemini/commands/"
         ;;
+      hermes)
+        echo "    $step. Hermes: start Hermes with this project as cwd — commands load from the sage plugin"
+        ;;
     esac
     step=$((step + 1))
   done
   echo ""
   echo -e "    Type ${BOLD}/sage${RESET} (or \`@sage\` in Opencode) and describe what you want."
   echo ""
-  echo -e "  ${DIM}Commands: /${p}build  /${p}fix  /${p}architect  /${p}status  /${p}review  /${p}learn${RESET}"
+  if printf '%s\n' ${plats_arr[@]+"${plats_arr[@]}"} | grep -qx "hermes"; then
+    echo -e "  ${DIM}Commands: /${p}build  /${p}fix  /${p}architect  /${p}sage-status  /${p}review  /${p}learn${RESET}"
+  else
+    echo -e "  ${DIM}Commands: /${p}build  /${p}fix  /${p}architect  /${p}status  /${p}review  /${p}learn${RESET}"
+  fi
 
   # Check for sage-memory
   local has_memory=false
@@ -838,10 +852,10 @@ sage_update() {
     # Empty-safe expansion (see select_platform — same bash 3.2 guard).
     for p in ${FLAG_LIST[@]+"${FLAG_LIST[@]}"}; do
       case "$p" in
-        claude-code|antigravity|codex|opencode|gemini-cli)
+        claude-code|antigravity|codex|opencode|gemini-cli|hermes)
           PLATFORMS+=("$p") ;;
         all)
-          PLATFORMS=("claude-code" "antigravity" "codex" "opencode" "gemini-cli")
+          PLATFORMS=("claude-code" "antigravity" "codex" "opencode" "gemini-cli" "hermes")
           break ;;
       esac
     done
@@ -875,6 +889,9 @@ except: pass
   if [ "$PLATFORM" = "claude-code" ] || [ "$PLATFORM" = "both" ]; then
     echo -e "    ${CYAN}↻${RESET} Regenerate CLAUDE.md and .claude/commands/"
   fi
+  if printf '%s\n' ${PLATFORMS[@]+"${PLATFORMS[@]}"} | grep -qx "hermes"; then
+    echo -e "    ${CYAN}↻${RESET} Regenerate AGENTS.md and Hermes plugin/hooks"
+  fi
   echo -e "    ${GREEN}✓${RESET} Preserve .sage/ project state (untouched)"
   if [ -n "$community_skills" ]; then
     echo -e "    ${GREEN}✓${RESET} Preserve community skills: $community_skills"
@@ -906,9 +923,20 @@ except: pass
 
   # Update sage/ framework
   if [ -d "$target/sage" ]; then
+    local update_source="$SAGE_FRAMEWORK"
+    local update_tmp=""
+    local source_resolved target_resolved
+    source_resolved="$(cd "$SAGE_FRAMEWORK" && pwd -P)"
+    target_resolved="$(cd "$target/sage" && pwd -P)"
+    if [ "$source_resolved" = "$target_resolved" ]; then
+      update_tmp="$(mktemp -d)"
+      cp -a "$SAGE_FRAMEWORK" "$update_tmp/sage"
+      update_source="$update_tmp/sage"
+    fi
     rm -rf "$target/sage"
-    cp -a "$SAGE_FRAMEWORK" "$target/sage" &
+    cp -a "$update_source" "$target/sage" &
     spin $! "Updating framework..."
+    [ -n "$update_tmp" ] && rm -rf "$update_tmp"
     prune_framework_copy "$target/sage"
     echo -e "  ${GREEN}✓${RESET} sage/ updated"
   fi
@@ -1421,7 +1449,7 @@ sage_help() {
   echo "Flags:"
   echo "  --prefix                         Namespace commands as sage:build, sage:fix, etc."
   echo "  --preset <name>                  Set constitution preset (base|startup|enterprise|opensource)"
-  echo "  --platform <list>                Comma-separated platforms (claude-code|antigravity|codex|opencode|gemini-cli|all)"
+  echo "  --platform <list>                Comma-separated platforms (claude-code|antigravity|codex|opencode|gemini-cli|hermes|all)"
   echo ""
   echo "Examples:"
   echo "  sage new my-app                  # Create project with Sage"
@@ -1761,6 +1789,7 @@ sage_worktree() {
       codex)       _wt_copy_ignored "$root" "$dir" ".codex"; _wt_copy_ignored "$root" "$dir" "AGENTS.md" ;;
       opencode)    _wt_copy_ignored "$root" "$dir" ".opencode" ;;
       gemini-cli)  _wt_copy_ignored "$root" "$dir" ".gemini"; _wt_copy_ignored "$root" "$dir" "GEMINI.md" ;;
+      hermes)      _wt_copy_ignored "$root" "$dir" "AGENTS.md" ;;
     esac
   done
   [ "$WT_COPIED" -gt 0 ] && echo -e "  ${GREEN}✓${RESET} Copied $WT_COPIED gitignored runtime path(s) into the worktree."

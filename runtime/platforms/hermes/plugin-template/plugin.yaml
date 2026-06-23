@@ -1,0 +1,25 @@
+name: sage
+version: "__SAGE_VERSION__"
+description: >-
+  AI skills framework: UNDERSTAND -> ENVISION -> DELIVER -> REFLECT.
+  Process enforcement, Sage workflows, skills, and review personas.
+author: xoai
+license: MIT
+provides_skills: true
+provides_slash_commands: true
+provides_tools:
+  - sage_spec_check
+  - sage_hallucination_check
+  - sage_verify
+  - sage_visual_gate
+  - sage_run_gates
+keywords:
+  - framework
+  - process
+  - skills
+  - workflows
+  - product
+  - engineering
+  - design
+  - ux
+  - research
