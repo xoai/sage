@@ -656,9 +656,10 @@ Sage is platform-agnostic. It works wherever AI agents work.
 | [Codex (OpenAI)](runtime/platforms/codex/) | AGENTS.md + `.codex/agents/` (TOML sub-agents) | Native (TOML) | Full |
 | [Opencode](runtime/platforms/opencode/) | AGENTS.md + `.opencode/{commands,agents}/` (markdown) | Native (markdown) | Full |
 | [Gemini CLI](runtime/platforms/gemini-cli/) | GEMINI.md + `.gemini/commands/` (TOML) | Single-pass fallback in v1 | Full |
+| [Hermes Agent](runtime/platforms/hermes/) | AGENTS.md + Hermes plugin/skills/hooks | `delegate_task` | Full |
 | [Claude Code Plugin](runtime/platforms/claude-code/setup/generate-plugin.sh) | Plugin format — install with `/plugin install sage@xoai` | Task tool | Full |
 
-Six distribution paths from one source:
+Seven distribution paths from one source:
 
 ```
 Sage Framework (source of truth)
@@ -667,13 +668,14 @@ Sage Framework (source of truth)
     ├── generate-codex.sh         → AGENTS.md + .codex/agents/
     ├── generate-opencode.sh      → AGENTS.md + .opencode/{commands,agents}/
     ├── generate-gemini-cli.sh    → GEMINI.md + .gemini/commands/
+    ├── generate-hermes.sh        → AGENTS.md + Hermes plugin/skills/hooks
     └── generate-plugin.sh        → sage-plugin/ (Claude Code plugin)
 ```
 
 All in-project paths share the same `.sage/` project state. Multiple
 platforms can be installed simultaneously — Sage detects them and
-generates files for each. AGENTS.md is shared between Codex and
-Opencode; GEMINI.md is shared between Antigravity and Gemini CLI.
+generates files for each. AGENTS.md is shared between Codex, Opencode,
+and Hermes; GEMINI.md is shared between Antigravity and Gemini CLI.
 
 ### Installing for a specific platform
 
@@ -681,7 +683,9 @@ Opencode; GEMINI.md is shared between Antigravity and Gemini CLI.
 sage init                              # detect existing platforms; ask if none
 sage init --platform codex             # explicit: just Codex
 sage init --platform codex,opencode    # multiple
-sage init --platform all               # all 5 platforms
+sage init --platform hermes            # install Sage into $HERMES_HOME (default: ~/.hermes)
+HERMES_HOME=~/.hermes/profiles/work sage init --platform hermes
+sage init --platform all               # all supported platforms
 sage update                            # regenerate using the persisted list
 sage update --platform gemini-cli      # override on update
 ```

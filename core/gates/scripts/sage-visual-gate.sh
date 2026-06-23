@@ -47,7 +47,10 @@ mkdir -p "$FEATURE_DIR"
 # ── Step 1: Capture screenshots ──
 log "── Step 1: Capturing screenshots ──"
 
-SCREENSHOT_TOOL="$SAGE_ROOT/runtime/tools/sage-screenshot.sh"
+SCREENSHOT_TOOL="$SCRIPT_DIR/sage-screenshot.sh"
+if [ ! -f "$SCREENSHOT_TOOL" ]; then
+  SCREENSHOT_TOOL="$SAGE_ROOT/runtime/tools/sage-screenshot.sh"
+fi
 if [ ! -f "$SCREENSHOT_TOOL" ]; then
   # Try relative to gate script location
   SCREENSHOT_TOOL="$(cd "$SCRIPT_DIR/../../../runtime/tools" 2>/dev/null && pwd)/sage-screenshot.sh"
