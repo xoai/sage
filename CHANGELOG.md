@@ -2,6 +2,65 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [Unreleased] — Correctness
+
+Sage's deterministic gate layer is the one part of the framework that was
+supposed to be immune to a model talking itself out of a failure. It wasn't.
+This release makes it true, then puts it under test.
+
+**The gates failed open.** Gate 4 detected a hallucinated import, printed
+`❌ Import not found`, and exited `0` — "✅ PASS". Two independent causes: the
+detection loop ran in a pipeline subshell, so the failure never reached the
+verdict; and it used `grep -oP`, which BSD grep (macOS) and BusyBox grep reject,
+so with stderr discarded the check silently examined nothing at all. Gate 5
+exited `0` for a project with no test runner, indistinguishable from a green
+suite. Gate 1's task extraction collapsed against Sage's own plan template and
+passed every plan it was ever given, including plans naming files that don't
+exist. Gate 6 reported a missing browser as a visual defect.
+
+- **Three-state exit contract.** Every gate returns `0` pass, `1` fail, `2`
+  unverifiable. Exit 2 is never a pass: a workflow offers `[P] Proceed
+  unverified` (recorded as a waiver in `.sage/decisions.md`) or `[F] Fix
+  verification setup`. "The suite is green" and "there is no suite" are
+  different claims and no longer share an exit code.
+- **Gate 4** analyzes imports and packages in one `python3` pass — identical on
+  macOS, Linux and Alpine. An undeclared package is now a failure, not a
+  warning. The hard-coded `useServer`/`useClient`/Pages-Router greps are gone,
+  replaced by the project's own type-checker (tsc, else pyright/mypy), which
+  subsumes any such list and never goes stale.
+- **Gate 5** reads `package.json` as JSON instead of grepping for `"vitest"`,
+  which matched a keywords array and then ran a runner the project didn't have.
+  `eval` is gone. `python -m pytest` is now `python3` — on python3-only systems
+  the old spelling reported a *passing* suite as a failure.
+- **Gate 1** parses the plan properly and checks `Output:` deliverables of
+  `[DOC]` tasks, which were never read.
+- **Gate 6** distinguishes "no browser" from "broken layout".
+- **Regression tests.** `develop/validators/gates/` — 17 cases across all four
+  gates, pinning all three exit states, run in CI on modern bash and inside a
+  real `bash:3.2` container.
+
+**Portability.** New `check-portability.py` guards `grep -P`, bare `sed -i`,
+`mapfile`, associative arrays, `${var^^}`, `date %N` and `readlink -f`. It found
+41 more GNU-only constructs across 11 files. Two were load-bearing:
+`sage new-pack` used bash-4 `${var^}` and could never have run on macOS, and the
+CRLF regression test used a `sed -i` form BSD sed ignores, so on macOS it tested
+nothing. A dead `grep` in `validate-gates.sh` had been erroring out on every
+platform, silently skipping the check it guarded.
+
+**One version, not five.** `CHANGELOG` said 1.1.11, the README said 1.1.8, both
+plugin manifests said 1.0.9, both marketplace manifests said 1.0.9, and
+`sage init` stamped the literal `1.0.0` into every project's config. A root
+`VERSION` file is now the only hand-written version; `runtime/tools/release.py
+--check` fails CI on drift, and `sage version` tells you what you're running.
+
+**Verified install and upgrade.** `install.sh` downloaded `main` over git with
+no tag, no checksum and no signature. It now resolves a release tag, verifies
+the tarball's SHA-256 (sha256sum, else shasum, else python3 — never skipped),
+and aborts loudly without installing anything on a mismatch. `sage upgrade`
+checks out the newest release tag and prints the changelog you gained;
+`--channel main` keeps the old behavior behind an explicit warning. A failed
+upgrade leaves the existing framework untouched.
+
 ## [1.1.11] — Seamless built-in memory
 
 `sage-memory` is a built-in capability, but enabling it used to mean pasting an

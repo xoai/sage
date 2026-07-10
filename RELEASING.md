@@ -2,6 +2,51 @@
 
 Maintainer-facing checklist. End users don't read this.
 
+## Cutting a release
+
+The root `VERSION` file is the single source of truth. The plugin and
+marketplace manifests, the CHANGELOG's top entry, and the `sage-version`
+stamped into every project's `.sage/config.yaml` are all derived from it, and
+CI fails on drift.
+
+```bash
+# 1. Rename the ## [Unreleased] heading to ## [X.Y.Z] — <title>.
+#    `--bump` refuses to write until that entry exists: a release without a
+#    changelog entry is a release nobody can read.
+
+# 2. Raise the version and propagate it into all four manifests.
+python3 runtime/tools/release.py --bump patch    # or minor / major
+
+# 3. Full CI green.
+bash develop/validators/gates/run-gate-tests.sh
+bash develop/validators/installer/run-installer-tests.sh
+python3 develop/validators/tools/test_release.py
+python3 develop/validators/check-bash-arrays.py
+python3 develop/validators/check-portability.py
+docker run --rm -v "$PWD":/sage -w /sage bash:3.2 bash develop/validators/bash32-smoke.sh
+
+# 4. Commit, then tag. The tag must match VERSION or the workflow rejects it.
+git tag -a "v$(cat VERSION)" -m "Sage v$(cat VERSION)"
+git push origin main --tags
+```
+
+The tag push runs `.github/workflows/release.yml`, which re-runs the gate tests
+and validators (a tag can point at a commit CI never saw), builds
+`sage-X.Y.Z.tar.gz` plus `checksums.txt`, verifies the checksum it is about to
+publish, and attaches both to a GitHub release with that version's changelog
+section as the notes.
+
+`install.sh` and `sage upgrade` both refuse to install a tarball whose SHA-256
+does not match the published `checksums.txt`. Nothing else authenticates the
+download — if the release assets are wrong, every user gets the wrong Sage.
+
+Smoke the result on a clean machine or container:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/xoai/sage/main/install.sh | bash
+sage version && sage new smoke-test
+```
+
 ## When `sage-memory` ships a new release
 
 `sage-memory` is a sibling Python package (`/mnt/e/Codes/sage-memory/`,
