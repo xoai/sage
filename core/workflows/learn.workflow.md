@@ -82,8 +82,10 @@ Do NOT present vague findings and rely on the user to approve them.
 The user may click [A] without scrutiny. The quality gate is YOUR
 responsibility, not the user's.
 
-If the user corrects any findings, update before storing. Store the
-correction as a self-learning entry (Rule 6).
+If the user corrects any findings, update before storing. Activate the
+canonical `sage-self-learning` skill for the correction and follow its complete
+classify, four-part author, search-before-store, enrich/correct/invalidate/link
+method. Do not store correction prose directly from the learn workflow.
 
 ## Step 5: Store Knowledge
 
@@ -180,6 +182,8 @@ Type a command, or describe what you want to do next.
 ## Rules
 
 - Search before storing — don't duplicate existing knowledge.
+- Corrections and gotchas belong to the canonical `sage-self-learning` skill;
+  do not store correction prose directly as ordinary knowledge.
 - Store insights, not facts readable from files.
 - One insight per memory entry — focused entries retrieve precisely.
 - Adapt depth to scope — broad scans stay high-level, deep dives

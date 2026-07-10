@@ -518,7 +518,7 @@ for wf in "$CORE"/workflows/*.workflow.md; do
   Trust the JSON output unconditionally. If "error" is non-null, surface
   it and stop. Recognized flags: --quality-locked / --no-quality-locked /
   --autonomous / --no-autonomous. When announcing active modes, use the
-  quality_locked_source and autonomous_source fields to label sources.
+  strict_source, quality_locked_source, and autonomous_source fields to label sources.
   Persist flag state to manifest.md.
 - Standard+ scope: spec.md MUST EXIST at .sage/work/ before implementing.
   "Design is clear" is NOT a spec. "We discussed this" is NOT a spec.
@@ -578,7 +578,7 @@ for wf in "$CORE"/workflows/*.workflow.md; do
   Trust the JSON output unconditionally. If "error" is non-null, surface
   it and stop. Recognized flags: --quality-locked / --no-quality-locked /
   --autonomous / --no-autonomous. When announcing active modes, use the
-  quality_locked_source and autonomous_source fields to label sources.
+  strict_source, quality_locked_source, and autonomous_source fields to label sources.
   Persist flag state to manifest.md.
 - MUST complete all 3 elicitation rounds SEQUENTIALLY before designing
   (unless --autonomous flag is active — see flag-parser skill).

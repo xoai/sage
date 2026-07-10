@@ -34,3 +34,31 @@ architect:
     - verification              # Gate 5
   optional: []                  # Extension gates + cross-artifact consistency
   skipped: []
+
+# Runtime mutation enforcement is independent from the quality-gate lists above.
+# It activates only for an explicitly selected run carrying the --strict flag.
+# Requirements are checked only at their declared stage boundary.
+strict_runtime:
+  ttl_seconds: 3600
+  lane_roots: []                # Empty means no repository lane lock.
+  scopes:
+    full:
+      stages:
+        pre-implementation:
+          required_artifacts: [approved-plan]
+          required_approvals: [plan-approved]
+          required_verifications: []
+        pre-completion:
+          required_artifacts: []
+          required_approvals: []
+          required_verifications: [test-suite]
+    lightweight:
+      stages:
+        pre-implementation:
+          required_artifacts: []
+          required_approvals: []
+          required_verifications: []
+        pre-completion:
+          required_artifacts: []
+          required_approvals: []
+          required_verifications: [targeted-tests]

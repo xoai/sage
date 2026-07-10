@@ -120,10 +120,16 @@ log ""
 
 # ── Step 4: Check for leftover markers ──
 log "── Clean code check ──"
-TODO_COUNT=$(grep -rn "TODO\|FIXME\|HACK\|XXX" --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" --include="*.py" --include="*.dart" "$ROOT/src" "$ROOT/app" "$ROOT/lib" 2>/dev/null | wc -l || echo "0")
+TODO_COUNT=$(
+  (
+    grep -rn "TODO\|FIXME\|HACK\|XXX" --include="*.ts" --include="*.tsx" \
+      --include="*.js" --include="*.jsx" --include="*.py" --include="*.dart" \
+      "$ROOT/src" "$ROOT/app" "$ROOT/lib" 2>/dev/null || true
+  ) | wc -l | tr -d '[:space:]'
+)
 if [ "$TODO_COUNT" -gt 0 ]; then
   log "⚠️  Found $TODO_COUNT TODO/FIXME/HACK markers in source"
-  grep -rn "TODO\|FIXME\|HACK" --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" --include="*.py" --include="*.dart" "$ROOT/src" "$ROOT/app" "$ROOT/lib" 2>/dev/null | head -5
+  grep -rn "TODO\|FIXME\|HACK" --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" --include="*.py" --include="*.dart" "$ROOT/src" "$ROOT/app" "$ROOT/lib" 2>/dev/null | head -5 || true
 else
   log "✅ No TODO/FIXME/HACK markers"
 fi

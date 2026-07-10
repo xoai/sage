@@ -5,12 +5,25 @@ mode: reflect
 produces: ["Cycle review", "Learnings with prevention rules", "Next-cycle seeds"]
 checkpoints: 2
 scope: "Single session"
-user-role: "Provide real-world feedback, approve learnings before storage"
+user-role: "Provide only unobserved external signals; approve in interactive mode"
 ---
 
 # Reflect Workflow
 
 Look back. Extract learnings. Seed the next cycle.
+
+## Invocation Modes
+
+- **Evidence mode (`--evidence`, default):** use the transcript, normalized
+  event log, tool outcomes, explicit corrections, artifacts, verification
+  outcomes, and prior learnings recalled or created during the run. Do not ask
+  the user to restate evidence the agent already observed.
+- **Interactive mode (`--interactive`):** retain the questionnaire and
+  learnings approval checkpoint for a user who wants a guided retrospective.
+
+User feedback is conditional in evidence mode. Ask only when a claim depends
+on an **unobserved external outcome**, **personal preference**, or
+**stakeholder signal** that is absent from the run evidence.
 
 ## Auto-Pickup
 
@@ -26,7 +39,7 @@ If no completed work exists: "Sage: No completed initiatives
 found. /reflect works best after a deliver cycle. Describe
 what you want to reflect on, or type / for other commands."
 
-## Step 1: Review the Cycle (Zone 1)
+## Step 1: Review the Cycle and Evidence (Zone 1)
 
 Sage → reflect workflow. Looking back at what was done.
 
@@ -37,6 +50,10 @@ Sage → reflect workflow. Looking back at what was done.
 Pick 1-3, type / for commands, or describe what you need.
 
 **For full initiative review, gather and present:**
+
+Before presenting, gather every available evidence source: transcript, event
+log, tool outcomes and recoveries, explicit corrections, artifacts and
+decisions, verification results, and prior learnings recalled or created.
 
 Sage: Cycle review for [initiative name].
 
@@ -55,10 +72,16 @@ Key artifacts:
   .sage/work/[initiative]/spec.md
   .sage/docs/[related research/analysis]
 
-## Step 2: Evaluate Outcomes
+## Step 2: Classify Evidence Gaps
 
-Ask the user for real-world feedback. This is the human input
-Sage cannot generate — the signal from reality.
+In evidence mode, classify each proposed claim as observed or externally
+unresolved. Do not ask the user to restate tool output, corrections, artifacts,
+decisions, or verification already present in the run.
+
+Ask for feedback only for an unobserved external outcome, personal preference,
+or stakeholder signal. If none exists, continue directly to Step 3.
+
+In interactive mode, ask the original guided questions:
 
 Sage: Now I need your perspective on how this went.
 
@@ -71,8 +94,8 @@ Share any or all — or describe your overall assessment.
 
 Pick 1-4, type / for commands, or describe what you need.
 
-Listen to the user's responses. Ask follow-up questions if
-the feedback is vague — specifics make better prevention rules.
+Listen to the user's responses. Ask follow-up questions only when the external
+signal is necessary to make a claim evidence-backed.
 
 ## Step 3: Extract Learnings
 
@@ -97,7 +120,7 @@ BECAUSE: [what happens if you don't — the consequence]
 - Has a CHECK? Observable condition, not self-assessment.
 If a learning fails any criterion, improve it before presenting.
 
-🔒 **LEARNINGS CHECKPOINT (Zone 2):**
+🔒 **LEARNINGS CHECKPOINT (Zone 2, interactive mode):**
 
 Sage: Learnings extracted from [initiative/topic].
 
@@ -116,13 +139,24 @@ Improve:
 
 Pick A/R/N, or tell me what to change.
 
+In evidence mode, the quality check replaces mandatory user approval. Continue
+when every claim is grounded in cited run evidence. It is valid to conclude
+that there is no novel learning to store.
+
 ## Step 4: Store and Update
 
-On approval:
+After the interactive approval, or immediately after the evidence-mode quality
+check:
 
-1. **Store each learning** via sage_memory_store with tags:
-   `self-learning`, `reflect`, `[initiative-slug]`, and
-   category tag (`reinforce`, `prevent`, or `improve`).
+1. **Delegate every proposed learning through the canonical
+   `sage-self-learning` skill — one invocation per candidate.** Pass its
+   evidence references and category tags (`reflect`, `[initiative-slug]`, and
+   `reinforce`, `prevent`, or `improve`). The canonical skill must classify the
+   learning, author the four-part What happened / Why wrong / What's correct /
+   Prevention rule record, perform search-before-store, enrich or update an
+   equivalent record, invalidate and link a correction when an old rule is
+   wrong, and link the result to relevant tasks, modules, technologies, or code
+   memories. Reflect must not write directly to a learning backend.
 
 2. **Update conventions.md** if any learning revealed a project
    pattern that should become a convention. Announce what was
@@ -136,6 +170,14 @@ On approval:
    ### YYYY-MM-DD — Reflection: [initiative/topic]
    [Summary of key learnings and what changes going forward.]
    ```
+
+5. **Acknowledge the lifecycle request** when the injected reflection context
+   supplies runtime commands. After the report and all delegated learning
+   writes finish, run the provided `reflection complete` command with the
+   actual stored and novel-candidate counts. Zero is a valid result. If the
+   reflection is deliberately inapplicable or cannot proceed, run the provided
+   `reflection skip` command with an evidence-based reason. Never leave a
+   requested reflection pending silently.
 
 ## Step 5: Seed the Next Cycle (Zone 3)
 
@@ -171,11 +213,16 @@ Good reflection output:
 
 - Reflect is for LOOKING BACK, not for fixing. If the reflection
   reveals something to fix, suggest /fix. Don't fix during reflect.
-- User feedback is required. Don't generate learnings from the
-  cycle review alone — the real-world signal matters most.
+- Evidence mode is the default. User feedback is required only for an
+  unobserved external outcome, personal preference, or stakeholder signal.
+- Interactive mode retains the questionnaire and approval checkpoint.
+- Do not ask the user to restate transcript, event log, tool outcomes,
+  corrections, artifacts, verification, or prior learnings.
 - WHEN/CHECK/BECAUSE is mandatory for every learning.
-- Store learnings with `self-learning` + `reflect` tags so Rule 0
-  memory search finds them in future cycles.
+- Delegate every candidate to the canonical `sage-self-learning` skill; reflect
+  never authors or stores an ad hoc learning itself.
+- When a lifecycle acknowledgment command is supplied, complete or skip it
+  after the reflection work; do not acknowledge completion early.
 - Save the reflection report to .sage/docs/ — it's a permanent
   artifact, not a transient conversation.
 - Seeding the next cycle is not optional. The value of reflection

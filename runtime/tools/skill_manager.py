@@ -116,6 +116,20 @@ def parse_frontmatter(content: str) -> dict:
         result["description"] = " ".join(desc_lines)
     return result
 
+
+def parse_composition_metadata(skill_path: Path) -> dict:
+    """Parse nested composition metadata without changing scalar callers."""
+    from sage_runtime.composition_contracts import CompositionError
+    from sage_runtime.metadata import extract_sage_metadata
+
+    metadata = extract_sage_metadata(Path(skill_path))
+    composition = metadata.get("composition")
+    if composition is None:
+        return {}
+    if not isinstance(composition, dict):
+        raise CompositionError(f"composition metadata must be a mapping: {skill_path}")
+    return composition
+
 # ── Source Parser ──
 class SourceInfo:
     def __init__(self, stype, owner="", repo="", path="", branch="", url=""):

@@ -18,11 +18,13 @@ comments, CRLF, absent key).
 Public surface:
     read_platforms(project_dir: Path) -> list[str]
     detect_claude_code(project_dir: Path) -> bool
+    detect_hermes(project_dir: Path) -> bool
 
 Spec: .sage/work/20260521-platform-detection-fix/spec.md §4.1.
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 
@@ -131,6 +133,32 @@ def detect_claude_code(project_dir: Path) -> bool:
         pass
 
     return "claude-code" in read_platforms(project_dir)
+
+
+def detect_hermes(project_dir: Path) -> bool:
+    """Return True when project state or a generated marker targets Hermes."""
+
+    if "hermes" in read_platforms(project_dir):
+        return True
+
+    agents = project_dir / "AGENTS.md"
+    try:
+        if agents.is_file() and "BEGIN SAGE HERMES GENERATED" in agents.read_text(
+            encoding="utf-8", errors="replace"
+        ):
+            return True
+    except OSError:
+        pass
+
+    catalog = project_dir / ".sage" / "runtime" / "route-catalog.json"
+    try:
+        if catalog.is_file():
+            loaded = json.loads(catalog.read_text(encoding="utf-8-sig"))
+            return isinstance(loaded, dict) and loaded.get("platform") == "hermes"
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        pass
+
+    return False
 
 
 # ── Self-test ─────────────────────────────────────────────────────────
@@ -257,6 +285,12 @@ if __name__ == "__main__":
     # Genuine negative.
     _check("negative: antigravity-only, no .claude/, no Sage CLAUDE.md",
            detect_claude_code(_project('platforms: ["antigravity"]\n')), False)
+
+    print("\ndetect_hermes — signals:")
+    _check("Hermes block-list platform",
+           detect_hermes(_project("platforms:\n  - hermes\n")), True)
+    _check("Hermes absent",
+           detect_hermes(_project('platforms: ["claude-code"]\n')), False)
 
     print()
     if failures:

@@ -11,7 +11,7 @@
     },
     ".sage/docs/multi-agent.md": {
       "source": "docs/multi-agent.md",
-      "sha256": "19d6aa1ca247fd7724923de56fdfd298e3a149e09de9cdd38051f35604d08e17"
+      "sha256": "63d0d5a610e4c2e0de311818e3e6216afaef68722f2148efb62f7d7043162958"
     },
     ".claude/commands/build-x.md": {
       "source": "commands/build-x.md",

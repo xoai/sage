@@ -36,10 +36,17 @@ from typing import Any
 # Sibling helper in runtime/tools/ — resolvable because this script is
 # invoked as `python3 .../runtime/tools/multi_agent_setup.py`, so its
 # own directory is sys.path[0].
-from sage_platforms import detect_claude_code
+from sage_platforms import detect_claude_code, detect_hermes
 
 # Schema version of .sage/config.yaml :: multi_agent block we write.
 MULTI_AGENT_CONFIG_VERSION = "1.0.0"
+HERMES_MULTI_AGENT_COMMANDS = (
+    "build-x",
+    "review-spec",
+    "review-plan",
+    "implement",
+    "review-code",
+)
 
 # ── ANSI ──────────────────────────────────────────────────────────────
 class C:
@@ -113,16 +120,16 @@ def preflight(project_dir: Path, *, for_install: bool) -> tuple[bool, list[str]]
     else:
         ok(f"Python {sys.version_info.major}.{sys.version_info.minor} (≥3.11)")
 
-    # claude-code project? Detect from project state (.claude/ dir,
-    # Sage CLAUDE.md, or config.yaml platforms) via the shared helper —
-    # not a brittle single-line config.yaml grep.
-    if detect_claude_code(project_dir):
+    # Claude and Hermes both expose a native multi-agent command surface.
+    claude = detect_claude_code(project_dir)
+    hermes = detect_hermes(project_dir)
+    if claude:
         ok("Claude Code project detected")
-    else:
-        err("not a Claude Code project — multi-agent is Claude Code "
-            "only in v1")
-        err("(no .claude/ directory, no Sage-generated CLAUDE.md, and "
-            ".sage/config.yaml does not list claude-code)")
+    if hermes:
+        ok("Hermes project detected")
+    if not claude and not hermes:
+        err("multi-agent requires a Claude Code or Hermes Sage project")
+        err("(.sage/config.yaml must list claude-code or hermes)")
         hard_fail = True
 
     # CLIs on PATH (soft)
@@ -130,12 +137,12 @@ def preflight(project_dir: Path, *, for_install: bool) -> tuple[bool, list[str]]
         if shutil.which("codex"):
             ok("codex CLI on PATH")
         else:
-            warn("codex CLI not on PATH (install before first /build-x)")
+            warn("codex CLI not on PATH (needed only by CLI-bound roles)")
             warnings.append("codex")
         if shutil.which("kimi"):
             ok("kimi CLI on PATH")
         else:
-            warn("kimi CLI not on PATH (install before first /build-x)")
+            warn("kimi CLI not on PATH (needed only by CLI-bound roles)")
             warnings.append("kimi")
 
     if hard_fail:
@@ -282,11 +289,54 @@ def copy_template(src: Path, dst: Path, *, render: bool, sage_version: str) -> N
         shutil.copy2(src, dst)
 
 
+def _hermes_plugin_dir() -> Path:
+    configured = os.environ.get("HERMES_HOME")
+    home = Path(configured).expanduser() if configured else Path.home() / ".hermes"
+    return home / "plugins" / "sage"
+
+
+def install_hermes_surface(framework_dir: Path) -> Path:
+    """Install the Hermes-native /build-x command family into the Sage plugin."""
+
+    plugin = _hermes_plugin_dir()
+    skills = plugin / "skills"
+    skills.mkdir(parents=True, exist_ok=True)
+    source_root = framework_dir / "runtime" / "multi-agent" / "commands"
+    for name in HERMES_MULTI_AGENT_COMMANDS:
+        destination = skills / name / "SKILL.md"
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source_root / f"{name}.md", destination)
+    template = (
+        framework_dir
+        / "runtime"
+        / "platforms"
+        / "hermes"
+        / "plugin-template"
+        / "__init__.py"
+    )
+    shutil.copy2(template, plugin / "__init__.py")
+    return plugin
+
+
+def remove_hermes_surface() -> None:
+    plugin = _hermes_plugin_dir()
+    for name in HERMES_MULTI_AGENT_COMMANDS:
+        shutil.rmtree(plugin / "skills" / name, ignore_errors=True)
+
+
 # ── File ownership lists from manifest ────────────────────────────────
-def framework_owned_pairs(manifest: dict[str, Any], framework_root: Path, project: Path) -> list[tuple[Path, Path]]:
+def framework_owned_pairs(
+    manifest: dict[str, Any],
+    framework_root: Path,
+    project: Path,
+    *,
+    include_claude: bool = True,
+) -> list[tuple[Path, Path]]:
     out = []
     base = framework_root / "runtime" / "multi-agent"
     for deployed_rel, meta in manifest["framework_owned"].items():
+        if deployed_rel.startswith(".claude/") and not include_claude:
+            continue
         src = base / meta["source"]
         dst = project / deployed_rel
         out.append((src, dst))
@@ -388,21 +438,28 @@ def cmd_install(framework_dir: Path, project_dir: Path, *, yes: bool, force: boo
     sage_version = detect_sage_version(framework_dir)
 
     preflight(project_dir, for_install=True)
+    claude = detect_claude_code(project_dir)
+    hermes = detect_hermes(project_dir)
 
     config_path = project_dir / ".sage" / "config.yaml"
     existing = read_multi_agent_config(config_path)
     is_reinstall = existing is not None and existing.get("enabled") == "true"
 
     print(f"\n  {C.B}This will install{C.R} (sage v{sage_version}):\n")
-    fw_pairs = framework_owned_pairs(manifest, framework_dir, project_dir)
+    fw_pairs = framework_owned_pairs(
+        manifest, framework_dir, project_dir, include_claude=claude
+    )
     user_pairs = user_owned_pairs(manifest, framework_dir, project_dir)
     for _, dst in user_pairs:
         info(f"{dst.relative_to(project_dir)}  {C.D}(yours — edit freely){C.R}")
     for _, dst in fw_pairs:
         info(f"{dst.relative_to(project_dir)}  {C.D}(framework — refreshed by sage update){C.R}")
-    info(".claude/settings.json  (merged, not overwritten)")
+    if claude:
+        info(".claude/settings.json  (merged, not overwritten)")
+        info("CLAUDE.md  (multi-agent section appended)")
+    if hermes:
+        info("Hermes Sage plugin  (/build-x command family)")
     info(f".sage/config.yaml  (multi_agent block, version {sage_version})")
-    info("CLAUDE.md  (multi-agent section appended)")
 
     if is_reinstall:
         print(f"\n  {C.Y}multi-agent is already installed (v{existing.get('installed_version', '?')}).{C.R}")
@@ -433,30 +490,37 @@ def cmd_install(framework_dir: Path, project_dir: Path, *, yes: bool, force: boo
             os.chmod(dst, 0o755)
         ok(f"{dst.relative_to(project_dir)}  (installed/refreshed)")
 
-    # settings.json merge
-    snippet_path = framework_dir / "runtime" / "multi-agent" / "settings.snippet.json"
-    settings_path = project_dir / ".claude" / "settings.json"
-    added = merge_settings_json(settings_path, snippet_path)
-    if added:
-        ok(f".claude/settings.json  (added {len(added)} bash patterns)")
-    else:
-        ok(".claude/settings.json  (already up to date)")
+    # Claude Code settings merge; Hermes uses native toolsets and plugins.
+    if claude:
+        snippet_path = framework_dir / "runtime" / "multi-agent" / "settings.snippet.json"
+        settings_path = project_dir / ".claude" / "settings.json"
+        added = merge_settings_json(settings_path, snippet_path)
+        if added:
+            ok(f".claude/settings.json  (added {len(added)} bash patterns)")
+        else:
+            ok(".claude/settings.json  (already up to date)")
+
+    if hermes:
+        plugin = install_hermes_surface(framework_dir)
+        ok(f"Hermes Sage plugin  ({plugin})")
 
     # config.yaml
     write_multi_agent_config(config_path, version=sage_version)
     ok(f".sage/config.yaml  (multi_agent.enabled=true, version={sage_version})")
 
-    # CLAUDE.md
-    claude_md = project_dir / "CLAUDE.md"
-    if append_claude_section(claude_md):
-        ok("CLAUDE.md  (multi-agent section appended)")
-    else:
-        if claude_md.exists():
-            ok("CLAUDE.md  (multi-agent section already present)")
+    # CLAUDE.md is a Claude-only instruction surface.
+    if claude:
+        claude_md = project_dir / "CLAUDE.md"
+        if append_claude_section(claude_md):
+            ok("CLAUDE.md  (multi-agent section appended)")
         else:
-            warn("CLAUDE.md  (not found — run `sage update` to regenerate)")
+            if claude_md.exists():
+                ok("CLAUDE.md  (multi-agent section already present)")
+            else:
+                warn("CLAUDE.md  (not found — run `sage update` to regenerate)")
 
-    print(f"\n  {C.B}Done.{C.R}  Try: {C.CYAN}/build-x <task>{C.R}  inside Claude Code.")
+    platform_name = "Claude Code or Hermes" if claude and hermes else ("Claude Code" if claude else "Hermes")
+    print(f"\n  {C.B}Done.{C.R}  Try: {C.CYAN}/build-x <task>{C.R}  inside {platform_name}.")
     print(f"  {C.D}Edit .sage/agents.toml to change tool bindings.{C.R}\n")
     return 0
 
@@ -470,7 +534,12 @@ def cmd_remove(framework_dir: Path, project_dir: Path, *, yes: bool) -> int:
         warn("multi-agent is not installed in this project — nothing to remove.")
         return 0
 
-    fw_pairs = framework_owned_pairs(manifest, framework_dir, project_dir)
+    claude = detect_claude_code(project_dir)
+    hermes = detect_hermes(project_dir)
+
+    fw_pairs = framework_owned_pairs(
+        manifest, framework_dir, project_dir, include_claude=claude
+    )
     user_pairs = user_owned_pairs(manifest, framework_dir, project_dir)
 
     print(f"\n  {C.B}This will remove{C.R}:\n")
@@ -478,9 +547,12 @@ def cmd_remove(framework_dir: Path, project_dir: Path, *, yes: bool) -> int:
         info(f"{dst.relative_to(project_dir)}  {C.D}(user — backed up before removal){C.R}")
     for _, dst in fw_pairs:
         info(f"{dst.relative_to(project_dir)}  {C.D}(framework — deleted){C.R}")
-    info(".claude/settings.json  (prune multi-agent patterns; keep yours)")
+    if claude:
+        info(".claude/settings.json  (prune multi-agent patterns; keep yours)")
+        info("CLAUDE.md  (multi-agent section removed)")
+    if hermes:
+        info("Hermes Sage plugin  (/build-x command family removed)")
     info(".sage/config.yaml  (multi_agent block removed)")
-    info("CLAUDE.md  (multi-agent section removed)")
     print(f"  {C.D}.sage/work/  is never touched.{C.R}")
 
     ans = confirm("[A] Remove  |  [C] Cancel", default="A", yes=yes).upper()
@@ -522,20 +594,26 @@ def cmd_remove(framework_dir: Path, project_dir: Path, *, yes: bool) -> int:
     # We leave these alone since the platform generator likely owns them.
 
     # Settings prune
-    snippet_path = framework_dir / "runtime" / "multi-agent" / "settings.snippet.json"
-    settings_path = project_dir / ".claude" / "settings.json"
-    removed = prune_settings_json(settings_path, snippet_path)
-    if removed:
-        ok(f".claude/settings.json  (pruned {len(removed)} bash patterns)")
+    if claude:
+        snippet_path = framework_dir / "runtime" / "multi-agent" / "settings.snippet.json"
+        settings_path = project_dir / ".claude" / "settings.json"
+        removed = prune_settings_json(settings_path, snippet_path)
+        if removed:
+            ok(f".claude/settings.json  (pruned {len(removed)} bash patterns)")
+
+    if hermes:
+        remove_hermes_surface()
+        ok("Hermes Sage plugin  (multi-agent commands removed)")
 
     # Config remove
     remove_multi_agent_config(config_path)
     ok(".sage/config.yaml  (multi_agent block removed)")
 
     # CLAUDE.md
-    claude_md = project_dir / "CLAUDE.md"
-    if remove_claude_section(claude_md):
-        ok("CLAUDE.md  (multi-agent section removed)")
+    if claude:
+        claude_md = project_dir / "CLAUDE.md"
+        if remove_claude_section(claude_md):
+            ok("CLAUDE.md  (multi-agent section removed)")
 
     print(f"\n  {C.B}Removed.{C.R}  /build still works as the in-session cycle.\n")
     return 0
@@ -557,8 +635,13 @@ def cmd_refresh(framework_dir: Path, project_dir: Path, *, yes: bool, force: boo
         # Not installed in this project — nothing to do.
         return 0
 
+    claude = detect_claude_code(project_dir)
+    hermes = detect_hermes(project_dir)
+
     print(f"\n  {C.B}Refreshing multi-agent files{C.R}  (template → project)\n")
-    fw_pairs = framework_owned_pairs(manifest, framework_dir, project_dir)
+    fw_pairs = framework_owned_pairs(
+        manifest, framework_dir, project_dir, include_claude=claude
+    )
     deployed_to_meta = {k: v for k, v in manifest["framework_owned"].items()}
 
     for src, dst in fw_pairs:
@@ -631,10 +714,15 @@ def cmd_refresh(framework_dir: Path, project_dir: Path, *, yes: bool, force: boo
     # Bump installed_version
     write_multi_agent_config(config_path, version=sage_version)
 
+    if hermes:
+        plugin = install_hermes_surface(framework_dir)
+        ok(f"Hermes Sage plugin  ({plugin})")
+
     # Refresh CLAUDE.md section if missing (e.g., generator regenerated CLAUDE.md and lost it).
-    claude_md = project_dir / "CLAUDE.md"
-    if append_claude_section(claude_md):
-        ok("CLAUDE.md  (multi-agent section re-appended)")
+    if claude:
+        claude_md = project_dir / "CLAUDE.md"
+        if append_claude_section(claude_md):
+            ok("CLAUDE.md  (multi-agent section re-appended)")
 
     print(f"\n  {C.G}Multi-agent refresh complete.{C.R}\n")
     return 0

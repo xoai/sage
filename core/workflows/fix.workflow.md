@@ -323,12 +323,10 @@ analysis was incomplete — either the diagnosis was wrong, or the
 fix introduced a new issue.
 
 **Self-learning trigger:** If you return to Step 2 more than once
-(i.e., 2+ failed fix attempts), this is a MANDATORY `gotcha` trigger.
-Before attempting the next fix, store what you learned via
-sage_memory_store with `[LRN:gotcha]` title, `self-learning` tag,
-and four-part content (what happened, why wrong, what's correct,
-prevention rule). Do NOT wait until the fix succeeds — capture the
-learning NOW so future sessions benefit even if this session fails.
+(i.e., 2+ failed fix attempts), create a repeated-failure candidate and
+invoke the canonical `sage-self-learning` skill before the next attempt.
+The skill must inspect evidence, search before store, and use the configured
+backend. Do not issue a raw memory-store call from this workflow.
 
 **Quality gates:** After tests pass, run quality gates per
 `sage/core/workflows/sub-workflows/quality-gates.workflow.md`.

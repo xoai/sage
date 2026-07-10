@@ -45,6 +45,9 @@ bash develop/validators/contracts/validate-all.sh
 bash develop/validators/contracts/validate-skills.sh
 bash develop/validators/contracts/validate-gates.sh
 bash develop/validators/contracts/validate-workflows.sh
+
+# Deterministic learning lifecycle across Claude Code and Hermes
+bash develop/validators/learning-lifecycle-smoke.sh .
 ```
 
 Pressure tests and scenario tests are run manually by presenting the scenario

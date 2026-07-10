@@ -1,6 +1,7 @@
 """Deterministic flag parser for workflow $ARGUMENTS.
 
 Recognized flags (boolean, no value):
+- --strict               enable runtime invariant enforcement for this run
 - --quality-locked       turn quality-locked mode on
 - --no-quality-locked    turn quality-locked mode off (overrides config default)
 - --autonomous           turn autonomous mode on
@@ -29,9 +30,10 @@ from __future__ import annotations
 from dataclasses import dataclass, asdict
 from typing import Optional
 
-POSITIVE_FLAGS = {"--quality-locked", "--autonomous"}
+POSITIVE_FLAGS = {"--strict", "--quality-locked", "--autonomous"}
 NEGATIVE_FLAGS = {"--no-quality-locked", "--no-autonomous"}
 FLAG_TO_KEY = {
+    "--strict": "strict",
     "--quality-locked": "quality_locked",
     "--no-quality-locked": "quality_locked",
     "--autonomous": "autonomous",
@@ -43,12 +45,14 @@ SUPPORTED_FOR_ERROR = sorted(ALL_FLAGS)
 
 @dataclass
 class ParseResult:
+    strict: bool
     quality_locked: bool
     autonomous: bool
     goal: str
     error: Optional[str] = None
     # Source of each value: "flag" (any flag form), "config", or None
     # (when the value is the implicit default-off).
+    strict_source: Optional[str] = None
     quality_locked_source: Optional[str] = None
     autonomous_source: Optional[str] = None
 
@@ -74,7 +78,11 @@ def parse(arguments: str, defaults: Optional[dict] = None) -> ParseResult:
     defaults = defaults or {}
 
     # Track each key's state as we parse: "positive", "negative", or None
-    flag_state: dict[str, Optional[str]] = {"quality_locked": None, "autonomous": None}
+    flag_state: dict[str, Optional[str]] = {
+        "strict": None,
+        "quality_locked": None,
+        "autonomous": None,
+    }
 
     remaining = arguments.strip()
 
@@ -86,7 +94,7 @@ def parse(arguments: str, defaults: Optional[dict] = None) -> ParseResult:
         if token not in ALL_FLAGS:
             supported = ", ".join(SUPPORTED_FOR_ERROR)
             return ParseResult(
-                False, False, "",
+                False, False, False, "",
                 f"Unknown flag '{token}'. Supported flags: {supported}.",
             )
 
@@ -96,7 +104,7 @@ def parse(arguments: str, defaults: Optional[dict] = None) -> ParseResult:
         if flag_state[key] is not None and flag_state[key] != new_state:
             # Conflict: --X and --no-X both passed for the same key
             return ParseResult(
-                False, False, "",
+                False, False, False, "",
                 f"Conflicting flags for {key}: both --{key.replace('_', '-')} "
                 f"and --no-{key.replace('_', '-')} passed.",
             )
@@ -111,18 +119,21 @@ def parse(arguments: str, defaults: Optional[dict] = None) -> ParseResult:
         if state == "negative":
             return False, "flag"
         # No flag passed — consult config defaults
-        if defaults.get(key) is True:
+        if key != "strict" and defaults.get(key) is True:
             return True, "config"
         return False, None
 
+    strict_value, strict_source = resolve("strict")
     ql_value, ql_source = resolve("quality_locked")
     auto_value, auto_source = resolve("autonomous")
 
     return ParseResult(
+        strict=strict_value,
         quality_locked=ql_value,
         autonomous=auto_value,
         goal=remaining,
         error=None,
+        strict_source=strict_source,
         quality_locked_source=ql_source,
         autonomous_source=auto_source,
     )

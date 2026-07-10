@@ -33,11 +33,21 @@ happens. Building without research? It tells you what 15 minutes of
 discovery would prevent, then lets you decide. Gap detection, not
 gatekeeping.
 
-Routing is deterministic first, intelligent second: keywords match
-workflows before any LLM judgment. When keywords don't match, a
-focused sub-agent classifier picks the right phase. Every routing
-decision is confirmed with the user before proceeding. Smart enough
-to route accurately. Humble enough to ask when unsure.
+Routing gives authority only to explicit installed commands. An explicit route
+creates replayable run state and resolves the selected workflow's capability
+owners from validated metadata and explicit/project/user policy. Natural-language
+matches are bounded advice while idle and are suppressed during an active run;
+they never arm a mutation gate. Method ownership remains separate from routing,
+so Sage can combine with another skill—or stay off—without keyword-selected
+conflicts.
+See [Neutral Skill Composition](docs/composition.md) and the
+[Deterministic Learning Lifecycle](docs/learning-lifecycle.md).
+
+Strict gating is opt-in per explicit route (`/build --strict`, for example).
+Hooks fail open when there is no healthy active Sage run, when another workflow
+owns the task, or when strict mode is off. Once an explicit strict Sage run is
+active, only declared machine-observable invariants may deny a mutation; prose
+or keyword matches never do.
 
 ### The Quality Chain
 
@@ -88,14 +98,21 @@ be lost.
 
 Most agent frameworks are stateless. The agent that made a mistake
 yesterday makes it again today. Sage has three skills that build
-institutional memory — all backed by sage-memory MCP:
+institutional memory through one configured backend (`sage-memory` or
+OpenViking):
 
-- **sage-self-learning** captures mistakes as WHEN/CHECK/BECAUSE prevention rules. Every session starts by searching past mistakes before doing anything.
+- **sage-self-learning** captures mistakes as WHEN/CHECK/BECAUSE prevention rules. Supported platform hooks recall scoped prevention rules before work without selecting or enforcing a workflow.
 - **sage-memory** stores project knowledge as focused prose insights — how your auth works, why billing uses event sourcing, what conventions the team follows.
 - **sage-ontology** maps entity relationships — not just "billing exists" but "billing depends on payments, which triggers webhooks, which notify users." Touch one module, know the blast radius.
 
 Day 1, the agent knows nothing. Day 30, it knows your codebase's
 landmines, patterns, and conventions.
+
+Recall, candidate detection, and reflection are lifecycle capabilities rather
+than a mandatory Sage workflow. They continue to work when another installed
+skill owns the method—or when no Sage workflow is selected. Hooks detect
+structured evidence and request the canonical skills; they do not author
+learnings from keyword matches. Backend outages fail open.
 
 ## Get Started
 
@@ -235,15 +252,17 @@ Run in your terminal:
 
 ### Routing
 
-<p align="center">
-  <img src="sage_routing.svg" alt="Sage Routing — 3-layer funnel from keywords to confirmation." width="600" />
-</p>
+Routing separates authority from advice:
 
-Three layers, deterministic first:
+1. **Explicit commands** — installed slash commands start, switch, or cancel replayable runs.
+2. **Active state** — the selected workflow continues until explicit switch or cancel.
+3. **Advisory matching** — natural-language matches may suggest an installed workflow but never create state, select a skill owner, or arm a gate.
 
-1. **Keywords** (instant) — "build" → `/build`, "fix" → `/fix`, "audit" → `/analyze`. Handles 60-70% of requests with zero LLM judgment.
-2. **Sub-agent classifier** (focused) — independent context, single job: classify into UNDERSTAND / ENVISION / DELIVER / REFLECT.
-3. **Confirmation** (human decides) — 2-3 options with skill chains visible. The user confirms before anything runs.
+Workflow routes and skills are different surfaces. Canonical workflows are
+explicitly routable. Method and domain skills remain directly invocable and may
+participate through the composition catalog as declared owners, augmenters,
+validators, or observers. Compatibility does not auto-activate every installed
+skill.
 
 ### Slash Commands
 
@@ -251,7 +270,7 @@ Use inside your IDE (Claude Code, Antigravity):
 
 | Command | What It Does |
 |---------|-------------|
-| `/sage` | **Start here.** Routes via keywords → classify → confirm |
+| `/sage` | Inspect state and offer validated, optional workflow choices |
 | `/build` | Spec → plan → build-loop → quality gates (with auto-review, coding principles, auto-QA). Accepts `--quality-locked`, `--autonomous` |
 | `/fix` | Diagnose → scope → fix → verify (reads QA and design-review reports) |
 | `/architect` | Elicit → design → milestone plan → phased build (with ADR auto-review). Accepts `--quality-locked`, `--autonomous` |
@@ -367,7 +386,7 @@ layers and observable conditions that can't be argued away.
 
 **Layer 1 — Always-on rules** in the system prompt. Even if nothing else
 loads, the gates prevent the worst violations. Eight rules covering
-memory-before-work, spec-first, artifact-only state, checkpoints
+memory-before-work, spec-first, artifact-owned narrative, checkpoints
 (no unilateral deferral), self-check, decisions logging, learning
 from corrections, and skills-before-assumptions.
 
@@ -631,15 +650,17 @@ When Sage runs in your project, it manages state in `.sage/`:
 │       ├── manifest.md      # Cycle state + handoff context
 │       ├── qa-report.md     # QA test results (from /qa)
 │       └── design-review.md # Design audit findings (from /design-review)
+├── composition.json          # Compiled neutral provider catalog (generated)
+├── runtime/                  # Append-only events + deterministic run projections
 └── gates/
     ├── gate-modes.yaml      # Which gates run per workflow mode
     └── scripts/             # Deterministic verification scripts
 ```
 
-**Artifact-only state.** There is no progress.md or state file that the
-agent summarizes. The artifacts ARE the state: spec.md exists = spec
-phase complete. plan.md exists = planning done. File existence is
-binary — the agent can't hallucinate a file into existence.
+**Narrative stays artifact-owned; runtime facts are event-derived.** Specs,
+plans, rationale, and handoff judgment remain in human-readable artifacts. The
+machine runtime stores only observable route, composition, artifact, approval,
+and verification facts derived from `.sage/runtime/runs/*/events.jsonl`.
 
 **decisions.md is newest-first.** The agent prepends entries after the
 header — recent context is always read first. When the file exceeds
@@ -652,17 +673,19 @@ Sage is platform-agnostic. It works wherever AI agents work.
 | Platform | How Sage Integrates | Sub-agent reviews | Status |
 |----------|---------------------|-------------------|--------|
 | [Claude Code](runtime/platforms/claude-code/) | CLAUDE.md + `.claude/commands/` (markdown) | Task tool | Full |
+| [Hermes Agent](runtime/platforms/hermes/) | AGENTS.md + skills + native lifecycle hooks | delegate_task | Full |
 | [Antigravity](runtime/platforms/antigravity/) | GEMINI.md + `.agent/` (markdown) | Native | Full |
 | [Codex (OpenAI)](runtime/platforms/codex/) | AGENTS.md + `.codex/agents/` (TOML sub-agents) | Native (TOML) | Full |
 | [Opencode](runtime/platforms/opencode/) | AGENTS.md + `.opencode/{commands,agents}/` (markdown) | Native (markdown) | Full |
 | [Gemini CLI](runtime/platforms/gemini-cli/) | GEMINI.md + `.gemini/commands/` (TOML) | Single-pass fallback in v1 | Full |
 | [Claude Code Plugin](runtime/platforms/claude-code/setup/generate-plugin.sh) | Plugin format — install with `/plugin install sage@xoai` | Task tool | Full |
 
-Six distribution paths from one source:
+Seven distribution paths from one source:
 
 ```
 Sage Framework (source of truth)
     ├── generate-claude-code.sh   → CLAUDE.md + .claude/
+    ├── generate-hermes.sh        → AGENTS.md + skills/ + hooks/
     ├── generate-antigravity.sh   → GEMINI.md + .agent/
     ├── generate-codex.sh         → AGENTS.md + .codex/agents/
     ├── generate-opencode.sh      → AGENTS.md + .opencode/{commands,agents}/
@@ -680,8 +703,10 @@ Opencode; GEMINI.md is shared between Antigravity and Gemini CLI.
 ```bash
 sage init                              # detect existing platforms; ask if none
 sage init --platform codex             # explicit: just Codex
+sage init --platform hermes            # Hermes in $HERMES_HOME (default: ~/.hermes)
+HERMES_HOME=~/.hermes/profiles/work sage init --platform hermes
 sage init --platform codex,opencode    # multiple
-sage init --platform all               # all 5 platforms
+sage init --platform all               # all supported platforms
 sage update                            # regenerate using the persisted list
 sage update --platform gemini-cli      # override on update
 ```

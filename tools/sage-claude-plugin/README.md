@@ -185,7 +185,7 @@ Use inside your IDE (Claude Code, Antigravity):
 
 | Command | What It Does |
 |---------|-------------|
-| `/sage` | **Start here.** Routes via keywords → classify → confirm |
+| `/sage` | Inspect state and offer validated, optional workflow choices |
 | `/build` | Feature: spec → plan → build-loop → quality gates |
 | `/fix` | Diagnose → scope → fix → verify (reads QA and design-review reports when available) |
 | `/architect` | Elicit → design → milestone plan → phased build |

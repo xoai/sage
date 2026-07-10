@@ -5,13 +5,15 @@
 #   bash parse.sh "<arguments>" [--config-path PATH]
 #
 # Output: JSON to stdout matching the Python parser's contract:
-#   {"quality_locked": bool, "autonomous": bool, "goal": "...",
-#    "error": null | "...", "quality_locked_source": "flag"|"config"|null,
+#   {"strict": bool, "quality_locked": bool, "autonomous": bool, "goal": "...",
+#    "error": null | "...", "strict_source": "flag"|null,
+#    "quality_locked_source": "flag"|"config"|null,
 #    "autonomous_source": "flag"|"config"|null}
 #
 # Exit code: 0 on clean parse, 1 on unknown flag or conflict.
 #
 # Recognized flags (boolean, no value):
+#   --strict             enable strict runtime invariants for this run
 #   --quality-locked     turn quality-locked mode on (source: "flag")
 #   --no-quality-locked  turn it off, overriding config (source: "flag")
 #   --autonomous         turn autonomous mode on (source: "flag")
@@ -46,15 +48,15 @@ src_field() {
 }
 
 emit() {
-  local quality_locked=$1 autonomous=$2 goal=$3 error=$4
-  local ql_source=$5 auto_source=$6
+  local strict=$1 quality_locked=$2 autonomous=$3 goal=$4 error=$5
+  local strict_source=$6 ql_source=$7 auto_source=$8
   local error_field='null'
   if [ -n "$error" ]; then
     error_field='"'"$(json_escape "$error")"'"'
   fi
-  printf '{"quality_locked": %s, "autonomous": %s, "goal": "%s", "error": %s, "quality_locked_source": %s, "autonomous_source": %s}\n' \
-    "$quality_locked" "$autonomous" "$(json_escape "$goal")" "$error_field" \
-    "$(src_field "$ql_source")" "$(src_field "$auto_source")"
+  printf '{"strict": %s, "quality_locked": %s, "autonomous": %s, "goal": "%s", "error": %s, "strict_source": %s, "quality_locked_source": %s, "autonomous_source": %s}\n' \
+    "$strict" "$quality_locked" "$autonomous" "$(json_escape "$goal")" "$error_field" \
+    "$(src_field "$strict_source")" "$(src_field "$ql_source")" "$(src_field "$auto_source")"
 }
 
 # ── Parse positional + --config-path ─────────────────────────────────
@@ -108,6 +110,7 @@ input="${input%"${input##*[![:space:]]}"}"
 # State values: "" (no flag), "positive", "negative"
 ql_flag_state=''
 auto_flag_state=''
+strict_flag_state=''
 
 while [[ "$input" == --* ]]; do
   flag="${input%% *}"
@@ -118,46 +121,49 @@ while [[ "$input" == --* ]]; do
   fi
 
   case "$flag" in
+    --strict)
+      strict_flag_state='positive'
+      ;;
     --quality-locked)
       if [ "$ql_flag_state" = 'negative' ]; then
-        emit 'false' 'false' '' \
+        emit 'false' 'false' 'false' '' \
           "Conflicting flags for quality_locked: both --quality-locked and --no-quality-locked passed." \
-          '' ''
+          '' '' ''
         exit 1
       fi
       ql_flag_state='positive'
       ;;
     --no-quality-locked)
       if [ "$ql_flag_state" = 'positive' ]; then
-        emit 'false' 'false' '' \
+        emit 'false' 'false' 'false' '' \
           "Conflicting flags for quality_locked: both --quality-locked and --no-quality-locked passed." \
-          '' ''
+          '' '' ''
         exit 1
       fi
       ql_flag_state='negative'
       ;;
     --autonomous)
       if [ "$auto_flag_state" = 'negative' ]; then
-        emit 'false' 'false' '' \
+        emit 'false' 'false' 'false' '' \
           "Conflicting flags for autonomous: both --autonomous and --no-autonomous passed." \
-          '' ''
+          '' '' ''
         exit 1
       fi
       auto_flag_state='positive'
       ;;
     --no-autonomous)
       if [ "$auto_flag_state" = 'positive' ]; then
-        emit 'false' 'false' '' \
+        emit 'false' 'false' 'false' '' \
           "Conflicting flags for autonomous: both --autonomous and --no-autonomous passed." \
-          '' ''
+          '' '' ''
         exit 1
       fi
       auto_flag_state='negative'
       ;;
     *)
-      emit 'false' 'false' '' \
-        "Unknown flag '$flag'. Supported flags: --autonomous, --no-autonomous, --no-quality-locked, --quality-locked." \
-        '' ''
+      emit 'false' 'false' 'false' '' \
+        "Unknown flag '$flag'. Supported flags: --autonomous, --no-autonomous, --no-quality-locked, --quality-locked, --strict." \
+        '' '' ''
       exit 1
       ;;
   esac
@@ -166,6 +172,13 @@ while [[ "$input" == --* ]]; do
 done
 
 # ── Resolve precedence: flag > config > default off ──────────────────
+
+strict_value='false'
+strict_source=''
+if [ "$strict_flag_state" = 'positive' ]; then
+  strict_value='true'
+  strict_source='flag'
+fi
 
 ql_value='false'
 ql_source=''
@@ -183,5 +196,5 @@ case "$auto_flag_state" in
   '')       if [ "$auto_default" = 'true' ]; then auto_value='true'; auto_source='config'; fi ;;
 esac
 
-emit "$ql_value" "$auto_value" "$input" '' "$ql_source" "$auto_source"
+emit "$strict_value" "$ql_value" "$auto_value" "$input" '' "$strict_source" "$ql_source" "$auto_source"
 exit 0

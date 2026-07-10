@@ -1,192 +1,99 @@
 # Sage Process Constitution
 
-These rules are non-negotiable. They ensure Sage delivers quality outcomes
-regardless of platform, model, or task type. Each rule has a compliance
-check — an observable signal that the rule was followed.
+These principles govern an explicitly selected Sage workflow or a persisted
+active Sage run. They do not force Sage onto ordinary host-agent work.
 
-## Rule 0: Route Every Request
+## Rule 0: Explicit Authority
 
-Before responding to any substantial request, classify scope and announce
-the workflow. This fires FIRST — before reading state, before activating
-skills, before doing any work.
+- Installed slash commands are authoritative.
+- Plain prose and keyword matches are never authoritative transitions.
+- Advisory route context may be accepted, combined, or ignored.
+- An active run suppresses inferred rerouting until explicit switch or cancel.
+- A stale or unavailable target is rejected rather than guessed.
 
-- Scan `.sage/work/` frontmatter and read `.sage/decisions.md` for context
-- Classify: Tier 1 (just do it), Tier 2 (announce and proceed),
-  Tier 3 (card and choose)
-- For Tier 2/3: announce with "Sage →" before doing anything else
+**Compliance:** every run transition has an explicit command and durable event.
 
-**Scope calibration:** When in doubt, bias toward Standard. A brief note
-takes 2 minutes. Rework from undocumented decisions takes hours.
-- Tier 1 only: single file, no design decisions, no behavior changes
-  visible to other team members
-- Any behavior change, API change, or team-visible decision → Tier 2+
+## Rule 1: Replayable State
 
-**Compliance:** Every substantial response starts with a "Sage →"
-announcement, uses a slash command, or is genuinely Tier 1.
+An explicit start records the workflow, strict-mode choice, route-catalog hash,
+and resolved composition before entering a capability. State and event receipts
+must be idempotent and safe under concurrent hooks.
 
-## Rule 1: State First
+**Compliance:** the run can be reconstructed from `.sage/runtime` events.
 
-Before any substantial response, scan `.sage/work/` frontmatter. If work
-exists in `.sage/work/`, scan frontmatter for active initiatives.
-Never start fresh when there is existing context. Never regenerate
-artifacts that already exist without acknowledging them.
+## Rule 2: Declared Composition
 
-**Compliance:** Active work is acknowledged before new work begins.
+Every required capability has one declared owner. Compatible augmenters,
+validators, and observers may assist only when selected by explicit request,
+user/project policy, or workflow defaults. Compatibility makes a skill eligible;
+it does not auto-activate every installed skill. Ambiguous exclusive owners
+require a user choice.
 
-## Rule 1A: Memory Before Work
+The user may combine Sage with external methods and domain skills. A keyword in
+task prose never replaces the selected owner.
 
-Before writing specs, plans, ADRs, or starting an investigation,
-search sage-memory for relevant context. This is mandatory for
-Standard+ scope work when sage-memory MCP is available.
+**Compliance:** capability entry names its resolved owner and selected helpers.
 
-Two searches minimum:
-1. General domain search — query with task domain keywords, limit 5
-2. Self-learning search — same query with filter_tags ["self-learning"], limit 5
+## Rule 3: Scoped Gates
 
-**MCP parameter types:** query is a string, limit is an integer (not
-"5"), filter_tags and tags are arrays of strings (not JSON strings).
+Strict enforcement exists only for a healthy active run explicitly started with
+`--strict`. Outside that state, hooks fail open. Inside it, gates may enforce only
+declared shell, lane, ownership, artifact, and lifecycle invariants. Prose is not
+an authorization channel.
 
-Use findings to inform your approach:
-- Previous corrections → avoid repeating the same mistake
-- Gotchas → known pitfalls in this area of the codebase
-- Conventions → project-specific patterns to follow
-- Architecture decisions → constraints that affect this work
+Workflow approval checkpoints apply only when the selected workflow declares
+them. Ordinary free input does not inherit Sage artifact or approval gates.
 
-This is the counterpart to Rule 6 (capture corrections). Rule 1A
-ensures learnings are recalled; Rule 6 ensures they are stored.
-Without both, the memory system is write-only.
+**Compliance:** every denial cites an active strict run and a declared invariant.
 
-**Compliance:** Every Standard+ workflow start includes at least one
-sage_memory_search call before producing artifacts. If MCP is
-unavailable, check `.sage-memory/` folder instead.
+## Rule 4: Skills Before Assumptions
 
-## Rule 2: Skills Before Assumptions
+Load the resolved owner skill before producing its output. Preserve atomic spans
+through their declared terminal. Helpers may not silently take over the owner's
+method or terminal.
 
-If a Sage skill exists for the current task, activate and follow it.
-Do NOT rely on general training when a skill provides specific
-methodology. Skills are tested, refined processes that produce better
-outcomes than ad-hoc approaches.
+**Compliance:** entered and exited capability events match the composition plan.
 
-Check available skills before proceeding with any substantial task.
+## Rule 5: Verify Before Claiming Done
 
-**Compliance:** Skill is read before producing skill-covered output.
+Obtain fresh evidence in proportion to risk and compare it with the declared
+acceptance criteria. Store actual evidence in run state or workflow artifacts.
+Do not claim completion while declared tasks remain unfinished.
 
-## Rule 3: Spec Before Code (File Check)
+**Compliance:** a completion event references current verification evidence.
 
-Standard+ scope: `.sage/work/[initiative]/spec.md` MUST exist before
-implementation begins. This is a FILE CHECK, not a judgment call.
+## Rule 6: Canonical Self-Learning
 
-Check: does the spec file exist on disk? If no → write it first.
+Hooks detect structured correction, repeated-failure, fail-to-pass, behavioral
+contradiction, and better-method evidence. Hooks never author learnings from
+keywords. The `sage-self-learning` skill interprets candidates, searches before
+store, enriches or updates equivalents, and supersedes incorrect rules through
+the one configured backend.
 
-The following are NOT substitutes for a spec file:
-- "The design is clear from our previous discussion"
-- "The user described exactly what they want"
-- "This is straightforward enough to implement directly"
-- Previous conversations no longer in context
-- Verbal agreements or implicit understanding
+Exactly one recall owner injects bounded prevention rules. Backend or recall
+failure is advisory and fails open.
 
-A spec is a file the user approves. Even if the user says "just
-build it," write a minimal 5-line spec capturing WHAT you're
-building, present [A]/[R], and get approval before implementing.
+**Compliance:** every stored learning was authored by the canonical skill and
+has a stable dedupe key, evidence references, rationale, and prevention rule.
 
-**Compliance:** `ls .sage/work/*/spec.md` returns a file before
-any implementation code is written.
+## Rule 7: Evidence-Based Reflection
 
-## Rule 4: Checkpoints Are Sacred
+Self-learning capture and reflection form one lifecycle. At a terminal checkpoint,
+the canonical reflection skill reviews run evidence and pending candidates. It
+does not require the user to restate observable failures. Interactive questions
+are reserved for unobservable external outcomes or preferences.
 
-Never skip human approval on:
-- Briefs (requirements and goals)
-- Specs (technical design decisions)
-- Plans (implementation approach)
-- Final deliverables (completed work)
+Every reflection request ends with a durable completion containing actual counts
+(including zero) or a durable skip with an evidence-based reason.
 
-Show the work. Wait for explicit approval. Proceed only when confirmed.
+**Compliance:** requested reflections are never left pending silently.
 
-**Never change scope unilaterally.** The agent MUST NOT:
-- Defer, skip, or deprioritize planned work without asking
-- Mark an initiative as complete when tasks remain unfinished
-- Suggest closing out work the user hasn't reviewed
-- Reduce scope ("let's skip this part") without presenting the
-  trade-off and getting explicit approval
+## Rule 8: Durable Decisions
 
-If work cannot be completed (context limits, external blockers,
-complexity beyond current session), present the situation honestly:
-what's done, what remains, and why — then let the user decide
-whether to defer, pause, or continue.
+Record only decisions declared durable by the active workflow. Initiative-local
+decisions belong with that initiative; cross-project decisions belong in the
+global project log. Do not create Sage artifacts merely because routing advice was
+shown.
 
-**Compliance:** Each approval gate presents work and waits for response.
-Scope changes require explicit user consent before proceeding.
-
-## Rule 5: Verify Before Claiming Done (Checklist)
-
-Before presenting any completion checkpoint, run this checklist.
-Every item is an observable condition — not a self-assessment.
-
-For build workflows:
-- [ ] `.sage/work/*/spec.md` exists on disk
-- [ ] `.sage/work/*/plan.md` exists on disk
-- [ ] Test output is PASTED in the response (not summarized)
-- [ ] All plan tasks are addressed
-
-For fix workflows:
-- [ ] Root cause statement was presented and approved
-- [ ] Test output is PASTED showing the fix works
-
-If ANY condition fails → stop. Go back. Fix it. Do NOT present
-the checkpoint. Do NOT explain why a step was unnecessary.
-
-**Compliance:** Every completion checkpoint passes all checklist
-items. Missing items mean the checkpoint is not ready.
-
-## Rule 6: Capture Corrections
-
-When a learning moment occurs, store it via sage-self-learning before
-proceeding. This is automatic, not optional.
-
-Triggers:
-- User corrects your approach → `correction` (MANDATORY — never skip)
-- You tried 3+ approaches before succeeding → `gotcha`
-- Root cause analysis revealed non-obvious cause → `gotcha`
-- You discovered an undocumented project convention → `convention`
-- An API/library behaved differently than expected → `api-drift`
-- A test failed for a non-obvious reason → `error-fix`
-
-Store with `[LRN:type]` title, four-part content (what happened, why
-wrong, what's correct, prevention rule), tags: `self-learning` + type.
-
-**Storage target:** Always use `sage_memory_store()` MCP tool when
-sage-memory MCP is available. Do NOT use Claude's native memory system
-(MEMORY.md, feedback files, or other platform-specific memory) for
-corrections, learnings, or project knowledge. Sage has its own memory
-system — use it. If sage-memory MCP is unavailable, fall back to
-`.sage-memory/` markdown files, never to native platform memory.
-
-**Compliance:** Every user correction is followed by a sage_memory_store
-call with `self-learning` tag before continuing with the fix.
-
-## Rule 7: Record Decisions at Checkpoints
-
-At each checkpoint, **prepend** significant decisions to
-`.sage/decisions.md` (insert after the `# Decisions` header, before
-existing entries) — newest first. Record what was decided, why, and
-what alternatives were considered. This serves both agents (session
-context) and humans (project history).
-
-**Newest-first ordering:** Recent decisions are most relevant for
-context. Prepending ensures the agent reads recent context first
-without burning tokens on old entries.
-
-**Archive rotation:** When decisions.md exceeds ~200 lines, archive
-old entries at the next workflow close:
-1. Keep the 20 most recent entries in decisions.md
-2. Move the rest to `decisions-{YYYY-MM-DD}.md` (today's date)
-3. If an archive file with that date already exists, append to it
-4. Archives are read-only reference — only decisions.md gets new entries
-
-Update artifact frontmatter (status, phase) when artifacts are
-completed or change phase. The file system — what artifacts exist
-in `.sage/work/` and their frontmatter — is the source of truth
-for state. decisions.md is the source of truth for reasoning.
-
-**Compliance:** decisions.md has a new entry (prepended) after each
-checkpoint that involved a decision.
+**Compliance:** artifacts and decision logs match the active run and approved
+scope.

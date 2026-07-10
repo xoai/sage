@@ -88,6 +88,9 @@ CSO_ENFORCE="${CSO_ENFORCE:-1}" bash "$TESTS_DIR/../cso/validate-cso.sh" "$SAGE_
 # Token-budget check — advisory only. Emits WARN lines (folded into Warnings:);
 # never PASS/FAIL, so the contract total is untouched.
 bash "$TESTS_DIR/validate-token-budget.sh" "$SAGE_ROOT"
+# Deterministic runtime smoke — catalogs, route authority, replay, and strict facts.
+PYTHON_BIN="${PYTHON_BIN:-python3}" bash "$TESTS_DIR/../router-state-smoke.sh" "$SAGE_ROOT"
+PYTHON_BIN="${PYTHON_BIN:-python3}" bash "$TESTS_DIR/../composition-smoke.sh" "$SAGE_ROOT"
 
 echo ""
 bold "═══ Summary ═══"
