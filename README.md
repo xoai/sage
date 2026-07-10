@@ -116,6 +116,11 @@ curl -fsSL https://raw.githubusercontent.com/xoai/sage/main/install.sh | bash
 All `sage` commands run in bash. On Windows, use Git Bash or WSL
 for both installation and daily use.
 
+The installer resolves the latest release tag, downloads its tarball and
+`checksums.txt`, and verifies the SHA-256 before unpacking anything. A
+mismatch aborts loudly and installs nothing. Pin a specific release with
+`SAGE_VERSION=v1.1.11 curl -fsSL … | bash`.
+
 ### Path A: New Project (Greenfield)
 
 ```bash
@@ -202,8 +207,18 @@ no more explaining context from scratch.
 ### Upgrade
 
 ```bash
-sage upgrade   # pulls latest Sage framework from GitHub
+sage upgrade   # moves the framework to the latest release tag
 sage update    # regenerates platform files, preserves .sage/ state
+```
+
+`sage upgrade` checks out the newest `vX.Y.Z` tag and prints the changelog
+entries you gained. It no longer tracks `main`: a release tag is the only
+thing that has been through the release workflow's checks. On a tarball
+install it re-downloads and re-verifies the release's SHA-256 instead, and a
+failed upgrade leaves your existing framework untouched.
+
+```bash
+sage upgrade --channel main   # development channel: unreleased, unverified
 ```
 
 `sage update` regenerates CLAUDE.md, commands, workflows, and gate
@@ -220,7 +235,8 @@ Run in your terminal:
 | `sage new <n>` | Create a new project with Sage |
 | `sage init` | Add Sage to the current directory |
 | `sage update` | Regenerate platform files after changes |
-| `sage upgrade` | Update Sage to the latest version |
+| `sage upgrade` | Update Sage to the latest release (`--channel main` for dev) |
+| `sage version` | Print the installed framework version |
 | `sage learn [path]` | Learn a codebase or module |
 | `sage setup memory` | Configure persistent memory (sage-memory MCP) |
 | `sage find <query>` | Search skills.sh catalog (90K+ skills) |

@@ -63,9 +63,14 @@ echo -e "  ${BOLD}Sage Installer${RESET}"
 echo ""
 
 # ── Detect a local source (running from inside an extracted repo) ──
+#
+# SAGE_FORCE_REMOTE=1 suppresses this. `sage upgrade` on a tarball install runs
+# the installer that ships *inside* the framework; without the override it would
+# see itself as a local source and copy the old tree over itself.
 LOCAL_SOURCE=""
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || echo "")"
-if [ -n "$SCRIPT_DIR" ] && [ -f "$SCRIPT_DIR/bin/sage" ] && [ -d "$SCRIPT_DIR/core" ]; then
+if [ "${SAGE_FORCE_REMOTE:-}" != "1" ] \
+   && [ -n "$SCRIPT_DIR" ] && [ -f "$SCRIPT_DIR/bin/sage" ] && [ -d "$SCRIPT_DIR/core" ]; then
   LOCAL_SOURCE="$SCRIPT_DIR"
 fi
 
