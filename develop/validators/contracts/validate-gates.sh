@@ -42,11 +42,11 @@ for gate_file in $GATE_FILES; do
   fi
 
   # Required: order (integer)
-  order=$(echo "$frontmatter" | grep -oP '^order:\s*\K\d+' | head -1)
+  order=$(echo "$frontmatter" | sed -n 's/^order:[[:space:]]*\([0-9][0-9]*\).*$/\1/p' | head -1)
   if [ -n "$order" ]; then
     pass "$gate_name: has order ($order)"
     # Check filename matches order
-    file_order=$(echo "$gate_name" | grep -oP '^\d+')
+    file_order=$(echo "$gate_name" | grep -oE '^[0-9]+')
     if [ "$file_order" = "$order" ] || [ "$file_order" = "0$order" ]; then
       pass "$gate_name: filename prefix matches order"
     else
@@ -57,15 +57,15 @@ for gate_file in $GATE_FILES; do
   fi
 
   # Required: version
-  if echo "$frontmatter" | grep -qP '^version:\s*"?\d+\.\d+\.\d+"?'; then
+  if echo "$frontmatter" | grep -qE '^version:[[:space:]]*"?[0-9]+\.[0-9]+\.[0-9]+"?'; then
     pass "$gate_name: has valid version"
   else
     fail "$gate_name: missing or invalid version"
   fi
 
   # Required: category
-  category=$(echo "$frontmatter" | grep -oP '^category:\s*\K\S+' | head -1)
-  if echo "$category" | grep -qP '^(compliance|quality|safety|verification)$'; then
+  category=$(echo "$frontmatter" | sed -n 's/^category:[[:space:]]*\([^[:space:]][^[:space:]]*\).*$/\1/p' | head -1)
+  if echo "$category" | grep -qE '^(compliance|quality|safety|verification)$'; then
     pass "$gate_name: valid category ($category)"
   else
     fail "$gate_name: category must be one of: compliance, quality, safety, verification (got: '$category')"
@@ -108,10 +108,14 @@ if [ -f "$MODES_FILE" ]; then
       fail "gate-modes.yaml: missing $mode mode configuration"
     fi
   done
-  # Check all gate names in modes file reference actual gate files
-  gate_names_in_config=$(grep -oP '- \K[\w-]+' "$MODES_FILE" | sort -u)
+  # Check all gate names in modes file reference something real. A configured
+  # entry is backed either by a gate file (core/gates/NN-name.gate.md) or by a
+  # review capability (core/capabilities/review/auto-qa) — gate-modes.yaml may
+  # enable both. Searching only core/gates would reject `auto-qa`, which exists.
+  gate_names_in_config=$(grep -oE '\- [A-Za-z0-9_-]+' "$MODES_FILE" | sed 's/^- //' | sort -u)
   for gn in $gate_names_in_config; do
-    if find "$SAGE_ROOT/core/gates" -name "*${gn}*" -type f 2>/dev/null | grep -q .; then
+    if find "$SAGE_ROOT/core/gates" "$SAGE_ROOT/core/capabilities" \
+         -name "*${gn}*" 2>/dev/null | grep -q .; then
       pass "gate-modes.yaml: '$gn' references an existing gate"
     else
       fail "gate-modes.yaml: '$gn' references non-existent gate"

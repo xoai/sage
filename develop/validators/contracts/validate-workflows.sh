@@ -41,15 +41,15 @@ for wf_file in $WF_FILES; do
   fi
 
   # Required: version
-  if echo "$frontmatter" | grep -qP '^version:'; then
+  if echo "$frontmatter" | grep -q '^version:'; then
     pass "$wf_name: has version"
   else
     fail "$wf_name: missing 'version' field"
   fi
 
   # Required for main workflows: mode
-  if echo "$wf_name" | grep -qP '^(fix|build|architect)$'; then
-    mode=$(echo "$frontmatter" | grep -oP '^mode:\s*\K\S+' | head -1)
+  if echo "$wf_name" | grep -qE '^(fix|build|architect)$'; then
+    mode=$(echo "$frontmatter" | sed -n 's/^mode:[[:space:]]*\([^[:space:]][^[:space:]]*\).*$/\1/p' | head -1)
     if [ -n "$mode" ]; then
       pass "$wf_name: has mode ($mode)"
       if [ "$wf_name" = "$mode" ]; then
@@ -69,7 +69,7 @@ for wf_file in $WF_FILES; do
     pass "$wf_name: has process/sequence section"
 
     # Check that sequence references skill names with backtick syntax
-    skill_refs=$(echo "$body" | grep -oP '`[\w-]+`' | sort -u)
+    skill_refs=$(echo "$body" | grep -oE '`[A-Za-z0-9_-]+`' | sort -u)
     ref_count=$(echo "$skill_refs" | grep -c '`' || echo "0")
     if [ "$ref_count" -gt 0 ]; then
       pass "$wf_name: references $ref_count skills by name"
@@ -88,7 +88,7 @@ for wf_file in $WF_FILES; do
   fi
 
   # Check for human checkpoints in BUILD and ARCHITECT
-  if echo "$wf_name" | grep -qP '^(build|architect)$'; then
+  if echo "$wf_name" | grep -qE '^(build|architect)$'; then
     checkpoint_count=$(echo "$body" | grep -ci "CHECKPOINT" || echo "0")
     if [ "$checkpoint_count" -gt 0 ]; then
       pass "$wf_name: has $checkpoint_count human checkpoint(s)"

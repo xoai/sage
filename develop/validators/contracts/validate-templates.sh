@@ -38,7 +38,7 @@ for f in $FILES; do
 
   # Check for placeholder syntax
   body=$(sed -n '/^---$/,/^---$/!p' "$f" | tail -n +2)
-  placeholder_count=$(echo "$body" | grep -coP '\{[a-z_]+\}' || echo "0")
+  placeholder_count=$(echo "$body" | grep -cE '[{][a-z_]+[}]' || echo "0")
   if [ "$placeholder_count" -gt 0 ]; then
     pass "$name: has $placeholder_count placeholders"
   else

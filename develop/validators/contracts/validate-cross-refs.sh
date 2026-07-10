@@ -17,7 +17,7 @@ echo -e "\033[1m── Cross-Reference Validation ──\033[0m"
 # Build list of known skill names
 KNOWN_SKILLS=""
 for sf in $(find "$SAGE_ROOT/skills" -name "SKILL.md" -not -path "*/\{*" 2>/dev/null); do
-  sn=$(sed -n '/^---$/,/^---$/p' "$sf" | grep -oP '^name:\s*\K\S+' | head -1)
+  sn=$(sed -n '/^---$/,/^---$/p' "$sf" | sed -n 's/^name:[[:space:]]*\([^[:space:]][^[:space:]]*\).*$/\1/p' | head -1)
   [ -n "$sn" ] && KNOWN_SKILLS+=" $sn"
 done
 echo "  Known skills:$KNOWN_SKILLS"
@@ -28,10 +28,10 @@ echo "  Checking workflow → skill references..."
 for wf in $(find "$SAGE_ROOT/workflows" -name "*.workflow.md" 2>/dev/null); do
   wf_name=$(basename "$wf" .workflow.md)
   # Extract backtick-quoted skill references from workflow body
-  refs=$(sed -n '/^---$/,/^---$/!p' "$wf" | grep -oP '`([\w-]+)`' | tr -d '`' | sort -u)
+  refs=$(sed -n '/^---$/,/^---$/!p' "$wf" | grep -oE '`[A-Za-z0-9_-]+`' | tr -d '`' | sort -u)
   for ref in $refs; do
     # Skip known non-skill references (sub-workflow names, generic terms)
-    if echo "$ref" | grep -qP '^(quality-gates|sub-workflow|session-start)$'; then
+    if echo "$ref" | grep -qE '^(quality-gates|sub-workflow|session-start)$'; then
       continue
     fi
     if echo "$KNOWN_SKILLS" | grep -qw "$ref"; then
@@ -48,7 +48,7 @@ echo "  Checking persona → skill bindings..."
 for pf in $(find "$SAGE_ROOT/agents" -name "*.persona.md" 2>/dev/null); do
   p_name=$(basename "$pf" .persona.md)
   fm=$(sed -n '/^---$/,/^---$/p' "$pf" | sed '1d;$d')
-  bindings=$(echo "$fm" | grep -oP 'applies-to-skills:\s*\[\K[^\]]+' | tr ',' '\n' | sed 's/^ *//;s/ *$//')
+  bindings=$(echo "$fm" | sed -n 's/.*applies-to-skills:[[:space:]]*\[//p' | sed 's/\].*$//' | tr ',' '\n' | sed 's/^ *//;s/ *$//')
   for binding in $bindings; do
     if echo "$KNOWN_SKILLS" | grep -qw "$binding"; then
       pass "persona/$p_name → skill '$binding' exists"
@@ -62,8 +62,8 @@ echo ""
 # ── Check 3: Skill requires → skill exists ──
 echo "  Checking skill → skill dependencies..."
 for sf in $(find "$SAGE_ROOT/skills" -name "SKILL.md" -not -path "*/\{*" 2>/dev/null); do
-  s_name=$(sed -n '/^---$/,/^---$/p' "$sf" | grep -oP '^name:\s*\K\S+' | head -1)
-  requires=$(sed -n '/^---$/,/^---$/p' "$sf" | grep -oP '^requires:\s*\[\K[^\]]+' | tr ',' '\n' | sed 's/^ *//;s/ *$//')
+  s_name=$(sed -n '/^---$/,/^---$/p' "$sf" | sed -n 's/^name:[[:space:]]*\([^[:space:]][^[:space:]]*\).*$/\1/p' | head -1)
+  requires=$(sed -n '/^---$/,/^---$/p' "$sf" | sed -n 's/^requires:[[:space:]]*\[//p' | sed 's/\].*$//' | tr ',' '\n' | sed 's/^ *//;s/ *$//')
   for req in $requires; do
     if echo "$KNOWN_SKILLS" | grep -qw "$req"; then
       pass "skill/$s_name requires '$req' — exists"

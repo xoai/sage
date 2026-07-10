@@ -69,7 +69,13 @@ mk_skill  ref-skill           ""          ""            0     PASS    0
 # empty, so the skill was silently treated as NON-discipline and skipped —
 # fail-silent non-enforcement. It must appear as a recognized PASS here.
 mk_skill  disc-crlf           discipline  "X MARKER X"  1     PASS    1
-sed -i 's/$/\r/' "$CAP/disc-crlf/SKILL.md" "$CAP/disc-crlf/TESTS.md"
+# awk, not `sed -i 's/$/\r/'`: BSD sed neither accepts a bare -i nor expands
+# \r in the replacement, so on macOS that line appended a literal "r" and the
+# CRLF regression this test exists to catch was never actually exercised.
+for crlf_file in "$CAP/disc-crlf/SKILL.md" "$CAP/disc-crlf/TESTS.md"; do
+  awk '{ printf "%s\r\n", $0 }' "$crlf_file" > "$crlf_file.tmp" &&
+    mv "$crlf_file.tmp" "$crlf_file"
+done
 
 OUT="$(bash "$VALIDATOR" "$ROOT" 2>&1)"
 

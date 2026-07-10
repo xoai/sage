@@ -53,7 +53,7 @@ if [ -z "$slug" ]; then
 fi
 
 # Validate slug format
-if ! echo "$slug" | grep -qP '^[a-z0-9][a-z0-9-]*[a-z0-9]$'; then
+if ! echo "$slug" | grep -qE '^[a-z0-9][a-z0-9-]*[a-z0-9]$'; then
   echo "Error: Slug must be lowercase kebab-case (e.g., jwt-auth, user-onboarding)"
   exit 1
 fi
@@ -73,7 +73,7 @@ mkdir -p "$FEATURES_DIR"
 max_num=0
 for dir in "$FEATURES_DIR"/*/; do
   [ -d "$dir" ] || continue
-  num=$(basename "$dir" | grep -oP '^\d+' || echo "0")
+  num=$(basename "$dir" | grep -oE '^[0-9]+' || echo "0")
   if [ "$num" -gt "$max_num" ]; then
     max_num=$num
   fi

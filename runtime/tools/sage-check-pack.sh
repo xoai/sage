@@ -71,7 +71,7 @@ pass "SKILL.md manifest exists"
 
 # Required fields
 for field in name description version layer; do
-  if grep -qP "^${field}:" "$manifest"; then
+  if grep -q "^${field}:" "$manifest"; then
     pass "Has '$field' field"
   else
     fail "Missing required field: $field"
@@ -79,7 +79,7 @@ for field in name description version layer; do
 done
 
 # Layer value
-layer=$(grep -oP '^layer:\s*\K\d+' "$manifest" 2>/dev/null || echo "0")
+layer=$(sed -n 's/^layer:[[:space:]]*\([0-9][0-9]*\).*$/\1/p' "$manifest" 2>/dev/null || echo "0")
 if [ "$layer" -ge 1 ] && [ "$layer" -le 3 ]; then
   pass "Layer: $layer"
 else
@@ -88,16 +88,16 @@ else
 fi
 
 # Framework version field
-if grep -qP '^framework-version:' "$manifest"; then
-  fv=$(grep -oP '^framework-version:\s*\K.*' "$manifest" | head -1 | tr -d '"')
+if grep -q '^framework-version:' "$manifest"; then
+  fv=$(sed -n 's/^framework-version:[[:space:]]*//p' "$manifest" | head -1 | tr -d '"')
   pass "Framework version: $fv"
 else
   warn "Missing 'framework-version' field — needed for staleness tracking"
 fi
 
 # Last verified date
-if grep -qP '^last-verified:' "$manifest"; then
-  lv=$(grep -oP '^last-verified:\s*\K.*' "$manifest" | tr -d '"')
+if grep -q '^last-verified:' "$manifest"; then
+  lv=$(sed -n 's/^last-verified:[[:space:]]*//p' "$manifest" | tr -d '"')
   pass "Last verified: $lv"
 
   # Check staleness (warn if >6 months old)
@@ -115,8 +115,8 @@ fi
 
 # Dependencies (L2 must have L1 dep, L3 must have L2 dep)
 if [ "$layer" -ge 2 ]; then
-  if grep -qP '^\s*packs:\s*\[.+\]' "$manifest"; then
-    deps=$(grep -oP '^\s*packs:\s*\[\K[^\]]+' "$manifest" | tr ',' '\n' | sed 's/^ *//;s/ *$//' | grep -v '^$')
+  if grep -qE '^[[:space:]]*packs:[[:space:]]*\[.+\]' "$manifest"; then
+    deps=$(sed -n 's/^[[:space:]]*packs:[[:space:]]*\[//p' "$manifest" | sed 's/\].*$//' | tr ',' '\n' | sed 's/^ *//;s/ *$//' | grep -v '^$')
     dep_count=$(echo "$deps" | wc -l)
     pass "Declares $dep_count pack dependency(ies)"
 
@@ -275,7 +275,7 @@ done
 for f in "$pack_dir"/constitution/*.md; do
   [ -f "$f" ] || continue
   fname=$(basename "$f")
-  principle_count=$(grep -cP '^\d+\.' "$f" 2>/dev/null || echo "0")
+  principle_count=$(grep -cE '^[0-9]+\.' "$f" 2>/dev/null || echo "0")
   if [ "$principle_count" -gt 0 ]; then
     pass "$fname: $principle_count numbered principle(s)"
     if [ "$principle_count" -gt 7 ]; then
@@ -326,7 +326,7 @@ echo ""
 echo "── Composability ──"
 
 # Check for "always/never" contradictions with dependency packs
-deps=$(grep -oP '^\s*packs:\s*\[\K[^\]]+' "$manifest" 2>/dev/null | tr ',' '\n' | sed 's/^ *//;s/ *$//' | grep -v '^$' || true)
+deps=$(sed -n 's/^[[:space:]]*packs:[[:space:]]*\[//p' "$manifest" 2>/dev/null | sed 's/\].*$//' | tr ',' '\n' | sed 's/^ *//;s/ *$//' | grep -v '^$' || true)
 
 if [ -n "$deps" ]; then
   # Extract strong directives from this pack

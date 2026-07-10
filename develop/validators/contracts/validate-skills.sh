@@ -48,11 +48,11 @@ for skill_file in $SKILL_FILES; do
   frontmatter=$(sed -n '/^---$/,/^---$/p' "$skill_file" | sed '1d;$d')
 
   # ── Check 2: Required field — name ──
-  fm_name=$(echo "$frontmatter" | grep -oP '^name:\s*\K\S+' | head -1)
+  fm_name=$(echo "$frontmatter" | sed -n 's/^name:[[:space:]]*\([^[:space:]][^[:space:]]*\).*$/\1/p' | head -1)
   if [ -n "$fm_name" ]; then
     pass "$skill_name: has 'name' field ($fm_name)"
     # Check kebab-case
-    if echo "$fm_name" | grep -qP '^[a-z][a-z0-9]*(-[a-z0-9]+)*$'; then
+    if echo "$fm_name" | grep -qE '^[a-z][a-z0-9]*(-[a-z0-9]+)*$'; then
       pass "$skill_name: name is kebab-case"
     else
       fail "$skill_name: name '$fm_name' is not kebab-case (must be lowercase-with-hyphens)"
@@ -81,7 +81,7 @@ for skill_file in $SKILL_FILES; do
   fi
 
   # ── Check 4: Required field — version ──
-  if echo "$frontmatter" | grep -qP '^version:\s*"?\d+\.\d+\.\d+"?'; then
+  if echo "$frontmatter" | grep -qE '^version:[[:space:]]*"?[0-9]+\.[0-9]+\.[0-9]+"?'; then
     pass "$skill_name: has valid semver version"
   else
     fail "$skill_name: missing or invalid 'version' field (must be semver: X.Y.Z)"
@@ -89,8 +89,8 @@ for skill_file in $SKILL_FILES; do
 
   # ── Check 5: Required field — modes ──
   if echo "$frontmatter" | grep -q "^modes:"; then
-    modes=$(echo "$frontmatter" | grep -oP '^modes:\s*\[?\K[^\]]+')
-    if echo "$modes" | grep -qP '(fix|build|architect)'; then
+    modes=$(echo "$frontmatter" | sed -n 's/^modes:[[:space:]]*\[\{0,1\}//p' | sed 's/\].*$//')
+    if echo "$modes" | grep -qE '(fix|build|architect)'; then
       pass "$skill_name: has valid modes ($modes)"
     else
       fail "$skill_name: modes must contain at least one of: fix, build, architect"

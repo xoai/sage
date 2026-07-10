@@ -39,6 +39,19 @@ jobs:
         # quoted, embedded, unquoted, and [*] forms.
         run: python3 develop/validators/check-bash-arrays.py
 
+  portability:
+    name: BSD userland portability (GNU-only constructs)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lint for GNU-only constructs
+        # The bash:3.2 job below catches bash *version* problems, but it runs
+        # on Linux with GNU coreutils — so it cannot catch GNU *userland*
+        # problems. macOS has BSD grep/sed/date, where `grep -P` and friends
+        # fail silently when stderr is discarded. This linter is that guard.
+        run: python3 develop/validators/check-portability.py
+
   bash32:
     name: bash 3.2 behavioral smoke (real macOS system-shell version)
     runs-on: ubuntu-latest

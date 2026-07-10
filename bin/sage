@@ -32,6 +32,9 @@ STEP_START_TIME=""
 # macOS date doesn't support %N — outputs literal "N" instead of failing
 _sage_now() {
   local t
+  # BSD date emits "<seconds>N" rather than erroring; the lines below strip the
+  # N and detect the missing nanoseconds by length.
+  # portability-ok: handled explicitly, see above
   t=$(date +%s%N 2>/dev/null || date +%s)
   # Strip non-digits (macOS outputs "1774343489N")
   t="${t//[!0-9]/}"

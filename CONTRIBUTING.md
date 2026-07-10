@@ -114,6 +114,20 @@ on modern bash, so when in doubt, use the safe form.
 `${#arr[@]}` (the length) and `${arr+set}` (the is-set test) are NOT
 affected — only value expansion (`${arr[@]}` / `${arr[*]}`) is.
 
+### GNU-only constructs
+
+bash 3.2 is only half the problem. macOS also ships **BSD userland**, so
+`grep -P`, a bare `sed -i`, `date +%N` and `readlink -f` behave differently
+there — or not at all. The failure is silent: `grep -oP` prints "invalid
+option" to stderr, and a script that discards stderr simply sees no matches,
+so the check it was performing quietly examines nothing and reports success.
+That is how Gate 4 shipped a fail-open hallucination check.
+
+Where PCRE-class matching is genuinely needed, use `python3` (already a
+dependency) rather than `grep -P`. A line that is portable despite matching a
+rule may carry a trailing `# portability-ok: <reason>` comment — a waiver
+states why the line is fine, it is not a way to defer a fix.
+
 ### Verifying
 
 ```bash
@@ -124,6 +138,9 @@ bash -n bin/sage runtime/multi-agent/scripts/run-role.sh
 # Pure-Python, stdlib only — portable across Linux / macOS / WSL.
 # Catches quoted, embedded ("text ${arr[*]} text"), and unquoted forms.
 python3 develop/validators/check-bash-arrays.py
+
+# Static lint for GNU-only constructs that fail silently under BSD userland.
+python3 develop/validators/check-portability.py
 
 # Behavioral smoke test under a *real* bash 3.2 (requires Docker).
 # Proves the quirk reproduces, the empty-safe idiom works, and every

@@ -31,7 +31,7 @@ for f in $FILES; do
   [ -n "$(echo "$fm" | grep '^name:')" ] && pass "$name: has name" || fail "$name: missing name"
 
   # tier field
-  tier=$(echo "$fm" | grep -oP '^tier:\s*\K\d+' | head -1)
+  tier=$(echo "$fm" | sed -n 's/^tier:[[:space:]]*\([0-9][0-9]*\).*$/\1/p' | head -1)
   if [ -n "$tier" ]; then
     pass "$name: has tier ($tier)"
   else
@@ -39,11 +39,11 @@ for f in $FILES; do
   fi
 
   # version
-  echo "$fm" | grep -qP '^version:' && pass "$name: has version" || fail "$name: missing version"
+  echo "$fm" | grep -q '^version:' && pass "$name: has version" || fail "$name: missing version"
 
   # Check for numbered principles
   body=$(sed -n '/^---$/,/^---$/!p' "$f" | tail -n +2)
-  principle_count=$(echo "$body" | grep -cP '^\d+\.' || echo "0")
+  principle_count=$(echo "$body" | grep -cE '^[0-9]+\.' || echo "0")
   if [ "$principle_count" -gt 0 ]; then
     pass "$name: has $principle_count numbered principles"
   else

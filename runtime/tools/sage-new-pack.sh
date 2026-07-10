@@ -38,7 +38,7 @@ if [ -z "$pack_name" ]; then
   exit 1
 fi
 
-if ! echo "$layer" | grep -qP '^[123]$'; then
+if ! echo "$layer" | grep -qE '^[123]$'; then
   echo "Error: Layer must be 1, 2, or 3."
   exit 1
 fi
@@ -77,6 +77,12 @@ case "$layer" in
   2) layer_name="framework"; token_budget="5000"; dep_note="must declare L1 pack dependency" ;;
   3) layer_name="stack"; token_budget="1500"; dep_note="must declare L2 pack dependencies" ;;
 esac
+
+# Title-cased forms for the generated docs. bash 3.2 (macOS /bin/bash) has no
+# ${var^} case modification — it is a bash 4 feature and a syntax error there.
+capitalize() { printf '%s' "$1" | awk '{ print toupper(substr($0, 1, 1)) substr($0, 2) }'; }
+layer_name_title=$(capitalize "$layer_name")
+pack_name_title=$(capitalize "$pack_name")
 
 # ─── Create directory structure ───────────────────────────────────────────
 
@@ -124,7 +130,7 @@ echo "  ✓ SKILL.md manifest"
 cat > "$pack_dir/README.md" << EOF
 # $pack_name
 
-**Layer $layer — ${layer_name^} Pack**
+**Layer $layer — ${layer_name_title} Pack**
 
 TODO: 2-3 sentences explaining what agent mistakes this pack corrects and
 why those corrections matter.
@@ -206,7 +212,7 @@ echo "  ✓ anti-patterns/${pack_name}-anti-patterns.md"
 # ─── Generate constitution template ──────────────────────────────────────
 
 cat > "$pack_dir/constitution/${pack_name}.constitution-additions.md" << EOF
-# ${pack_name^} — Constitution Additions
+# ${pack_name_title} — Constitution Additions
 
 ## Principles
 
