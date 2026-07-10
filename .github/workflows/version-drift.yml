@@ -1,0 +1,29 @@
+name: version-drift
+
+# The root VERSION file is the single source of truth (ADR-2). The plugin
+# manifests, the CHANGELOG's top entry, and every documented config example
+# are derived from it. They used to disagree — 1.1.11 / 1.1.8 / 1.0.9 / 1.0.0 —
+# and users had no way to tell what they were running.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  version-drift:
+    name: version artifacts agree with VERSION
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.8'
+
+      - name: Check for version drift
+        run: python3 runtime/tools/release.py --check
+
+      - name: Test the release tool itself
+        run: python3 develop/validators/tools/test_release.py

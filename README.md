@@ -513,7 +513,7 @@ relationships) for smarter integration.
 Sage configuration lives in `.sage/config.yaml`:
 
 ```yaml
-sage-version: "1.1.8"
+sage-version: "<stamped by sage init from the framework's VERSION file>"
 project-name: "my-app"
 detected-stack: [react, typescript]
 auto_review: true          # sub-agent review after spec/plan approval

@@ -183,7 +183,7 @@ a new project (establish them as the first code is written).
 
 ### .sage/config.yaml
 ```yaml
-sage-version: "1.0.0"
+sage-version: "<stamped by sage init from the framework's VERSION file>"
 project-name: "<detected or provided>"
 mode-default: build
 packs:
