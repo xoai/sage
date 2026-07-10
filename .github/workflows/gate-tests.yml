@@ -40,6 +40,11 @@ jobs:
                   tools/sage-claude-plugin/hooks/scripts \
                   --exclude sage-session-init.sh
 
+      - name: Installer integrity tests
+        # Drives the real install.sh against a fake release served over file://.
+        # Proves a corrupted download aborts before anything is written.
+        run: bash develop/validators/installer/run-installer-tests.sh
+
   gate-tests-bash32:
     name: gate regression tests (bash 3.2 — macOS system shell)
     runs-on: ubuntu-latest
