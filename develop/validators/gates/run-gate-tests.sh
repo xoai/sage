@@ -166,22 +166,19 @@ H=sage-hallucination-check.sh
 run_case G1 "missing relative import fails closed (01-analysis §2.1 repro)" \
   --script "$H" --exit 1 \
   --contains "FAIL" --contains "does-not-exist" \
-  --xfail "fail() runs in a pipeline subshell, so PASS=false never reaches the verdict (P1-T2)" \
   -- "$FIX/hallucination/missing-relative-import/src/app.ts" \
      "$FIX/hallucination/missing-relative-import"
 
-# The 'Checked 1 imports' assertion stops this case from passing vacuously:
-# today the gate reaches PASS having examined nothing.
+# The 'Checked 1 imports' assertion stops this case from passing vacuously —
+# the pre-P1-T2 gate reached PASS having examined nothing.
 run_case G2 "clean TypeScript passes, having actually resolved the import" \
   --script "$H" --exit 0 --contains "PASS" \
   --contains "Checked 1 imports, 0 missing" \
-  --xfail "counters increment inside a pipeline subshell, so the gate passes vacuously (P1-T2)" \
   -- "$FIX/hallucination/clean-ts/src/app.ts" "$FIX/hallucination/clean-ts"
 
 run_case G3 "phantom package fails closed" \
   --script "$H" --exit 1 \
   --contains "FAIL" --contains "totally-not-a-real-package" \
-  --xfail "undeclared packages only warn, and warnings still exit 0 (P1-T2)" \
   -- "$FIX/hallucination/phantom-package/src/app.ts" \
      "$FIX/hallucination/phantom-package"
 
@@ -199,7 +196,6 @@ run_case G12 "counters are truthful (no contradictory 'no imports' line)" \
   --script "$H" --exit 1 \
   --contains "Checked 1 imports, 1 missing" \
   --not-contains "No relative imports to check" \
-  --xfail "counters are lost with the subshell; the gate prints both a failure and 'no imports' (P1-T2)" \
   -- "$FIX/hallucination/missing-relative-import/src/app.ts" \
      "$FIX/hallucination/missing-relative-import"
 
