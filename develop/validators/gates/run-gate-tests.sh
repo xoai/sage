@@ -215,13 +215,11 @@ V=sage-verify.sh
 
 run_case G6 "no test runner is UNVERIFIABLE, not pass" \
   --script "$V" --exit 2 --contains "UNVERIFIABLE" \
-  --xfail "a project with zero tests exits 0, indistinguishable from a green suite (P1-T4)" \
   -- "$FIX/verify/no-runner"
 
 run_case G7 "passing pytest suite passes" \
   --script "$V" --exit 0 --contains "PASS" \
   --requires pytest \
-  --xfail "pytest is invoked as 'python -m pytest'; on python3-only systems that is command-not-found (P1-T4)" \
   -- "$FIX/verify/passing-pytest"
 
 # Asserting on the test's name proves the gate failed because the SUITE failed,
@@ -229,7 +227,6 @@ run_case G7 "passing pytest suite passes" \
 run_case G8 "failing pytest suite fails, with captured evidence" \
   --script "$V" --exit 1 --contains "FAIL" --contains "test_arithmetic_is_broken" \
   --requires pytest \
-  --xfail "same 'python' bug: exits 1 on command-not-found, so no test evidence is captured (P1-T4)" \
   -- "$FIX/verify/failing-pytest"
 
 run_case G9 "'vitest' in package.json metadata is not a runner" \
@@ -237,7 +234,6 @@ run_case G9 "'vitest' in package.json metadata is not a runner" \
   --not-contains "npx vitest" \
   --env npm_config_offline=true --env npm_config_yes=false \
   --timeout 60 \
-  --xfail "runner detection greps for the substring '\"vitest\"', matching the keywords array (P1-T4)" \
   -- "$FIX/verify/misleading-package-json"
 
 echo ""
