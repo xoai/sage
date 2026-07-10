@@ -12,10 +12,12 @@ Python 3.8+, stdlib only.
 """
 from __future__ import annotations
 
+import hashlib
 import pathlib
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
 import unittest
 
@@ -198,6 +200,75 @@ class ReleaseToolTest(unittest.TestCase):
         build_tree(self.dir)
         rc, _ = run(self.dir)
         self.assertEqual(rc, 2)
+
+
+def git(root, *args):
+    return subprocess.run(["git", "-C", str(root), *args],
+                          capture_output=True, text=True, check=True)
+
+
+@unittest.skipUnless(shutil.which("git"), "git is required")
+class ArtifactsTest(unittest.TestCase):
+    """--artifacts builds the tarball install.sh will verify (ADR-3)."""
+
+    def setUp(self):
+        self.dir = pathlib.Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.dir, ignore_errors=True)
+        build_tree(self.dir, version="1.2.3")
+        (self.dir / "bin").mkdir()
+        (self.dir / "bin" / "sage").write_text("#!/usr/bin/env bash\necho hi\n")
+        git(self.dir, "init", "-q")
+        git(self.dir, "config", "user.email", "t@example.com")
+        git(self.dir, "config", "user.name", "t")
+        git(self.dir, "add", "-A")
+        git(self.dir, "commit", "-qm", "fixture")
+
+    def test_artifacts_from_a_tag(self):
+        git(self.dir, "tag", "v1.2.3")
+        rc, out = run(self.dir, "--artifacts")
+        self.assertEqual(rc, 0, out)
+
+        tarball = self.dir / "dist" / "sage-1.2.3.tar.gz"
+        checksums = self.dir / "dist" / "checksums.txt"
+        self.assertTrue(tarball.is_file())
+
+        digest, name = checksums.read_text().split()
+        self.assertEqual(name, "sage-1.2.3.tar.gz")
+        self.assertEqual(digest, hashlib.sha256(tarball.read_bytes()).hexdigest())
+
+    def test_artifacts_refuses_tag_that_contradicts_version(self):
+        git(self.dir, "tag", "v9.9.9")
+        rc, out = run(self.dir, "--artifacts", "--ref", "v9.9.9")
+        self.assertEqual(rc, 1, out)
+        self.assertIn("does not match VERSION", out)
+
+    def test_artifacts_fails_on_unknown_ref(self):
+        rc, out = run(self.dir, "--artifacts", "--ref", "v0.0.0-nope")
+        self.assertEqual(rc, 1, out)
+
+    def test_corrupted_tarball_fails_its_own_checksum(self):
+        """The property install.sh depends on: one flipped byte breaks the digest."""
+        git(self.dir, "tag", "v1.2.3")
+        self.assertEqual(run(self.dir, "--artifacts")[0], 0)
+
+        tarball = self.dir / "dist" / "sage-1.2.3.tar.gz"
+        recorded = (self.dir / "dist" / "checksums.txt").read_text().split()[0]
+
+        data = bytearray(tarball.read_bytes())
+        data[len(data) // 2] ^= 0x01
+        tarball.write_bytes(bytes(data))
+
+        self.assertNotEqual(hashlib.sha256(tarball.read_bytes()).hexdigest(), recorded)
+
+    def test_tarball_unpacks_under_a_versioned_prefix(self):
+        git(self.dir, "tag", "v1.2.3")
+        self.assertEqual(run(self.dir, "--artifacts")[0], 0)
+        with tarfile.open(self.dir / "dist" / "sage-1.2.3.tar.gz") as tf:
+            names = tf.getnames()
+        self.assertIn("sage-1.2.3/bin/sage", names)
+        self.assertIn("sage-1.2.3/VERSION", names)
+        # git archive never includes the .git directory.
+        self.assertFalse([n for n in names if ".git/" in n])
 
 
 if __name__ == "__main__":

@@ -1,0 +1,96 @@
+name: release
+
+# Publishes a verifiable release on tag push (ADR-3).
+#
+# Sage used to be installed with `curl | bash` against main, and upgraded with
+# `git pull --ff-only` against main. There was no tag, no checksum, and no
+# signature — a compromised or mid-push main landed straight in ~/.sage/framework
+# and, from there, into every project on its next `sage update`.
+#
+# Now: an annotated tag vX.Y.Z produces sage-X.Y.Z.tar.gz plus a checksums.txt
+# that install.sh verifies before unpacking anything.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build (e.g. v1.1.11)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: build and publish release artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # git archive needs the tag's history
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.8'
+
+      - name: Resolve the tag
+        id: tag
+        run: echo "name=${{ github.event.inputs.tag || github.ref_name }}" >> "$GITHUB_OUTPUT"
+
+      - name: Tag must match VERSION
+        # A tag naming a version the tree does not claim would ship a tarball
+        # whose contents contradict its filename.
+        run: |
+          tag="${{ steps.tag.outputs.name }}"
+          version="$(cat VERSION)"
+          if [ "$tag" != "v$version" ]; then
+            echo "::error::tag $tag does not match VERSION $version"
+            exit 1
+          fi
+
+      - name: No version drift
+        run: python3 runtime/tools/release.py --check
+
+      # A tag can point at any commit, including one CI never saw. Re-run the
+      # checks that guard the release rather than trusting the branch build.
+      - name: Install fixture toolchains
+        run: |
+          python3 -m pip install --quiet pytest
+          npm install --global --silent typescript
+
+      - name: Gate regression tests
+        run: bash develop/validators/gates/run-gate-tests.sh
+
+      - name: Static validators
+        run: |
+          python3 develop/validators/check-bash-arrays.py
+          python3 develop/validators/check-portability.py
+          python3 develop/validators/tools/test_release.py
+
+      - name: Build tarball + checksums
+        run: python3 runtime/tools/release.py --artifacts --ref "${{ steps.tag.outputs.name }}"
+
+      - name: Verify the checksum we are about to publish
+        working-directory: dist
+        run: sha256sum -c checksums.txt
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${{ steps.tag.outputs.name }}"
+          notes="$(python3 - "$tag" <<'PY'
+import pathlib, re, sys
+tag = sys.argv[1].lstrip('v')
+text = pathlib.Path('CHANGELOG.md').read_text()
+# The section from this version's heading to the next one.
+m = re.search(r'^##\s*\[%s\].*?(?=^##\s*\[|\Z)' % re.escape(tag), text, re.M | re.S)
+print(m.group(0).strip() if m else 'See CHANGELOG.md')
+PY
+)"
+          gh release create "$tag" \
+            dist/sage-*.tar.gz dist/checksums.txt \
+            --title "Sage $tag" \
+            --notes "$notes"

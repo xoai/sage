@@ -19,6 +19,7 @@ Usage:
   release.py --sync              propagate VERSION into the derived files
   release.py --bump patch|minor|major
                                  raise VERSION, then --sync
+  release.py --artifacts         build the release tarball + checksums.txt
   release.py --repo-root PATH    operate on a tree other than this checkout
 
 Exit: 0 = agree / written   |   1 = drift or refusal   |   2 = bad invocation
@@ -27,13 +28,19 @@ Exit: 0 = agree / written   |   1 = drift or refusal   |   2 = bad invocation
 version. Write the entry first; the changelog is the release note, not an
 afterthought.
 
+`--artifacts` produces dist/sage-X.Y.Z.tar.gz from a git ref (default: the tag
+`vX.Y.Z`) and a checksums.txt that `sha256sum -c` and `shasum -a 256 -c` both
+understand. install.sh verifies against it before unpacking anything (ADR-3).
+
 Python 3.8+, stdlib only.
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import pathlib
 import re
+import subprocess
 import sys
 
 SEMVER = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
@@ -208,6 +215,48 @@ def bump(root: pathlib.Path, level: str) -> int:
     return sync(root)
 
 
+def sha256_file(path: pathlib.Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def artifacts(root: pathlib.Path, ref: str, outdir: pathlib.Path) -> int:
+    version = read_version(root)
+    if ref is None:
+        ref = f"v{version}"
+
+    # A tag that names a different version than VERSION would ship a tarball
+    # whose contents contradict its filename.
+    m = SEMVER.match(ref[1:]) if ref.startswith("v") else None
+    if m and ref[1:] != version:
+        raise Problem(f"ref {ref} does not match VERSION {version}")
+
+    outdir.mkdir(parents=True, exist_ok=True)
+    tarball = outdir / f"sage-{version}.tar.gz"
+
+    # git archive honors .gitattributes export-ignore and never includes .git,
+    # so the tarball is exactly the tracked tree at that ref.
+    proc = subprocess.run(
+        ["git", "-C", str(root), "archive", "--format=tar.gz",
+         f"--prefix=sage-{version}/", "-o", str(tarball), ref],
+        capture_output=True, text=True,
+    )
+    if proc.returncode != 0:
+        raise Problem(f"git archive {ref} failed: {proc.stderr.strip()}")
+
+    digest = sha256_file(tarball)
+    # Two spaces: the format both `sha256sum -c` and `shasum -a 256 -c` read.
+    (outdir / "checksums.txt").write_text(f"{digest}  {tarball.name}\n")
+
+    print(f"  built {tarball.relative_to(root) if root in tarball.parents else tarball}")
+    print(f"  sha256 {digest}")
+    print(f"OK — artifacts for {version} from {ref}.")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Keep version artifacts derived from the root VERSION file."
@@ -219,6 +268,12 @@ def main() -> int:
                        help="propagate VERSION into the derived files")
     group.add_argument("--bump", choices=("patch", "minor", "major"),
                        help="raise VERSION, then sync")
+    group.add_argument("--artifacts", action="store_true",
+                       help="build the release tarball and checksums.txt")
+    parser.add_argument("--ref", default=None,
+                        help="git ref to archive (default: the tag vX.Y.Z)")
+    parser.add_argument("--out", type=pathlib.Path, default=None,
+                        help="artifact output directory (default: <repo>/dist)")
     parser.add_argument("--repo-root", type=pathlib.Path,
                         default=pathlib.Path(__file__).resolve().parents[2],
                         help="operate on a tree other than this checkout")
@@ -230,6 +285,8 @@ def main() -> int:
             return check(root)
         if args.sync:
             return sync(root)
+        if args.artifacts:
+            return artifacts(root, args.ref, args.out or root / "dist")
         return bump(root, args.bump)
     except Problem as exc:
         print(f"✗ {exc}")
