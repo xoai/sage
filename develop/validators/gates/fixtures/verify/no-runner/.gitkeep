@@ -1,0 +1,2 @@
+# Fixture for G6 — no package.json, pyproject.toml, pubspec.yaml or go.mod.
+# Gate 5 must exit 2 (UNVERIFIABLE), never 0 (PASS).

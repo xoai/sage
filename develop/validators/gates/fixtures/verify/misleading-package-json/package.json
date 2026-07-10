@@ -1,0 +1,7 @@
+{
+  "name": "misleading-package-json-fixture",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Names test runners in metadata only. No runner is installed and no test script exists.",
+  "keywords": ["vitest", "jest", "mocha"]
+}

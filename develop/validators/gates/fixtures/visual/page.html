@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Gate 6 fixture</title>
+    <style>
+      * { box-sizing: border-box; margin: 0; }
+      body {
+        font: 16px/1.6 system-ui, sans-serif;
+        background: linear-gradient(160deg, #1d3557, #457b9d 55%, #a8dadc);
+        color: #f1faee;
+        min-height: 100vh;
+        padding: 2rem 1rem;
+      }
+      .card {
+        max-width: 40rem;
+        margin: 0 auto 1.5rem;
+        padding: 1.5rem;
+        border-radius: 12px;
+        background: rgba(0, 0, 0, 0.35);
+      }
+      h1 { font-size: 1.75rem; margin-bottom: 0.5rem; }
+      code { background: rgba(255, 255, 255, 0.15); padding: 0 0.25rem; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Gate 6 visual fixture</h1>
+      <p>
+        A deliberately dense, colorful page: no horizontal overflow at 375px,
+        no console errors, and large enough that its PNG clears the
+        <code>BLANK_THRESHOLD</code> that guards against blank captures.
+      </p>
+    </div>
+    <div class="card">
+      <p>
+        Every element here is fluid, so <code>document.documentElement.scrollWidth</code>
+        must equal the viewport width on mobile.
+      </p>
+    </div>
+    <div class="card">
+      <p>
+        Gate 6 must exit 0 against this page when a browser is available, and
+        exit 2 (UNVERIFIABLE) when one is not — never exit 1.
+      </p>
+    </div>
+  </body>
+</html>

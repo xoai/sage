@@ -1,0 +1,57 @@
+name: gate-tests
+
+# Regression tests for the deterministic gate scripts (core/gates/scripts/).
+# These gates are the layer Sage advertises as immune to model rationalization,
+# so they carry their own tests. See develop/validators/gates/README.md.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  gate-tests:
+    name: gate regression tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.8'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Provision the runners the fixtures need, so nothing SKIPs in CI.
+      - name: Install fixture toolchains
+        run: |
+          python3 -m pip install --quiet pytest
+          npm install --global --silent typescript
+
+      - name: Run gate regression tests
+        run: bash develop/validators/gates/run-gate-tests.sh
+
+      - name: Gate scripts and their plugin mirrors are identical
+        run: |
+          diff -r core/gates/scripts \
+                  tools/sage-claude-plugin/hooks/scripts \
+                  --exclude sage-session-init.sh
+
+  gate-tests-bash32:
+    name: gate regression tests (bash 3.2 — macOS system shell)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The bash:3.2 image is Alpine and ships neither python3 nor pytest.
+      # The gates depend on python3 (portable regex, JSON parsing), so install
+      # it; cases whose runners are absent SKIP rather than fail.
+      - name: Run the harness under bash 3.2
+        run: |
+          docker run --rm -v "$PWD":/sage -w /sage bash:3.2 sh -c '
+            apk add --no-cache python3 >/dev/null &&
+            bash develop/validators/gates/run-gate-tests.sh
+          '

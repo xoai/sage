@@ -1,0 +1,2 @@
+# Fixture for G4 — no analyzable source files.
+# Gate 4 must exit 2 (UNVERIFIABLE), never 0 (PASS).
