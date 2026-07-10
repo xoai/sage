@@ -38,7 +38,9 @@ fi
 # ── Static analysis (single pass, emitted as tab-separated records) ──
 #
 # Protocol:
-#   FILE            <path>
+#   FILES           <n>
+#   JS_FILES        <n>
+#   PY_FILES        <n>
 #   CHECKED_IMPORTS <n>
 #   MISSING_IMPORT  <file>  <specifier>
 #   PKG_MANIFEST    <path|->
@@ -184,8 +186,9 @@ def package_name(spec):
 
 
 files = discover(target)
-for f in files:
-    emit('FILE', f)
+emit('FILES', len(files))
+emit('JS_FILES', sum(1 for f in files if os.path.splitext(f)[1] in JS_EXT))
+emit('PY_FILES', sum(1 for f in files if f.endswith('.py')))
 
 # ── relative imports ──
 checked_imports = 0
@@ -270,6 +273,8 @@ fi
 
 # ── Parse the analysis into shell state (here-string: no subshell) ──
 FILE_COUNT=0
+JS_FILES=0
+PY_FILES=0
 CHECKED_IMPORTS=0
 MISSING_IMPORTS=0
 CHECKED_PKGS=0
@@ -277,11 +282,12 @@ PHANTOM_PKGS=0
 PKG_MANIFEST="-"
 MISSING_LINES=""
 PHANTOM_LINES=""
-FILES_LIST=()
 
 while IFS=$'\t' read -r kind a b; do
   case "$kind" in
-    FILE)            FILES_LIST+=("$a"); FILE_COUNT=$((FILE_COUNT + 1)) ;;
+    FILES)           FILE_COUNT="$a" ;;
+    JS_FILES)        JS_FILES="$a" ;;
+    PY_FILES)        PY_FILES="$a" ;;
     CHECKED_IMPORTS) CHECKED_IMPORTS="$a" ;;
     CHECKED_PKGS)    CHECKED_PKGS="$a" ;;
     PKG_MANIFEST)    PKG_MANIFEST="$a" ;;
@@ -331,57 +337,84 @@ fi
 
 log ""
 
-# ── Step 3: TypeScript compilation check ──
-log "── Type check ──"
+# ── Step 3: Toolchain check ──
+#
+# A real type-checker subsumes any list of "APIs that don't exist" a gate could
+# hard-code, and it does not go stale. This replaces the former Step 4, which
+# grepped for `useServer`, `useClient` and Pages-Router APIs: React-specific
+# trivia in a gate advertised as universal, offering nothing to Python, Go or
+# Flutter projects. Framework-specific pattern checks belong in that
+# framework's skill, not here.
+log "── Toolchain check ──"
 
+TOOLCHAIN_RAN=false
+TOOLCHAIN_ARGV=()
+TOOLCHAIN_NAME=""
+
+# 1. TypeScript: prefer a tsc on PATH, else one already installed in the
+#    project. `--no-install` keeps the gate offline and non-mutating.
 if [ -f "$ROOT/tsconfig.json" ]; then
-  if command -v npx >/dev/null 2>&1; then
-    TYPE_OUTPUT=$(cd "$ROOT" && npx tsc --noEmit 2>&1) || {
-      ERRORS=$(printf '%s\n' "$TYPE_OUTPUT" | grep -c "error TS")
-      fail "TypeScript errors: $ERRORS"
-      printf '%s\n' "$TYPE_OUTPUT" | grep "error TS" | head -5
-    }
-    [ "$PASS" = true ] && log "  ✅ TypeScript compiles with no errors"
+  if command -v tsc >/dev/null 2>&1; then
+    TOOLCHAIN_ARGV=(tsc --noEmit)
+    TOOLCHAIN_NAME="tsc"
+  elif command -v npx >/dev/null 2>&1 &&
+       (cd "$ROOT" && npx --no-install tsc --version >/dev/null 2>&1); then
+    TOOLCHAIN_ARGV=(npx --no-install tsc --noEmit)
+    TOOLCHAIN_NAME="tsc"
   else
-    warn "npx not available, skipping TypeScript check"
+    warn "tsconfig.json present but no tsc available — skipping type check"
   fi
-else
-  log "  No tsconfig.json — skipping type check"
+
+# 2. Python: same shape, whichever checker the project has.
+elif [ "$PY_FILES" -gt 0 ]; then
+  if command -v pyright >/dev/null 2>&1; then
+    TOOLCHAIN_ARGV=(pyright "$TARGET")
+    TOOLCHAIN_NAME="pyright"
+  elif command -v mypy >/dev/null 2>&1; then
+    TOOLCHAIN_ARGV=(mypy "$TARGET")
+    TOOLCHAIN_NAME="mypy"
+  else
+    log "  No pyright or mypy available — skipping type check"
+  fi
+fi
+
+# 3. Otherwise the import- and package-existence checks above stand alone.
+if [ ${#TOOLCHAIN_ARGV[@]} -gt 0 ]; then
+  TOOLCHAIN_RAN=true
+  TYPE_OUTPUT=$(cd "$ROOT" && ${TOOLCHAIN_ARGV[@]+"${TOOLCHAIN_ARGV[@]}"} 2>&1)
+  if [ $? -ne 0 ]; then
+    ERRORS=$(printf '%s\n' "$TYPE_OUTPUT" | grep -c -e "error" || true)
+    fail "$TOOLCHAIN_NAME reported $ERRORS error line(s)"
+    printf '%s\n' "$TYPE_OUTPUT" | grep -e "error" | head -5
+  else
+    log "  ✅ $TOOLCHAIN_NAME reports no errors"
+  fi
+elif [ -z "$TOOLCHAIN_NAME" ] && [ "$PY_FILES" -eq 0 ] && [ ! -f "$ROOT/tsconfig.json" ]; then
+  log "  No type-checker configured for this project — skipping type check"
 fi
 
 log ""
 
-# ── Step 4: Check for common hallucination patterns ──
-log "── Common hallucination patterns ──"
-
-for file in ${FILES_LIST[@]+"${FILES_LIST[@]}"}; do
-  # Check for non-existent React hooks (common hallucination)
-  if grep -q "useServer" "$file"; then
-    fail "Hallucinated API: 'useServer' does not exist (in $file)"
-  fi
-  if grep -q "useClient" "$file"; then
-    fail "Hallucinated API: 'useClient' does not exist — use 'use client' directive (in $file)"
-  fi
-
-  # Check for deprecated/removed APIs used as if current
-  if grep -q "getServerSideProps\|getStaticProps\|getInitialProps" "$file"; then
-    case "$file" in
-      */app/*) warn "Pages Router API in App Router file: $file" ;;
-    esac
-  fi
-done
-
-log ""
-
 # ── Result ──
+#
+# Exit 2 when the gate examined nothing: no type-checker ran AND no JS/TS file
+# was parsed for imports. "Passed" and "couldn't check" must not share an exit
+# code — that equivalence is what let this gate fail open.
 log "═══ Gate 4 Result ═══"
-if [ "$PASS" = true ] && [ $WARNINGS -eq 0 ]; then
-  log "✅ PASS — No hallucinations detected"
-  exit 0
-elif [ "$PASS" = true ]; then
+if [ "$PASS" = false ]; then
+  log "❌ FAIL — Hallucinated imports or APIs detected"
+  exit 1
+elif [ "$TOOLCHAIN_RAN" = false ] && [ "$JS_FILES" -eq 0 ]; then
+  if [ "$FILE_COUNT" -eq 0 ]; then
+    log "⚠️ UNVERIFIABLE — no analyzable source files found under $TARGET"
+  else
+    log "⚠️ UNVERIFIABLE — $FILE_COUNT file(s) found, but no type-checker is available and none are JS/TS"
+  fi
+  exit 2
+elif [ $WARNINGS -gt 0 ]; then
   log "⚠️  PASS WITH WARNINGS — $WARNINGS warning(s), review recommended"
   exit 0
 else
-  log "❌ FAIL — Hallucinated imports or APIs detected"
-  exit 1
+  log "✅ PASS — No hallucinations detected"
+  exit 0
 fi

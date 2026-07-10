@@ -65,8 +65,8 @@ run_case() {
   local id="$1" label="$2"; shift 2
   [ -n "$ONLY" ] && [ "$ONLY" != "$id" ] && return 0
 
-  local script="" expect_exit="" xfail="" cwd="$REPO_ROOT" tmo=120 skip_if=""
-  local contains=() not_contains=() requires=() envs=() args=()
+  local script="" expect_exit="" xfail="" cwd="$REPO_ROOT" tmo=120
+  local contains=() not_contains=() requires=() envs=() args=() skip_if=()
 
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -75,7 +75,7 @@ run_case() {
       --contains)     contains+=("$2"); shift 2 ;;
       --not-contains) not_contains+=("$2"); shift 2 ;;
       --requires)     requires+=("$2"); shift 2 ;;
-      --skip-if-tool) skip_if="$2"; shift 2 ;;
+      --skip-if-tool) skip_if+=("$2"); shift 2 ;;
       --cwd)          cwd="$2"; shift 2 ;;
       --env)          envs+=("$2"); shift 2 ;;
       --xfail)        xfail="$2"; shift 2 ;;
@@ -98,11 +98,13 @@ run_case() {
       return 0
     fi
   done
-  if [ -n "$skip_if" ] && have_tool "$skip_if"; then
-    N_SKIP=$((N_SKIP + 1))
-    report SKIP "$id" "$label" "tool present, case only valid without it: $skip_if"
-    return 0
-  fi
+  for t in ${skip_if[@]+"${skip_if[@]}"}; do
+    if have_tool "$t"; then
+      N_SKIP=$((N_SKIP + 1))
+      report SKIP "$id" "$label" "tool present, case only valid without it: $t"
+      return 0
+    fi
+  done
 
   local runner=()
   if command -v timeout >/dev/null 2>&1; then runner=(timeout "$tmo"); fi
@@ -184,8 +186,14 @@ run_case G3 "phantom package fails closed" \
 
 run_case G4 "nothing to check is UNVERIFIABLE, not pass" \
   --script "$H" --exit 2 --contains "UNVERIFIABLE" \
-  --xfail "no exit-2 state exists yet; an empty tree reports PASS (P1-T3)" \
   -- "$FIX/hallucination/nothing-to-check" "$FIX/hallucination/nothing-to-check"
+
+# Gate 4 has no import analysis for Python. Without a type-checker it has
+# examined nothing, and must say so rather than report a clean bill of health.
+run_case G4b "Python file with no type-checker is UNVERIFIABLE, not pass" \
+  --script "$H" --exit 2 --contains "UNVERIFIABLE" \
+  --skip-if-tool pyright --skip-if-tool mypy \
+  -- "$FIX/hallucination/python-only" "$FIX/hallucination/python-only"
 
 run_case G5 "type error fails closed via toolchain" \
   --script "$H" --exit 1 --contains "FAIL" \
