@@ -5,6 +5,14 @@
 #
 # Usage: bash sage/core/gates/scripts/sage-visual-gate.sh <url> [feature-dir]
 #
+# Exit contract (ADR-1):
+#   0 = screenshots captured, automated checks clean
+#   1 = a real visual defect (blank page, missing capture, mobile overflow)
+#   2 = unverifiable — no browser toolchain, or the page could not be loaded
+#
+# Exit 2 matters here: "the layout is fine" and "no browser is installed" are
+# different claims. A missing toolchain used to be reported as a visual defect.
+#
 # What this script checks deterministically:
 #   1. Screenshots captured at all breakpoints (files exist, non-zero)
 #   2. No horizontal overflow on mobile (page width matches viewport)
@@ -22,13 +30,19 @@ set -uo pipefail
 URL="${1:-}"
 FEATURE_DIR="${2:-.sage/screenshots}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SAGE_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 PASS=true
 WARNINGS=0
 
 log()  { echo "$1"; }
 warn() { log "⚠️  $1"; WARNINGS=$((WARNINGS + 1)); }
 fail() { log "❌ $1"; PASS=false; }
+
+unverifiable() {
+  log ""
+  log "═══ Gate 6 Result ═══"
+  log "⚠️ UNVERIFIABLE — $1"
+  exit 2
+}
 
 if [ -z "$URL" ]; then
   echo "Usage: sage-visual-gate.sh <url> [screenshot-output-dir]"
@@ -42,34 +56,56 @@ log "  URL: $URL"
 log "  Output: $FEATURE_DIR"
 log ""
 
+# ── Step 0: Preflight ──
+#
+# Missing tooling is unverifiable, never a visual defect. The old resolution
+# rooted SAGE_ROOT at core/ (SCRIPT_DIR/../..), so the primary path was always
+# wrong and only the fallback ever matched.
+SCREENSHOT_TOOL="${SAGE_SCREENSHOT_TOOL:-}"
+if [ -z "$SCREENSHOT_TOOL" ]; then
+  for candidate in \
+    "$SCRIPT_DIR/../../../runtime/tools/sage-screenshot.sh" \
+    "$SCRIPT_DIR/../../runtime/tools/sage-screenshot.sh" \
+    "$SCRIPT_DIR/../../../../runtime/tools/sage-screenshot.sh"; do
+    if [ -f "$candidate" ]; then
+      SCREENSHOT_TOOL="$candidate"
+      break
+    fi
+  done
+fi
+
+if [ -z "$SCREENSHOT_TOOL" ] || [ ! -f "$SCREENSHOT_TOOL" ]; then
+  unverifiable "screenshot tool not found (set SAGE_SCREENSHOT_TOOL to override)"
+fi
+if ! command -v node >/dev/null 2>&1; then
+  unverifiable "node is not installed — a browser is required to capture screenshots"
+fi
+if ! command -v python3 >/dev/null 2>&1; then
+  unverifiable "python3 is required to read the capture results"
+fi
+
 mkdir -p "$FEATURE_DIR"
 
 # ── Step 1: Capture screenshots ──
 log "── Step 1: Capturing screenshots ──"
 
-SCREENSHOT_TOOL="$SAGE_ROOT/runtime/tools/sage-screenshot.sh"
-if [ ! -f "$SCREENSHOT_TOOL" ]; then
-  # Try relative to gate script location
-  SCREENSHOT_TOOL="$(cd "$SCRIPT_DIR/../../../runtime/tools" 2>/dev/null && pwd)/sage-screenshot.sh"
-fi
-
-if [ ! -f "$SCREENSHOT_TOOL" ]; then
-  fail "Screenshot tool not found at $SCREENSHOT_TOOL"
-  log ""
-  log "═══ Gate 6 Result ═══"
-  log "❌ FAIL — Screenshot tool missing"
-  exit 1
-fi
-
-bash "$SCREENSHOT_TOOL" "$URL" \
+CAPTURE_OUTPUT=$(bash "$SCREENSHOT_TOOL" "$URL" \
   --output "$FEATURE_DIR" \
   --label gate6 \
   --full-page \
-  --wait 3000 2>&1
+  --wait 3000 2>&1)
+CAPTURE_RC=$?
 
-if [ $? -ne 0 ]; then
-  fail "Screenshot capture failed"
+if [ "$CAPTURE_RC" -ne 0 ]; then
+  printf '%s\n' "$CAPTURE_OUTPUT" | tail -10
+  # Distinguish "no browser" from "the page is broken" where we can; both
+  # leave us without evidence, so neither may masquerade as a visual verdict.
+  if printf '%s' "$CAPTURE_OUTPUT" | grep -Fq "Cannot find module 'playwright'"; then
+    unverifiable "playwright is not installed (npm install playwright)"
+  fi
+  unverifiable "screenshot capture failed — no evidence to check (exit $CAPTURE_RC)"
 fi
+printf '%s\n' "$CAPTURE_OUTPUT" | tail -5
 
 echo ""
 
@@ -99,8 +135,10 @@ echo ""
 # ── Step 3: Check for horizontal overflow on mobile ──
 log "── Step 3: Mobile overflow check ──"
 
-# Generate a small Playwright script that checks if page is wider than viewport
-OVERFLOW_SCRIPT=$(mktemp /tmp/sage-overflow-XXXX.cjs)
+OVERFLOW_SCRIPT=$(mktemp "${TMPDIR:-/tmp}/sage-overflow-XXXXXX.cjs") || \
+  unverifiable "could not create a temporary file"
+trap 'rm -f "$OVERFLOW_SCRIPT"' EXIT
+
 cat > "$OVERFLOW_SCRIPT" << 'OFJS'
 const { chromium } = require('playwright');
 const fs = require('fs');
@@ -173,13 +211,28 @@ function findChromium() {
 })();
 OFJS
 
-OVERFLOW_OUTPUT=$(node "$OVERFLOW_SCRIPT" "$URL" 2>&1 | grep "^RESULT:" | sed 's/RESULT://')
-rm -f "$OVERFLOW_SCRIPT"
+PROBE_OUTPUT=$(node "$OVERFLOW_SCRIPT" "$URL" 2>&1)
 
-if [ -n "$OVERFLOW_OUTPUT" ]; then
-  HAS_OVERFLOW=$(echo "$OVERFLOW_OUTPUT" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); console.log(d.overflow)" 2>/dev/null)
-  SCROLL_W=$(echo "$OVERFLOW_OUTPUT" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); console.log(d.scrollWidth)" 2>/dev/null)
-  CONSOLE_ERRORS=$(echo "$OVERFLOW_OUTPUT" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); console.log(d.consoleErrors)" 2>/dev/null)
+if printf '%s' "$PROBE_OUTPUT" | grep -Fq "LOAD_FAILED:"; then
+  unverifiable "the page could not be loaded: $(printf '%s' "$PROBE_OUTPUT" | sed -n 's/^LOAD_FAILED://p' | head -1)"
+fi
+
+RESULT_JSON=$(printf '%s\n' "$PROBE_OUTPUT" | sed -n 's/^RESULT://p' | head -1)
+
+if [ -n "$RESULT_JSON" ]; then
+  # One python3 parse instead of four `node -e` subprocesses.
+  PARSED=$(printf '%s' "$RESULT_JSON" | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+print(str(d["overflow"]).lower())
+print(d["scrollWidth"])
+print(d["consoleErrors"])
+for s in d.get("consoleErrorSamples", []):
+    print("    " + s)
+')
+  HAS_OVERFLOW=$(printf '%s\n' "$PARSED" | sed -n '1p')
+  SCROLL_W=$(printf '%s\n' "$PARSED" | sed -n '2p')
+  CONSOLE_ERRORS=$(printf '%s\n' "$PARSED" | sed -n '3p')
 
   if [ "$HAS_OVERFLOW" = "true" ]; then
     fail "Mobile horizontal overflow detected (scrollWidth: ${SCROLL_W}px > viewport: 375px)"
@@ -189,13 +242,13 @@ if [ -n "$OVERFLOW_OUTPUT" ]; then
 
   if [ "${CONSOLE_ERRORS:-0}" -gt 0 ]; then
     warn "Console errors during page load: $CONSOLE_ERRORS"
-    SAMPLES=$(echo "$OVERFLOW_OUTPUT" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); d.consoleErrorSamples.forEach(e=>console.log('    '+e))" 2>/dev/null)
-    [ -n "$SAMPLES" ] && echo "$SAMPLES"
+    printf '%s\n' "$PARSED" | sed -n '4,$p'
   else
     log "  ✅ No console errors"
   fi
 else
-  warn "Could not run overflow check (page may not be accessible)"
+  printf '%s\n' "$PROBE_OUTPUT" | tail -5
+  unverifiable "the overflow probe produced no result — cannot verify layout"
 fi
 
 echo ""
@@ -205,7 +258,13 @@ log "── Step 4: Evidence summary ──"
 
 MANIFEST="$FEATURE_DIR/gate6-manifest.json"
 if [ -f "$MANIFEST" ]; then
-  SCREENSHOT_COUNT=$(node -e "const m=JSON.parse(require('fs').readFileSync('$MANIFEST','utf8')); console.log(m.screenshots.length)" 2>/dev/null || echo "?")
+  SCREENSHOT_COUNT=$(python3 -c '
+import json, sys
+try:
+    print(len(json.load(open(sys.argv[1]))["screenshots"]))
+except Exception:
+    print("?")
+' "$MANIFEST")
   log "  Screenshots captured: $SCREENSHOT_COUNT"
   log "  Manifest: $MANIFEST"
 else

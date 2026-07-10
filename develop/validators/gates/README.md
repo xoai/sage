@@ -27,9 +27,11 @@ verification setup` instead.
 ## Case outcomes
 
 - **PASS / FAIL** — the gate behaved, or did not behave, as declared.
-- **SKIP** — a tool the case needs (`pytest`, `tsc`, `playwright`) is absent.
-  Cases skip rather than fail so the harness stays useful offline; CI installs
-  the tools so nothing is skipped there.
+- **SKIP** — a tool the case needs is absent. Cases skip rather than fail so
+  the harness stays useful offline. CI installs `pytest` and `tsc`, but **not**
+  playwright, so `G11c` (Gate 6's pass path) skips there and is only exercised
+  by maintainers who have a browser installed. `G11b` is its mirror image: it
+  runs *only* when playwright is absent.
 - **XFAIL** — the case documents behavior that is currently *wrong* and is
   scheduled to be fixed. The reason names the task that fixes it.
 - **XPASS** — an `xfail` case started passing. The harness treats this as a

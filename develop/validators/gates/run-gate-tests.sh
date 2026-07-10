@@ -243,29 +243,25 @@ echo "Gate 1 — sage-spec-check.sh"
 S=sage-spec-check.sh
 
 # Asserting the filename proves the path was actually extracted and checked.
-# Without it this case passes vacuously, which is exactly how the bug hid.
+# Without it the pre-P1-T5 gate passed vacuously — which is how the bug hid.
 run_case G10a "declared file that exists passes, having actually been checked" \
   --script "$S" --exit 0 --contains "PASS" --contains "src/greeter.ts" \
   --cwd "$FIX/spec-check/pass" \
-  --xfail "awk's range collapses to the task's own line, so no Files: path is ever extracted (P1-T5)" \
   -- plan.md 1
 
 run_case G10b "declared file that is missing fails closed" \
   --script "$S" --exit 1 --contains "FAIL" --contains "src/missing.ts" \
   --cwd "$FIX/spec-check/fail" \
-  --xfail "extraction yields nothing, so the gate passes a plan whose file does not exist (P1-T5)" \
   -- plan.md 1
 
 run_case G10c "task declaring no deliverables is UNVERIFIABLE, not pass" \
   --script "$S" --exit 2 --contains "UNVERIFIABLE" \
   --cwd "$FIX/spec-check/unverifiable" \
-  --xfail "'no file paths extracted' reports PASS instead of exit 2 (P1-T5)" \
   -- plan.md 1
 
 run_case G10d "[DOC] task's Output: path is checked like Files:" \
   --script "$S" --exit 1 --contains "FAIL" --contains "docs/absent.md" \
   --cwd "$FIX/spec-check/doc-task" \
-  --xfail "the Output: field of a [DOC] task is never read (P1-T5)" \
   -- plan.md 1
 
 echo ""
@@ -282,7 +278,6 @@ run_case G11b "no browser toolchain is UNVERIFIABLE, not fail" \
   --script "$W" --exit 2 --contains "UNVERIFIABLE" \
   --skip-if-tool playwright \
   --timeout 60 \
-  --xfail "a missing browser is reported as a visual defect (exit 1) rather than missing tooling (P1-T5)" \
   -- "file://$FIX/visual/page.html" "$(mktemp -d)/shots"
 
 run_case G11c "clean page passes" \
