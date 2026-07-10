@@ -15,6 +15,7 @@ npm-debug.log*
 
 # Test artifacts
 /tmp/
+.worktrees/
 *.tmp
 
 # Build output

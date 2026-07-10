@@ -10,6 +10,8 @@ SAGE_DIR="$SAGE_ROOT/sage"
 CLAUDE_DIR="$SAGE_ROOT/.claude"
 PROJECT_SAGE="$SAGE_ROOT/.sage"
 CORE="$SAGE_DIR/core"
+RUNTIME_CLI="$SAGE_DIR/runtime/tools/sage_runtime_cli.py"
+PYTHON_BIN="${PYTHON_BIN:-python3}"
 
 echo ""
 echo "🚀 Sage → Claude Code Setup"
@@ -28,6 +30,27 @@ if [ ! -d "$CORE" ]; then
   echo "❌ Sage framework not found at $SAGE_DIR"
   echo "   Run this from the project root where sage/ is located."
   exit 1
+fi
+if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
+  echo "❌ Python 3 is required to validate generated Sage routes."
+  exit 1
+fi
+if [ ! -f "$RUNTIME_CLI" ]; then
+  echo "❌ Sage runtime CLI not found at $RUNTIME_CLI"
+  exit 1
+fi
+if ! "$PYTHON_BIN" -c 'import yaml' >/dev/null 2>&1; then
+  echo "❌ PyYAML is required to validate generated Sage routes."
+  echo "   Install it with: python3 -m pip install PyYAML"
+  exit 1
+fi
+
+# Validate user-owned hook settings before this generator mutates anything.
+SETTINGS_LOCAL="$CLAUDE_DIR/settings.local.json"
+if [ -f "$SETTINGS_LOCAL" ]; then
+  "$PYTHON_BIN" "$RUNTIME_CLI" hooks validate \
+    --platform claude-code \
+    --config "$SETTINGS_LOCAL" >/dev/null
 fi
 
 # ── Create .claude structure ──
@@ -466,51 +489,55 @@ done
 
 echo "  ✓ $SKILL_COUNT skills deployed to .claude/skills/"
 
+# Compile the platform's real slash-command IDs into one shared catalog.
+# This is the only route table consumed by runtime hooks.
+echo ""
+echo "🧭 Compiling validated route catalog..."
+"$PYTHON_BIN" "$RUNTIME_CLI" catalog compile \
+  --workflow-dir "$CORE/workflows" \
+  --platform claude-code \
+  --command-dir "$CLAUDE_DIR/commands" \
+  --output "$PROJECT_SAGE/runtime/route-catalog.json" >/dev/null
+echo "  ✓ .sage/runtime/route-catalog.json"
+
+echo ""
+echo "🧩 Compiling neutral skill composition..."
+"$PYTHON_BIN" "$RUNTIME_CLI" composition compile \
+  --project "$SAGE_ROOT" \
+  --platform claude-code \
+  --skill-root "$CLAUDE_DIR/skills" \
+  --output "$PROJECT_SAGE/composition.json" >/dev/null
+echo "  ✓ .sage/composition.json"
+
 # ═══════════════════════════════════════════════════════════════
-# Session hook — auto-inject Sage context on session start
+# Lifecycle hooks — session context, advisory routing, and explicit strict mode
 # ═══════════════════════════════════════════════════════════════
 echo ""
 echo "🔗 Setting up session hook..."
 
 mkdir -p "$CLAUDE_DIR/hooks"
-HOOK_SRC="$CORE/../runtime/platforms/claude-code/hooks/sage-session-init.sh"
+HOOK_SRC_DIR="$SAGE_DIR/runtime/platforms/claude-code/hooks"
+for hook_name in sage-session-init.sh sage-route-context.py sage-strict-gate.py \
+  sage-learning-recall.py sage-learning-observe.py sage-reflect-stop.py; do
+  if [ ! -f "$HOOK_SRC_DIR/$hook_name" ]; then
+    echo "❌ Required Claude Code hook is missing: $HOOK_SRC_DIR/$hook_name"
+    exit 1
+  fi
+  cp "$HOOK_SRC_DIR/$hook_name" "$CLAUDE_DIR/hooks/$hook_name"
+  chmod +x "$CLAUDE_DIR/hooks/$hook_name"
+  echo "  ✓ $hook_name"
+done
 
-if [ -f "$HOOK_SRC" ]; then
-  cp "$HOOK_SRC" "$CLAUDE_DIR/hooks/sage-session-init.sh"
-  chmod +x "$CLAUDE_DIR/hooks/sage-session-init.sh"
-  echo "  ✓ sage-session-init.sh"
-fi
-
-# Create or update settings.local.json with hook config (atomic write)
-SETTINGS_LOCAL="$CLAUDE_DIR/settings.local.json"
-mkdir -p "$CLAUDE_DIR"
-TEMP_SETTINGS=$(mktemp "${SETTINGS_LOCAL}.XXXXXX" 2>/dev/null || echo "${SETTINGS_LOCAL}.tmp")
-cat > "$TEMP_SETTINGS" << 'HOOKEOF'
-{
-  "hooks": {
-    "SessionStart": [
-      {
-        "matcher": "startup|resume|clear|compact",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash .claude/hooks/sage-session-init.sh"
-          }
-        ]
-      }
-    ]
-  }
-}
-HOOKEOF
-
-if mv "$TEMP_SETTINGS" "$SETTINGS_LOCAL" 2>/dev/null; then
-  echo "  ✓ settings.local.json (session hook)"
-else
-  echo "  ✗ Could not write settings.local.json: check permissions"
-  echo "    The session hook won't activate until this is fixed."
-  echo "    Try: sage update (to retry)"
-  rm -f "$TEMP_SETTINGS" 2>/dev/null
-fi
+"$PYTHON_BIN" "$RUNTIME_CLI" hooks install \
+  --platform claude-code \
+  --config "$SETTINGS_LOCAL" \
+  --session-command 'bash .claude/hooks/sage-session-init.sh' \
+  --route-command "\"$PYTHON_BIN\" \".claude/hooks/sage-route-context.py\"" \
+  --gate-command "\"$PYTHON_BIN\" \".claude/hooks/sage-strict-gate.py\"" \
+  --learning-recall-command "\"$PYTHON_BIN\" \".claude/hooks/sage-learning-recall.py\"" \
+  --learning-observe-command "\"$PYTHON_BIN\" \".claude/hooks/sage-learning-observe.py\"" \
+  --reflect-command "\"$PYTHON_BIN\" \".claude/hooks/sage-reflect-stop.py\"" >/dev/null
+echo "  ✓ settings.local.json (merged lifecycle hooks)"
 
 # IDE restart warning (only during update, not init)
 if [ "${SAGE_UPDATE_MODE:-}" = "true" ]; then
@@ -528,7 +555,7 @@ echo ""
 CMD_COUNT=$(find "$CLAUDE_DIR/commands" -name "*.md" 2>/dev/null | wc -l)
 echo "  CLAUDE.md            → always-on project instructions"
 echo "  .claude/commands/    → $CMD_COUNT slash commands"
-echo "  .claude/hooks/       → session init hook"
+echo "  .claude/hooks/       → session, advisory-route, and strict-gate hooks"
 echo "  .sage/               → project state directory"
 echo ""
 echo "Next steps:"

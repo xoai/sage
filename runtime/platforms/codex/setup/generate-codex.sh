@@ -162,7 +162,7 @@ echo "  ✓ sage-reviewer.toml"
 # Classifier sub-agent (used by navigator Layer 2 routing)
 cat > "$CODEX_DIR/agents/sage-classifier.toml" << 'AGENT_EOF'
 name = "sage-classifier"
-description = "Routes free-input requests to the right Sage workflow when keyword routing doesn't match."
+description = "Offers validated optional Sage workflow choices without turning task prose into authority."
 sandbox_mode = "read-only"
 developer_instructions = """
 You are a routing classifier for the Sage framework. Your only job is

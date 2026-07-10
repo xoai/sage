@@ -214,7 +214,7 @@ echo "  ✓ sage-reviewer.md"
 
 cat > "$OC_DIR/agents/sage-classifier.md" << 'AGENT_EOF'
 ---
-description: Routes free-input requests to the right Sage workflow when keyword routing doesn't match.
+description: Offers validated optional Sage workflow choices without turning task prose into authority.
 mode: subagent
 permission:
   edit: deny

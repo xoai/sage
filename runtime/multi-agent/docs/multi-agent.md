@@ -1,7 +1,7 @@
 # Multi-Agent — protocol
 
 Sage's optional multi-agent capability augments the default build loop
-with externally-invoked agents. Roles are bound to agents in
+with externally-invoked agents and Hermes-native execution. Roles are bound to agents in
 `.sage/agents.toml`; the dispatcher `.sage/scripts/run-role.sh` is the
 only thing that knows how to invoke each CLI.
 
@@ -13,13 +13,30 @@ only) by `sage update`.
 
 | Role            | Default agent | Mode       | Writes to                                                  |
 |-----------------|---------------|------------|------------------------------------------------------------|
-| `planner`       | Claude Code (host) | interactive | `.sage/work/<slug>/{brief,spec,plan}.md`             |
+| `planner`       | Current host       | interactive | `.sage/work/<slug>/{brief,spec,plan}.md`             |
 | `spec_reviewer` | Codex CLI     | read-only  | `.sage/work/<slug>/reviews/<artifact>-spec_reviewer-*.md`  |
 | `implementer`   | Kimi CLI      | yolo       | source tree (uncommitted) + `implementer-notes.md`         |
 | `code_reviewer` | Codex CLI     | read-only  | `.sage/work/<slug>/reviews/diff-code_reviewer-*.md`        |
 
 Change a binding by editing `.sage/agents.toml`. The slash commands and
 scripts do not name tools.
+
+## Hermes execution topology
+
+Hermes installs the same `/build-x` command family in its Sage plugin and
+requires an explicit execution topology:
+
+- `--direct` uses the configured host/CLI roles.
+- `--delegate` uses synchronous `delegate_task` fan-out for bounded lanes.
+- `--kanban` keeps Phases 1-5 as the approved planning boundary, then loads the
+  canonical `kanban-orchestrator` skill to create a durable, dependency-linked
+  graph. Every dispatched card loads `kanban-worker` plus its relevant Sage
+  skill and terminates with `kanban_complete` or `kanban_block`.
+
+With no flag, Hermes proposes a topology for confirmation; it never creates
+agents or cards from keyword matches. `HERMES_KANBAN_TASK` always selects worker
+mode. The board remains the source of truth for task status, while Sage
+manifests, gates, reviews, and learnings remain the method/evidence layer.
 
 ## Context passing
 
@@ -118,11 +135,14 @@ before writing):
 - `.sage/docs/multi-agent.md`
 - `.claude/commands/{build-x,review-spec,review-plan,implement,review-code}.md`
 - `.claude/agents/{codex-reviewer,kimi-implementer}.md`
+- Hermes: `~/.hermes/plugins/sage/skills/{build-x,review-spec,review-plan,implement,review-code}/`
 
 Merged, not overwritten:
 
 - `.claude/settings.json` — multi-agent bash patterns are added; your
   custom patterns are preserved.
+- Hermes `config.yaml` — existing delegation, Kanban, profile, and board
+  settings are preserved by the Sage platform generator.
 
 If you want to extend further, follow the same naming rule: don't shadow
 Sage's generated command names. Most extensions belong in `.sage/prompts/`

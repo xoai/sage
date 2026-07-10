@@ -9,7 +9,7 @@ and run your first cycle. The rest is for when you want to tune the
 loop, add a new agent, swap models, or understand what the framework
 is doing under the hood.
 
-> **Status:** v1.1.6, Claude Code only.
+> **Status:** Claude Code and Hermes.
 > **Required:** Sage v1.1.6+, Python 3.11+, the CLIs for whichever
 > roles you bind (default: Codex CLI + Kimi CLI).
 
@@ -57,9 +57,10 @@ This is fast, but it has known failure modes:
 The multi-agent cycle addresses all three by binding *different models*
 to the planner, reviewer, and implementer roles, and forcing all
 hand-offs through **files on disk** (no shared session memory). The
-host model (Claude Code, Opus) keeps the planner role and stays the
-only interface you interact with; external CLIs handle review and
-implementation.
+host model keeps the planner role and stays the only interface you interact
+with. External CLIs may handle review and implementation. On Hermes, native
+`delegate_task` subagents or the durable Kanban worker fleet may also execute
+approved plan lanes.
 
 When to use it:
 
@@ -82,7 +83,7 @@ When *not* to use it:
 ## 2. The cycle in one picture
 
 ```
-┌──────────────────────── Claude Code (host) ────────────────────────┐
+┌────────────────────── Host agent (Claude or Hermes) ──────────────┐
 │                                                                    │
 │   /build-x  ──────►  planner (Opus)                                │
 │                          │                                         │
@@ -127,15 +128,15 @@ When *not* to use it:
 ```
 
 All hand-offs are files under `.sage/work/<slug>/`. No agent reads any
-other agent's session memory. The host orchestrates; you stay in
-Claude Code the whole time.
+other agent's session memory. The host orchestrates; you stay in the selected
+host platform.
 
 ---
 
 ## 3. Quickstart
 
 ```bash
-# 1. Make sure you're in a Sage-initialized project on the claude-code platform.
+# 1. Use a Sage-initialized Claude Code or Hermes project.
 cd my-project
 sage init                           # if not already initialized
 
@@ -147,8 +148,9 @@ sage setup multi-agent              # adds 5 slash commands, ~16 files
 #    - kimi  (Moonshot): https://github.com/MoonshotAI/Kimi-CLI
 #    Both need their respective API keys in your environment.
 
-# 4. Open the project in Claude Code, then run the augmented cycle:
+# 4. Open the project in Claude Code or Hermes, then run the augmented cycle:
 #    /build-x  add a retry-with-exponential-backoff helper
+# Hermes also accepts --direct, --delegate, or --kanban.
 
 # 5. (When you're done) uninstall, leaving no trace except your work tree:
 sage setup multi-agent --remove
@@ -168,7 +170,7 @@ or understand why something behaved a particular way.
 | Sage v1.1.6+                   | The `sage setup multi-agent` subcommand exists from 1.1.6.  |
 | Python 3.11+ on `PATH`         | The dispatcher uses `tomllib` (stdlib from 3.11).           |
 | `.sage/` initialized           | Run `sage init` first if absent.                            |
-| `claude-code` in `platforms:`  | The slash commands and sub-agents are Claude Code shaped.   |
+| `claude-code` or `hermes` platform | Installs that host's native command surface.            |
 
 ### Soft requirements (install warns; you can defer)
 
@@ -183,14 +185,14 @@ install to bind any role to any CLI you have working — see
 
 ### Platform scope
 
-**Claude Code only in v1.** The slash commands, sub-agent isolation
-pattern, and `Bash(...)` permission patterns assume Claude Code
-primitives. Antigravity, Codex-as-host, Opencode, and Gemini CLI are
-explicit non-goals for v1.
+Claude Code installs `.claude/` commands, sub-agent wrappers, and merged
+`Bash(...)` permissions. Hermes installs the command family in the native Sage
+plugin and keeps direct, `delegate_task`, and Kanban execution as distinct
+topologies. Antigravity, Codex-as-host, Opencode, and Gemini CLI remain outside
+this capability's supported host surfaces.
 
-If you've installed Sage on multiple platforms in the same project
-(e.g., `claude-code` + `antigravity`), multi-agent only wires into
-`.claude/` — the other platforms continue to use `/build` only.
+If a project targets both Claude Code and Hermes, setup installs both native
+surfaces while sharing `.sage/agents.toml`, prompts, scripts, and work artifacts.
 
 ---
 
@@ -1067,13 +1069,13 @@ sage init
 
 …or change to a directory that already has `.sage/`.
 
-### Install: "❌ claude-code platform not configured"
+### Install: "multi-agent requires a Claude Code or Hermes Sage project"
 
-The project was initialised for a different platform. Multi-agent is
-Claude Code only in v1. To add Claude Code as an additional platform:
+The project was initialised for a different host. Add Claude Code or Hermes as
+an explicit Sage platform:
 
 ```bash
-sage init --platform claude-code,<existing-platform>
+sage init --platform hermes,<existing-platform>
 ```
 
 ### Pre-flight: "⚠ codex CLI not on PATH"
@@ -1239,7 +1241,7 @@ sage setup multi-agent --status
 # → multi-agent: enabled=true version=1.1.6
 ```
 
-Open Claude Code and run `/build-x` on a small test task to confirm
+Open Claude Code or Hermes and run `/build-x` on a small test task to confirm
 the loop completes.
 
 ### Differences from the prototype
@@ -1262,14 +1264,10 @@ adds:
 
 ### Can I use multi-agent with Cursor / Aider / Continue / Cline?
 
-Not in v1. The slash commands, sub-agent isolation, and `Bash(...)`
-permission patterns assume Claude Code primitives. The dispatcher
-itself (`run-role.sh`) is platform-agnostic — if you have a host that
-can invoke shell scripts and read files, you could in principle write
-your own host-side command set. But that's a fork, not a supported path.
-
-Multi-platform support is on the long roadmap but explicitly out of
-scope for v1.
+Claude Code and Hermes are supported hosts. Cursor, Aider, Continue, Cline,
+Antigravity, Codex-as-host, Opencode, and Gemini CLI do not yet have a native
+`/build-x` surface. The dispatcher itself (`run-role.sh`) remains
+platform-agnostic.
 
 ### Why isn't there a `/security-review` command?
 
@@ -1359,7 +1357,7 @@ entry from the planner. Reviewer outputs themselves go to
 `.sage/work/<slug>/reviews/`. After the cycle, `/reflect` consolidates
 both into `.sage/docs/reflect-<slug>.md`.
 
-### How is multi-agent different from sub-agents in Claude Code?
+### How is multi-agent different from native subagents and Hermes Kanban?
 
 Claude Code's built-in sub-agents share the host model. They're great
 for parallelising work or isolating context — but they don't give you
@@ -1367,6 +1365,13 @@ for parallelising work or isolating context — but they don't give you
 specifically cross-model adversarial review. The two coexist:
 `/build-x` uses sub-agents internally to isolate the external CLI's
 stdout from the host's main context.
+
+Hermes `delegate_task` is the synchronous fork/join primitive and can fan out
+bounded review or implementation lanes. Hermes Kanban is different: it is a
+durable task graph whose named worker profiles survive restarts, carry an audit
+trail, and support human block/unblock. `/build-x --kanban` loads the canonical
+`kanban-orchestrator` and `kanban-worker` contracts; a Kanban worker may still
+use `delegate_task` for a short subproblem inside its assigned card.
 
 ### Can I run `/build-x` in a fresh git repo?
 

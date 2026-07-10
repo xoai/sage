@@ -1,0 +1,335 @@
+contract: composition-overlay/v1
+
+# Method providers participate in capability ownership. Skills not listed here
+# or declaring their own composition metadata remain valid direct skill commands
+# and are emitted under composition.json:direct_skills.
+bindings:
+  context-loader:
+    atomic: false
+    provides:
+      - {capability: context.orient, role: owner, combine: exclusive}
+  scope-guard:
+    atomic: false
+    provides:
+      - {capability: scope.guard, role: validator, combine: compatible}
+  session-bridge:
+    atomic: false
+    provides:
+      - {capability: work.handoff, role: owner, combine: exclusive}
+  tool-use:
+    atomic: false
+    provides:
+      - {capability: execution.tools, role: owner, combine: compatible}
+  systematic-debug:
+    atomic: true
+    provides:
+      - capability: problem.investigate
+        role: owner
+        combine: exclusive
+        terminal: root-cause-identified
+  verify-completion:
+    atomic: false
+    provides:
+      - {capability: evidence.verify, role: owner, combine: exclusive}
+  codebase-scan:
+    atomic: false
+    provides:
+      - {capability: context.scan, role: owner, combine: exclusive}
+  deep-elicit:
+    atomic: true
+    provides:
+      - capability: requirements.elicit
+        role: owner
+        combine: exclusive
+        terminal: requirements-approved
+  quick-elicit:
+    atomic: true
+    provides:
+      - capability: requirements.elicit
+        role: owner
+        combine: exclusive
+        terminal: requirements-approved
+  coding-principles:
+    atomic: false
+    provides:
+      - {capability: change.implement, role: validator, combine: compatible}
+  git-discipline:
+    atomic: false
+    provides:
+      - {capability: change.implement, role: validator, combine: compatible}
+  implement:
+    atomic: true
+    provides:
+      - capability: change.implement
+        role: owner
+        combine: exclusive
+        terminal: implementation-complete
+  tdd:
+    atomic: false
+    provides:
+      - {capability: change.implement, role: augmenter, combine: compatible}
+  autonomous:
+    atomic: false
+    provides:
+      - {capability: execution.control, role: owner, combine: exclusive}
+  build-loop:
+    atomic: false
+    provides:
+      - {capability: change.implement, role: augmenter, combine: compatible}
+  flag-parser:
+    atomic: false
+    provides:
+      - {capability: route.flags, role: owner, combine: exclusive}
+  onboard:
+    atomic: false
+    provides:
+      - {capability: workflow.onboard, role: owner, combine: exclusive}
+  quality-locked:
+    atomic: true
+    provides:
+      - capability: quality.enforce
+        role: owner
+        combine: exclusive
+        terminal: quality-loop-complete
+  sage-help:
+    atomic: false
+    provides:
+      - {capability: workflow.help, role: owner, combine: exclusive}
+  plan:
+    atomic: true
+    provides:
+      - capability: work.decompose
+        role: owner
+        combine: exclusive
+        terminal: plan-approved
+  specify:
+    atomic: true
+    provides:
+      - capability: solution.specify
+        role: owner
+        combine: exclusive
+        terminal: specification-approved
+  auto-qa:
+    atomic: false
+    provides:
+      - {capability: evidence.verify, role: validator, combine: compatible}
+  auto-review:
+    atomic: false
+    provides:
+      - {capability: solution.specify, role: validator, combine: compatible}
+      - {capability: work.decompose, role: validator, combine: compatible}
+      - {capability: output.review, role: validator, combine: compatible}
+  quality-review:
+    atomic: false
+    provides:
+      - {capability: output.review, role: owner, combine: exclusive}
+  spec-review:
+    atomic: false
+    provides:
+      - {capability: solution.specify, role: validator, combine: compatible}
+  visual-review:
+    atomic: false
+    provides:
+      - {capability: visual.review, role: owner, combine: exclusive}
+  browser-check:
+    atomic: false
+    provides:
+      - {capability: evidence.browser, role: owner, combine: exclusive}
+  design-check:
+    atomic: false
+    provides:
+      - {capability: evidence.design, role: owner, combine: exclusive}
+  testing-skills:
+    atomic: false
+    provides:
+      - {capability: evidence.test, role: owner, combine: exclusive}
+  sage-self-learning:
+    atomic: false
+    provides:
+      - {capability: learning.capture, role: owner, combine: compatible}
+
+  # Canonical top-level/domain methods used by non-build workflows.
+  autoresearch:
+    atomic: true
+    provides:
+      - capability: metric.optimize
+        role: owner
+        combine: exclusive
+        terminal: metric-run-complete
+  user-interview:
+    atomic: false
+    provides:
+      - {capability: requirements.research, role: owner, combine: exclusive}
+  jtbd:
+    atomic: false
+    provides:
+      - {capability: research.synthesize, role: owner, combine: exclusive}
+  opportunity-map:
+    atomic: false
+    provides:
+      - {capability: research.map, role: owner, combine: exclusive}
+  ux-design:
+    atomic: false
+    provides:
+      - {capability: solution.design, role: owner, combine: exclusive}
+  ux-specify:
+    atomic: false
+    provides:
+      - {capability: design.specify, role: owner, combine: exclusive}
+  ux-writing:
+    atomic: false
+    provides:
+      - {capability: design.content, role: owner, combine: exclusive}
+  ux-audit:
+    atomic: false
+    provides:
+      - {capability: experience.audit, role: owner, combine: exclusive}
+  ux-evaluate:
+    atomic: false
+    provides:
+      - {capability: experience.evaluate, role: owner, combine: exclusive}
+  ux-heuristic-review:
+    atomic: false
+    provides:
+      - {capability: experience.heuristics, role: owner, combine: exclusive}
+  sage-ontology:
+    atomic: false
+    provides:
+      - {capability: knowledge.structure, role: owner, combine: exclusive}
+  learn:
+    atomic: false
+    provides:
+      - {capability: knowledge.capture, role: owner, combine: exclusive}
+  reflect:
+    atomic: true
+    provides:
+      - capability: learning.reflect
+        role: owner
+        combine: exclusive
+        terminal: reflection-acknowledged
+  status:
+    atomic: false
+    provides:
+      - {capability: state.report, role: owner, combine: exclusive}
+  continue:
+    atomic: false
+    provides:
+      - {capability: work.resume, role: owner, combine: exclusive}
+
+workflow_defaults:
+  sage:sage:
+    workflow.navigate: {owner: sage-navigator}
+    context.orient: {owner: context-loader}
+  sage:build:
+    context.orient: {owner: context-loader}
+    requirements.elicit: {owner: quick-elicit}
+    solution.specify:
+      owner: specify
+      validators: [spec-review, auto-review]
+    work.decompose:
+      owner: plan
+      validators: [auto-review]
+    change.implement:
+      owner: implement
+      augmenters: [tdd, build-loop]
+      validators: [coding-principles, git-discipline]
+    evidence.verify:
+      owner: verify-completion
+      validators: [auto-qa]
+    output.review:
+      owner: quality-review
+      validators: [auto-review]
+    learning.capture: {owner: sage-self-learning}
+    work.handoff: {owner: session-bridge}
+  sage:fix:
+    context.orient: {owner: context-loader}
+    problem.investigate: {owner: systematic-debug}
+    change.implement:
+      owner: implement
+      augmenters: [tdd]
+      validators: [coding-principles, git-discipline]
+    evidence.verify:
+      owner: verify-completion
+      validators: [auto-qa]
+    learning.capture: {owner: sage-self-learning}
+    work.handoff: {owner: session-bridge}
+  sage:architect:
+    context.orient: {owner: context-loader}
+    requirements.elicit: {owner: deep-elicit}
+    solution.specify:
+      owner: specify
+      validators: [spec-review, auto-review]
+    work.decompose:
+      owner: plan
+      validators: [auto-review]
+    output.review:
+      owner: quality-review
+      validators: [auto-review]
+    learning.capture: {owner: sage-self-learning}
+    work.handoff: {owner: session-bridge}
+  sage:research:
+    context.orient: {owner: context-loader}
+    requirements.research: {owner: user-interview}
+    research.synthesize: {owner: jtbd}
+    research.map: {owner: opportunity-map}
+    learning.capture: {owner: sage-self-learning}
+    work.handoff: {owner: session-bridge}
+  sage:design:
+    context.orient: {owner: context-loader}
+    requirements.elicit: {owner: quick-elicit}
+    solution.design: {owner: ux-design}
+    design.specify: {owner: ux-specify}
+    design.content: {owner: ux-writing}
+    learning.capture: {owner: sage-self-learning}
+    work.handoff: {owner: session-bridge}
+  sage:analyze:
+    context.orient: {owner: context-loader}
+    experience.audit: {owner: ux-audit}
+    experience.heuristics: {owner: ux-heuristic-review}
+    experience.evaluate: {owner: ux-evaluate}
+    output.review: {owner: quality-review}
+    learning.capture: {owner: sage-self-learning}
+  sage:qa:
+    context.orient: {owner: context-loader}
+    evidence.test: {owner: testing-skills}
+    evidence.browser: {owner: browser-check}
+    evidence.verify: {owner: verify-completion}
+    learning.capture: {owner: sage-self-learning}
+  sage:design-review:
+    context.orient: {owner: context-loader}
+    visual.review: {owner: visual-review}
+    evidence.design: {owner: design-check}
+    evidence.browser: {owner: browser-check}
+    learning.capture: {owner: sage-self-learning}
+  sage:review:
+    context.orient: {owner: context-loader}
+    output.review:
+      owner: quality-review
+      validators: [auto-review]
+    evidence.verify: {owner: verify-completion}
+  sage:learn:
+    context.orient: {owner: context-loader}
+    context.scan: {owner: codebase-scan}
+    knowledge.capture: {owner: learn}
+    learning.capture: {owner: sage-self-learning}
+  sage:map:
+    context.orient: {owner: context-loader}
+    knowledge.structure: {owner: sage-ontology}
+    learning.capture: {owner: sage-self-learning}
+  sage:reflect:
+    context.orient: {owner: context-loader}
+    learning.reflect: {owner: reflect}
+    learning.capture: {owner: sage-self-learning}
+  sage:continue:
+    work.resume: {owner: continue}
+    context.orient: {owner: context-loader}
+    work.handoff: {owner: session-bridge}
+  sage:status:
+    state.report: {owner: status}
+    context.orient: {owner: context-loader}
+  sage:autoresearch:
+    context.orient: {owner: context-loader}
+    metric.optimize: {owner: autoresearch}
+    evidence.verify: {owner: verify-completion}
+    learning.capture: {owner: sage-self-learning}
+    work.handoff: {owner: session-bridge}

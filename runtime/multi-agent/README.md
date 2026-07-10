@@ -22,14 +22,14 @@ runtime/multi-agent/
 ├── agents.toml.template      Role → agent binding (deployed to .sage/agents.toml)
 ├── prompts/                  Role prompts (deployed to .sage/prompts/)
 │   ├── _shared.md            Prepended to every role
-│   ├── planner.md            Charter for the host (Claude Code, Opus)
+│   ├── planner.md            Charter for the current host agent
 │   ├── spec_reviewer.md      Adversarial spec/plan reviewer
 │   ├── implementer.md        Behavior contract for the implementer
 │   └── code_reviewer.md      Adversarial post-implementation reviewer
 ├── scripts/                  Dispatcher + schema validator
 │   ├── run-role.sh           Reads agents.toml, invokes the configured CLI
 │   └── validate-review.sh    Schema check on reviewer output
-├── commands/                 Claude Code slash commands (deployed to .claude/commands/)
+├── commands/                 Host commands (Claude `.claude/`; Hermes Sage plugin)
 │   ├── build-x.md            Augmented build cycle
 │   ├── review-spec.md        Run the spec_reviewer on spec.md
 │   ├── review-plan.md        Run the spec_reviewer on plan.md
@@ -62,6 +62,7 @@ Editing the wrong column has predictable consequences.
 | `.claude/agents/codex-reviewer.md`        | framework   | Refreshes from template  |
 | `.claude/agents/kimi-implementer.md`      | framework   | Refreshes from template  |
 | `.claude/settings.json`                   | merged      | Multi-agent bash patterns added; user patterns preserved |
+| Hermes Sage plugin command skills         | framework   | Refreshed without replacing Hermes Kanban/profile config |
 | `.sage/config.yaml :: multi_agent.*`      | framework   | `installed_version` bumped |
 
 User-owned files surface "tune-the-loop" levers. If a change you want

@@ -1,0 +1,20 @@
+---
+name: hermes
+description: >-
+  Native adapter for NousResearch Hermes Agent. Installs Sage as a Hermes
+  plugin for slash commands and bundled skills, emits AGENTS.md for project
+  context, and wires Sage shell hooks through Hermes config.yaml.
+version: "1.0.0"
+tier: 1
+capabilities:
+  subagents: true
+  parallel-execution: true
+  worktrees: true
+  hooks: true
+  slash-commands: true
+  skill-auto-activation: true
+  file-system-access: true
+command-prefix: "/sage"
+install-method: hermes-plugin
+supported-os: [linux, macos, windows]
+---

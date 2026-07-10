@@ -20,6 +20,36 @@
 # ╚═══════════════════════════════════════════════════════════╝
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SAGE_ROOT="$(cd "$SCRIPT_DIR/../.." 2>/dev/null && pwd || pwd)"
+NODE_PATH_DELIMITER="$(node -p "require('path').delimiter" 2>/dev/null || true)"
+case "$NODE_PATH_DELIMITER" in
+  :|';') ;;
+  *) NODE_PATH_DELIMITER=':' ;;
+esac
+
+append_node_path() {
+  local candidate="$1"
+  [ -d "$candidate" ] || return 0
+  case "$NODE_PATH_DELIMITER${NODE_PATH:-}$NODE_PATH_DELIMITER" in
+    *"$NODE_PATH_DELIMITER$candidate$NODE_PATH_DELIMITER"*) ;;
+    *) NODE_PATH="${NODE_PATH:+$NODE_PATH$NODE_PATH_DELIMITER}$candidate" ;;
+  esac
+}
+
+prepare_playwright_node_path() {
+  append_node_path "$PWD/node_modules"
+  append_node_path "$PWD/../node_modules"
+  append_node_path "$SAGE_ROOT/node_modules"
+  append_node_path "$SAGE_ROOT/hermes-agent/node_modules"
+  append_node_path "$SAGE_ROOT/../hermes-agent/node_modules"
+  append_node_path "$SCRIPT_DIR/../node_modules"
+  append_node_path "$SCRIPT_DIR/../../node_modules"
+  append_node_path "$SCRIPT_DIR/../../hermes-agent/node_modules"
+  append_node_path "$SCRIPT_DIR/../../../hermes-agent/node_modules"
+  export NODE_PATH="${NODE_PATH:-}"
+}
+
 URL=""
 OUTPUT_DIR="."
 LABEL="screenshot"
@@ -55,6 +85,13 @@ if [ -z "$URL" ]; then
 fi
 
 mkdir -p "$OUTPUT_DIR"
+prepare_playwright_node_path
+
+if ! node -e "require.resolve('playwright')" >/dev/null 2>&1; then
+  echo "❌ Playwright node module not found"
+  echo "   Install it in Hermes or set NODE_PATH to a node_modules directory containing playwright."
+  exit 1
+fi
 
 echo "═══ Sage Screenshot Capture ═══"
 echo "  URL: $URL"
@@ -75,15 +112,28 @@ function findChromium() {
   const fs = require('fs');
   const path = require('path');
   const searchPaths = [
+    process.env.PLAYWRIGHT_BROWSERS_PATH,
+    process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, 'ms-playwright'),
+    process.env.USERPROFILE && path.join(process.env.USERPROFILE, 'AppData', 'Local', 'ms-playwright'),
     '/opt/pw-browsers',
-    process.env.HOME + '/.cache/ms-playwright',
-  ];
+    process.env.HOME && path.join(process.env.HOME, '.cache', 'ms-playwright'),
+  ].filter(Boolean);
   for (const base of searchPaths) {
     if (!fs.existsSync(base)) continue;
-    const dirs = fs.readdirSync(base).filter(d => d.startsWith('chromium-')).sort().reverse();
+    const dirs = fs.readdirSync(base)
+      .filter(d => d.startsWith('chromium-') || d.startsWith('chromium_headless_shell-'))
+      .sort()
+      .reverse();
     for (const dir of dirs) {
-      const chrome = path.join(base, dir, 'chrome-linux', 'chrome');
-      if (fs.existsSync(chrome)) return chrome;
+      const candidates = [
+        path.join(base, dir, 'chrome-linux', 'chrome'),
+        path.join(base, dir, 'chrome-win', 'chrome.exe'),
+        path.join(base, dir, 'chrome-headless-shell-win64', 'chrome-headless-shell.exe'),
+        path.join(base, dir, 'chrome-mac', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'),
+      ];
+      for (const chrome of candidates) {
+        if (fs.existsSync(chrome)) return chrome;
+      }
     }
   }
   return null; // fallback to playwright default

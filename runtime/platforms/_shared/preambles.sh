@@ -30,7 +30,7 @@ emit_preamble() {
     --no-quality-locked  override config default to off for this run
     --autonomous         agent makes elicitation decisions
     --no-autonomous      override config default to off for this run
-  When announcing active modes, use the quality_locked_source and
+  When announcing active modes, use strict_source, quality_locked_source, and
   autonomous_source fields from the JSON to label sources, e.g.
   "Modes: --quality-locked (from .sage/config.yaml), --autonomous (from flag)".
   Persist flag state to manifest.md frontmatter under "flags:".
@@ -127,7 +127,7 @@ emit_preamble() {
     --no-quality-locked  override config default to off for this run
     --autonomous         agent makes elicitation decisions
     --no-autonomous      override config default to off for this run
-  When announcing active modes, use the quality_locked_source and
+  When announcing active modes, use strict_source, quality_locked_source, and
   autonomous_source fields from the JSON to label sources, e.g.
   "Modes: --quality-locked (from .sage/config.yaml), --autonomous (from flag)".
   Persist flag state to manifest.md frontmatter under "flags:".

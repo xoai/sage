@@ -96,13 +96,29 @@ def test_to_dict_includes_source_fields():
     r = parse("--autonomous ship it")
     d = r.to_dict()
     assert d == {
+        "strict": False,
         "quality_locked": False,
         "autonomous": True,
         "goal": "ship it",
         "error": None,
+        "strict_source": None,
         "quality_locked_source": None,
         "autonomous_source": "flag",
     }
+
+
+def test_strict_is_a_supported_explicit_mode():
+    r = parse("--strict --quality-locked ship it")
+    assert r.strict is True
+    assert r.strict_source == "flag"
+    assert r.quality_locked is True
+    assert r.goal == "ship it"
+
+
+def test_strict_cannot_be_enabled_by_config_default():
+    r = parse("ship it", defaults={"strict": True})
+    assert r.strict is False
+    assert r.strict_source is None
 
 
 def test_unknown_flag_after_valid_flag():

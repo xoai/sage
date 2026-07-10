@@ -1,387 +1,190 @@
 ---
 name: sage-self-learning
 description: >
-  Captures agent mistakes, corrections, and discovered gotchas so they are
-  not repeated. Use when: (1) a command or operation fails unexpectedly,
-  (2) the user corrects the agent, (3) the agent discovers non-obvious
-  behavior through debugging, (4) an API or tool behaves differently than
-  expected, (5) a better approach is found for a recurring task. Also
-  searches past learnings before starting tasks to avoid known pitfalls.
-  Activate alongside the sage-memory skill — they share the same MCP
-  backend but serve different purposes (sage-memory = codebase
-  knowledge, sage-self-learning = agent mistakes and gotchas).
-version: "1.2.0"
+  Turns correction, failure, recovery, contradiction, and better-method
+  evidence into deduplicated prevention rules. Uses the one configured learning
+  backend, searches before storing, and pairs capture with evidence reflection.
+version: "2.0.0"
 type: process
 ---
 
-<!--
-  Fallback copy — sage's vendored prose for users without the
-  sage-memory MCP package installed.
-
-  Canonical version: ships with sage-memory >= 0.8.0 and is deployed
-  automatically by `sage update` (which runs `sage-memory
-  install-skills` when the package is present). Edits here only
-  affect users who don't have sage-memory installed.
-
-  To override locally for everyone: create a project-level skill
-  under .claude/skills/ with a different name.
+<!-- sage-metadata
+activation: candidate-or-explicit
+tags: [learning, correction, reflection, openviking, memory]
+inputs: [learning-candidate, evidence, recalled-rules, learning-config]
+outputs: [learning-record, correction-link, reflection-input]
+composition:
+  contract: composition/v1
+  id: sage-self-learning
+  atomic: false
+  provides:
+    - capability: learning.capture
+      role: owner
+      combine: compatible
 -->
 
 # Self-Learning
 
-Learn from mistakes. Don't repeat them.
+Self-learning changes future behavior. It is not an activity log and it is not
+permission to turn a keyword match into a rule. The skill is paired with
+`reflect`: capture handles evidence during work; reflection consolidates the
+cycle and closes the learning request.
 
-Captures what went wrong, what was non-obvious, and what the agent
-should do differently. Every learning includes a **prevention rule** —
-a forward-looking instruction that changes future behavior.
+## When to Use
 
-**Part of the unified knowledge system.** Self-learning stores through
-sage-memory (or files) with the `self-learning` tag / `learning` type.
-During recall, learnings surface as warnings alongside regular knowledge.
+Use this skill when a deterministic hook supplies a candidate or when there is
+clear evidence of one of these conditions:
 
-## Capabilities by Backend
+- the user corrected an approach or claimed behavior;
+- the same normalized operation failed repeatedly;
+- a failed verification later passed for the same target;
+- verified behavior contradicted an earlier assumption;
+- a demonstrably better recurring method was found.
 
-| Capability | MCP | Files |
-|------------|-----|-------|
-| Store learnings | ✅ `sage_memory_store` | ✅ `.sage-memory/lrn-*.md` files |
-| Search learnings | ✅ BM25 + `filter_tags` | ⚠️ scan `lrn-` files by name |
-| Update learnings | ✅ `sage_memory_update` | ✅ edit file |
-| Delete learnings | ✅ `sage_memory_delete` | ✅ delete file |
-| Browse by type | ✅ `sage_memory_list` | ✅ scan `lrn-` files |
-| Link to entities | ✅ `sage_memory_link` | ⚠️ `relations:` frontmatter (see sage-ontology skill) |
-| Multi-hop graph recall | ✅ `sage_memory_graph` | ❌ single-hop scan only |
-| Namespace isolation | ✅ `filter_tags` | ✅ `lrn-` filename prefix |
+Do not trigger from sentiment, generic negative words, or task keywords alone.
 
-**How to detect backend:** At session start, call `sage_memory_set_project`
-with the project root. If it responds, use MCP. If not, use
-`.sage-memory/` files.
+## Backend Authority
 
-## Recall: Search Before You Work
+Exactly one configured backend stores learnings and exactly one configured
+recall owner injects them. Read `.sage/config.yaml` and its named environment
+variables; do not probe several stores and do not copy a learning into a second
+memory system.
 
-At task start, search for learnings relevant to the current task.
+Supported backends:
 
-### With MCP
+- `openviking` — shared Markdown learning resources under the configured
+  `resource_uri`;
+- `sage-memory` — legacy-compatible structured memory tools;
+- a project adapter implementing the same search/store/update/supersede/link
+  contract.
 
-**Basic recall (keyword):**
-```
-sage_memory_search(
-  query: "<task-relevant keywords>",
-  filter_tags: ["self-learning"],
-  limit: 5
-)
-```
+If the configured backend is unavailable, preserve the candidate as pending and
+fail open. Do not silently fall back to local prose, a native agent memory file,
+or another database.
 
-Always include `filter_tags: ["self-learning"]` — this excludes all
-non-learning entries.
+## Process
 
-**Targeted recall (graph-based):** When you know the current task's
-ontology entity ID:
-```
-sage_memory_graph(
-  id: "<task_entity_memory_id>",
-  relation: "applies_to",
-  direction: "inbound",
-  depth: 1
-)
-```
+### 1. Load evidence
 
-Returns learnings explicitly linked to this task — more precise than
-keyword search.
+Read the candidate's evidence references and the relevant normalized events.
+Separate observed facts from interpretation. A valid record must be able to
+name the failure/correction, its root cause, the corrected behavior, and a
+forward-looking check.
 
-**Hot spot detection:**
-```
-sage_memory_graph(
-  id: "<module_entity_id>",
-  relation: "applies_to",
-  direction: "inbound",
-  depth: 1
-)
-```
-If 5+ linked learnings → flag the area as mistake-prone.
+### 2. Search before store
 
-### With Files
+Search the configured backend using the proposed root cause and prevention rule.
+Limit results and scope them by project, platform, active capability, selected
+providers, subsystem, and touched paths when available.
 
-Scan `.sage-memory/` for `lrn-` prefixed files. Read filenames and
-identify those relevant to the current task. Read matching files for
-their prevention rules.
+- Same root cause and same prevention rule: enrich/update the existing record.
+- Earlier rule is now wrong: create a correction, supersede the old record, and
+  link the audit trail.
+- Similar symptom but different cause or prevention: create a separate record.
+- No future behavior change: do not store.
 
-For a broad search: list all `lrn-*.md` files and scan names.
-For a focused search: look for keywords in filenames like
-`lrn-stripe-webhook-*.md` when working on Stripe webhooks.
+This step occurs before any Persist operation. Never reach directly for a raw
+memory call just because the thought "remember this" occurred.
 
-### Reporting
+### 3. Author the record
 
-When learnings are found, report the **prevention rule**, not the
-incident. Say: "Before working with Stripe webhooks, verify that body
-parsing middleware is skipped for the webhook route."
+Use a specific `[LRN:<type>]` title and these four semantic sections:
 
-When nothing is found, say nothing.
+1. **What happened** — bounded evidence, not a transcript dump.
+2. **Why it was wrong** — the causal explanation.
+3. **What's correct** — the verified behavior or method.
+4. **Prevention** — what to check before the next similar action.
 
-## Capture: Detect and Store
+Include a stable dedupe key plus selectors that make recall precise:
 
-### Five Learning Types
+- `status`: `active`, `superseded`, or `invalidated`;
+- `scope`: `project` or `global`;
+- project and platform;
+- capabilities and providers;
+- relevant paths or subsystem;
+- evidence references;
+- `corrects` or `superseded_by` when applicable.
 
-| Type | Trigger |
-|------|---------|
-| `gotcha` | Non-obvious behavior discovered through debugging |
-| `correction` | User corrected the agent |
-| `convention` | Undocumented project/team pattern discovered |
-| `api-drift` | API/library behaves differently than expected |
-| `error-fix` | Recurring error with a known solution |
+### 4. Persist through the configured adapter
 
-### How to Store
+#### OpenViking
 
-**Title:** `[LRN:<type>] <specific description>`
+Search only beneath the configured `viking://resources/...` learning URI. Write
+one Markdown resource beneath that same URI using the host's OpenViking
+write/store operation (the HTTP equivalent is `POST /api/v1/content/write` with
+`mode: replace`). Use a deterministic filename derived from the title slug and
+dedupe key. Never embed a user name, machine path, credential, or agent identity
+in source-controlled configuration.
 
-**Content:** Four-part structure:
-1. **What happened** — the symptom
-2. **Why it was wrong** — root cause
-3. **What's correct** — the right approach
-4. **Prevention** — what to check BEFORE this happens again
+The resource shape is:
 
-**With MCP:**
-```
-sage_memory_store(
-  title: "[LRN:gotcha] Stripe webhook requires raw body before JSON parsing",
-  content: "What happened: Webhook signature verification failed with 400.
-    Why: Express body parser replaced raw body with parsed JSON.
-    What's correct: Use express.raw() for the webhook route.
-    Prevention: Before implementing any webhook handler that verifies
-    signatures, check whether the SDK requires the raw request body.",
-  tags: ["self-learning", "gotcha", "stripe", "webhooks"],
-  entities: [
-    {name: "Stripe", type: "TECHNOLOGY"},
-    {name: "Express", type: "TECHNOLOGY"}
-  ],
-  scope: "project"
-)
-```
-
-**Extract Before Store (0.9+).** Pass an `entities` array naming the
-technologies, services, or modules the learning is about. The
-Prevention line in particular should usually reference a real entity
-(library, service, module) so future graph traversal from that entity
-surfaces this learning. Optional `relations` array if the learning
-connects two entities (e.g., `{from: "Express", to: "Stripe", rel:
-"contradicts"}` for a body-parser/signature-verification conflict).
-
-**With files:**
-```
-File: .sage-memory/lrn-stripe-webhook-raw-body.md
-
+```markdown
 ---
-tags: [self-learning, gotcha, stripe, webhooks]
-type: learning
+schema: sage-learning/v1
+status: active
 scope: project
-created: 2026-03-20
+project: <project selector>
+platforms: [<platform>]
+capabilities: [<capability>]
+providers: [<provider>]
+paths: [<relative path>]
+tags: [self-learning, <type>]
+dedupe_key: <sha256>
+evidence_refs: [<event id>]
+corrects: null
+superseded_by: null
 ---
+# [LRN:<type>] <specific title>
 
-[LRN:gotcha] Stripe webhook requires raw body before JSON parsing
-
-What happened: Webhook signature verification failed with 400
-"No signatures found matching the expected signature."
-
-Why: Express body parser replaced raw body with parsed JSON before
-the Stripe SDK could verify the signature.
-
-What's correct: Use express.raw({type: 'application/json'})
-middleware for the webhook route, before the global body parser.
-
-Prevention: Before implementing any webhook handler that verifies
-signatures (Stripe, GitHub, Twilio), check whether the SDK requires
-the raw request body. If yes, ensure body parsing middleware is
-skipped or deferred for that route.
+What happened: ...
+Why it was wrong: ...
+What's correct: ...
+Prevention: ...
 ```
 
-### Link to Ontology Entities (MCP only)
+Update an equivalent record in place. For a correction, write the new record,
+mark the old record `superseded`, set its `superseded_by`, and set the new
+record's `corrects` field. Generated `.abstract.md` and `.overview.md` nodes are
+never learning records.
 
-After storing a learning, link it to the relevant entity:
-```
-sage_memory_link(
-  source_id: "<learning_memory_id>",
-  target_id: "<task_or_module_entity_id>",
-  relation: "applies_to"
-)
-```
+#### Sage Memory
 
-**With files:** Skip linking. Mention the related entity in the content
-if the connection is important: "Related entity: task_a1b2 (Fix payment
-timeout)."
+Use the structured `sage_memory_search`, `sage_memory_store`,
+`sage_memory_update`, and `sage_memory_link` operations supplied by that
+backend. Preserve the same record fields and search-before-store decision. The
+skill owns these calls; hooks and workflows must not hand-author raw entries.
 
-### Link to Code Symbols (0.11+ Codebase Scan)
+### 5. Hand off to reflection
 
-When a learning applies to a SPECIFIC function or class — not just
-"the payment system" but `PaymentOrchestrator.charge` on line 47 —
-link it to the actual symbol so the recall surfaces during code work
-on that exact symbol.
+Keep stored/updated record IDs and candidate outcomes in run evidence. At the
+workflow terminal, `reflect` reviews the complete cycle, consolidates patterns,
+and records actual stored and novel-candidate counts. Capture is not a substitute
+for reflection, and reflection must not invent records without this skill.
 
-**Detect availability:** if `sage-memory scan-codebase --help` exits
-0 and a recent scan has run, code-symbol memories exist in the
-project DB.
+## Rules
 
-**Workflow:**
+- Evidence detection and semantic authoring are separate stages.
+- Search before every new store.
+- Prefer one enriched rule over near-duplicates.
+- Prevention must be actionable before the next attempt.
+- Store only claims supported by evidence.
+- Use relative selectors; never persist personal or machine-specific details.
+- Do not block task execution merely because storage is unavailable.
+- A configured external recall owner means Sage recall hooks stand down.
 
-1. **Find the symbol's memory id:**
-   ```
-   sage_memory_search(
-     query: "PaymentOrchestrator.charge",
-     filter_tags: ["codebase"],
-     limit: 3
-   )
-   ```
-   The file-memory result's `id` field is the parent for all symbols
-   in that file. For symbol-level linkage, query `code_symbols`
-   directly via the MCP search (filter on the qualified name in tags
-   or content), or accept the file-level link as the v1 granularity.
+## Failure Modes
 
-2. **Link the learning to the file memory:**
-   ```
-   sage_memory_link(
-     source_id: "<learning_memory_id>",
-     target_id: "<file_memory_id>",
-     relation: "applies_to"
-   )
-   ```
+- **Raw memory logging:** stop and run this process from search-before-store.
+- **Duplicate result:** enrich the existing record and reuse its ID.
+- **Wrong old rule:** supersede and link; never delete the audit trail silently.
+- **Ambiguous backend:** store nothing until configuration selects exactly one.
+- **OpenViking result outside the resource prefix:** ignore it.
+- **Only generated overview nodes returned:** treat as no eligible learning.
+- **Insufficient evidence:** keep the candidate pending or skip with a reason.
 
-3. **Future recall:** when an agent works on the same file, the
-   graph channel surfaces this learning even if the query doesn't
-   mention the file by name — entity-mediated proximity at work.
+## Quality Check
 
-**Why bother:** "show me past mistakes on `PaymentOrchestrator`" is
-the single most valuable self-learning query, and it ONLY works when
-learnings are linked to the code structure, not just to free-text
-file paths that drift when files move.
-
-**With files:** Skip — relative paths in prose go stale; the
-file-memory id is stable across renames as long as content_hash
-doesn't change. Without MCP, document the path in the content and
-re-find the file each session.
-
-### When a Learning Causes a Bug
-
-When you follow a stored self-learning entry and it leads to incorrect
-behavior (wrong library, outdated pattern, contradicted convention):
-
-1. **Store a NEW learning** (type: `correction`) describing what the
-   original said, why it's now wrong, and what the correct approach is.
-
-2. **Invalidate the original:**
-   ```
-   sage_memory_update(id: "<original_id>", status: "invalidated")
-   ```
-
-3. **Link the correction to the original:**
-   ```
-   sage_memory_link(
-     source_id: "<correction_id>",
-     target_id: "<original_id>",
-     relation: "corrects"
-   )
-   ```
-
-The original learning will never appear in search again. The correction
-replaces it as active knowledge. The graph edge preserves the audit trail.
-
-**With files:** Rename the original file to `lrn-INVALID-<name>.md` and
-add `status: invalidated` to its frontmatter. Create the correction as
-a new file.
-
-### Search Before Store (Semantic Reinforcement)
-
-Before creating a new learning, check for existing similar learnings:
-
-1. Search with the new learning's core content:
-   ```
-   sage_memory_search(
-     query: "<what_happened + prevention_rule>",
-     filter_tags: ["self-learning"],
-     limit: 3
-   )
-   ```
-
-2. If the top result describes the **same root cause and same prevention**:
-   - Do NOT create a new entry
-   - Update the existing entry with any new details:
-     ```
-     sage_memory_update(id: "<existing_id>", content: "<merged content>")
-     ```
-   - The access_count bump from the search already signals reinforcement
-
-3. If no strong match → store as new.
-
-Why: Three entries saying "check middleware order" waste search slots.
-One entry that gets richer over time is more useful.
-
-**With files:** Scan `lrn-*.md` filenames for similar topics. If a
-match exists, edit that file instead of creating a new one.
-
-### When NOT to Store
-
-Ask: "Would this change how I approach a future task?"
-- **No** → don't store
-- **Yes** → store
-
-**Budget:** 2-5 learnings per significant task.
-
-## Review: Curate and Improve
-
-Triggered by "sage review" or "review learnings."
-
-### With MCP
-
-1. **Inventory** — `sage_memory_list(tags: ["self-learning"])` → all learnings
-2. **By type** — `sage_memory_list(tags: ["self-learning", "gotcha"])` etc.
-3. **Stale check** — flag learnings about changed code or outdated APIs
-4. **Consolidate** — merge 3+ similar → store consolidated → link to same
-   entities → delete originals
-5. **Promote** — identify learnings for scope escalation
-6. **Hot spots** — `sage_memory_graph` on key entities → count inbound
-   `applies_to` edges → report most mistake-prone areas
-
-### With Files
-
-1. **Inventory** — list all `lrn-*.md` files
-2. **By type** — read frontmatter to group by type tag
-3. **Stale check** — check creation dates, read content for outdated refs
-4. **Consolidate** — manually merge file contents → create new file →
-   delete originals
-5. **Promote** — identify candidates, create global-scope copy
-6. **Hot spots** — count `lrn-*.md` files by domain keyword in filename
-
-## Promote: Scope Escalation
-
-**Project → Global:** Learning applies beyond this codebase. Store a
-context-independent version at global scope.
-
-**With MCP:** `sage_memory_store(..., scope: "global")`
-**With files:** Copy to `~/.sage-memory/` (global directory), remove
-project-specific details.
-
-**Global → Team:** Export to a shared file in the repo. **Read:**
-`references/team-sharing.md`.
-
-**Read:** `references/promotion-rules.md` for criteria.
-
-## Quality Principles
-
-**Prevention over documentation.** Every learning answers: "What should
-I check before this happens again?"
-
-**Specificity retrieves.** `[LRN:gotcha] Stripe webhook requires raw body`
-retrieves. `[LRN:gotcha] API issue` does not.
-
-**Freshness matters.** Update or delete when code changes make a learning
-obsolete.
-
-**Learnings are not memories.** "Billing uses saga pattern" is a memory.
-"Agent assumed REST, broke the compensation chain" is a learning.
-
-## References
-
-- `references/capture-patterns.md` — Triggers, examples, prevention rules
-- `references/storage-conventions.md` — Format conventions
-- `references/promotion-rules.md` — Scope escalation criteria
-- `references/team-sharing.md` — Export formats for teams
-- `references/review-workflow.md` — Curation process
-- `references/examples.md` — End-to-end scenarios
-- `references/ontology-integration.md` — Graph integration
+Before returning, verify that the selected backend is the configured one, the
+search preceded Persist, the record has all four semantic sections, selectors
+contain no personal data, correction links are consistent, and the record ID is
+available to the terminal reflection.

@@ -304,8 +304,9 @@ Pick A/R/V, or tell me what to change.
 **On approval — Post-Flight (Rule 7):**
 1. Append root cause and fix to `.sage/decisions.md`
 2. Update artifact frontmatter if relevant
-3. Store root cause and fix in memory (tagged `self-learning`)
-   with WHEN/CHECK/BECAUSE prevention rule
+3. Send any novel root-cause candidate through `sage-self-learning`.
+   It searches before store and uses the configured backend; this workflow
+   never issues a raw memory-store call.
 4. **Next steps (Zone 3):**
 
 Next steps:
@@ -338,7 +339,7 @@ Good fix output:
   "I know what to change" is NOT a plan file.
 - Tests before code (Base Principle 1). Write failing test first.
 - Verify with evidence (Rule 5). PASTE actual test output.
-- Capture corrections (Rule 6). Store as self-learning.
+- Capture corrections (Rule 6) through the canonical self-learning skill.
 - Minimal change: fix the bug, don't refactor the neighborhood.
 - If stuck, use problem-solving skill. Don't retry the same approach.
 - If the fix reveals a systemic issue, ESCALATE. Do not scope-creep

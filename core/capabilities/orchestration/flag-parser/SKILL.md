@@ -1,7 +1,7 @@
 ---
 name: flag-parser
 description: >
-  Parses workflow flags (--quality-locked, --autonomous) from $ARGUMENTS
+  Parses workflow flags (--strict, --quality-locked, --autonomous) from $ARGUMENTS
   at the start of /build and /architect commands. Uses deterministic
   runtimes (Python primary, Bash fallback) with prose-rule fallback
   if neither runtime is available. Returns a strict JSON contract that
@@ -24,6 +24,7 @@ the agent trusts that JSON unconditionally.
 
 | Flag | Effect | Default |
 |------|--------|---------|
+| `--strict` | Enable deterministic runtime invariant enforcement for this explicit run | off; never enabled by config |
 | `--quality-locked` | Loop review/revise until findings are clean or cap (10) hit | off (overridable by config) |
 | `--no-quality-locked` | Force off, overriding a config default | — |
 | `--autonomous` | Agent makes elicitation decisions from memory/codebase/principles | off (overridable by config) |
@@ -72,10 +73,12 @@ All three parsing layers emit the same JSON shape to stdout:
 
 ```json
 {
+  "strict": true | false,
   "quality_locked": true | false,
   "autonomous": true | false,
   "goal": "<remainder after flags, trimmed>",
   "error": null | "<error message>",
+  "strict_source": "flag" | null,
   "quality_locked_source": "flag" | "config" | null,
   "autonomous_source": "flag" | "config" | null
 }
@@ -141,7 +144,7 @@ This is the only case where prose parsing is acceptable.
    `--quality-locked --autonomous` are equivalent.
 3. **Unknown flags are an error.** If $ARGUMENTS starts with `--` and
    the flag name isn't recognized, return JSON with `error` populated.
-4. **No values, just booleans.** Neither flag takes an argument.
+4. **No values, just booleans.** No flag takes an argument.
    `--quality-locked=true` is not supported.
 5. **Goal is everything after the flags.** Surrounding whitespace
    trimmed; internal whitespace preserved.
@@ -150,22 +153,25 @@ This is the only case where prose parsing is acceptable.
 
 ```
 INPUT:  "Ship dark mode"
-OUTPUT: {"quality_locked": false, "autonomous": false, "goal": "Ship dark mode", "error": null}
+OUTPUT: {"strict": false, "quality_locked": false, "autonomous": false, "goal": "Ship dark mode", "error": null}
+
+INPUT:  "--strict --quality-locked Ship dark mode"
+OUTPUT: {"strict": true, "quality_locked": true, "autonomous": false, "goal": "Ship dark mode", "error": null}
 
 INPUT:  "--quality-locked Ship dark mode"
-OUTPUT: {"quality_locked": true, "autonomous": false, "goal": "Ship dark mode", "error": null}
+OUTPUT: {"strict": false, "quality_locked": true, "autonomous": false, "goal": "Ship dark mode", "error": null}
 
 INPUT:  "--autonomous --quality-locked Ship dark mode"
-OUTPUT: {"quality_locked": true, "autonomous": true, "goal": "Ship dark mode", "error": null}
+OUTPUT: {"strict": false, "quality_locked": true, "autonomous": true, "goal": "Ship dark mode", "error": null}
 
 INPUT:  "--quality-locked"
-OUTPUT: {"quality_locked": true, "autonomous": false, "goal": "", "error": null}
+OUTPUT: {"strict": false, "quality_locked": true, "autonomous": false, "goal": "", "error": null}
 
 INPUT:  "Ship --quality-locked dark mode"   # flag not at start
-OUTPUT: {"quality_locked": false, "autonomous": false, "goal": "Ship --quality-locked dark mode", "error": null}
+OUTPUT: {"strict": false, "quality_locked": false, "autonomous": false, "goal": "Ship --quality-locked dark mode", "error": null}
 
 INPUT:  "--foo bar"
-OUTPUT: {"quality_locked": false, "autonomous": false, "goal": "", "error": "Unknown flag '--foo'. Supported flags: --quality-locked, --autonomous."}
+OUTPUT: {"strict": false, "quality_locked": false, "autonomous": false, "goal": "", "error": "Unknown flag '--foo'."}
 EXIT:   1
 ```
 
@@ -173,7 +179,7 @@ EXIT:   1
 
 ### On clean parse (error: null)
 
-1. Use `quality_locked` and `autonomous` booleans for the rest of the
+1. Use `strict`, `quality_locked`, and `autonomous` booleans for the rest of the
    workflow.
 2. Use `goal` as the user's task description (may be empty — workflow
    will auto-pickup from `.sage/work/`).
@@ -181,7 +187,7 @@ EXIT:   1
 
 ```
 Sage → build workflow.
-Modes: --quality-locked, --autonomous
+Modes: --strict, --quality-locked, --autonomous
 Goal: Ship dark mode for the dashboard
 ```
 
