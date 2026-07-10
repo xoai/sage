@@ -26,9 +26,21 @@ bash .sage/gates/scripts/sage-hallucination-check.sh src/ .
 ```
 
 This script automatically: verifies relative imports resolve to real files,
-checks imported packages exist in package.json/node_modules, runs TypeScript
-compilation check (if tsconfig exists), and detects common hallucinated APIs
-(useServer, useClient, Pages Router in App Router). Exit code 0 = pass.
+checks imported packages are declared in package.json or installed in
+node_modules, and runs the project's type-checker (tsc, else pyright/mypy).
+
+A real type-checker subsumes any hard-coded list of "APIs that don't exist",
+and it does not go stale — which is why the former `useServer`/`useClient`
+pattern greps are gone.
+
+**Exit contract:** `0` = pass · `1` = an import or package does not resolve, or
+the type-checker reported errors · `2` = UNVERIFIABLE, nothing was examined
+(no analyzable source files, or a Python project with no type-checker
+installed — this gate has no import analysis for Python).
+
+Exit 2 is not a pass. Offer `[P] Proceed unverified` (logged to
+`.sage/decisions.md`) or `[F] Fix verification setup` — install pyright/mypy,
+or point the gate at source files.
 
 If the script passes, proceed to the manual checks below for items
 that require semantic understanding (API method names, version compatibility).

@@ -72,8 +72,44 @@ mechanical parts of each check:
 | 05 verification | `scripts/sage-verify.sh` | Test runner detected and all tests pass, build compiles, no TODO markers |
 | 06 visual | `scripts/sage-visual-gate.sh` | Screenshots captured at 3 breakpoints, no blank pages, no mobile horizontal overflow, no console errors |
 
-Scripts return exit code 0 (pass) or 1 (fail). Gate files instruct: "ALWAYS run
-the script first. Language-based checking is supplementary."
+Gate files instruct: "ALWAYS run the script first. Language-based checking is
+supplementary."
+
+### The exit contract
+
+Every gate script returns one of three states. Callers — workflow prose, hooks,
+the plugin — MUST distinguish all three.
+
+| Exit | State | Final line | Meaning |
+|:---:|---|---|---|
+| `0` | pass | `✅ PASS — …` | The check ran and found nothing wrong. |
+| `1` | fail | `❌ FAIL — …` | The check ran and found something wrong. |
+| `2` | unverifiable | `⚠️ UNVERIFIABLE — …` | The check could not run: nothing to examine, or the tooling is absent. |
+
+**Exit 2 must never be treated as a pass.** It exists because "the suite is
+green" and "there is no suite" are different claims that used to share exit 0 —
+which is precisely how a gate can report success on code it never looked at.
+Nor is it a failure: a project with no tests, or a machine with no browser, has
+not done anything wrong. It has produced no evidence.
+
+On exit 2 a workflow presents a choice and records the answer:
+
+```
+[P] Proceed unverified — logged as a waiver in .sage/decisions.md
+[F] Fix verification setup — install the runner/toolchain, then re-run
+```
+
+Examples of each unverifiable state:
+
+- Gate 1 — the task declares no `Files:` or `Output:` deliverables.
+- Gate 4 — no analyzable source files, or a Python project with no
+  pyright/mypy installed (Gate 4 has no import analysis for Python).
+- Gate 5 — no test runner detected, or one declared in `package.json` but not
+  installed.
+- Gate 6 — no browser toolchain, or the page could not be loaded.
+
+Regression tests pin all three states for all four scripts:
+`bash develop/validators/gates/run-gate-tests.sh`.
 
 The scripts handle WHAT exists and passes. Claude handles WHETHER the code is
 semantically correct. This split gives deterministic evidence for the mechanical

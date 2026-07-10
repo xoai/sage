@@ -33,8 +33,8 @@ Does the implementation match the task specification? Nothing missing,
 nothing extra.
 
 **Script first:** Run `bash .sage/gates/scripts/sage-spec-check.sh [plan-path] [task-number]`
-If the script fails (exit code non-zero), the gate FAILS regardless
-of agent assessment.
+Exit 1 → the gate FAILS regardless of agent assessment.
+Exit 2 → UNVERIFIABLE; see "Unverifiable Gate Handling" below. Never a pass.
 
 **Agent review:** Read `sage/core/capabilities/review/spec-review/SKILL.md`
 for adversarial verification. Do not trust your own report — verify
@@ -74,7 +74,8 @@ Are all imports, APIs, methods, and version numbers real? Does the
 implementation actually do what the comments say?
 
 **Script first:** Run `bash .sage/gates/scripts/sage-hallucination-check.sh [target-dir] [project-root]`
-If the script fails, the gate FAILS.
+Exit 1 → the gate FAILS.
+Exit 2 → UNVERIFIABLE; see "Unverifiable Gate Handling" below. Never a pass.
 
 **Agent review:** Check for non-obvious hallucinations the script
 can't catch — phantom API methods, wrong function signatures,
@@ -85,7 +86,9 @@ incorrect version-specific behavior.
 Run the tests. Run the feature. Show evidence. Don't trust claims.
 
 **Script first:** Run `bash .sage/gates/scripts/sage-verify.sh [project-root]`
-If the script fails, the gate FAILS.
+Exit 1 → the gate FAILS.
+Exit 2 → UNVERIFIABLE; see "Unverifiable Gate Handling" below. A project with
+no tests does NOT pass this gate.
 
 **Agent review:** Read `sage/core/capabilities/debugging/verify-completion/SKILL.md`
 for acceptance criteria verification beyond what the script checks.
@@ -184,6 +187,34 @@ Gate returns FAIL + escalate-to-human:
 
 Gate returns PASS:
 → Proceed to next gate
+
+### Unverifiable Gate Handling
+
+A gate script exits `2` when it could not run its check at all: nothing to
+examine, or the tooling is absent. That is neither a pass nor a failure — the
+gate produced no evidence, and evidence is the only thing it is for.
+
+**Never auto-pass an exit 2.** Never re-run and hope. Stop and present:
+
+```
+⚠️  Gate <N> UNVERIFIABLE — <reason from the script>
+
+    Nothing was checked. This is not a pass.
+
+    [P] Proceed unverified — record a waiver in .sage/decisions.md
+    [F] Fix verification setup — <the script names the missing tool>
+```
+
+On `[P]`: append to `.sage/decisions.md` — the gate, the reason, the timestamp,
+and who approved it — then continue. A cycle that completes with waived gates
+says so in its manifest.
+
+On `[F]`: the user installs the runner or toolchain; re-run the same gate.
+
+Exit 2 is common and legitimate: a docs-only change has no tests, a CLI project
+has no browser, a Python project may have no type-checker. Treating those as
+failures trains users to ignore gate output, which is the failure mode this
+whole layer exists to prevent. Treating them as passes is a lie.
 
 ## Mode-Specific Defaults
 

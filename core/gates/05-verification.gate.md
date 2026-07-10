@@ -25,9 +25,18 @@ supplementary — the script provides deterministic evidence.
 bash .sage/gates/scripts/sage-verify.sh .
 ```
 
-This script automatically: detects the test runner (vitest, jest, pytest,
-flutter test, go test), runs all tests, checks the build compiles, scans
-for TODO/FIXME markers, and returns exit code 0 on pass / 1 on fail.
+This script automatically: detects the test runner (vitest, jest, mocha, npm
+test, pytest, flutter test, go test) by reading `package.json` as JSON, runs
+all tests, checks the build compiles, and scans for TODO/FIXME markers.
+
+**Exit contract:** `0` = tests ran and passed · `1` = tests ran and failed, or
+the build failed · `2` = UNVERIFIABLE, no runner was detected, or one is
+declared but not installed.
+
+Exit 2 is not a pass — this is the distinction the gate exists for. A project
+with zero tests must never return the same code as a green suite. Offer
+`[P] Proceed unverified` (logged to `.sage/decisions.md`) or `[F] Fix
+verification setup` — install the runner, or add a test.
 
 If the script passes, proceed to the manual checks below only for
 acceptance criteria that can't be automated.

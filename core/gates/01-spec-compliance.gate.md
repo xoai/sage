@@ -21,8 +21,16 @@ bash .sage/gates/scripts/sage-spec-check.sh .sage/work/YYYYMMDD-slug/plan.md TAS
 ```
 
 This script automatically: extracts the task spec from the plan, verifies
-all listed files exist, checks test files exist for each source file, and
-reports completion status. Exit code 0 = all deliverables present.
+all listed `Files:` and `Output:` deliverables exist, checks test files exist
+for each source file, and reports completion status.
+
+**Exit contract:** `0` = every declared deliverable exists · `1` = a declared
+deliverable is missing, or the task is absent from the plan · `2` =
+UNVERIFIABLE, the task declares no deliverables to check.
+
+Exit 2 is not a pass. Offer `[P] Proceed unverified` (logged to
+`.sage/decisions.md`) or `[F] Fix verification setup` — here, add a `Files:`
+or `Output:` line to the task so there is something to verify.
 
 The script handles WHAT exists. The manual checks below handle WHETHER
 the code is correct — semantic verification that requires reading the code.

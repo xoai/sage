@@ -46,6 +46,24 @@ The script is deterministic — it produces PNG files and a manifest.json.
 If "before" screenshots were captured at the start of a redesign task, comparison
 is automatic.
 
+**Or run the full gate**, which captures the screenshots and then performs the
+automated checks (blank-page detection, mobile overflow, console errors):
+
+```bash
+bash .sage/gates/scripts/sage-visual-gate.sh http://localhost:3000/<route> \
+  .sage/work/<YYYYMMDD-slug>/screenshots
+```
+
+**Exit contract:** `0` = screenshots captured, automated checks clean · `1` = a
+real visual defect (blank capture, missing capture, mobile horizontal overflow)
+· `2` = UNVERIFIABLE, no browser toolchain is installed or the page could not
+be loaded.
+
+Exit 2 is not a pass, and it is not a failure either: a missing browser says
+nothing about the layout. Offer `[P] Proceed unverified` (logged to
+`.sage/decisions.md`) or `[F] Fix verification setup` — `npm install playwright`,
+or start the dev server the URL points at.
+
 ## Check Criteria
 
 ### Mobile (375px) — Check FIRST

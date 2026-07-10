@@ -53,6 +53,8 @@ verification scripts** that don't rely on the agent's self-assessment:
 verifies imports exist, `sage-spec-check.sh` confirms deliverables
 match the plan. Scripts run first; agent review runs second. The script
 says tests fail → gate fails, regardless of what the agent thinks.
+Each returns `0` pass, `1` fail, or `2` unverifiable — and an unverifiable
+gate (no test runner, no browser) stops and asks rather than passing.
 Five core gates sequence after every implementation: spec compliance,
 constitution compliance, code quality, hallucination check, verification.
 Two advisory gates — browser check and design check — activate

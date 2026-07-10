@@ -384,7 +384,11 @@ structures root cause investigation.
 reviews. `sage-verify.sh` runs your test suite, `sage-hallucination-check.sh`
 verifies imports exist, `sage-spec-check.sh` confirms deliverables match
 the plan. The script says tests fail → gate fails, regardless of what
-the agent thinks.
+the agent thinks. Each script returns one of three states — `0` pass, `1`
+fail, `2` unverifiable — and "unverifiable" is never silently upgraded to a
+pass: a project with no test runner stops and asks. The scripts carry their
+own regression tests (`develop/validators/gates/`), because a gate that fails
+open is worse than no gate at all.
 
 **Layer 5 — Self-learning.** Corrections from past sessions are stored
 as WHEN/CHECK/BECAUSE rules and searched before every Standard+ task.
