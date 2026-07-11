@@ -52,9 +52,14 @@ import sys
 import tempfile
 import time
 
-import graders
-
 HERE = pathlib.Path(__file__).resolve().parent
+# Run as a script, Python puts this dir on sys.path for us; imported as a module
+# (by the tests, or by release.py --with-evals) it does not.
+if str(HERE) not in sys.path:
+    sys.path.insert(0, str(HERE))
+
+import graders  # noqa: E402
+
 REPO_ROOT = HERE.parents[1]
 SCENARIOS = HERE / "scenarios"
 FIXTURES = HERE / "fixtures"
@@ -231,6 +236,21 @@ def sage_init(ws: pathlib.Path) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 # Drivers
 # ─────────────────────────────────────────────────────────────────────────────
+def input_tokens(usage: dict) -> int:
+    """Everything the model actually read.
+
+    `input_tokens` alone is the UNCACHED remainder — it reported 2 for a session
+    that read 22,809 tokens, because the other 22,807 arrived as cache creation
+    and cache reads. Counting only the remainder undercounts input by a factor of
+    a thousand, and it silently destroys the one comparison this harness exists to
+    make: Sage's cost IS its eager layer, so the sage condition must show more
+    input than bare. With the cache keys dropped, that difference is invisible.
+    """
+    return ((usage.get("input_tokens") or 0)
+            + (usage.get("cache_creation_input_tokens") or 0)
+            + (usage.get("cache_read_input_tokens") or 0))
+
+
 class Driver:
     """Drives one headless agent session in a workspace.
 
@@ -308,7 +328,7 @@ class ClaudeCodeDriver(Driver):
                     session_id = ev.get("session_id") or session_id
                     cost += ev.get("total_cost_usd") or 0.0
                     usage = ev.get("usage") or {}
-                    tok_in += usage.get("input_tokens") or 0
+                    tok_in += input_tokens(usage)
                     tok_out += usage.get("output_tokens") or 0
                     turns.append(ev.get("result") or "")
                 elif ev.get("type") == "system" and ev.get("session_id"):
@@ -450,38 +470,58 @@ def write_report(results: list, runs: int, path: pathlib.Path) -> None:
         "|---|---|---|---|",
     ]
 
-    sage_wins = bare_wins = 0
+    # Denominators are per-condition on purpose. Some scenarios are sage-only
+    # (routing, hooks — things Sage ADDS), and putting those in bare's denominator
+    # reports the absence of a feature as a behavioural loss. The first draft of
+    # this report did exactly that: it printed "bare: 1/2" when bare had run one
+    # scenario and passed it. That is padding the delta, which is the one thing
+    # this suite must not do.
+    sage_wins = sage_ran = bare_wins = bare_ran = contested = 0
     for sid in scenarios:
         s = v.get((sid, "sage"))
         b = v.get((sid, "bare"))
 
         def cell(x):
             if not x:
-                return "—"
+                return "— *n/a*"
             mark = "✅" if x["verdict"] else "❌"
             return f"{mark} {x['passed_runs']}/{x['total_runs']}"
 
-        if s and s["verdict"]:
-            sage_wins += 1
-        if b and b["verdict"]:
-            bare_wins += 1
+        if s:
+            sage_ran += 1
+            sage_wins += bool(s["verdict"])
+        if b:
+            bare_ran += 1
+            bare_wins += bool(b["verdict"])
 
         if s and b:
-            delta = "**+Sage**" if s["verdict"] and not b["verdict"] else (
-                "−Sage" if b["verdict"] and not s["verdict"] else "same")
+            contested += 1
+            if s["verdict"] and not b["verdict"]:
+                delta = "**+Sage**"
+            elif b["verdict"] and not s["verdict"]:
+                delta = "**−Sage**"
+            else:
+                delta = "same"
         else:
-            delta = "—"
+            delta = "*sage-only*"
         lines.append(f"| {sid} | {cell(s)} | {cell(b)} | {delta} |")
 
-    total = len(scenarios)
     lines += [
         "",
-        f"**sage: {sage_wins}/{total} · bare: {bare_wins}/{total}**",
+        f"**sage {sage_wins}/{sage_ran} · bare {bare_wins}/{bare_ran}** — "
+        f"{contested} scenario(s) ran in both conditions. The rest are sage-only "
+        f"(routing, hooks: things Sage adds, not behaviours it improves) and are "
+        f"not counted against bare.",
         "",
         "## Cost",
         "",
+        "Input counts cache creation and cache reads, not just the uncached",
+        "remainder. Sage's cost IS its eager layer, so a sage session must read more",
+        "than a bare one — counting only uncached input hid exactly that, and",
+        "reported 2 input tokens for a session that read 22,809.",
+        "",
         "| Condition | tokens in | tokens out | cost |",
-        "|---|---|---|---|",
+        "|---|---:|---:|---:|",
     ]
     for cond in CONDITIONS:
         rows = [x for k, x in v.items() if k[1] == cond]
@@ -493,7 +533,7 @@ def write_report(results: list, runs: int, path: pathlib.Path) -> None:
             f"${sum(r['cost_usd'] for r in rows):.2f} |"
         )
 
-    failures = [r for r in results if r["error"]]
+    failures = [r for r in results if r.get("error")]
     if failures:
         lines += ["", "## Errors", ""]
         for r in failures:

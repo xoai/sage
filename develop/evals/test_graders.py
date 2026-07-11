@@ -328,6 +328,55 @@ class GraderTest(unittest.TestCase):
         self.assertIn("kaboom", r["detail"])
 
 
+class ReportingTest(unittest.TestCase):
+    """The report is the deliverable. Both of these shipped wrong in the first
+    real run, and both erred in the direction of flattering Sage."""
+
+    def setUp(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "run_evals", pathlib.Path(__file__).resolve().parent / "run_evals.py")
+        self.R = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.R)
+
+    def test_input_tokens_include_the_cache(self):
+        """`input_tokens` alone is the UNCACHED remainder — it read 2 for a session
+        that consumed 22,809. Sage's cost IS its eager layer, so undercounting input
+        by a factor of a thousand hides the one number the comparison needs."""
+        usage = {"input_tokens": 2,
+                 "cache_creation_input_tokens": 7726,
+                 "cache_read_input_tokens": 15081,
+                 "output_tokens": 4}
+        self.assertEqual(self.R.input_tokens(usage), 22809)
+
+    def test_input_tokens_tolerates_missing_keys(self):
+        self.assertEqual(self.R.input_tokens({}), 0)
+        self.assertEqual(self.R.input_tokens({"input_tokens": 5}), 5)
+
+    def test_sage_only_scenarios_are_not_counted_against_bare(self):
+        """The first draft printed 'bare: 1/2' when bare had run ONE scenario and
+        passed it — reporting the absence of a feature as a behavioural loss."""
+        results = [
+            {"scenario": "E3", "condition": "sage", "pass": True,
+             "cost_usd": 0.5, "tokens_in": 100, "tokens_out": 10},
+            {"scenario": "E3", "condition": "bare", "pass": True,
+             "cost_usd": 0.3, "tokens_in": 50, "tokens_out": 10},
+            {"scenario": "E6", "condition": "sage", "pass": True,   # sage-only
+             "cost_usd": 0.6, "tokens_in": 100, "tokens_out": 10},
+        ]
+        out = pathlib.Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, out, ignore_errors=True)
+        path = out / "summary.md"
+        self.R.write_report(results, 1, path)
+        text = path.read_text()
+
+        self.assertIn("sage 2/2 · bare 1/1", text)
+        self.assertNotIn("bare 1/2", text)
+        self.assertIn("sage-only", text)
+        # E3 ran in both and both passed: that is honestly "same", not a Sage win.
+        self.assertIn("same", text)
+
+
 class TranscriptTest(unittest.TestCase):
     def test_text_collects_assistant_prose_in_order(self):
         tx = transcript(("say", "first"), ("tool", "Bash", {"command": "ls"}),
