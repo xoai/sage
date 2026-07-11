@@ -1,0 +1,38 @@
+name: hook-tests
+
+# Tests for the Claude Code PreToolUse spec-gate hook (ADR-4). The hook makes
+# Rule 3 (spec-before-code) mechanical, so it carries its own regression tests
+# just like the gate scripts. See develop/validators/hooks/run-hook-tests.sh.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  hook-tests:
+    name: spec-gate hook tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.8'
+
+      - name: Run spec-gate hook tests
+        run: bash develop/validators/hooks/run-hook-tests.sh
+
+  hook-tests-bash32:
+    name: spec-gate hook tests (bash 3.2 — macOS system shell)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run the hook tests under bash 3.2
+        run: |
+          docker run --rm -v "$PWD":/sage -w /sage bash:3.2 sh -c '
+            apk add --no-cache python3 >/dev/null &&
+            bash develop/validators/hooks/run-hook-tests.sh
+          '
