@@ -10,8 +10,26 @@ user-role: "Accept findings, revise, or discuss"
 
 # Review Workflow
 
-Independent evaluation of Sage artifacts. Designed to work in a fresh
-session for maximum objectivity, but also works within an existing session.
+Independent evaluation. Designed to work in a fresh session for maximum
+objectivity, but also works within an existing session.
+
+## Step 0: Mode Dispatch
+
+`/review` has four modes. Parse `$ARGUMENTS` for a mode flag; default is code /
+artifact review.
+
+| Invocation | Mode | Read the mode reference |
+|---|---|---|
+| `/review` (default) | Code / artifact quality | (this file, Steps 1–5) |
+| `/review --ux` | UX assessment (audit → evaluate → heuristics) | `core/workflows/review-modes/ux.md` |
+| `/review --design` | Design-system compliance + visual quality | `core/workflows/review-modes/design.md` |
+| `/review --browser` | Functional / browser QA (optional Lightpanda) | `core/workflows/review-modes/browser.md` |
+
+These modes fold in the former `/analyze`, `/design-review`, and `/qa`
+workflows. On a mode flag, read the matching reference and follow it; the Rules
+below still apply. `--ux` uses the `ux-review` skill, which ships in the
+`sage-product` pack — if it is not installed, say so and offer
+`sage add xoai/sage-product`.
 
 ## Step 1: Identify What to Review
 

@@ -13,6 +13,17 @@ user-role: "Specify what to learn, verify findings before storage"
 Deliberate knowledge capture. Use to onboard to a new codebase, deeply
 understand a module, or build persistent memory for a project area.
 
+## Step 0: Mode Dispatch
+
+`/learn` builds **memory** (prose knowledge). `/learn --ontology` builds the
+**ontology** (a typed entity/relationship graph) instead — it folds in the
+former `/map` workflow. Parse `$ARGUMENTS`:
+
+- `/learn` (default) → Steps 1–N below (memory capture).
+- `/learn --ontology` → read `core/workflows/learn-modes/ontology.md` and follow
+  it; it maps modules, services, and APIs and their dependencies via the
+  `sage-ontology` skill.
+
 ## Step 1: Determine Scope
 
 If a path is specified, that's the target — deep dive.

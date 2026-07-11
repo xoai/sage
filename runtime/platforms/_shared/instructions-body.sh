@@ -40,15 +40,16 @@ Before responding, route using this three-layer chain:
 build/implement/create/add/develop/ship/code/feature → /build
 fix/bug/broken/error/crash/failing/debug/issue → /fix
 architect/redesign/system design/migrate/rewrite → /architect
-understand/research/interview/discover/user needs/jobs to be done → /research
-design/wireframe/brief/UX/PRD/prototype/mockup → /design
-audit/evaluate/assess/analyze/measure/funnel/usability → /analyze
+understand/research/interview/discover/user needs/jobs to be done → /research (sage-product pack)
+design/wireframe/brief/UX/PRD/prototype/mockup → /design (sage-product pack)
+audit/evaluate/assess/analyze/measure/funnel/usability → /review --ux
 reflect/retro/retrospective/lessons/what did we learn/look back → /reflect
-continue/resume/pick up/where was I/what was I doing → /continue
-qa/test the app/smoke test/browser test/functional test → /qa
-map/ontology/graph/dependencies/structure/what connects/what depends → /map
+continue/resume/pick up/where was I/what was I doing/status/where am I → /continue
+qa/test the app/smoke test/browser test/functional test → /review --browser
+map/ontology/graph/dependencies/structure/what connects/what depends → /learn --ontology
 optimize/reduce/increase/minimize/maximize/improve/iterate until/autoresearch → /autoresearch
-design review/design audit/design check/visual audit/slop check → /design-review
+design review/design audit/design check/visual audit/slop check → /review --design
+(deprecated aliases, one cycle: /analyze→/review --ux, /qa→/review --browser, /map→/learn --ontology, /design-review→/review --design, /status→/continue)
 
 If keywords match ONE workflow → go to confirmation.
 If keywords match MULTIPLE → present matched workflows as options.
@@ -362,16 +363,16 @@ Rules:
 | `/build` | Feature: spec → plan → build-loop → quality gates |
 | `/fix` | Diagnose → scope → fix → verify |
 | `/architect` | Elicit → design → milestone plan → phased build |
-| `/research` | Interview → JTBD → opportunity map |
-| `/design` | Brief → spec → copy (reads research context) |
-| `/analyze` | UX audit → evaluation → findings |
-| `/status` | Compute project state from artifacts |
-| `/review` | Independent evaluation (sub-agent where the Task tool exists) |
-| `/learn` | Codebase scan → memory storage |
+| `/review` | Independent evaluation. Modes: `--ux`, `--design`, `--browser` |
+| `/learn` | Codebase scan → memory. `--ontology` builds the entity graph |
 | `/reflect` | Review cycle → extract learnings → seed next cycle |
-| `/continue` | Resume any active cycle with full context |
-| `/qa` | Browser-based functional testing (optional Lightpanda) |
-| `/design-review` | Design quality audit + design system compliance |
+| `/continue` | Resume an active cycle; with none, prints project status |
+| `/autoresearch` | Optimization loop (optional runtime, sage-autoresearch pack) |
+| `/research`, `/design` | PM/UX workflows — install the `sage-product` pack |
+
+Folded in v1.2.0: `/analyze`→`/review --ux`, `/design-review`→`/review --design`,
+`/qa`→`/review --browser`, `/map`→`/learn --ontology`, `/status`→`/continue`.
+The old names still route for one deprecation cycle.
 
 ## Enforcement (platform-dependent)
 

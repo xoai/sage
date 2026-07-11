@@ -271,18 +271,17 @@ Use inside your IDE (Claude Code, Antigravity):
 | `/build` | Spec → plan → build-loop → quality gates (with auto-review, coding principles, auto-QA). Accepts `--quality-locked`, `--autonomous` |
 | `/fix` | Diagnose → scope → fix → verify (reads QA and design-review reports) |
 | `/architect` | Elicit → design → milestone plan → phased build (with ADR auto-review). Accepts `--quality-locked`, `--autonomous` |
-| `/research` | Interview → JTBD → opportunity map |
-| `/design` | Brief → spec → copy (reads research context) |
-| `/analyze` | UX audit → evaluation → findings |
-| `/qa` | Browser-based functional testing (optional Lightpanda MCP) |
-| `/design-review` | Design quality audit + AI slop detection + design system compliance |
-| `/review` | Independent artifact evaluation via sub-agent delegation |
-| `/autoresearch` | Autonomous iteration toward a measurable metric (reduce bundle, increase coverage) |
-| `/map` | Build ontology knowledge graph — modules, services, dependencies |
-| `/learn` | Codebase scan → memory storage |
+| `/review` | Independent evaluation. Modes: `--ux` (UX audit/evaluate/heuristics), `--design` (design-system + slop), `--browser` (functional QA, optional Lightpanda) |
+| `/learn` | Codebase scan → memory. `--ontology` builds the entity/dependency graph |
 | `/reflect` | Review cycle → extract learnings → seed next cycle |
-| `/continue` | Resume any active cycle with full context |
-| `/status` | Compute project state from artifacts |
+| `/continue` | Resume an active cycle; with none, prints project status |
+| `/autoresearch` | Autonomous iteration toward a measurable metric (optional runtime — `sage-autoresearch` pack) |
+| `/research`, `/design` | PM/UX workflows — install the `sage-product` pack |
+
+The core command set is 9 (down from 16 in v1.2.0). `/analyze`, `/design-review`,
+`/qa`, `/map`, and `/status` folded into modes of `/review`, `/learn`, and
+`/continue`; the old names still route for one deprecation cycle. `/research` and
+`/design` ship with the [sage-product](packs/sage-product/) pack.
 
 ### Workflow Flags (`/build` and `/architect`)
 

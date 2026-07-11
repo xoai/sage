@@ -61,13 +61,33 @@ Pick 1-{N+1}, type / for commands, or describe what you need.
 
 On selection: load that cycle's manifest, route to its workflow.
 
-### No cycles found (Zone 4: Open)
+### No cycles found (Zone 4: Open) — this is also `/status`
+
+With no active cycle, `/continue` prints the **project status** (folding in the
+former `/status` workflow): compute state from artifacts — never from a
+progress file — and report only what exists.
+
+Scan and display:
+1. `.sage/work/` — read each artifact's frontmatter for status and phase
+2. `.sage/docs/` — count project-level artifacts
+3. `.sage/decisions.md` — the last 2–3 entries for recent context
+4. `.sage/gates/gate-modes.yaml` — current gate activation config
 
 ```
-Sage: No active cycles found.
+Sage: Project status for [name]
 
-Describe what you want to work on, or type / to see commands.
+Active:   [initiative] [status, phase] — brief ✓ spec ✓ plan (in-progress)
+Completed:[initiative] [completed]
+Docs:     [N] files in .sage/docs/
+Recent:   [last 2–3 decision titles]
+Gates:    [mode config summary]
+
+No active cycle to resume. Describe what you want to work on, or type / for
+commands.
 ```
+
+If `.sage/work/` is empty, say so — do not fabricate state. Always suggest the
+next slash command.
 
 ## Step 2: Load Context and Resume
 

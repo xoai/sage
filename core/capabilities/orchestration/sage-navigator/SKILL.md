@@ -108,9 +108,16 @@ Route using this chain. Each layer handles what the previous missed.
 build/implement/create/add/develop/ship/code/feature → /build
 fix/bug/broken/error/crash/failing/debug/issue → /fix
 architect/redesign/system design/migrate/rewrite → /architect
-understand/research/interview/discover/user needs/jobs to be done → /research
-design/wireframe/brief/UX/PRD/prototype/mockup → /design
-audit/evaluate/assess/analyze/measure/funnel/usability → /analyze
+understand/research/interview/discover/user needs/jobs to be done → /research (sage-product pack)
+design/wireframe/brief/UX/PRD/prototype/mockup → /design (sage-product pack)
+audit/evaluate/assess/analyze/measure/funnel/usability → /review --ux
+qa/test the app/smoke test/browser test → /review --browser
+design review/design audit/visual audit/slop check → /review --design
+map/ontology/graph/dependencies/what connects → /learn --ontology
+status/where am I/where was I → /continue
+
+(v1.2.0 folds: the former /analyze, /qa, /design-review, /map, /status are now
+modes of /review, /learn, and /continue; the old names still route for one cycle.)
 
 If ONE match → go to Confirmation.
 If MULTIPLE match → present matched workflows in Confirmation.
