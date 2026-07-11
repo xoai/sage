@@ -56,9 +56,13 @@ surfaces:
     kind: workflow
     covered-by: [E1, E4, E7]
     notes: >
-      E1 grades the build loop's TDD order, E4 its scope discipline, E7 its
-      spec gate. The plan→implement→verify sequence as a whole is not graded;
-      E9 (Phase 3) will grade it under subagent execution.
+      E1/E4/E7 grade the INLINE path only — TDD order, scope discipline, spec
+      gate. Step 6 now forks: inline (default, C13) or subagent execution. The
+      SUBAGENT path is not covered by any existing scenario, and the three above
+      would all still pass if it were completely broken, because none of them
+      sets the flag. E9/E10 (P3-T7) exist to close that, and until they run this
+      row over-states coverage of the file as a whole — which is what this note
+      is for.
 
   workflow-fix:
     path: core/workflows/fix.workflow.md
@@ -68,7 +72,9 @@ surfaces:
       inside a fix-shaped task, but nothing grades fix's distinctive rule —
       root cause confirmed BEFORE the fix, and the surgical/moderate/systemic
       scoping that follows it. This is the largest single coverage hole in the
-      workflow set.
+      workflow set, and Step 4 now adds a second uncovered path: subagent
+      execution for Moderate+ fixes (surgical fixes stay inline by design — there
+      is no accumulated context to isolate across two files).
 
   workflow-architect:
     path: core/workflows/architect.workflow.md
