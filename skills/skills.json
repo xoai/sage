@@ -28,26 +28,6 @@
       "source": "built-in",
       "version": "1.0.0"
     },
-    "pack-discover": {
-      "source": "built-in",
-      "version": "1.0.0"
-    },
-    "pack-draft": {
-      "source": "built-in",
-      "version": "1.0.0"
-    },
-    "pack-observe": {
-      "source": "built-in",
-      "version": "1.0.0"
-    },
-    "pack-source-process": {
-      "source": "built-in",
-      "version": "1.0.0"
-    },
-    "pack-validate": {
-      "source": "built-in",
-      "version": "1.0.0"
-    },
     "react": {
       "source": "built-in",
       "version": "1.0.0"
