@@ -27,5 +27,13 @@ jobs:
         with:
           python-version: '3.8'
 
+      # The graders run pytest-backed gate scripts; without pytest the Gate 5
+      # grader tests would exercise the unverifiable path instead of the real one.
+      - name: Install fixture toolchain
+        run: python3 -m pip install --quiet pytest
+
+      - name: Grader unit tests
+        run: python3 develop/evals/test_graders.py
+
       - name: Validate scenarios and graders
         run: python3 develop/evals/run_evals.py --offline-check
