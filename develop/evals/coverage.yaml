@@ -221,10 +221,12 @@ surfaces:
     anchor: "### Rule 0: Route Every Request"
     covered-by: [E6, E11]
     notes: >
-      E6 grades one routing decision (multi-surface ask → architect, not
-      build). The three-layer chain's fallback layers, the tier classifier, and
-      the Zone-1 confirmation format are not separately graded. E11 (P2-T2)
-      extends this to trigger-level regression once routing moves to a skill.
+      After batch 2, eager keeps ONLY the keyword map and the announce rule; the
+      fallback chain, confirmation format, and worked examples are in
+      sage-routing. The keyword map cannot follow them, and this is the one hard
+      constraint in the whole diet: a skill that teaches routing cannot fire on a
+      turn where routing has already failed. E6 is the guard on that line — if it
+      regresses, this batch reverts.
 
   eager-rule-1a-memory:
     path: runtime/platforms/_shared/instructions-body.sh
@@ -292,9 +294,9 @@ surfaces:
     anchor: "### Rule 4: Checkpoints Are Sacred"
     covered-by: [E4]
     notes: >
-      E4 grades the no-unilateral-scope-change half of the rule. The approval-
-      gate half (present work, wait for response) is not graded — the eval
-      driver is headless and cannot answer a prompt.
+      Reduced to 5 lines in batch 2; the reasoning moved to sage-checkpoints. E4
+      still grades the half that a headless harness CAN see — no unilateral scope
+      change. The approval-gate half remains ungradeable here.
 
   eager-rule-5-verify:
     path: runtime/platforms/_shared/instructions-body.sh
@@ -334,13 +336,16 @@ surfaces:
       only incidentally (as evidence of routing). Style itself is not a
       behavioral claim and is a candidate for DELETE in the diet map.
 
-  eager-interaction-zones:
+  eager-checkpoints:
     path: runtime/platforms/_shared/instructions-body.sh
     kind: eager-block
-    anchor: "## Interaction Zones"
+    anchor: "## Checkpoints"
     uncovered: >
-      No grader inspects zone footers. 29 lines paid every turn to format
-      prompts the headless driver never sees.
+      Batch 2 cut this from 29 lines to 8 — the [A]/[R]/[N] contract stays, the
+      four-zone protocol moved to sage-checkpoints. Still uncovered, and
+      structurally so: the eval driver is headless and cannot answer an approval
+      prompt, so the half of this that matters most to a human user is the half
+      the harness cannot see. That is a limit of the instrument, not an oversight.
 
 
 
