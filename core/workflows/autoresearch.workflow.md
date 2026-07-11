@@ -70,10 +70,24 @@ use them. If stuck (5+ consecutive discard/crash), read
 - MODIFY: Make the change within writable scope
 
 **Runtime phases (COMMIT, VERIFY, DECIDE, LOG, REPEAT):**
-Run the Python runtime:
+
+The autoresearch runtime is an optional package (extracted from core in Phase 3,
+like sage-memory). Probe for it first, and degrade LOUDLY if absent (never
+silently fall through):
+
 ```bash
-python -m core.autoresearch run --brief .sage/work/<slug>/brief.md --project .
+if python3 -c 'import autoresearch' 2>/dev/null; then
+  python3 -m autoresearch run --brief .sage/work/<slug>/brief.md --project .
+else
+  echo "Sage: autoresearch runtime not installed — the optimization loop will"
+  echo "run in degraded (manual) mode. Install it for the deterministic runtime:"
+  echo "    sage add xoai/sage-autoresearch"
+  # …and log one line to the initiative's decisions.md (R29 loud degradation).
+fi
 ```
+
+When the package is absent, handle the phases inline (below) and announce the
+degradation so the user knows the deterministic runtime isn't active.
 
 Or handle phases inline:
 - COMMIT: `git add -A && git commit -m "autoresearch #N: <desc>"`

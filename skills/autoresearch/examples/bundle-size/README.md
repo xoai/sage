@@ -14,7 +14,7 @@
 
 Or directly:
 ```bash
-python -m core.autoresearch run --brief .sage/work/YYYYMMDD-bundle/brief.md
+python3 -m autoresearch run --brief .sage/work/YYYYMMDD-bundle/brief.md  # needs: sage add xoai/sage-autoresearch
 ```
 
 ## What the agent will try

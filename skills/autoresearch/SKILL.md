@@ -103,13 +103,20 @@ for per-phase detail.
 
 ## Runtime Integration
 
-The Python runtime at `core/autoresearch/` handles deterministic phases
-(COMMIT, VERIFY, DECIDE, LOG, REPEAT). The agent handles creative
-phases (REVIEW, IDEATE, MODIFY).
+An optional Python runtime handles the deterministic phases (COMMIT, VERIFY,
+DECIDE, LOG, REPEAT); the agent handles the creative phases (REVIEW, IDEATE,
+MODIFY). The runtime was extracted from core into its own package in Phase 3
+(like sage-memory) — install it with `sage add xoai/sage-autoresearch`.
 
-**Running the runtime:**
+**Running the runtime** — probe first, and degrade LOUDLY if it is absent
+(announce + log to decisions.md; never silently skip):
 ```bash
-python -m core.autoresearch run --brief .sage/work/<slug>/brief.md --project .
+if python3 -c 'import autoresearch' 2>/dev/null; then
+  python3 -m autoresearch run --brief .sage/work/<slug>/brief.md --project .
+else
+  echo "Sage: autoresearch runtime not installed — running in degraded (manual)"
+  echo "mode. For the deterministic runtime: sage add xoai/sage-autoresearch"
+fi
 ```
 
 **Harness contract:** The verify command must print `METRIC name=number`
