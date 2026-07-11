@@ -19,6 +19,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 HOOK="${SAGE_SPEC_GATE:-$REPO_ROOT/runtime/platforms/claude-code/hooks/sage-spec-gate.sh}"
 DEG_LOG="${SAGE_DEG_LOG:-$REPO_ROOT/runtime/platforms/claude-code/hooks/sage-degradation-log.sh}"
 TDD_GATE="${SAGE_TDD_GATE:-$REPO_ROOT/runtime/platforms/claude-code/hooks/sage-tdd-gate.sh}"
+SESSION_INIT="${SAGE_SESSION_INIT:-$REPO_ROOT/runtime/plugin-overlay/hooks/scripts/sage-session-init.sh}"
 
 ONLY=""
 VERBOSE=false
@@ -394,6 +395,54 @@ mkdir -p "$P/.sage" "$P/src"
 printf 'tdd_enforcement: true\n' > "$P/.sage/config.yaml"
 assert H31 "a non-git project fails open" "$P" "$SRCEDIT" \
   --hook "$TDD_GATE" --exit 0
+
+
+# ─── The plugin is step 1 of 2, and must say so ─────────────────────────────
+# Found by smoking the marketplace install. The plugin ships commands, skills and
+# hooks — but the workflows read capabilities from the project's vendored sage/
+# tree, which only `sage init` creates. Installed alone, /build references files
+# that are not on disk. The session hook used to `exit 0` silently in that state, so
+# the agent discovered the gap mid-answer and improvised. It now says so up front.
+
+if [ -z "$ONLY" ] || [ "$ONLY" = "H32" ]; then
+  P="$(mktemp -d "${TMPDIR:-/tmp}/sage-inittest-XXXXXX")/proj"; mkdir -p "$P/src"
+  out="$( cd "$P" && bash "$SESSION_INIT" 2>/dev/null )"
+  if printf '%s' "$out" | grep -Fq "NOT initialized" \
+     && printf '%s' "$out" | grep -Fq "sage init"; then
+    report PASS H32 "an uninitialized project is told to run sage init (not silence)"
+    N_PASS=$((N_PASS + 1))
+  else
+    report FAIL H32 "an uninitialized project is told to run sage init (not silence)" \
+      "session hook said: ${out:-<nothing>}"
+    N_FAIL=$((N_FAIL + 1)); FAILED_IDS="$FAILED_IDS H32"
+  fi
+fi
+
+if [ -z "$ONLY" ] || [ "$ONLY" = "H33" ]; then
+  P="$(mktemp -d "${TMPDIR:-/tmp}/sage-inittest-XXXXXX")/proj"
+  mkdir -p "$P/.sage/work" "$P/sage/core"
+  out="$( cd "$P" && bash "$SESSION_INIT" 2>/dev/null )"
+  if printf '%s' "$out" | grep -Fq "NOT initialized"; then
+    report FAIL H33 "a properly initialized project is not nagged" "false alarm: $out"
+    N_FAIL=$((N_FAIL + 1)); FAILED_IDS="$FAILED_IDS H33"
+  else
+    report PASS H33 "a properly initialized project is not nagged"
+    N_PASS=$((N_PASS + 1))
+  fi
+fi
+
+if [ -z "$ONLY" ] || [ "$ONLY" = "H34" ]; then
+  # Half-installed: .sage/ present, the framework removed.
+  P="$(mktemp -d "${TMPDIR:-/tmp}/sage-inittest-XXXXXX")/proj"; mkdir -p "$P/.sage/work"
+  out="$( cd "$P" && bash "$SESSION_INIT" 2>/dev/null )"
+  if printf '%s' "$out" | grep -Fq "sage update"; then
+    report PASS H34 "a half-installed project is told to run sage update"
+    N_PASS=$((N_PASS + 1))
+  else
+    report FAIL H34 "a half-installed project is told to run sage update" "said: ${out:-<nothing>}"
+    N_FAIL=$((N_FAIL + 1)); FAILED_IDS="$FAILED_IDS H34"
+  fi
+fi
 
 # H9 — hard_enforcement not set at all (key absent) → allow (never surprise-block)
 P=$(new_project); printf 'sage-version: "1.1.11"\n' > "$P/.sage/config.yaml"; add_manifest "$P" demo pre-spec

@@ -12,9 +12,27 @@ Sage is a skills framework that makes AI agents think before they act,
 stay focused under complexity, and deliver outcomes you can trust.
 Built for product and engineering teams, open to any domain.
 
+> ## ⚠️ Installing this plugin is step 1 of 2
+>
+> **The plugin is the front end. It is not the framework.** It ships the slash
+> commands, the skills and the enforcement hooks — but the workflows read Sage's
+> capabilities (`build-loop`, `tdd`, `specify`, the personas, the navigator) from a
+> `sage/` tree **inside your project**, and only `sage init` puts one there.
+>
+> Install the plugin and stop, and `/build` will reference files that are not on
+> disk. So, in your project:
+>
+> ```bash
+> sage init          # ← required. The CLI ships with this plugin (scripts/sage),
+>                    #   or install it globally: curl -fsSL <install.sh> | bash
+> ```
+>
+> Then `/sage` and describe what you want to build. The session hook will tell the
+> agent if you skip this, so it can tell you — but it is quicker to just do it.
+
 - **Think first, build second** — a framing round challenges assumptions before solutioning begins, preventing the most expensive mistake: solving the wrong problem
 - **Focus over noise** — loads only what the task needs, producing sharper reasoning
-- **Reliable by design** — quality gates catch drift at every stage, automatically
+- **Mechanical where it counts** — hooks that block a source edit until a test exists, and an edit before a spec exists. Measured: test-first holds 3/3 against a bare agent's 0/3
 - **Gets smarter over time** — persistent memory turns every session into accumulated wisdom
 - **Grows with its ecosystem** — built-in skills for product, design, and engineering, extensible with a growing community catalog, easy to contribute
 

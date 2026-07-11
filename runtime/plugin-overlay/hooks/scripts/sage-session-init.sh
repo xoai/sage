@@ -8,7 +8,41 @@
 
 SAGE_DIR=".sage"
 
-# Exit silently if no Sage project
+# ── Not initialized? Say so — do not exit silently. ──
+#
+# The plugin ships the commands, the skills and the hooks. It does NOT ship the
+# framework's capabilities: /build reads sage/core/capabilities/orchestration/
+# build-loop/SKILL.md, /architect reads deep-elicit, /sage reads the navigator —
+# and that tree is created by `sage init`, not by installing the plugin.
+#
+# Installing the plugin alone therefore produces a workflow that references files
+# which are not there. Found by smoking the marketplace install: the agent read
+# /sage, went looking for the navigator, could not find it, and said so mid-answer.
+# It coped — but a user who has just installed a plugin should be told what to do,
+# not watch the agent discover the gap.
+#
+# This output is context for the model, not a banner for the user: it only surfaces
+# if they actually reach for a Sage workflow.
+if [ ! -d "$SAGE_DIR" ] && [ ! -d "sage" ]; then
+  echo "Sage: the plugin is installed, but this project is NOT initialized."
+  echo "The plugin provides the commands and the hooks. The workflows read the"
+  echo "framework's capabilities from the project's vendored sage/ tree, which does"
+  echo "not exist here — so /sage, /build, /fix and /architect will reference files"
+  echo "that are missing."
+  echo ""
+  echo "If the user reaches for a Sage workflow, tell them to run \`sage init\` first."
+  echo "The plugin bundles the CLI at scripts/sage; install.sh puts it on PATH."
+  exit 0
+fi
+
+# Initialized state directory exists but the framework does not — a half-installed
+# project (someone removed sage/, or an init that did not finish).
+if [ -d "$SAGE_DIR" ] && [ ! -d "sage" ]; then
+  echo "Sage: .sage/ exists but the vendored sage/ framework is missing."
+  echo "Workflows will reference capabilities that are not on disk. Run \`sage update\`."
+  echo ""
+fi
+
 [ -d "$SAGE_DIR" ] || exit 0
 
 # ── Scan active work via frontmatter ──
