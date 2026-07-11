@@ -165,13 +165,29 @@ add_manifest "$P" beta pre-spec
 assert H7 "any pre-spec cycle blocks source edits" "$P" "$SRC" \
   --exit 2 --stderr "pre-spec" --stderr "beta"
 
-# H8 — completion guard: manifest edit to complete while not gates-passed → block.
-# The completion guard is implemented in P2-T5; xfail until then.
+# H8 — completion guard: manifest Write to complete while building → block (R25)
 P=$(new_project); set_config "$P" "hard_enforcement: true"; add_manifest "$P" demo building
 assert H8 "closing a cycle before gates pass is blocked" "$P" \
   '{"tool_name":"Write","tool_input":{"file_path":".sage/work/demo/manifest.md","content":"---\ngate_state: complete\nstatus: complete\n---\n"}}' \
-  --exit 2 --stderr "Rule 5" \
-  --xfail "completion guard lands in P2-T5"
+  --exit 2 --stderr "Rule 5" --stderr "gates-passed"
+
+# H8b — completion guard via Edit new_string → block
+P=$(new_project); set_config "$P" "hard_enforcement: true"; add_manifest "$P" demo building
+assert H8b "Edit that sets complete before gates pass is blocked" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/demo/manifest.md","old_string":"gate_state: building","new_string":"gate_state: complete"}}' \
+  --exit 2 --stderr "Rule 5"
+
+# H8c — completing after gates-passed is allowed
+P=$(new_project); set_config "$P" "hard_enforcement: true"; add_manifest "$P" demo gates-passed
+assert H8c "closing a cycle after gates pass is allowed" "$P" \
+  '{"tool_name":"Write","tool_input":{"file_path":".sage/work/demo/manifest.md","content":"---\ngate_state: complete\nstatus: complete\n---\n"}}' \
+  --exit 0
+
+# H8d — an ordinary manifest advance (building, no complete) is not touched
+P=$(new_project); set_config "$P" "hard_enforcement: true"; add_manifest "$P" demo spec-approved
+assert H8d "advancing gate_state (not to complete) is allowed" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/demo/manifest.md","old_string":"gate_state: spec-approved","new_string":"gate_state: plan-approved"}}' \
+  --exit 0
 
 # H9 — hard_enforcement not set at all (key absent) → allow (never surprise-block)
 P=$(new_project); printf 'sage-version: "1.1.11"\n' > "$P/.sage/config.yaml"; add_manifest "$P" demo pre-spec

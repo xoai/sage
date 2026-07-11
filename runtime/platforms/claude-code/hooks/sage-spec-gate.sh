@@ -107,41 +107,7 @@ if os.path.isfile(config_path):
 if enforce is not True:
     emit("ALLOW")
 
-# ── 4. Classify the target path ──
-if not file_path:
-    emit("ALLOW")  # no file to gate (some tool calls carry none)
-
-abspath = file_path if os.path.isabs(file_path) else os.path.join(project_root, file_path)
-abspath = os.path.normpath(abspath)
-
-# Writing Sage's own state or the vendored framework is never gated.
-try:
-    rel = os.path.relpath(abspath, project_root)
-except ValueError:
-    rel = file_path
-first = rel.split(os.sep)[0]
-if first in (".sage", "sage"):
-    emit("ALLOW")
-
-# Block only recognized SOURCE files. Docs, config, and unknown extensions are
-# allowed — writing specs/plans/notes must never be blocked, and an unknown
-# extension errs toward not blocking (hooks fail open).
-SOURCE_EXT = {
-    ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".py", ".go", ".rs",
-    ".java", ".rb", ".php", ".c", ".cc", ".cpp", ".cxx", ".h", ".hpp",
-    ".cs", ".swift", ".kt", ".kts", ".dart", ".vue", ".svelte", ".scala",
-    ".ex", ".exs", ".sh", ".bash", ".zsh", ".sql", ".css", ".scss", ".sass",
-    ".less", ".html", ".htm", ".m", ".mm", ".r", ".jl", ".lua", ".pl",
-}
-ext = os.path.splitext(abspath)[1].lower()
-if ext not in SOURCE_EXT:
-    emit("ALLOW")
-
-# ── 5. Inspect active cycle manifests ──
-manifests = sorted(glob.glob(os.path.join(sage_dir, "work", "*", "manifest.md")))
-if not manifests:
-    emit("ALLOW")  # no active cycle / Tier-1 work
-
+# ── Manifest state reader (used by the completion guard and the spec gate) ──
 KNOWN_STATES = {
     "pre-spec", "spec-approved", "plan-approved",
     "building", "gates-passed", "complete",
@@ -173,6 +139,87 @@ def manifest_gate_state(path):
         return ("corrupt", None)
     return ("ok", val)
 
+
+# ── 4. Classify the target path ──
+if not file_path:
+    emit("ALLOW")  # no file to gate (some tool calls carry none)
+
+abspath = file_path if os.path.isabs(file_path) else os.path.join(project_root, file_path)
+abspath = os.path.normpath(abspath)
+
+# ── Completion guard (R25) ──
+# Narrowly scoped to edits of a cycle manifest: block marking a cycle complete
+# while its gate_state has not reached gates-passed. This is Rule 5 (verify
+# before claiming done) made mechanical. It runs before the ".sage/ → allow"
+# rule below, which would otherwise wave every manifest edit through.
+work_root = os.path.normpath(os.path.join(sage_dir, "work"))
+is_manifest = os.path.basename(abspath) == "manifest.md"
+under_work = False
+if is_manifest:
+    try:
+        under_work = os.path.commonpath([abspath, work_root]) == work_root
+    except ValueError:
+        under_work = False
+
+if is_manifest and under_work:
+    # The content this edit would write. Write carries `content`; Edit carries
+    # `new_string`; MultiEdit carries an `edits` array of new_strings.
+    new_text = ""
+    if isinstance(tool_input.get("content"), str):
+        new_text += tool_input["content"]
+    if isinstance(tool_input.get("new_string"), str):
+        new_text += "\n" + tool_input["new_string"]
+    for e in (tool_input.get("edits") or []):
+        if isinstance(e, dict) and isinstance(e.get("new_string"), str):
+            new_text += "\n" + e["new_string"]
+
+    wants_complete = bool(
+        re.search(r"(?:gate_state|status)\s*:\s*\"?complete\b", new_text, re.I)
+    )
+    if wants_complete:
+        cur_kind, cur_state = manifest_gate_state(abspath)
+        # Block only a real backwards jump: an existing cycle that has not yet
+        # reached gates-passed. A fresh/unreadable manifest, or one already at
+        # gates-passed/complete, is not blocked (fail toward not blocking).
+        if cur_kind == "ok" and cur_state not in ("gates-passed", "complete"):
+            slug = os.path.basename(os.path.dirname(abspath))
+            emit(
+                "BLOCK",
+                (
+                    'Sage spec-gate: cannot mark cycle "%s" complete — gate_state is\n'
+                    '"%s", not gates-passed. Rule 5: run the quality gates and verify\n'
+                    "before claiming done. Run the gates, set gate_state: gates-passed,\n"
+                    "then complete."
+                ) % (slug, cur_state),
+            )
+
+# Writing Sage's own state or the vendored framework is never gated.
+try:
+    rel = os.path.relpath(abspath, project_root)
+except ValueError:
+    rel = file_path
+first = rel.split(os.sep)[0]
+if first in (".sage", "sage"):
+    emit("ALLOW")
+
+# Block only recognized SOURCE files. Docs, config, and unknown extensions are
+# allowed — writing specs/plans/notes must never be blocked, and an unknown
+# extension errs toward not blocking (hooks fail open).
+SOURCE_EXT = {
+    ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".py", ".go", ".rs",
+    ".java", ".rb", ".php", ".c", ".cc", ".cpp", ".cxx", ".h", ".hpp",
+    ".cs", ".swift", ".kt", ".kts", ".dart", ".vue", ".svelte", ".scala",
+    ".ex", ".exs", ".sh", ".bash", ".zsh", ".sql", ".css", ".scss", ".sass",
+    ".less", ".html", ".htm", ".m", ".mm", ".r", ".jl", ".lua", ".pl",
+}
+ext = os.path.splitext(abspath)[1].lower()
+if ext not in SOURCE_EXT:
+    emit("ALLOW")
+
+# ── 5. Inspect active cycle manifests ──
+manifests = sorted(glob.glob(os.path.join(sage_dir, "work", "*", "manifest.md")))
+if not manifests:
+    emit("ALLOW")  # no active cycle / Tier-1 work
 
 pre_spec = []
 warned = False
