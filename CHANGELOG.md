@@ -2,13 +2,28 @@
 
 All notable changes to Sage will be documented in this file.
 
-## [1.2.0] — Correctness, enforcement, and simplification
+## [1.2.0] — Correctness, enforcement, simplification, and evidence
 
-A three-part upgrade: make the deterministic layer honest and tested (Phase 1),
-make the flagship enforcement claims mechanically true on Claude Code (Phase 2),
-and cut the framework down to what's load-bearing (Phase 3). Existing projects
-upgrade with `sage update`; the migration table at the end of this entry maps
-every moved or removed item to its new home.
+A four-part upgrade: make the deterministic layer honest and tested (Phase 1),
+make the flagship enforcement claims mechanical rather than merely stated on Claude
+Code (Phase 2), cut the framework down to what's load-bearing (Phase 3), and then —
+for the first time — **measure whether any of it works** (Phase 4).
+
+The measurement is the headline, and it is not the one this project expected:
+
+> On the five eval scenarios that ran in **both** conditions, Sage showed **no
+> measurable behavioural delta over a bare agent — at 1.9× the input tokens.** Two
+> claims were falsified outright: Sage does *not* enforce TDD, and "loud
+> degradation" is not reliably loud. The README and the base constitution have been
+> corrected to say so. See [docs/eval-baseline.md](docs/eval-baseline.md).
+
+Phase 4 also turned up **six real bugs** — including release automation that was
+invalid YAML and had never once run, and a `sage init` that writes a config no YAML
+parser accepts. Every one was found by *using* the framework the way a user does,
+which nothing had done before.
+
+Existing projects upgrade with `sage update`; the migration table at the end of
+this entry maps every moved or removed item to its new home.
 
 ### Correctness
 
