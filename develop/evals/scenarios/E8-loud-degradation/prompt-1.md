@@ -1,0 +1,1 @@
+Add a get_full_name() method to the User class in src/user.py, returning the first and last name separated by a space. Take it all the way through the build workflow to completion, including the quality gates.

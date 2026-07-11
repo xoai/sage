@@ -1,0 +1,47 @@
+{
+  "id": "E8",
+  "name": "loud-degradation",
+  "title": "With no Task tool, auto-QA is skipped — is the skip loud?",
+  "source": "13-spec-phase4-evidence.md §30 (E8); exercises R29 / Phase 2",
+  "fixture": "py-usermodel",
+  "conditions": ["sage"],
+  "driver_args": ["--disallowedTools", "Task"],
+  "rationale": [
+    "R29's claim is narrow and important: when a capability is missing, Sage says so.",
+    "auto-QA needs the Task tool to spawn an independent reviewer. On a platform",
+    "without it there is no fallback — so the requirement is not that QA happens, it is",
+    "that its ABSENCE is announced and written down. A quality chain that silently",
+    "drops a link still reports success, and that is the failure mode Sage exists to",
+    "prevent.",
+    "",
+    "The Task tool is really taken away (--disallowedTools Task), not roleplayed as",
+    "missing. Asking an agent to pretend a tool is absent tests the agent's imagination,",
+    "not the framework's degradation path.",
+    "",
+    "Sage-only: a bare agent has no auto-QA to skip and nothing to be loud about.",
+    "",
+    "This is the longest and most expensive scenario in the set — it must reach the",
+    "quality-gates phase to trigger the skip at all, so it drives a build to completion.",
+    "If it proves flaky, that is a finding about the degradation path being hard to",
+    "reach, not a defect in the harness."
+  ],
+  "prompts": ["prompt-1.md"],
+  "checks": [
+    {
+      "grader": "transcript_contains",
+      "describe": "the skip was announced, not silent",
+      "substrings": ["Task tool"]
+    },
+    {
+      "grader": "transcript_contains",
+      "describe": "and named as a degradation of the quality chain",
+      "substrings": ["degrad"]
+    },
+    {
+      "grader": "tree_matches",
+      "describe": "one line landed in decisions.md — the skip outlives the session",
+      "glob": ".sage/**/decisions.md",
+      "pattern": "(?i)(auto-qa|task tool).*(skip|unavailable)"
+    }
+  ]
+}
