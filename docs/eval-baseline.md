@@ -65,6 +65,22 @@ The eager layer is 398 lines on every turn
 ([docs/context-budget.md](context-budget.md)); that is the price, and the mechanism
 is the product.
 
+> **⚠️ Superseded in part by v1.3.0.** This page records what was measured at
+> **v1.2.1**, and the numbers above are that measurement. Since then the eager
+> layer has been cut from **398 lines to 177** (ADR-9): the prose that this very
+> page found to be doing nothing was moved into on-demand skills or deleted.
+>
+> **The 1.9× has NOT been re-measured.** It is a token measurement, and a line
+> count is not a token measurement — inferring one from the other is precisely
+> the arithmetic that let this project advertise a "~200 line" eager layer while
+> the real file was 398. The re-baseline requires a model-in-loop run against
+> v1.3.0 and is tracked as Phase 5 (P5-T2), which will publish
+> `eval-baseline.md` v2 with both conditions re-run.
+>
+> Until then the honest statement is: the price above was real at v1.2.1, the
+> layer that set it is now 56% smaller, and what that did to the ratio is
+> **not yet known**.
+
 ## What this does and does not say
 
 **It does not say Sage is worthless — it says what part of Sage is load-bearing.**

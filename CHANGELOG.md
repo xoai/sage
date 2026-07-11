@@ -2,6 +2,85 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [Unreleased] — The eager layer stops being the price of admission
+
+### Phase 2 — Native skills and the context diet (ADR-9)
+
+The eager layer is the file the model reads on **every turn of every session**.
+At v1.2.1 it was 398 lines, and the eval had just finished demonstrating that
+most of what it contained changed no behavior — the deltas came from hooks. We
+were paying rent, every turn, on prose that was not doing the work.
+
+It is now **177 lines**.
+
+| Layer | v1.2.1 | v1.3.0 | |
+|---|---:|---:|---|
+| Eager `CLAUDE.md` (every turn) | 398 lines · ~4,433 tok | **177 lines · ~2,144 tok** | **−56%** |
+| On-demand system skills | — | 568 lines · ~5,914 tok | new — paid per skill, per use |
+| Generic platform (inlines everything) | n/a (no generator existed) | 735 lines | new |
+| `/build` | 535 | 535 | unchanged |
+| `/fix` | 465 | 465 | unchanged |
+| `/architect` | 409 | 409 | unchanged |
+
+**What moved, and why it was safe to move.** Nearly all of it described checks
+that a script already performs. `sage-spec-gate` blocks an edit while a cycle is
+`pre-spec` whether or not the model read the paragraph promising it would.
+`sage-tdd-gate` blocks code before tests the same way. Rule 5's fourteen-line
+self-check list was, line for line, what the gate scripts do — the model was
+being asked to hand-simulate, on every turn, a check that runs anyway.
+
+So what remains in the eager layer names its mechanism instead of restating it:
+
+    Tests before code.  [sage-tdd-gate blocks the edit]
+    spec.md AND plan.md before you implement.  [sage-spec-gate blocks the edit]
+
+Everything else — routing depth, the memory guide, checkpoints, the gates
+explainer, tiers, the constitution's full text, the decision-log protocol — is
+now **seven system skills**, fetched when a description matches what the user
+actually said. A session that never asks about tiers never pays for tiers.
+
+**On the number we are NOT quoting.** v1.2.1 measured Sage at 1.9× a bare
+agent's input tokens. We have not re-measured it, and we are not going to
+estimate it from a line count — that is the exact arithmetic that let this
+project advertise a "~200 line" eager layer while the real file was 398. The
+re-baseline is a model-in-loop run (Phase 5, P5-T2) and it will be published
+whatever it shows. Until then: the layer is 56% smaller, and what that does to
+the ratio is not yet known.
+
+### Also in this phase
+
+- **`--platform generic` was silently broken.** Three separate whitelists in
+  `bin/sage` omitted `generic`, so it fell through to the default and installed a
+  **claude-code** project — hooks and all — on a platform that cannot run them.
+  Anyone who ever typed it got the wrong install and no warning. Fixed, and
+  generic now has a real generator (there wasn't one; its `CLAUDE.md` was
+  hand-written, orphaned, and still documented "Modes" and `.sage/skills/` paths
+  that no longer exist).
+
+- **Eval coverage is now a CI contract** (ADR-14). `develop/evals/coverage.yaml`
+  maps all 83 behavioral surfaces — every workflow, capability, skill, hook,
+  gate, and eager-layer block — to the scenarios that exercise them, or to a
+  written reason nothing does. 37 are covered. 46 are not, and now say so out
+  loud. A PR that changes a mapped surface without touching a covering scenario
+  fails CI, unless it declares itself behavior-neutral with `#eval-neutral` —
+  which is logged, not waived.
+
+- **The budget counts both halves now.** `budgets.yaml` gained `skills:` and
+  `generic:` sections. Moving content from a file paid every turn into a file
+  paid on demand is a real win — but only if someone counts both. Otherwise "we
+  cut the eager layer by 56%" stays true while the total quietly goes up, and it
+  reads exactly the same in a release note.
+
+- **New scenario E11** (skill-trigger regression) is the safety net for the whole
+  diet: if a description stops triggering, the answer stops arriving, and every
+  other scenario would still pass. Its checks grade the *answer*, not the skill
+  invocation, because a check that must be rewritten at the boundary it polices
+  is not a control.
+
+- **Project-level `.claude/skills/` discovery was verified, not assumed** —
+  probed with a canary token against Claude Code 2.1.207
+  (`docs/attestations/`). It expires, and Phase 4 re-checks it mechanically.
+
 ## [1.2.2] — Installing the plugin is step 1 of 2
 
 Found by smoking the marketplace install — the one path the release checklist calls
