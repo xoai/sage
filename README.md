@@ -20,7 +20,7 @@ Built for product and engineering teams, open to any domain.
 
 ## What we measured
 
-Sage's central claim has always been that agents behave better under it. As of
+Sage's central claim has always been that agents behave better under it. Since
 v1.2.0 that claim is measured instead of asserted, and **the honest answer is
 narrower than this README used to imply.**
 
@@ -36,8 +36,8 @@ scenarios that ran in both conditions there is **no measurable difference**, at
 **1.9× the input tokens**.
 
 **Where Sage does win, it wins because something is mechanical.** The exception is
-test-first, and it is instructive: at v1.2.0 it was prose, and it failed 0/3. It is
-a hook now, and it passes 3/3 while a bare agent still fails 0/3. That is the whole
+test-first, and it is instructive: at v1.2.0 it was prose, and it failed 0/3. Since
+v1.2.1 it is a hook, and it passes 3/3 while a bare agent still fails 0/3. That is the whole
 thesis in one row — not "the framework says to write tests", but "the edit does not
 go through until you have".
 

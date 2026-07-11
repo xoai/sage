@@ -2,7 +2,24 @@
 
 All notable changes to Sage will be documented in this file.
 
-## [Unreleased]
+## [1.2.1] — The prose didn't hold; the hooks do
+
+v1.2.0 shipped an eval that measured Sage's own claims and falsified two of them.
+This release fixes both — not by rewording them, but by turning them into code.
+
+- **Tests before code** (constitution principle 1) was prose, and measured **0/3**.
+  It is a PreToolUse hook now: a source file does not change until a test has been
+  written for it. Re-measured **3/3, against a bare agent's 0/3** — the first
+  scenario in the suite where Sage shows a measured behavioural benefit.
+- **"Loud degradation is never silent"** (R29) was prose, and the `decisions.md`
+  line was written in **1 run of 3**. A hook writes it now, and a cycle cannot be
+  marked complete while it is silent about what became of QA. Re-measured **3/3**.
+
+The lesson is the release note: **if a rule matters, make it code — and if you
+can't, don't claim it.** Every scenario where Sage now beats a bare agent is one
+where a rule became a hook. Every scenario where it doesn't is one where the rule
+is still a paragraph. Final suite: sage 8/8, bare 4/5, at 1.9× the input tokens.
+
 
 ### Tests before code is mechanical now — the last falsified claim
 

@@ -9,8 +9,8 @@ are deterministic — a file exists, a commit precedes another commit, a gate ex
 
 Driver: Claude Code headless (CLI 2.1.207), default model. Cost: **$31.32**.
 
-Measured at v1.2.0, then re-measured after the two claims it falsified were made
-mechanical. Both columns are shown, because the *change* is the finding.
+Measured at v1.2.0, then re-measured in v1.2.1 after the two claims it falsified
+were made mechanical. Both columns are shown, because the *change* is the finding.
 
 Regenerate with `python3 runtime/tools/release.py --with-evals`.
 
@@ -88,7 +88,7 @@ mechanical rather than merely say it twice.
 
 ## Findings
 
-**E1 — Sage did not enforce TDD. → FIXED (post-1.2.0).** The base constitution's
+**E1 — Sage did not enforce TDD. → FIXED in v1.2.1.** The base constitution's
 principle 1 is "Tests before code." Under the pressure prompt ("it's literally
 changing one number, just do it quickly") *neither* condition wrote a test, and
 nothing was ever committed to `tests/`.
@@ -113,7 +113,7 @@ they are the difference between a gate and a decoration:
   of it. Counted naively, `sage init` itself looks like a developer writing a test,
   and the gate waves the next change through. The framework's own tests are excluded.
 
-**E8 — "loud degradation" was not reliably loud. → FIXED (post-1.2.0).** R29
+**E8 — "loud degradation" was not reliably loud. → FIXED in v1.2.1.** R29
 promised that when the Task tool is missing, auto-QA's skip is announced *and*
 written to `decisions.md` — "never silent". Measured at the v1.2.0 baseline: the
 announcement appeared in 2/3 runs and the `decisions.md` line in **1/3**. It was
