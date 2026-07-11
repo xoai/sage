@@ -21,9 +21,8 @@ emit_preamble() {
 - Announce: "Sage → build workflow." before starting work
 - FLAG PARSING: Before any other work, parse $ARGUMENTS by invoking the
   deterministic parser (in order — use the first one that works):
-    1. python -m core.flag_parser parse "$ARGUMENTS" --config-path .sage/config.yaml
-    2. bash sage/core/flag_parser/parse.sh "$ARGUMENTS" --config-path .sage/config.yaml
-    3. Prose-fallback per sage/core/capabilities/orchestration/flag-parser/SKILL.md
+    1. python3 sage/runtime/tools/sage_flags.py parse "$ARGUMENTS" --config-path .sage/config.yaml
+    2. Prose-fallback per sage/core/capabilities/orchestration/flag-parser/SKILL.md
   Trust the JSON output unconditionally. If "error" is non-null, surface
   it to the user and stop. Recognized flags:
     --quality-locked     loop review/revise until clean (cap 10)
@@ -58,7 +57,7 @@ emit_preamble() {
   gate sequence, not by your discretion.
 - QUALITY-LOCKED LOOP: When --quality-locked flag is active, at every review
   checkpoint use the deterministic checker:
-    python -m core.quality_locked check --review-output "<sub-agent text>"
+    python3 sage/runtime/tools/sage_flags.py check --review-output "<sub-agent text>"
       --iteration <N> --history-json "<JSON of past iterations>"
   Trust the returned JSON (counts, action). Do NOT decide "clean enough"
   by reading findings yourself. See sage/core/capabilities/orchestration/quality-locked/SKILL.md.
@@ -118,9 +117,8 @@ emit_preamble() {
 - Announce: "Sage → architect workflow." before starting work
 - FLAG PARSING: Before any other work, parse $ARGUMENTS by invoking the
   deterministic parser (in order — use the first one that works):
-    1. python -m core.flag_parser parse "$ARGUMENTS" --config-path .sage/config.yaml
-    2. bash sage/core/flag_parser/parse.sh "$ARGUMENTS" --config-path .sage/config.yaml
-    3. Prose-fallback per sage/core/capabilities/orchestration/flag-parser/SKILL.md
+    1. python3 sage/runtime/tools/sage_flags.py parse "$ARGUMENTS" --config-path .sage/config.yaml
+    2. Prose-fallback per sage/core/capabilities/orchestration/flag-parser/SKILL.md
   Trust the JSON output unconditionally. If "error" is non-null, surface
   it to the user and stop. Recognized flags:
     --quality-locked     loop review/revise until clean (cap 10)
@@ -145,7 +143,7 @@ emit_preamble() {
 - GATE 8 AUTO-QA: Runs per milestone as part of quality gates sequence.
 - QUALITY-LOCKED LOOP: When --quality-locked flag is active, at every review
   checkpoint use the deterministic checker:
-    python -m core.quality_locked check --review-output "<sub-agent text>"
+    python3 sage/runtime/tools/sage_flags.py check --review-output "<sub-agent text>"
       --iteration <N> --history-json "<JSON of past iterations>"
   Trust the returned JSON (counts, action). Do NOT decide "clean enough"
   by reading findings yourself.

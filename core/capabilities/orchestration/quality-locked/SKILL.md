@@ -48,7 +48,7 @@ For each iteration (1..10):
 
 2. Call the quality-locked checker:
 
-   python -m core.quality_locked check \
+   python3 sage/runtime/tools/sage_flags.py check \
      --review-output "<sub-agent output text>" \
      --iteration <current iteration number> \
      --history-json '<JSON array of prior iteration records>'
@@ -73,7 +73,7 @@ The agent only runs the sub-agent and applies the revisions.
 
 The check command is the primary path. If Python is unavailable:
 
-1. **Python primary:** `python -m core.quality_locked check ...`
+1. **Python primary:** `python3 sage/runtime/tools/sage_flags.py check ...`
 2. **Prose fallback:** read this SKILL.md's decision rules below and
    reason manually. Announce the fallback to the user so the
    reliability degradation is visible.

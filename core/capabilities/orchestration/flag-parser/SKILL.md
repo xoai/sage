@@ -2,10 +2,9 @@
 name: flag-parser
 description: >
   Parses workflow flags (--quality-locked, --autonomous) from $ARGUMENTS
-  at the start of /build and /architect commands. Uses deterministic
-  runtimes (Python primary, Bash fallback) with prose-rule fallback
-  if neither runtime is available. Returns a strict JSON contract that
-  the agent trusts unconditionally.
+  at the start of /build and /architect commands. Uses a deterministic
+  python3 runtime with a prose-rule fallback if python3 is unavailable.
+  Returns a strict JSON contract that the agent trusts unconditionally.
 version: "1.1.0"
 modes: [build, architect]
 type: process
@@ -52,7 +51,7 @@ is a user error. The parser returns an error JSON and exits non-zero.
 Read from `.sage/config.yaml`. Strict-match contract: only lines
 matching exactly `<key>: true` (with one space after the colon,
 lowercase `true`, no trailing characters) are honored. The strict form
-ensures Python and Bash agree byte-for-byte. Rejected variants
+ensures Python and the prose rules agree byte-for-byte. Rejected variants
 (treated as no default):
 
 - `quality_locked: True` (titlecase)
@@ -68,7 +67,7 @@ Use the `--quality-locked` flag to override.
 
 ## JSON Contract
 
-All three parsing layers emit the same JSON shape to stdout:
+Both parsing layers emit the same JSON shape to stdout:
 
 ```json
 {
@@ -99,7 +98,7 @@ use it and skip the rest.
 ### Layer 1 — Python (primary, preferred)
 
 ```bash
-python -m core.flag_parser parse "$ARGUMENTS" --config-path .sage/config.yaml
+python3 sage/runtime/tools/sage_flags.py parse "$ARGUMENTS" --config-path .sage/config.yaml
 ```
 
 The `--config-path` is optional — when provided, the parser reads
@@ -109,31 +108,22 @@ omitted (or the file is missing/malformed), no defaults apply.
 Outputs JSON to stdout. Exit 0 on clean parse, 1 on unknown flag or
 conflict.
 
-### Layer 2 — Bash fallback (when Python unavailable)
+### Layer 2 — Prose-rule fallback (last resort)
 
-```bash
-bash sage/core/flag_parser/parse.sh "$ARGUMENTS" --config-path .sage/config.yaml
-```
-
-Same JSON shape, same exit codes. Uses only POSIX bash features —
-works on macOS bash 3.2+ and any Linux bash.
-
-### Layer 3 — Prose-rule fallback (last resort)
-
-Use ONLY when both Python and Bash are unavailable (rare — locked-down
-container, embedded environments). The agent reads the parsing rules
+Use ONLY when Python is unavailable (rare — Sage requires python3, so this
+is a locked-down or broken environment). The agent reads the parsing rules
 below and produces JSON manually.
 
 **Announce when falling back:**
 
 ```
-Sage: Deterministic parsers unavailable (Python and Bash both failed).
+Sage: Deterministic parser unavailable (python3 not found).
 Using prose-rule fallback for flag parsing.
 ```
 
 This is the only case where prose parsing is acceptable.
 
-## Parsing Rules (used by all three layers)
+## Parsing Rules (used by both layers)
 
 1. **Flags must appear before the goal description.** Flags at the end
    are not parsed — they're treated as part of the goal.
@@ -216,8 +206,7 @@ modes for the duration of the session.
 
 | Situation | Behavior |
 |---|---|
-| Python missing | Fall through to Bash layer automatically |
-| Bash failed (e.g., parse.sh missing) | Fall through to prose-rule layer |
+| Python missing | Fall through to the prose-rule layer (announce degradation) |
 | Unknown flag | Surface error message, stop workflow |
 | Empty $ARGUMENTS | Both modes off, empty goal — workflow may scan `.sage/work/` for active initiative |
 | `/continue` overrides | New invocation's flags override manifest; note to user |
@@ -225,7 +214,7 @@ modes for the duration of the session.
 ## Quality Criteria
 
 - Parser is deterministic — same input always produces same output
-- All three layers produce IDENTICAL JSON for the same input (verified by parity tests)
+- Both layers produce IDENTICAL JSON for the same input (verified by parity tests)
 - Error messages name the unknown flag and list supported flags
 - Goal preserves user-supplied whitespace and casing
 - Flag state is announced and persisted before any artifact work begins

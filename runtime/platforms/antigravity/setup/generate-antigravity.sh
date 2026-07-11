@@ -512,9 +512,8 @@ for wf in "$CORE"/workflows/*.workflow.md; do
 - Announce: "Sage → build workflow." before starting work
 - FLAG PARSING: Before any other work, parse $ARGUMENTS by invoking the
   deterministic parser (in order — use the first one that works):
-    1. python -m core.flag_parser parse "$ARGUMENTS" --config-path .sage/config.yaml
-    2. bash sage/core/flag_parser/parse.sh "$ARGUMENTS" --config-path .sage/config.yaml
-    3. Prose-fallback per sage/core/capabilities/orchestration/flag-parser/SKILL.md
+    1. python3 sage/runtime/tools/sage_flags.py parse "$ARGUMENTS" --config-path .sage/config.yaml
+    2. Prose-fallback per sage/core/capabilities/orchestration/flag-parser/SKILL.md
   Trust the JSON output unconditionally. If "error" is non-null, surface
   it and stop. Recognized flags: --quality-locked / --no-quality-locked /
   --autonomous / --no-autonomous. When announcing active modes, use the
@@ -530,7 +529,7 @@ for wf in "$CORE"/workflows/*.workflow.md; do
 - GATE 3 INDEPENDENT: Code quality review MUST use sub-agent when Task tool available.
 - GATE 8 AUTO-QA: Runs as part of quality gates sequence (if Task tool available).
 - QUALITY-LOCKED LOOP: When --quality-locked flag is active, at every review
-  checkpoint use: python -m core.quality_locked check --review-output "..."
+  checkpoint use: python3 sage/runtime/tools/sage_flags.py check --review-output "..."
     --iteration N --history-json "[...]"
   Trust the returned JSON. Do NOT decide "clean enough" by reading findings.
 - AUTO-PICK [A] WHEN BOTH FLAGS ACTIVE: If both --autonomous AND --quality-locked
@@ -572,9 +571,8 @@ for wf in "$CORE"/workflows/*.workflow.md; do
 - Announce: "Sage → architect workflow." before starting work
 - FLAG PARSING: Before any other work, parse $ARGUMENTS by invoking the
   deterministic parser (in order — use the first one that works):
-    1. python -m core.flag_parser parse "$ARGUMENTS" --config-path .sage/config.yaml
-    2. bash sage/core/flag_parser/parse.sh "$ARGUMENTS" --config-path .sage/config.yaml
-    3. Prose-fallback per sage/core/capabilities/orchestration/flag-parser/SKILL.md
+    1. python3 sage/runtime/tools/sage_flags.py parse "$ARGUMENTS" --config-path .sage/config.yaml
+    2. Prose-fallback per sage/core/capabilities/orchestration/flag-parser/SKILL.md
   Trust the JSON output unconditionally. If "error" is non-null, surface
   it and stop. Recognized flags: --quality-locked / --no-quality-locked /
   --autonomous / --no-autonomous. When announcing active modes, use the
@@ -591,7 +589,7 @@ for wf in "$CORE"/workflows/*.workflow.md; do
 - GATE 3 INDEPENDENT: Code quality review MUST use sub-agent when Task tool available.
 - GATE 8 AUTO-QA: Runs per milestone as part of quality gates sequence.
 - QUALITY-LOCKED LOOP: When --quality-locked flag is active, at every review
-  checkpoint use: python -m core.quality_locked check --review-output "..."
+  checkpoint use: python3 sage/runtime/tools/sage_flags.py check --review-output "..."
     --iteration N --history-json "[...]"
   Trust the returned JSON. Do NOT decide "clean enough" by reading findings.
 - AUTO-PICK [A] WHEN BOTH FLAGS ACTIVE: If both --autonomous AND --quality-locked
