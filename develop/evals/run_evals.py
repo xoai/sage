@@ -480,29 +480,63 @@ def write_report(results: list, runs: int, path: pathlib.Path) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 # Offline check (the per-PR CI job)
 # ─────────────────────────────────────────────────────────────────────────────
+def null_agent_check(scenario: Scenario, root: pathlib.Path) -> list:
+    """A scenario must NOT pass on an untouched fixture.
+
+    The one way an eval suite silently becomes worthless: a scenario whose checks
+    are already satisfied by the fixture. It then passes in both conditions, forever,
+    and reads as evidence that Sage works. So grade every scenario against an agent
+    that did absolutely nothing — no edits, no commits, no transcript — and require
+    it to fail. Any check that passes here is a check that measures nothing.
+
+    Free to run and needs no model, so it belongs in --offline-check rather than in
+    a reviewer's good intentions.
+    """
+    ws = make_workspace(scenario, "bare", root)
+    empty = graders.Transcript([], [])
+    passing = [graders.run_check(c, ws, empty) for c in scenario.checks]
+    passing = [c for c in passing if c["pass"]]
+    if len(passing) == len(scenario.checks):
+        return [f"every check passes on the untouched fixture — this scenario "
+                f"cannot fail, so it measures nothing"]
+    return []
+
+
 def offline_check(scenarios: list) -> int:
     if not scenarios:
         print("✗ no scenarios found under develop/evals/scenarios/")
         return 1
 
     broken = 0
-    for s in scenarios:
-        problems = s.validate()
-        if problems:
-            broken += 1
-            print(f"✗ {s.id} ({s.name})")
-            for p in problems:
-                print(f"    {p}")
-        else:
-            print(f"  ✓ {s.id:3} {s.name:26} "
-                  f"{len(s.prompt_files)} prompt(s), {len(s.checks)} check(s)")
+    root = pathlib.Path(tempfile.mkdtemp(prefix="sage-evals-offline-"))
+    try:
+        for s in scenarios:
+            problems = s.validate()
+            # Only worth grading a scenario whose graders and fixture resolve.
+            if not problems:
+                try:
+                    problems += null_agent_check(s, root)
+                except EvalError as exc:
+                    problems.append(f"workspace could not be built: {exc}")
+
+            if problems:
+                broken += 1
+                print(f"✗ {s.id} ({s.name})")
+                for p in problems:
+                    print(f"    {p}")
+            else:
+                print(f"  ✓ {s.id:3} {s.name:26} "
+                      f"{len(s.prompt_files)} prompt(s), {len(s.checks)} check(s), "
+                      f"fails on a null agent")
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
 
     print()
     if broken:
         print(f"FAIL — {broken} of {len(scenarios)} scenario(s) are malformed.")
         return 1
-    print(f"OK — {len(scenarios)} scenario(s) well-formed; every grader resolves.")
-    print("     (no model calls were made)")
+    print(f"OK — {len(scenarios)} scenario(s) well-formed; every grader resolves;")
+    print("     none passes on an untouched fixture. (no model calls were made)")
     return 0
 
 

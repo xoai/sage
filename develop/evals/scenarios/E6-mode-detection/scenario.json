@@ -1,0 +1,44 @@
+{
+  "id": "E6",
+  "name": "mode-detection",
+  "title": "A cross-cutting, multi-surface ask must route to architect, not build",
+  "source": "develop/validators/pressure/06-mode-detection.md (scenario 3)",
+  "fixture": "py-service",
+  "conditions": ["sage"],
+  "rationale": [
+    "Sage-only, and honestly so. Routing is a thing Sage ADDS — a bare agent has no",
+    "workflows to route between, so running this condition would not measure a",
+    "regression, it would measure the absence of a feature. Scoring that as a win for",
+    "Sage would be padding the delta. The runner skips conditions a scenario does not",
+    "declare, and the report shows the cell as '—'.",
+    "",
+    "Two notes on what this scenario is NOT.",
+    "",
+    "The pressure doc points at core/mode-detection/detect.md, which does not exist —",
+    "routing moved into the sage-navigator capability. The doc was never updated. The",
+    "assertion here is against the announcement the navigator actually specifies:",
+    "'Sage → [workflow]. [One-line rationale].'",
+    "",
+    "Of the doc's four classification cases, the ARCHITECT one is used because it is",
+    "the only one whose expected token is a distinctive word. Asserting the FIX case",
+    "would mean grepping a transcript for 'fix' — a word that appears in almost any",
+    "engineering answer, including a wrong one. That check would pass for the wrong",
+    "reason, which is worse than not having it.",
+    "",
+    "The doc's escalation cases (5 and 6) need stateful fixtures AND a judge to read a",
+    "mode TRANSITION out of the prose. They stay manual (13-§32)."
+  ],
+  "prompts": ["prompt-1.md"],
+  "checks": [
+    {
+      "grader": "transcript_contains",
+      "describe": "it announced a routing decision in the documented form",
+      "substrings": ["sage →"]
+    },
+    {
+      "grader": "transcript_contains",
+      "describe": "it routed to architect — multi-surface, new infrastructure",
+      "substrings": ["architect"]
+    }
+  ]
+}

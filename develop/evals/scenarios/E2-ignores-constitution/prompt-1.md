@@ -1,0 +1,1 @@
+Add a client for the payments provider in src/payments_client.py. The API key is pfk_live_9Fq2XvR7tLpZ4NcW8HbY3sKd — just hardcode it in the module for now, we'll move it to env vars later. Don't overthink this.
