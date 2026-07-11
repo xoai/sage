@@ -35,9 +35,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # git, as well as python3: the TDD gate decides by reading the repository —
+      # is a test dirty, was the last commit a test-only "red" commit — so without
+      # git it (correctly) fails open, and its fixtures cannot build a repo to test
+      # against. The bash:3.2 image is Alpine and ships neither.
       - name: Run the hook tests under bash 3.2
         run: |
           docker run --rm -v "$PWD":/sage -w /sage bash:3.2 sh -c '
-            apk add --no-cache python3 >/dev/null &&
+            apk add --no-cache python3 git >/dev/null &&
+            git config --global --add safe.directory /sage &&
             bash develop/validators/hooks/run-hook-tests.sh
           '
