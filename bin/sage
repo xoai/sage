@@ -1048,6 +1048,19 @@ DECMD
     migration_notes="${migration_notes}\n  ${GREEN}✓${RESET} Installed the spec-gate hook (hard_enforcement: false — OFF).\n     To enforce spec-before-code, set hard_enforcement: true in .sage/config.yaml"
   fi
 
+  # ── Migration: relocate vendored templates develop/ → core/ (R42) ──
+  # Framework templates moved to core/templates in Phase 3. A normal `sage
+  # update` already replaced sage/ wholesale (so sage/core/templates/ is present
+  # and sage/develop/templates/ is gone). This handles an out-of-band vendored
+  # copy left in the old layout. Idempotent: fires only when the old directory
+  # exists and the new one does not. .sage/ project-override templates are left
+  # in place — sage-scaffold resolves the legacy path as a fallback.
+  if [ -d "$target/sage/develop/templates" ] && [ ! -d "$target/sage/core/templates" ]; then
+    mkdir -p "$target/sage/core"
+    mv "$target/sage/develop/templates" "$target/sage/core/templates"
+    migration_notes="${migration_notes}\n  ${CYAN}↻${RESET} Relocated vendored templates → sage/core/templates/"
+  fi
+
   if [ -n "$migration_notes" ]; then
     echo ""
     echo -e "$migration_notes"

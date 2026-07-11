@@ -562,7 +562,7 @@ The agent maintains the journal as a convention — no tooling enforces it.
 But skills should remind the agent to update it. This ensures the journal
 stays current across sessions.
 
-See `develop/templates/journal-template.md` for the journal structure.
+See `core/templates/journal-template.md` for the journal structure.
 
 ## Submission Checklist
 

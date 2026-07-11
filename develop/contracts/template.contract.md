@@ -15,7 +15,7 @@ comprehensive. The `specify` skill works with either.
 ## Required File Structure
 
 ```
-develop/templates/<document-type>/
+core/templates/<document-type>/
 └── <variant>.template.md       # REQUIRED — Template definition
 ```
 
@@ -133,7 +133,8 @@ Templates MUST NOT:
 To replace a default template:
 
 1. Create a template with `replaces: <default-template-name>` in frontmatter.
-2. Place in `.sage/develop/templates/` (project) or `community/develop/templates/` (community).
+2. Place in `.sage/core/templates/` (project) or `community/core/templates/` (community).
+   The legacy `.sage/develop/templates/` path still resolves as a fallback.
 3. Ensure the replacement has at least the same named sections as the original,
    so skills that reference specific sections still work.
 

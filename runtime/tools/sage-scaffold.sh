@@ -57,27 +57,30 @@ if [ ! -d "$feature_dir" ]; then
   exit 1
 fi
 
-# Find templates — check .sage/develop/templates/ first (project overrides), then framework defaults
+# Find templates — check project overrides first, then framework defaults.
+# Templates moved from develop/templates → core/templates in Phase 3; the
+# develop/ paths are kept as fallbacks so a pre-move vendored copy still works.
 find_template() {
   local subpath="$1"
+  local candidate
 
-  # Project override
-  if [ -f "$SAGE_DIR/develop/templates/$subpath" ]; then
-    echo "$SAGE_DIR/develop/templates/$subpath"
-    return 0
-  fi
+  # Project override: .sage/core/templates/ (new), then .sage/develop/templates/ (legacy)
+  for candidate in \
+    "$SAGE_DIR/core/templates/$subpath" \
+    "$SAGE_DIR/develop/templates/$subpath"; do
+    if [ -f "$candidate" ]; then echo "$candidate"; return 0; fi
+  done
 
-  # Framework default (when installed via CLI, templates are in .sage/develop/templates/)
-  # Also check relative to script location for development
-  local script_dir
+  # Framework default, relative to the script location.
+  local script_dir sage_root
   script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  local sage_root
   sage_root="$(cd "$script_dir/.." && pwd)"
 
-  if [ -f "$sage_root/develop/templates/$subpath" ]; then
-    echo "$sage_root/develop/templates/$subpath"
-    return 0
-  fi
+  for candidate in \
+    "$sage_root/core/templates/$subpath" \
+    "$sage_root/develop/templates/$subpath"; do
+    if [ -f "$candidate" ]; then echo "$candidate"; return 0; fi
+  done
 
   echo ""
   return 1

@@ -117,7 +117,7 @@ findings are still valuable.
 Save to `.sage/work/[cycle-id]/design-review.md` (if cycle) or
 `.sage/docs/design-review-[topic].md` (if standalone).
 
-Use template from `develop/templates/design-review-template.md`.
+Use template from `core/templates/design-review-template.md`.
 
 🔒 **DESIGN REVIEW CHECKPOINT:**
 

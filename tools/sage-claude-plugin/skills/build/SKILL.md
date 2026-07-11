@@ -53,7 +53,7 @@ Using as build input."
 ### Manifest Lifecycle (build workflow)
 
 **Create** manifest.md when the first artifact is saved (brief or spec).
-Use the template from `develop/templates/manifest-template.md`.
+Use the template from `core/templates/manifest-template.md`.
 
 **Update** manifest.md at EVERY checkpoint:
 - Every [A]/[R]/[N] gate: update phase, status, `gate_state`, updated timestamp

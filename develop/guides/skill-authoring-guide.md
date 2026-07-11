@@ -310,7 +310,7 @@ modes: [build, architect]
 
 Every pack MUST include test prompts. These are the evidence that the skill works.
 
-See `develop/templates/pack/tests-template.md` for the format.
+See `core/templates/pack/tests-template.md` for the format.
 
 **Good test prompts:**
 - Specific enough to trigger the skill's guidance

@@ -82,7 +82,7 @@ constitutions:
 
 templates:
   spec-minimal:
-    source: develop/templates/spec/minimal.spec-template.md
+    source: core/templates/spec/minimal.spec-template.md
     type: spec
     variant: minimal
 ```

@@ -124,7 +124,7 @@ For each flow in scope:
 Save report to `.sage/work/[cycle-id]/qa-report.md` (if cycle context)
 or `.sage/docs/qa-report-[topic].md` (if standalone).
 
-Use the report template from `develop/templates/qa-report-template.md`.
+Use the report template from `core/templates/qa-report-template.md`.
 
 🔒 **QA REPORT CHECKPOINT:**
 
