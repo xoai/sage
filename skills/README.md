@@ -18,7 +18,7 @@ process, or judgment that makes the AI agent better at a specific job.
 | `knowledge` | Technology-specific patterns and judgment | react, nextjs, web |
 | `process` | Methodology with steps and references | jtbd, prd, ux-writing |
 | `composite` | Composes multiple knowledge skills for a stack | stack-nextjs-supabase |
-| `bundle` | Metapackage that installs related skills | product-management, ux-design |
+| `bundle` | Metapackage that installs related skills | ux-design |
 
 ## Official Skills
 
@@ -66,9 +66,7 @@ process, or judgment that makes the AI agent better at a specific job.
 
 | Bundle | Installs | Description |
 |--------|----------|-------------|
-| [product-management](product-management/) | jtbd + opportunity-map + user-interview + prd | Full PM chain |
 | [ux-design](ux-design/) | 9 UX skills | Full UX chain |
-| [skill-builder](skill-builder/) | 5 builder skills | Skill authoring |
 
 ## Compatibility
 

@@ -64,10 +64,6 @@
       "source": "built-in",
       "version": "1.0.0"
     },
-    "product-management": {
-      "source": "built-in",
-      "version": "1.0.0"
-    },
     "react": {
       "source": "built-in",
       "version": "1.0.0"
@@ -77,10 +73,6 @@
       "version": "1.0.0"
     },
     "sage-self-learning": {
-      "source": "built-in",
-      "version": "1.0.0"
-    },
-    "skill-builder": {
       "source": "built-in",
       "version": "1.0.0"
     },
