@@ -122,6 +122,18 @@ surfaces:
       Optional runtime shipped in the sage-autoresearch pack; the optimization
       loop has no scenario. Its own pressure assets move with the pack (P6-T1).
 
+  subworkflow-subagent-execution:
+    path: core/workflows/sub-workflows/subagent-execution.workflow.md
+    kind: sub-workflow
+    uncovered: >
+      ADR-10's execution mode. The mechanism it rests on IS verified — hooks fire
+      and veto inside subagents (P3-T1, docs/attestations/), and the ledger guard
+      has six hook tests (H35-H40) that fail when the guard is stubbed out. What
+      is NOT yet measured is the mode end-to-end: does a real multi-task plan
+      actually come out the other side with every task independently reviewed?
+      E9 and E10 (P3-T7) are written to answer that, and until they run this row
+      is an honest IOU rather than a claim.
+
   subworkflow-quality-gates:
     path: core/workflows/sub-workflows/quality-gates.workflow.md
     kind: sub-workflow
