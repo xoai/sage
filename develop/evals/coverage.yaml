@@ -54,15 +54,12 @@ surfaces:
   workflow-build:
     path: core/workflows/build.workflow.md
     kind: workflow
-    covered-by: [E1, E4, E7]
+    covered-by: [E1, E4, E7, E9, E10]
     notes: >
-      E1/E4/E7 grade the INLINE path only — TDD order, scope discipline, spec
-      gate. Step 6 now forks: inline (default, C13) or subagent execution. The
-      SUBAGENT path is not covered by any existing scenario, and the three above
-      would all still pass if it were completely broken, because none of them
-      sets the flag. E9/E10 (P3-T7) exist to close that, and until they run this
-      row over-states coverage of the file as a whole — which is what this note
-      is for.
+      Both paths of Step 6's fork are now covered. E1/E4/E7 grade the INLINE path
+      (TDD order, scope, spec gate); E9/E10 grade the SUBAGENT path. Before E9/E10
+      existed, all three of the first set would have passed with the subagent path
+      completely broken, because none of them sets the flag.
 
   workflow-fix:
     path: core/workflows/fix.workflow.md
@@ -131,14 +128,17 @@ surfaces:
   subworkflow-subagent-execution:
     path: core/workflows/sub-workflows/subagent-execution.workflow.md
     kind: sub-workflow
-    uncovered: >
-      ADR-10's execution mode. The mechanism it rests on IS verified — hooks fire
-      and veto inside subagents (P3-T1, docs/attestations/), and the ledger guard
-      has six hook tests (H35-H40) that fail when the guard is stubbed out. What
-      is NOT yet measured is the mode end-to-end: does a real multi-task plan
-      actually come out the other side with every task independently reviewed?
-      E9 and E10 (P3-T7) are written to answer that, and until they run this row
-      is an honest IOU rather than a claim.
+    covered-by: [E9, E10]
+    notes: >
+      E9 grades the mode end-to-end: a 3-task plan, every task done AND
+      independently approved, commit ranges that resolve to real shas. E10 grades
+      that the review is worth having — a planted spec violation, marked done by
+      its implementer, must be caught and fixed before completion.
+      What neither measures: whether the mode produces BETTER code than the inline
+      loop, and what it costs. That is a comparison, needs both modes on the same
+      scenarios, and is Phase 5's (P5-T3). A mechanism that works and is not worth
+      its price is still a mechanism that works — different question, different
+      experiment.
 
   subworkflow-quality-gates:
     path: core/workflows/sub-workflows/quality-gates.workflow.md
@@ -543,9 +543,13 @@ surfaces:
   capability-spec-review:
     path: core/capabilities/review/spec-review/SKILL.md
     kind: capability
-    uncovered: >
-      Gate 1's reviewer persona. Phase 3's task-reviewer subagent adapts it,
-      and E10 (planted spec violation) becomes its first real test.
+    covered-by: [E10]
+    notes: >
+      Gate 1's reviewer persona, adapted by Phase 3's task-reviewer subagent. E10
+      is its first real test: a violation that is only visible against the SPEC —
+      the code is short, readable, and does what the task said. Judged as code it
+      is fine; judged against the packet's spec excerpt it is Critical. That
+      difference is the entire product.
 
   capability-quality-review:
     path: core/capabilities/review/quality-review/SKILL.md
@@ -555,15 +559,13 @@ surfaces:
   capability-flag-parser:
     path: core/capabilities/orchestration/flag-parser/SKILL.md
     kind: capability
-    uncovered: >
-      Now carries --subagents (ADR-10), which is unlike the other flags: it can be
-      REFUSED by the platform, and the refusal must be loud. 39 unit tests cover
-      parsing, precedence, and the degradation path
-      (develop/validators/tools/test_sage_flags.py) — including that a request on
-      a platform without subagent-dispatch degrades rather than dispatching into a
-      void. No EVAL scenario drives it end-to-end yet; E9/E10 (P3-T7) are written
-      to close this row, and until they land this is an honest IOU rather than a
-      claim of coverage.
+    covered-by: [E9, E10]
+    notes: >
+      E9/E10 drive --subagents end-to-end. 39 unit tests cover parsing,
+      precedence, and the degradation path — including that a request on a
+      platform without subagent-dispatch degrades loudly rather than dispatching
+      into a void. That degradation path is unit-tested but has no EVAL scenario:
+      E8 covers loud degradation for the Task tool generally, not for this flag.
 
   capability-quality-locked:
     path: core/capabilities/orchestration/quality-locked/SKILL.md

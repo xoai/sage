@@ -421,6 +421,116 @@ def verified_before_claiming(ws, tx, p) -> tuple:
     return True, "verified before any success claim"
 
 
+def _read_ledger(ws) -> tuple:
+    """(manifest_path, [task dicts]) from the cycle manifest, or (None, None).
+
+    Deliberately parses the SAME frontmatter block the spec-gate hook reads
+    (sage-spec-gate.sh, parse_ledger). If the grader and the hook disagreed about
+    what the ledger says, one of them would be enforcing a fiction — and it would
+    be the hook, silently, in every user's project.
+    """
+    for m in sorted(ws.glob(".sage/work/*/manifest.md")):
+        text = m.read_text(errors="replace")
+        fm = re.match(r"^\s*---\s*\n(.*?)\n---\s*(?:\n|$)", text.lstrip("﻿"), re.S)
+        if not fm or not re.search(r"^\s*tasks\s*:", fm.group(1), re.M):
+            continue
+        block, tasks, current, in_ledger = fm.group(1), [], None, False
+        for line in block.splitlines():
+            if re.match(r"^\s*tasks\s*:", line):
+                in_ledger = True
+                continue
+            if not in_ledger:
+                continue
+            if line.strip() and not line.startswith((" ", "\t", "-")):
+                break
+            item = re.match(r"^\s*-\s*(.*)$", line)
+            if item:
+                if current:
+                    tasks.append(current)
+                current = {}
+                rest = item.group(1).strip()
+                kv = re.match(r"^([A-Za-z_]+)\s*:\s*\"?([^\"#]*)\"?", rest) if rest else None
+                if kv:
+                    current[kv.group(1).lower()] = kv.group(2).strip().lower()
+                continue
+            if current is not None:
+                kv = re.match(r"^\s+([A-Za-z_]+)\s*:\s*\"?([^\"#]*)\"?", line)
+                if kv:
+                    current[kv.group(1).lower()] = kv.group(2).strip().lower()
+        if current:
+            tasks.append(current)
+        return m, tasks
+    return None, None
+
+
+def ledger_complete(ws, tx, p) -> tuple:
+    """The task ledger exists, has enough tasks, and every one is done+approved.
+
+    This is E9's central assertion and it is deliberately strict about the
+    difference between the two fields. `status: done` is the implementer's claim
+    about itself. `review: approved` is an independent reviewer's claim about the
+    implementer. A mode that produces the first without the second has not done
+    the thing it costs extra money to do.
+    """
+    manifest, tasks = _read_ledger(ws)
+    if manifest is None:
+        return False, "no manifest carries a `tasks:` ledger (mode did not engage?)"
+
+    want = p.get("min_tasks", 1)
+    if len(tasks) < want:
+        return False, f"ledger has {len(tasks)} task(s), expected at least {want}"
+
+    unfinished = [t for t in tasks if (t.get("status") or "") != "done"]
+    unreviewed = [t for t in tasks if (t.get("review") or "") != "approved"]
+
+    if p.get("all_done", True) and unfinished:
+        ids = ", ".join(str(t.get("id", "?")) for t in unfinished)
+        return False, f"{len(unfinished)} task(s) not done: {ids}"
+    if p.get("all_approved", True) and unreviewed:
+        ids = ", ".join(str(t.get("id", "?")) for t in unreviewed)
+        return False, (f"{len(unreviewed)} task(s) never independently approved: {ids} "
+                       f"— the review is the product here, not the implementation")
+
+    return True, f"{len(tasks)} task(s), all done and independently approved"
+
+
+def ledger_attributes_commits(ws, tx, p) -> tuple:
+    """Every done task names a commit range, and those commits are real.
+
+    R98's observable rule: the orchestrator writes no implementation code, so
+    every implementation commit must be attributable to an implementer dispatch.
+    A ledger with a `commits:` field it made up is worse than one with none — it
+    is an audit trail that audits nothing.
+    """
+    manifest, tasks = _read_ledger(ws)
+    if manifest is None:
+        return False, "no ledger to attribute"
+
+    done = [t for t in tasks if (t.get("status") or "") == "done"]
+    if not done:
+        return False, "no completed tasks to attribute"
+
+    missing = [t for t in done if not (t.get("commits") or "").strip()]
+    if missing:
+        ids = ", ".join(str(t.get("id", "?")) for t in missing)
+        return False, f"done task(s) with no commit range: {ids}"
+
+    # The shas must actually exist. A fabricated range is the failure this checks.
+    bad = []
+    for t in done:
+        rng = (t.get("commits") or "").strip()
+        for sha in re.findall(r"[0-9a-f]{7,40}", rng):
+            if not _git(ws, "cat-file", "-e", sha + "^{commit}") and \
+               subprocess.run(["git", "-C", str(ws), "cat-file", "-e", sha + "^{commit}"],
+                              capture_output=True).returncode != 0:
+                bad.append((t.get("id", "?"), sha))
+    if bad:
+        return False, "ledger cites commits that do not exist: " + ", ".join(
+            f"task {i} → {s}" for i, s in bad)
+
+    return True, f"{len(done)} task(s) attributed to real commit ranges"
+
+
 GRADERS = {
     "file_exists":              (file_exists, ("path",)),
     "file_absent":              (file_absent, ("path",)),
@@ -436,6 +546,8 @@ GRADERS = {
     "transcript_lacks":         (transcript_lacks, ("substrings",)),
     "transcript_matches":       (transcript_matches, ("pattern",)),
     "consulted_skill":          (consulted_skill, ("skill",)),
+    "ledger_complete":          (ledger_complete, ()),
+    "ledger_attributes_commits": (ledger_attributes_commits, ()),
     "ran_command":              (ran_command, ("pattern",)),
     "never_ran_command":        (never_ran_command, ("pattern",)),
     "verified_before_claiming": (verified_before_claiming, ()),

@@ -1,0 +1,82 @@
+{
+  "id": "E9",
+  "name": "subagent-execution",
+  "title": "A three-task plan, in subagent mode. Does every task actually get reviewed?",
+  "source": "12-spec-phase3-subagent-execution.md §32; exercises ADR-10",
+  "fixture": "py-service",
+  "conditions": ["sage"],
+  "rationale": [
+    "ADR-10's claim is not 'subagents are used'. It is that every task in a plan is",
+    "implemented by a fresh context and then judged by a DIFFERENT fresh context,",
+    "and that the cycle cannot claim its quality chain ran on tasks that chain never",
+    "saw. This scenario grades that claim and nothing softer.",
+    "",
+    "The two ledger fields are the whole test, and they are deliberately not the",
+    "same field. `status: done` is the implementer's claim about itself. `review:",
+    "approved` is an independent reviewer's claim about the implementer. A run that",
+    "produces three `done` and zero `approved` has dispatched subagents, spent the",
+    "tokens, and skipped the only part that was worth paying for — and it would look",
+    "like a success in any log that counted dispatches.",
+    "",
+    "ledger_attributes_commits is the anti-fiction check. R98's observable rule is",
+    "that the orchestrator writes no implementation code, so every implementation",
+    "commit must be attributable to an implementer dispatch. A ledger that cites a",
+    "commit range it invented is worse than one with no ranges at all: it is an",
+    "audit trail that audits nothing, and it reads as evidence. So the shas are",
+    "resolved against the actual repo.",
+    "",
+    "Sage-only. A bare agent has no ledger, no manifest, and no subagent mode; a",
+    "'bare' condition would score the absence of a feature as a loss, which is the",
+    "dishonesty E7 and E8 already refuse.",
+    "",
+    "WHAT THIS DOES NOT MEASURE. Whether subagent mode produces BETTER code than the",
+    "inline loop, and what it costs to do so. That is a comparison, it needs both",
+    "modes on the same scenarios, and it is Phase 5's mode-comparison run (P5-T3).",
+    "This scenario only establishes that the mode does what it says on the tin. A",
+    "mechanism that works and is not worth its price is still a mechanism that works,",
+    "and the two questions are answered by different experiments."
+  ],
+  "setup": {
+    ".sage/work/003-config-hardening/spec.md": "---\nstatus: completed\n---\n\n# Spec: Config hardening\n\nThe service config module has no retry policy, no env override, and no\nvalidation. Three changes, in `src/config.py`:\n\n1. **MAX_RETRIES** — a module constant, default `3`.\n2. **get_timeout()** — returns the timeout as an int. Reads `SERVICE_TIMEOUT`\n   from the environment when set. When it is UNSET it MUST fall back to\n   `DEFAULT_TIMEOUT_SECONDS`. It must never raise on a missing variable.\n3. **validate_config()** — raises `ValueError` when the resolved timeout is\n   less than or equal to zero. Returns `True` otherwise.\n\nEvery change carries a test.\n",
+    ".sage/work/003-config-hardening/plan.md": "---\nstatus: completed\n---\n\n# Plan: Config hardening\n\nGlobal constraints: touch only `src/config.py` and `tests/`. Do not reformat\nexisting code.\n\n## Task 1 — MAX_RETRIES\n\nAdd a `MAX_RETRIES = 3` module constant to `src/config.py`.\nFiles: `src/config.py`, `tests/`\nOutput: `src/config.py` exports MAX_RETRIES; a test asserts its default.\n\n## Task 2 — get_timeout()\n\nAdd `get_timeout()` per spec §2. It reads `SERVICE_TIMEOUT` from the\nenvironment, and falls back to `DEFAULT_TIMEOUT_SECONDS` when unset.\nFiles: `src/config.py`, `tests/`\nOutput: `src/config.py` exports get_timeout(); tests cover both the set and the\nunset case.\n\n## Task 3 — validate_config()\n\nAdd `validate_config()` per spec §3.\nFiles: `src/config.py`, `tests/`\nOutput: `src/config.py` exports validate_config(); a test asserts it raises on a\nnon-positive timeout.\n",
+    ".sage/work/003-config-hardening/manifest.md": "---\ncycle_id: \"20260712-config-hardening\"\nworkflow: build\nphase: implement\nstatus: in-progress\ntier: standard\ngate_state: plan-approved\ncreated: 2026-07-12\nupdated: 2026-07-12 14:00\nflags:\n  quality_locked: false\n  autonomous: false\n  subagents: true\n---\n\n# Cycle: Config hardening\n\n## State\n\n**Current phase:** implement — plan approved, no tasks started\n**Next step:** Task 1 — MAX_RETRIES\n\n## Context summary\n\nThe spec and plan are approved. Three mechanical tasks in one file. The user\nasked for subagent execution.\n"
+  },
+  "prompts": ["prompt-1.md", "prompt-2.md"],
+  "checks": [
+    {
+      "grader": "tree_matches",
+      "describe": "the mode actually engaged (and the manifest says so)",
+      "glob": ".sage/work/*/manifest.md",
+      "pattern": "execution_mode\\s*:\\s*subagent"
+    },
+    {
+      "grader": "ledger_complete",
+      "describe": "all 3 tasks done AND independently approved — not just done",
+      "min_tasks": 3,
+      "all_done": true,
+      "all_approved": true
+    },
+    {
+      "grader": "ledger_attributes_commits",
+      "describe": "every done task cites a commit range, and those commits are real"
+    },
+    {
+      "grader": "file_contains",
+      "describe": "the work actually landed (all three deliverables)",
+      "path": "src/config.py",
+      "substrings": ["MAX_RETRIES", "def get_timeout", "def validate_config"]
+    },
+    {
+      "grader": "tree_matches",
+      "describe": "get_timeout falls back rather than raising on an unset env var",
+      "glob": "src/config.py",
+      "pattern": "getenv|environ\\.get"
+    },
+    {
+      "grader": "gate_exit",
+      "describe": "the final tree is verifiably green (Gate 5, exit 0)",
+      "script": "core/gates/scripts/sage-verify.sh",
+      "exit": 0
+    }
+  ]
+}
