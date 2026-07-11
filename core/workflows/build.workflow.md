@@ -98,11 +98,9 @@ Context summary MUST NOT be:
 - Generic guidance ("Continue with implementation")
 The summary must contain judgment the spec doesn't contain.
 
-**Decision-log target (Rule 7):** in this workflow, "decisions.md"
-means the initiative's log at `.sage/work/[initiative]/decisions.md`.
-The global `.sage/decisions.md` is only for cross-initiative
-decisions. Readers check the initiative log first, then fall back to
-the global file.
+**Shared cycle protocol:** decision-log targeting (Rule 7), gate_state
+discipline, phase announcements, and the session-break contract are shared across
+the delivery workflows — see `core/workflows/_shared/cycle-protocol.md`.
 
 ## Phase Announcements
 

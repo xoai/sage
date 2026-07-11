@@ -38,9 +38,9 @@ Read the initiative's decisions.md first, then the global
 `.sage/decisions.md`, for context. Read `handoff` field in
 the most recent artifact if present.
 
-**Decision-log target (Rule 7):** in this workflow, "decisions.md"
-means the initiative's log at `.sage/work/[initiative]/decisions.md`;
-the global `.sage/decisions.md` is only for cross-initiative decisions.
+**Shared cycle protocol:** decision-log targeting (Rule 7), gate_state
+discipline, phase announcements, and the session-break contract are shared across
+the delivery workflows — see `core/workflows/_shared/cycle-protocol.md`.
 
 ### Manifest Lifecycle (architect workflow)
 
