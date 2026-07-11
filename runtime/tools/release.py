@@ -24,6 +24,7 @@ Usage:
                                  raise VERSION, then --sync
   release.py --artifacts         build the release tarball + checksums.txt
   release.py --notes vX.Y.Z      print that version's CHANGELOG section
+  release.py --with-evals        run the eval suite and write its summary
   release.py --repo-root PATH    operate on a tree other than this checkout
 
 Exit: 0 = agree / written   |   1 = drift or refusal   |   2 = bad invocation
@@ -300,6 +301,33 @@ def bump(root: pathlib.Path, level: str) -> int:
     return sync(root)
 
 
+def with_evals(root: pathlib.Path, runs: int) -> int:
+    """Run the eval suite and leave its summary where the release notes can reach it.
+
+    Not part of --check, and deliberately not in per-PR CI: a full run makes real
+    model calls and costs real money, so it is a thing a maintainer decides to do
+    at release time, with the number in hand, rather than a thing that happens to
+    them on every typo fix (13-§30 R74).
+    """
+    runner = root / "develop" / "evals" / "run_evals.py"
+    if not runner.is_file():
+        raise Problem("develop/evals/run_evals.py not found")
+
+    print(f"  running the eval suite (N={runs}) — this makes real model calls…")
+    proc = subprocess.run(
+        [sys.executable, str(runner), "--runs", str(runs), "--report"],
+        cwd=str(root),
+    )
+    summary = root / "develop" / "evals" / "results" / "summary.md"
+    if summary.is_file():
+        print(f"\n  summary → {summary.relative_to(root)}")
+        print("  Paste it into the release notes; the sage-vs-bare delta is the claim.")
+    if proc.returncode != 0:
+        print("\n✗ the eval run reported failures — read the summary before releasing.")
+        return 1
+    return 0
+
+
 def sha256_file(path: pathlib.Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as fh:
@@ -357,6 +385,11 @@ def main() -> int:
                        help="build the release tarball and checksums.txt")
     group.add_argument("--notes", metavar="VERSION",
                        help="print that version's CHANGELOG section (release notes)")
+    group.add_argument("--with-evals", action="store_true",
+                       help="run the eval suite and write results/summary.md "
+                            "(makes real model calls; costs money)")
+    parser.add_argument("--eval-runs", type=int, default=3,
+                        help="runs per scenario per condition for --with-evals (default 3)")
     parser.add_argument("--ref", default=None,
                         help="git ref to archive (default: the tag vX.Y.Z)")
     parser.add_argument("--out", type=pathlib.Path, default=None,
@@ -377,6 +410,8 @@ def main() -> int:
         if args.notes:
             print(notes(root, args.notes))
             return 0
+        if args.with_evals:
+            return with_evals(root, args.eval_runs)
         return bump(root, args.bump)
     except Problem as exc:
         print(f"✗ {exc}")
