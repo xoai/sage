@@ -60,8 +60,13 @@ PLUGIN_MANIFESTS = (
 
 SCAN_SUFFIXES = (".md", ".sh", ".yaml", ".yml")
 SCAN_EXCLUDE_DIRS = (".git", ".sage", ".sage-memory", "node_modules", ".pytest_cache")
-# The tooling tests build fixture trees that deliberately contain literals.
-SCAN_EXCLUDE_PATHS = ("CHANGELOG.md", "develop/validators/tools")
+# Test harnesses build fixture trees (fake .sage/config.yaml, plugin.json,
+# CHANGELOG) that deliberately contain version literals — exclude them.
+SCAN_EXCLUDE_PATHS = (
+    "CHANGELOG.md",
+    "develop/validators/tools",
+    "develop/validators/hooks",
+)
 
 
 class Problem(Exception):
