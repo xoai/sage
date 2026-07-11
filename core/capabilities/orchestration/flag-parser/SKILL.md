@@ -1,7 +1,7 @@
 ---
 name: flag-parser
 description: >
-  Parses workflow flags (--quality-locked, --autonomous) from $ARGUMENTS
+  Parses workflow flags (--quality-locked, --autonomous, --subagents) from $ARGUMENTS
   at the start of /build and /architect commands. Uses a deterministic
   python3 runtime with a prose-rule fallback if python3 is unavailable.
   Returns a strict JSON contract that the agent trusts unconditionally.
@@ -27,6 +27,18 @@ the agent trusts that JSON unconditionally.
 | `--no-quality-locked` | Force off, overriding a config default | — |
 | `--autonomous` | Agent makes elicitation decisions from memory/codebase/principles | off (overridable by config) |
 | `--no-autonomous` | Force off, overriding a config default | — |
+| `--subagents` | Fresh implementer + reviewer subagent per plan task (ADR-10) | off (overridable by config) |
+| `--no-subagents` | Force off, overriding a config default | — |
+
+**`--subagents` is different from the other two, and the difference matters.**
+The others are policies: ask for them and you get them. This one is a
+*capability* — it requires the platform contract's `subagent-dispatch`. Where
+that is absent, the request is REFUSED, not silently downgraded: the workflow
+announces it, the degradation hook writes a `decisions.md` line, and the
+manifest records `execution_mode: inline (subagents-unavailable)`. Call
+`resolve_execution_mode()` in `sage_flags.py` rather than reading the flag
+directly — a bare flag read is how a "fresh reviewer per task" quietly becomes
+the same context reviewing itself.
 
 ## Precedence (highest wins)
 
@@ -73,6 +85,7 @@ Both parsing layers emit the same JSON shape to stdout:
 {
   "quality_locked": true | false,
   "autonomous": true | false,
+  "subagents": true | false,
   "goal": "<remainder after flags, trimmed>",
   "error": null | "<error message>",
   "quality_locked_source": "flag" | "config" | null,

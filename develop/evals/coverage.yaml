@@ -538,8 +538,14 @@ surfaces:
     path: core/capabilities/orchestration/flag-parser/SKILL.md
     kind: capability
     uncovered: >
-      Covered by unit tests (develop/validators/tools/test_sage_flags.py), not
-      by evals. Phase 3 extends it with --subagents; the unit suite extends too.
+      Now carries --subagents (ADR-10), which is unlike the other flags: it can be
+      REFUSED by the platform, and the refusal must be loud. 39 unit tests cover
+      parsing, precedence, and the degradation path
+      (develop/validators/tools/test_sage_flags.py) — including that a request on
+      a platform without subagent-dispatch degrades rather than dispatching into a
+      void. No EVAL scenario drives it end-to-end yet; E9/E10 (P3-T7) are written
+      to close this row, and until they land this is an honest IOU rather than a
+      claim of coverage.
 
   capability-quality-locked:
     path: core/capabilities/orchestration/quality-locked/SKILL.md
