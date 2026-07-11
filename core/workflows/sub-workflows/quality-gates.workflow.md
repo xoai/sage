@@ -141,7 +141,13 @@ Runs as part of the gate sequence, not by agent discretion.
 2. Scope is Standard or Comprehensive (Lightweight tasks skip)
 3. `auto_qa` ≠ false in `.sage/config.yaml`
 
-If ANY condition is false → skip silently.
+Skip handling — a skipped QA that leaves no trace reads as a QA that passed,
+so a Task-tool skip is LOUD (R29):
+- Condition 1 false (Task tool unavailable) AND scope is Standard+ → announce
+  `Sage: auto-QA skipped — Task tool unavailable on this platform. Quality
+  chain is degraded.` and append one line to the initiative's `decisions.md`.
+- Condition 2 false (Lightweight scope) → skip, no announcement (nothing to QA).
+- Condition 3 false (`auto_qa: false`) → skip with the one-line "disabled" note.
 
 **When active:**
 1. Announce: "⚡ Running implementation QA (sub-agent)..."

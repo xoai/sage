@@ -106,8 +106,14 @@ filter, downgrade, or dismiss findings.
 
 **Step 3 — Task tool NOT available OR `independent_gate3` is false:**
 
-Self-review fallback. Announce: "Self-review only — Task tool not
-available. For independent review, run /review."
+Self-review fallback. This is a degraded Gate 3 — make it loud (R29):
+- Announce: `Sage: independent Gate 3 skipped — Task tool unavailable on this
+  platform. Self-review only; quality chain is degraded. For independent
+  review, run /review.`
+- When the cause is the Task tool being unavailable (not a config opt-out),
+  append one line to the initiative's `decisions.md`:
+  `[<date>] independent Gate 3 skipped (Task tool unavailable) — code quality
+  self-reviewed only.`
 
 Do NOT self-review when Task tool IS available and config allows
 sub-agent. That defeats the purpose of independent review.

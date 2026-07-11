@@ -266,9 +266,10 @@ fi
 #
 # Skipped for fix dispatches (the fix dispatch carries the review
 # file directly — the implementer doesn't need the spec author's
-# judgment a second time). Skipped silently when the artifact has
-# no frontmatter or no `handoff:` key — invariant I1 (inert by
-# absence).
+# judgment a second time). Omitted when the artifact has no
+# frontmatter or no `handoff:` key — invariant I1 (inert by
+# absence). This is not a quality skip: there is simply no handoff
+# to inject, so nothing is lost and nothing needs announcing.
 #
 # Per spec §D3, injected into both `doc` and `diff` dispatches. For
 # `doc` the source is the artifact named in TARGET; for `diff` (the

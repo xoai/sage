@@ -441,8 +441,12 @@ self-bias lives — is not included.
 All are advisory — the user can always `[P] Proceed`. Findings are
 logged to `decisions.md` for `/reflect` to learn from.
 
-Requires Claude Code's Task tool. When Task tool is not available
-(e.g., Antigravity), reviews are skipped silently.
+Requires Claude Code's Task tool. When the Task tool is not available
+(e.g., Antigravity), each review is skipped **loudly** — it announces
+`Quality chain is degraded` and logs one line to `decisions.md`, so
+`/reflect` and `/status` surface the gap. A degraded review is never
+silent: a review that vanishes without a trace reads as one that passed.
+See the per-platform enforcement table under [Enforcement](#enforcement-model).
 
 ### Coding Principles
 

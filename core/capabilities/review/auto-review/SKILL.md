@@ -43,8 +43,14 @@ proceeding to the next phase. The only way to skip is [S].
 ### Conditions (checked by the workflow before spawning)
 
 1. **Task tool is available.** If not (e.g., Antigravity), [A] falls
-   back to simple approval. Announce: "Task tool not available —
-   skipping independent review."
+   back to simple approval. This is a degradation, so make it loud —
+   never silent (R29):
+   - Announce: `Sage: auto-review skipped — Task tool unavailable on
+     this platform. Quality chain is degraded.`
+   - Append one line to the initiative's `decisions.md`:
+     `[<date>] auto-review skipped (Task tool unavailable) — <phase>
+     approved without independent review.`
+   so `/reflect` and `/status` surface the gap later.
 
 2. **Scope is Standard or Comprehensive.** Lightweight tasks skip
    auto-review — they have no spec/plan to review. [A] behaves as
@@ -448,7 +454,10 @@ Be concise. No generic praise. No padding. Just findings.
 
 ## Failure Modes
 
-- **Task tool not available:** Skip silently. Do NOT self-review.
+- **Task tool not available:** Do NOT self-review (it shares the author's blind
+  spots). Skip the sub-agent, but LOUDLY, per Conditions #1: announce the
+  degradation and log one line to decisions.md. Never skip silently — a review
+  that vanishes without a trace reads as a review that passed.
 - **Sub-agent times out:** Skip with note. Do NOT block workflow.
 - **Sub-agent returns malformed output:** Present raw output to user
   with a note: "Review format was unexpected. Please interpret."

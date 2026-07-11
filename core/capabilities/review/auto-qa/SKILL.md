@@ -36,8 +36,13 @@ sequence triggers it — the agent does not decide whether to run it.
 
 **Activation conditions (checked by quality-gates workflow):**
 
-1. **Task tool is available.** If not (e.g., Antigravity), skip
-   silently. No self-review fallback.
+1. **Task tool is available.** If not (e.g., Antigravity), there is no
+   self-review fallback — but the skip is LOUD, never silent (R29):
+   - Announce: `Sage: auto-QA skipped — Task tool unavailable on this
+     platform. Quality chain is degraded.`
+   - Append one line to the initiative's `decisions.md`:
+     `[<date>] auto-QA skipped (Task tool unavailable) — completion
+     accepted without independent QA.`
 
 2. **Scope is Standard or Comprehensive.** Lightweight tasks skip.
 
@@ -46,8 +51,10 @@ sequence triggers it — the agent does not decide whether to run it.
    "Auto-QA disabled. Run the QA command for manual testing."
    If `auto_qa: true` or absent (default), proceed.
 
-If ANY condition is false → skip silently (except config disabled
-which shows one-line note).
+When the scope is Standard+ and auto-QA cannot run because the Task tool is
+absent, announce and log per condition #1 — a skipped QA that leaves no trace
+reads as a QA that passed. (A config-disabled skip shows its one-line note; a
+Lightweight-scope skip needs no announcement — there is nothing to QA.)
 
 Gate 8 runs AFTER Gates 1-5 pass. Gates catch structural issues;
 Gate 8 catches semantic issues (spec drift, missing handlers,
@@ -229,7 +236,9 @@ MUST appear — it is not the agent's discretion.
 
 ## Failure Modes
 
-- **Task tool not available:** Skip silently. Do NOT self-review.
+- **Task tool not available:** No self-review fallback (it shares the author's
+  blind spots). Skip the sub-agent, but LOUDLY per Activation condition #1:
+  announce the degradation and log one line to decisions.md. Never silent.
 - **Sub-agent times out:** Skip with note. Do NOT block workflow.
 - **Sub-agent returns malformed output:** Present raw output to user
   with note: "QA format was unexpected. Please interpret."
