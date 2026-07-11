@@ -16,7 +16,7 @@ Built for product and engineering teams, open to any domain.
 - **Focus over noise** — loads only what the task needs, producing sharper reasoning
 - **Reliable by design** — 5-layer enforcement, 3 independent sub-agent reviews, quality gates with deterministic scripts
 - **Gets smarter over time** — self-learning, memory, and ontology compound into institutional knowledge of your codebase
-- **Grows with its ecosystem** — 38 built-in skills, extensible with 90K+ community skills from skills.sh
+- **Grows with its ecosystem** — 12 focused core skills plus installable packs (product/UX, pack-authoring, autoresearch), extensible with 90K+ community skills from skills.sh
 
 ## Why Sage
 
@@ -119,7 +119,7 @@ for both installation and daily use.
 The installer resolves the latest release tag, downloads its tarball and
 `checksums.txt`, and verifies the SHA-256 before unpacking anything. A
 mismatch aborts loudly and installs nothing. Pin a specific release with
-`SAGE_VERSION=v1.1.11 curl -fsSL … | bash`.
+`SAGE_VERSION=v1.2.0 curl -fsSL … | bash`.
 
 ### Path A: New Project (Greenfield)
 
@@ -345,7 +345,7 @@ Free-form input always works. These patterns guide, they don't constrain.
 ### The Pipeline: UNDERSTAND → ENVISION → DELIVER → REFLECT
 
 <p align="center">
-  <img src="docs/assets/sage_workflows.svg" alt="Sage Workflows — 14 commands chaining 37 skills across 4 phases." width="600" />
+  <img src="docs/assets/sage_workflows.svg" alt="Sage Workflows — 9 commands across the UNDERSTAND → ENVISION → DELIVER phases." width="600" />
 </p>
 
 Sage organizes work into four phases. Each phase has dedicated

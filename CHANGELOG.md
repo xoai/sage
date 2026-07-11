@@ -2,7 +2,15 @@
 
 All notable changes to Sage will be documented in this file.
 
-## [Unreleased] — Correctness
+## [1.2.0] — Correctness, enforcement, and simplification
+
+A three-part upgrade: make the deterministic layer honest and tested (Phase 1),
+make the flagship enforcement claims mechanically true on Claude Code (Phase 2),
+and cut the framework down to what's load-bearing (Phase 3). Existing projects
+upgrade with `sage update`; the migration table at the end of this entry maps
+every moved or removed item to its new home.
+
+### Correctness
 
 Sage's deterministic gate layer is the one part of the framework that was
 supposed to be immune to a model talking itself out of a failure. It wasn't.
@@ -60,6 +68,64 @@ and aborts loudly without installing anything on a mismatch. `sage upgrade`
 checks out the newest release tag and prints the changelog you gained;
 `--channel main` keeps the old behavior behind an explicit warning. A failed
 upgrade leaves the existing framework untouched.
+
+### Mechanical enforcement
+
+Enforcement on the primary platform was prose-only, and the quality chain
+vanished silently on platforms without the Task tool.
+
+- **Spec-gate hook** (Claude Code). A `PreToolUse` hook blocks edits to source
+  files while a Standard+ cycle is still pre-spec (Rule 3), and blocks marking a
+  cycle complete before its gates pass (Rule 5) — the agent cannot rationalize
+  past a blocked tool call. Scoped, escapable (`hard_enforcement: false`,
+  `tier: tier1`, edits under `.sage/`), and fail-open. New projects default it
+  on; projects upgraded with `sage update` get it installed but **off**, with a
+  notice, so enforcement never surprises an established workflow.
+- **Machine cycle state.** The manifest gains `tier` and `gate_state`, advanced
+  at every checkpoint; the hook reads `gate_state`.
+- **Loud degradation.** Every review that can't run (no Task tool) now announces
+  itself and logs to `decisions.md` — no silent skips. The README gains a
+  per-platform enforcement truth table.
+
+### Simplification
+
+The framework carried ~60% more surface than was load-bearing, and shipped two
+copies of itself.
+
+- **One copy, generated.** The Claude Code plugin is produced from single
+  sources by `build_plugin.py`; a `plugin-drift` CI check proves the committed
+  mirror matches. `develop/templates` moved to `core/templates`.
+- **Leaner catalog.** Core skills 38 → 12 (the memory triad + the engineering
+  stack). The PM/UX suite, the pack-authoring skills, and the autoresearch
+  runtime are installable packs (staged under `packs/`). Two stub skills
+  deleted; four `stack-*` skills folded into their parent framework skills as
+  detection-gated integration sections.
+- **Fewer commands.** Workflows 16 → 9: `/analyze`, `/design-review`, and `/qa`
+  became modes of `/review` (`--ux`, `--design`, `--browser`); `/map` →
+  `/learn --ontology`; `/status` → `/continue`. Old names still route for one
+  deprecation cycle.
+- **No Python in core.** The flag packages inlined to `runtime/tools/sage_flags.py`;
+  autoresearch extracted. `find core -name '*.py'` → 0.
+- **Lean vendoring.** `sage init` stops shipping Sage's dev toolkit into user
+  projects (the duplicate plugin, `develop/`, `docs/`, marketing SVGs) — a ~40%
+  footprint cut. Four platforms (antigravity, codex, gemini-cli, opencode) moved
+  to a community/experimental tier; `claude-code` is first-class.
+- **Integrity.** Install and upgrade pin to release tags and verify SHA-256; a
+  root `VERSION` file is the single source of truth with a CI drift check.
+
+### Migration
+
+| Removed / moved | New home | User action |
+|---|---|---|
+| 15 PM/UX skills + `/research` + `/design` | `packs/sage-product` (→ `xoai/sage-product`) | `sage add xoai/sage-product` |
+| 5 `pack-*` authoring skills | `packs/sage-pack-authoring` | `sage add xoai/sage-pack-authoring` |
+| `autoresearch` Python runtime | `packs/sage-autoresearch` | `sage add xoai/sage-autoresearch` (workflow degrades loudly without it) |
+| 4 `stack-*` skills | parent skills (nextjs/flutter/react-native) | none — auto via detection |
+| `skill-builder`, `product-management` | deleted (stubs) | none |
+| `/analyze`, `/design-review`, `/qa` | `/review --ux` / `--design` / `--browser` | old names route for one cycle |
+| `/map`, `/status` | `/learn --ontology`, `/continue` | old names route for one cycle |
+| `develop/templates/` | `core/templates/` | none — `sage update` migrates the vendored copy |
+| antigravity / codex / gemini-cli / opencode | `runtime/platforms/community/` | none — still selectable, labeled experimental |
 
 ## [1.1.11] — Seamless built-in memory
 

@@ -1,6 +1,6 @@
 {
   "name": "sage",
-  "description": "AI skills framework: UNDERSTAND → ENVISION → DELIVER → REFLECT. Process enforcement, 14 workflows, 37 skills, 5 agent personas.",
+  "description": "AI skills framework: UNDERSTAND → ENVISION → DELIVER. Mechanical process enforcement, 9 workflows, 12 core skills (+ installable packs), 5 agent personas.",
   "owner": {
     "name": "xoai",
     "url": "https://github.com/xoai"
@@ -8,7 +8,7 @@
   "plugins": [
     {
       "name": "sage",
-      "description": "AI skills framework: UNDERSTAND → ENVISION → DELIVER → REFLECT. Process enforcement, 14 workflows, 37 skills, 5 agent personas.",
+      "description": "AI skills framework: UNDERSTAND → ENVISION → DELIVER. Mechanical process enforcement, 9 workflows, 12 core skills (+ installable packs), 5 agent personas.",
       "version": "{{VERSION}}",
       "source": {
         "source": "git-subdir",

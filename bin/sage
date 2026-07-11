@@ -1087,6 +1087,16 @@ DECMD
     migration_notes="${migration_notes}\n  ${GREEN}✓${RESET} Installed the spec-gate hook (hard_enforcement: false — OFF).\n     To enforce spec-before-code, set hard_enforcement: true in .sage/config.yaml"
   fi
 
+  # ── Deprecation notice: PM/UX skills moved to the sage-product pack (R54) ──
+  # If this project's .sage/ artifacts show prior use of a moved skill, point
+  # the user at the pack that now provides it. Grep is fail-soft (|| true).
+  local moved_hits=""
+  moved_hits=$(grep -rlE 'jtbd|ux-audit|ux-evaluate|ux-review|opportunity-map|prd-|user-interview' \
+                 "$target/.sage/docs" "$target/.sage/work" 2>/dev/null | head -1 || true)
+  if [ -n "$moved_hits" ]; then
+    migration_notes="${migration_notes}\n  ${YELLOW}↻${RESET} PM/UX skills moved to a pack. If you use them, install it:\n     sage add xoai/sage-product"
+  fi
+
   # ── Migration: relocate vendored templates develop/ → core/ (R42) ──
   # Framework templates moved to core/templates in Phase 3. A normal `sage
   # update` already replaced sage/ wholesale (so sage/core/templates/ is present
