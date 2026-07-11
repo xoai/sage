@@ -28,7 +28,12 @@ dist/
 .mcp.json
 .sage/
 .sage-memory/
-sage/
+# Anchored. Unanchored, `sage/` matches a directory named `sage` at ANY depth —
+# it silently swallowed runtime/plugin-overlay/skills/sage/, the plugin's /sage
+# router, which therefore never got committed. It existed on every developer's
+# disk and in no clean checkout. Only a vendored copy at the repo root is meant
+# to be ignored here.
+/sage/
 .claude/
 CLAUDE.md
 
