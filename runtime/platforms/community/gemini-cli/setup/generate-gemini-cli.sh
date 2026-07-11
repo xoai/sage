@@ -57,7 +57,7 @@ if [ -f "$SAGE_ROOT/GEMINI.md" ]; then
 fi
 
 if [ "$SKIP_GEMINI_MD" = false ]; then
-  source "$(dirname "$0")/../../_shared/instructions-body.sh"
+  source "$(dirname "$0")/../../../_shared/instructions-body.sh"
   emit_instructions_body \
     | sed \
       -e 's|Task tool|sub-agent invocation|g' \
@@ -121,7 +121,7 @@ fi
 echo ""
 echo "📎 Generating .gemini/commands/ from core workflows..."
 
-source "$(dirname "$0")/../../_shared/preambles.sh"
+source "$(dirname "$0")/../../../_shared/preambles.sh"
 
 for wf in "$CORE"/workflows/*.workflow.md; do
   [ -f "$wf" ] || continue

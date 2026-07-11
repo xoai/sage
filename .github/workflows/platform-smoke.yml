@@ -1,0 +1,27 @@
+name: platform-smoke
+
+# Two-tier platform validation (12-§20 R62). Every platform generator must at
+# least run and emit its instructions file. First-class (claude-code) is
+# additionally exercised end-to-end by the gate-tests / hook-tests /
+# reference-integrity jobs; community platforms (antigravity, codex, gemini-cli,
+# opencode) get this generation-smoke only — they have no quality chain to test.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  platform-smoke:
+    name: every platform generator produces output
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Generation smoke (all platform generators)
+        run: bash develop/validators/platforms/generation-smoke.sh

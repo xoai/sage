@@ -375,7 +375,7 @@ Sage is platform-agnostic. It works wherever AI agents work.
 
 | Platform | How Sage Integrates | Status |
 |----------|---------------------|--------|
-| [Antigravity](runtime/platforms/antigravity/) | GEMINI.md + `.agent/` with rules, skills, workflows | Full |
+| [Antigravity](runtime/platforms/community/antigravity/) | GEMINI.md + `.agent/` with rules, skills, workflows | Full |
 | [Claude Code](runtime/platforms/claude-code/) | CLAUDE.md + `.claude/commands/` with slash commands | Full |
 
 Both share the same `.sage/` project state. Switch platforms mid-project.

@@ -323,11 +323,11 @@ select_platform() {
     # Two-line choice for readability (5+ platforms now)
     echo ""
     echo "  Which platform are you using? Pick one:"
-    echo "    [1] Claude Code"
-    echo "    [2] Antigravity (Google IDE)"
-    echo "    [3] Codex (OpenAI)"
-    echo "    [4] Opencode"
-    echo "    [5] Gemini CLI"
+    echo "    [1] Claude Code           (first-class — full quality chain)"
+    echo "    [2] Antigravity (Google)  (community — experimental)"
+    echo "    [3] Codex (OpenAI)        (community — experimental)"
+    echo "    [4] Opencode              (community — experimental)"
+    echo "    [5] Gemini CLI            (community — experimental)"
     echo "    [6] Multiple — install for all"
     printf "  > "
     read -r choice
@@ -613,9 +613,15 @@ run_generators() {
   fi
 
   for p in ${platforms_to_run[@]+"${platforms_to_run[@]}"}; do
+    # First-class platforms live at platforms/<p>/; community (experimental)
+    # ones moved to platforms/community/<p>/ (P3-T13). Resolve either.
     local script="$sage_path/runtime/platforms/$p/setup/generate-$p.sh"
+    [ -f "$script" ] || script="$sage_path/runtime/platforms/community/$p/setup/generate-$p.sh"
     if [ -f "$script" ]; then
       echo ""
+      case "$script" in
+        */community/*) echo -e "  ${YELLOW}⚠ $p is community-maintained (experimental) — generation only, no quality chain.${RESET}" ;;
+      esac
       bash "$script" "$target"
     else
       echo -e "  ${YELLOW}⚠ Generator not found: $script${RESET}"

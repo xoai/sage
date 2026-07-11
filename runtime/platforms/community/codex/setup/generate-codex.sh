@@ -1,21 +1,20 @@
 #!/usr/bin/env bash
 # ═══════════════════════════════════════════════════════════════
-# Sage → Opencode Setup
-# Generates AGENTS.md + .opencode/{commands,agents}/ for Opencode.
-# Opencode reads AGENTS.md as the project instructions and supports
-# markdown commands with YAML frontmatter in .opencode/commands/,
-# plus sub-agents in .opencode/agents/.
+# Sage → Codex (OpenAI) Setup
+# Generates AGENTS.md + .codex/agents/ for OpenAI Codex.
+# Codex reads AGENTS.md as its system prompt and reads TOML
+# agent definitions from .codex/agents/.
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 
 SAGE_ROOT="${1:-.}"
 SAGE_DIR="$SAGE_ROOT/sage"
-OC_DIR="$SAGE_ROOT/.opencode"
+CODEX_DIR="$SAGE_ROOT/.codex"
 PROJECT_SAGE="$SAGE_ROOT/.sage"
 CORE="$SAGE_DIR/core"
 
 echo ""
-echo "🚀 Sage → Opencode Setup"
+echo "🚀 Sage → Codex Setup"
 echo "═══════════════════════════════"
 
 # ── Validate ──
@@ -25,50 +24,27 @@ if [ ! -d "$CORE" ]; then
   exit 1
 fi
 
-# ── Read prefix config ──
-PREFIX=""
-if [ -f "$PROJECT_SAGE/config.yaml" ]; then
-  if grep -q 'command_prefix: true' "$PROJECT_SAGE/config.yaml" 2>/dev/null; then
-    PREFIX="sage:"
-  fi
-fi
-
-# ── Create .opencode structure ──
+# ── Create .codex structure ──
 echo ""
-echo "📁 Creating .opencode/ structure..."
-mkdir -p "$OC_DIR/commands" "$OC_DIR/agents"
+echo "📁 Creating .codex/ structure..."
+mkdir -p "$CODEX_DIR/agents"
 
 # ═══════════════════════════════════════════════════════════════
 # AGENTS.md — Generated from shared instructions-body
-# Opencode reads AGENTS.md at project root as system context.
-# Same content as Codex's AGENTS.md; if Codex is also installed,
-# both platforms read the same file.
+# Codex reads AGENTS.md as the system prompt (with a 32KiB cap).
+# Terminology swaps: "Task tool" → "sub-agent invocation"
+#                    ".claude/commands/" → "AGENTS.md routing"
 # ═══════════════════════════════════════════════════════════════
 echo "📝 Generating AGENTS.md..."
 
-# Only write AGENTS.md if it doesn't exist OR is Sage-generated.
-# This avoids clobbering a user's manual AGENTS.md.
-SKIP_AGENTS_MD=false
-if [ -f "$SAGE_ROOT/AGENTS.md" ]; then
-  if head -1 "$SAGE_ROOT/AGENTS.md" 2>/dev/null | grep -q "Sage"; then
-    SKIP_AGENTS_MD=false  # Sage-generated, safe to overwrite
-  else
-    SKIP_AGENTS_MD=true
-    echo "  ⚠ AGENTS.md exists and is not Sage-generated — skipping write."
-    echo "    Move or rename it if you want Sage to manage it."
-  fi
-fi
+source "$(dirname "$0")/../../../_shared/instructions-body.sh"
 
-if [ "$SKIP_AGENTS_MD" = false ]; then
-  source "$(dirname "$0")/../../_shared/instructions-body.sh"
-  emit_instructions_body \
-    | sed \
-      -e 's|Task tool|sub-agent invocation|g' \
-      -e 's|the Task tool|the sub-agent system|g' \
-      -e 's|`.claude/commands/\[workflow\].md`|`.opencode/commands/[workflow].md`|g' \
-    > "$SAGE_ROOT/AGENTS.md"
-  echo "  ✓ AGENTS.md"
-fi
+emit_instructions_body \
+  | sed \
+    -e 's|Task tool|sub-agent invocation|g' \
+    -e 's|the Task tool|the sub-agent system|g' \
+    -e 's|`.claude/commands/\[workflow\].md`|`AGENTS.md` (this file)|g' \
+  > "$SAGE_ROOT/AGENTS.md"
 
 # ── Dynamic constitution merging (same as Claude Code) ──
 CONST_SECTION="## Engineering Principles
@@ -101,86 +77,56 @@ $NEW_PRINCIPLE"
       fi
     fi
   fi
+
+  PROJECT_ADDITIONS=$(sed -n '/^## Project Additions/,$ { /^## Project/d; /^$/d; /^(/d; p; }' "$CONST_FILE" 2>/dev/null)
+  if [ -n "$PROJECT_ADDITIONS" ]; then
+    CONST_SECTION="$CONST_SECTION
+
+Project additions:"
+    while IFS= read -r line; do
+      if [ -n "$line" ]; then
+        PRINCIPLE_NUM=$((PRINCIPLE_NUM + 1))
+        CONST_SECTION="$CONST_SECTION
+${PRINCIPLE_NUM}. ${line}"
+      fi
+    done <<< "$PROJECT_ADDITIONS"
+  fi
 fi
 
-if [ "$SKIP_AGENTS_MD" = false ]; then
-  python3 -c "
+# Replace placeholder in AGENTS.md
+python3 -c "
 with open('$SAGE_ROOT/AGENTS.md', 'r') as f:
     content = f.read()
 replacement = '''$CONST_SECTION'''
 content = content.replace('__CONSTITUTION_PLACEHOLDER__', replacement)
 with open('$SAGE_ROOT/AGENTS.md', 'w') as f:
     f.write(content)
-" 2>/dev/null || true
+" 2>/dev/null || {
+  sed -i.bak "s|__CONSTITUTION_PLACEHOLDER__|## Engineering Principles\n\nBase (all projects):\n1. Tests before code\n2. No silent failures\n3. Secrets never in code\n4. Dependencies explicit\n5. Changes reversible|" "$SAGE_ROOT/AGENTS.md" 2>/dev/null && rm -f "$SAGE_ROOT/AGENTS.md.bak"
+}
+
+# ── Size check (Codex 32 KiB cap) ──
+AGENTS_SIZE=$(wc -c < "$SAGE_ROOT/AGENTS.md")
+AGENTS_LIMIT=32768
+if [ "$AGENTS_SIZE" -gt "$AGENTS_LIMIT" ]; then
+  echo "  ⚠ AGENTS.md is $AGENTS_SIZE bytes — Codex default cap is 32 KiB."
+  echo "    Set project_doc_max_bytes in ~/.codex/config.toml to allow it."
+else
+  echo "  ✓ AGENTS.md ($AGENTS_SIZE bytes, under 32 KiB cap)"
 fi
 
 # ═══════════════════════════════════════════════════════════════
-# Per-workflow command files in .opencode/commands/
-# Format: markdown with YAML frontmatter
-# Filename = command name (e.g., build.md → /build)
+# Sub-agents — Codex reads .codex/agents/*.toml
 # ═══════════════════════════════════════════════════════════════
 echo ""
-echo "📎 Generating .opencode/commands/ from core workflows..."
+echo "🤖 Generating .codex/agents/ sub-agents..."
 
-# Source the shared preambles emitter
-source "$(dirname "$0")/../../_shared/preambles.sh"
-
-for wf in "$CORE"/workflows/*.workflow.md; do
-  [ -f "$wf" ] || continue
-  basename_wf=$(basename "$wf" .workflow.md)
-
-  # Get preamble (preserve trailing newlines)
-  PREAMBLE=$({ emit_preamble "$basename_wf"; printf x; })
-  PREAMBLE="${PREAMBLE%x}"
-
-  # Get workflow description from frontmatter for the YAML `description:` field
-  WF_DESC=$(sed -n '/^---$/,/^---$/{ /^produces:/s/^produces: *//p; }' "$wf" \
-    | head -1 | sed 's/\[//g;s/\]//g;s/"//g' | cut -c1-100)
-  [ -z "$WF_DESC" ] && WF_DESC="Sage $basename_wf workflow"
-
-  # /sage stays unprefixed; everything else gets PREFIX
-  cmd_name="$basename_wf"
-  [ "$basename_wf" != "sage" ] && cmd_name="${PREFIX}${basename_wf}"
-
-  # Build the command file — YAML frontmatter + preamble + workflow body
-  {
-    echo "---"
-    echo "description: ${WF_DESC}"
-    echo "---"
-    echo ""
-    # Preamble translated for Opencode terminology
-    printf "%s" "$PREAMBLE" | sed \
-      -e 's|Task tool|sub-agent invocation|g' \
-      -e 's|the Task tool|the sub-agent system|g'
-    # Workflow body (strip frontmatter, substitute paths)
-    sed '/^---$/,/^---$/d' "$wf" \
-      | sed 's|\*\*sage-navigator\*\* skill|**sage-navigator** skill at `sage/core/capabilities/orchestration/sage-navigator/SKILL.md`|g' \
-      | sed "s|sage-navigator's intelligence layer|sage-navigator's intelligence layer (\`sage/core/capabilities/orchestration/sage-navigator/SKILL.md\`, section 2)|g" \
-      | sed 's|If relevant Sage skills exist, read and follow them.|If relevant Sage skills exist in `sage/skills/`, read and follow them.|g' \
-      | sed '/^$/N;/^\n$/d'
-    echo ""
-    echo '$ARGUMENTS'
-  } > "$OC_DIR/commands/${cmd_name}.md"
-
-  echo "  ✓ ${cmd_name}.md → /${cmd_name}"
-done
-
-# ═══════════════════════════════════════════════════════════════
-# Sub-agents in .opencode/agents/
-# Format: markdown with YAML frontmatter (mode: subagent)
-# ═══════════════════════════════════════════════════════════════
-echo ""
-echo "🤖 Generating .opencode/agents/ sub-agents..."
-
-cat > "$OC_DIR/agents/sage-reviewer.md" << 'AGENT_EOF'
----
-description: Independent reviewer for Sage artifacts (spec, plan, ADR, root cause, fix plan, QA). READ-ONLY — never modifies files.
-mode: subagent
-permission:
-  edit: deny
-  bash: deny
----
-
+# Reviewer sub-agent (used by auto-review, auto-qa, quality-locked)
+cat > "$CODEX_DIR/agents/sage-reviewer.toml" << 'AGENT_EOF'
+name = "sage-reviewer"
+description = "Independent reviewer for Sage artifacts (spec, plan, ADR, root cause, fix plan, QA). READ-ONLY — never modifies files."
+sandbox_mode = "read-only"
+developer_instructions = """
 You are a review sub-agent for the Sage framework. You were NOT
 involved in writing the artifact under review. Evaluate it with fresh
 eyes. Be specific. Be brief.
@@ -209,18 +155,16 @@ MINOR-substantive: [list or "None"]
 MINOR-cosmetic: [list or "None"]
 
 Be concise. No generic praise. No padding. Just findings.
+"""
 AGENT_EOF
-echo "  ✓ sage-reviewer.md"
+echo "  ✓ sage-reviewer.toml"
 
-cat > "$OC_DIR/agents/sage-classifier.md" << 'AGENT_EOF'
----
-description: Routes free-input requests to the right Sage workflow when keyword routing doesn't match.
-mode: subagent
-permission:
-  edit: deny
-  bash: deny
----
-
+# Classifier sub-agent (used by navigator Layer 2 routing)
+cat > "$CODEX_DIR/agents/sage-classifier.toml" << 'AGENT_EOF'
+name = "sage-classifier"
+description = "Routes free-input requests to the right Sage workflow when keyword routing doesn't match."
+sandbox_mode = "read-only"
+developer_instructions = """
 You are a routing classifier for the Sage framework. Your only job is
 to classify a request into one of three phases of work:
 
@@ -234,11 +178,12 @@ reasoning.
 
 Do not ask questions. Do not produce code. Do not propose workflows.
 Classification only.
+"""
 AGENT_EOF
-echo "  ✓ sage-classifier.md"
+echo "  ✓ sage-classifier.toml"
 
 # ═══════════════════════════════════════════════════════════════
-# Project state — .sage/ initialization
+# Project state — .sage/ initialization (same logic as Claude Code)
 # ═══════════════════════════════════════════════════════════════
 echo ""
 echo "📊 Checking project state..."
@@ -252,15 +197,15 @@ fi
 # ── Report ──
 echo ""
 echo "═══════════════════════════════"
-echo "✅ Sage → Opencode setup complete"
+echo "✅ Sage → Codex setup complete"
 echo ""
 echo "Files written:"
-echo "  AGENTS.md                    (read by Opencode as system context)"
-echo "  .opencode/commands/          (markdown command definitions)"
-echo "  .opencode/agents/            (markdown sub-agent definitions)"
+echo "  AGENTS.md                  (read by Codex as system prompt)"
+echo "  .codex/agents/             (TOML sub-agent definitions)"
 echo ""
 echo "Next steps:"
-echo "  - Run \`opencode\` to start a session"
-echo "  - Type /sage or describe what you want to build"
-echo "  - Sub-agent reviews use @sage-reviewer (invoked automatically by workflows)"
+echo "  - Run \`codex\` to start a session"
+echo "  - The sage-reviewer agent is invoked automatically by Sage workflows"
+echo "    that need independent review. Codex will spawn it on request."
+echo "  - Sage workflows are described in AGENTS.md routing table"
 echo ""

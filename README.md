@@ -699,18 +699,33 @@ header — recent context is always read first. When the file exceeds
 
 ## Platforms
 
-Sage is platform-agnostic. It works wherever AI agents work.
+Sage generates process files for many agents, but not every platform can run
+every layer. Two tiers:
 
-| Platform | How Sage Integrates | Sub-agent reviews | Status |
-|----------|---------------------|-------------------|--------|
-| [Claude Code](runtime/platforms/claude-code/) | CLAUDE.md + `.claude/commands/` (markdown) | Task tool | Full |
-| [Antigravity](runtime/platforms/antigravity/) | GEMINI.md + `.agent/` (markdown) | Native | Full |
-| [Codex (OpenAI)](runtime/platforms/codex/) | AGENTS.md + `.codex/agents/` (TOML sub-agents) | Native (TOML) | Full |
-| [Opencode](runtime/platforms/opencode/) | AGENTS.md + `.opencode/{commands,agents}/` (markdown) | Native (markdown) | Full |
-| [Gemini CLI](runtime/platforms/gemini-cli/) | GEMINI.md + `.gemini/commands/` (TOML) | Single-pass fallback in v1 | Full |
-| [Claude Code Plugin](runtime/platforms/claude-code/setup/generate-plugin.sh) | Plugin format — install with `/plugin install sage@xoai` | Task tool | Full |
+**First-class** — full quality chain (sub-agent reviews + the mechanical
+spec-gate hook) and end-to-end CI:
 
-Six distribution paths from one source:
+| Platform | How Sage Integrates | Quality chain |
+|----------|---------------------|---------------|
+| [Claude Code](runtime/platforms/claude-code/) | CLAUDE.md + `.claude/commands/` (markdown) | Full — Task tool + spec-gate hook |
+| [Claude Code Plugin](runtime/platforms/claude-code/setup/generate-plugin.sh) | Plugin — `/plugin install sage@sage` | Full — Task tool + spec-gate hook |
+
+[Generic](runtime/platforms/generic/) ships a portable AGENTS.md baseline
+(prose rules; deterministic gates run manually) as a starting point for agents
+without a dedicated generator.
+
+**Community (experimental)** — generation-tested only; the sub-agent reviews and
+the spec-gate hook are unavailable, so Rule 3 / Rule 5 rely on prose and any
+skipped review degrades loudly. See each platform's `STATUS.md`:
+
+| Platform | How Sage Integrates |
+|----------|---------------------|
+| [Antigravity](runtime/platforms/community/antigravity/) | GEMINI.md + `.agent/` (markdown) |
+| [Codex (OpenAI)](runtime/platforms/community/codex/) | AGENTS.md + `.codex/agents/` (TOML sub-agents) |
+| [Opencode](runtime/platforms/community/opencode/) | AGENTS.md + `.opencode/{commands,agents}/` (markdown) |
+| [Gemini CLI](runtime/platforms/community/gemini-cli/) | GEMINI.md + `.gemini/commands/` (TOML) |
+
+Distribution paths from one source:
 
 ```
 Sage Framework (source of truth)
