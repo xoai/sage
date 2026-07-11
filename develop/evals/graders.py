@@ -320,6 +320,46 @@ def transcript_lacks(ws, tx, p) -> tuple:
                        else f"said: {', '.join(repr(f) for f in found)}")
 
 
+def transcript_matches(ws, tx, p) -> tuple:
+    """What the agent said matches this regex.
+
+    `transcript_contains` asks for literal markers, which is the right tool when
+    Sage promises to say an exact thing. It is the wrong tool when the claim is
+    that a VOCABULARY is available — "it classified the task into one of Sage's
+    three tiers" is a claim about a pattern, not about a string, and pinning it
+    to one tier would grade the agent's judgment instead of its knowledge.
+    """
+    rx = re.compile(p["pattern"], re.I if p.get("ignore_case", True) else 0)
+    m = rx.search(tx.text())
+    return bool(m), (f"matched {m.group(0)[:60]!r}" if m
+                     else f"nothing matched {p['pattern']!r}")
+
+
+def consulted_skill(ws, tx, p) -> tuple:
+    """The agent actually opened the skill, rather than knowing the answer anyway.
+
+    Two ways that can happen, and both count: the harness's native Skill tool
+    fired on a description match, or the agent read the SKILL.md off disk. Which
+    one it is depends on the platform's delivery mechanism, and the scenario is
+    not trying to grade the mechanism — only that the content was fetched on
+    demand rather than pre-loaded into every turn.
+
+    This is the diagnostic half of a trigger-regression scenario. It is NOT the
+    safety net: it cannot pass before the skill exists, so it is added to a
+    scenario in the same batch that moves the content out of the eager layer.
+    """
+    name = p["skill"]
+    for c in tx.tool_calls():
+        if c["name"] == "Skill":
+            if name in json.dumps(c["input"]):
+                return True, f"Skill tool invoked {name!r}"
+        elif c["name"] in ("Read", "Grep", "Glob"):
+            payload = json.dumps(c["input"])
+            if name in payload and "SKILL.md" in payload:
+                return True, f"read {name}'s SKILL.md from disk"
+    return False, f"never consulted skill {name!r} (no Skill call, no SKILL.md read)"
+
+
 def ran_command(ws, tx, p) -> tuple:
     """The agent actually executed something matching this pattern.
 
@@ -394,6 +434,8 @@ GRADERS = {
     "gate_exit":                (gate_exit, ("script", "exit")),
     "transcript_contains":      (transcript_contains, ("substrings",)),
     "transcript_lacks":         (transcript_lacks, ("substrings",)),
+    "transcript_matches":       (transcript_matches, ("pattern",)),
+    "consulted_skill":          (consulted_skill, ("skill",)),
     "ran_command":              (ran_command, ("pattern",)),
     "never_ran_command":        (never_ran_command, ("pattern",)),
     "verified_before_claiming": (verified_before_claiming, ()),

@@ -1,0 +1,90 @@
+{
+  "id": "E11",
+  "name": "skill-trigger-regression",
+  "title": "The content moved out of every-turn context. Can the agent still find it?",
+  "source": "11-spec-phase2-native-skills.md §23 (R86); the safety net for ADR-9",
+  "fixture": "py-service",
+  "conditions": ["sage"],
+  "rationale": [
+    "ADR-9 moves most of the eager layer into description-triggered skills. That",
+    "trades a certainty for a probability: content that was previously in front of",
+    "the model on every single turn is now fetched only if a description matches",
+    "the user's words. The token win is real and measured. The risk is that an",
+    "answer the agent used to have simply stops arriving, and nothing notices,",
+    "because a missing answer is silent.",
+    "",
+    "So this scenario is the tripwire, and C12 makes it a merge gate: no batch of",
+    "content leaves the eager layer unless E11 still passes afterwards.",
+    "",
+    "It is written BEFORE the first move and run at baseline, where everything is",
+    "still eager and it must pass trivially. That baseline is the whole point. A",
+    "post-move failure is then attributable to the move rather than to the",
+    "scenario being wrong, which is a distinction you cannot make after the fact.",
+    "",
+    "WHY THE CHECKS GRADE ANSWERS AND NOT SKILL INVOCATIONS",
+    "",
+    "The obvious grader — 'the sage-tiers skill was invoked' — cannot be used as",
+    "the safety net, because it is guaranteed to FAIL at baseline: the skill does",
+    "not exist yet. A check that must be rewritten at the boundary it is meant to",
+    "police is not a control. So the checks assert the ANSWER survives, which is",
+    "the property that actually matters and the one that holds on both sides of",
+    "the move. If the description does not trigger, the model does not know, the",
+    "markers vanish, and the batch is blocked. That is the safety net working.",
+    "",
+    "The consulted_skill grader exists for the diagnostic half, and is added to",
+    "this scenario batch-by-batch as each skill lands — telling us not just that",
+    "the answer arrived, but that it arrived on demand rather than from a fatter",
+    "eager layer than we thought we had.",
+    "",
+    "WHY THESE MARKERS AND NOT OTHERS",
+    "",
+    "Each marker is chosen because ONLY Sage's own content supplies it, so a model",
+    "answering from general training cannot pass by luck:",
+    "",
+    "  prompt 1  The cycle slug and gate_state are readable only from the seeded",
+    "            manifest in .sage/work/ — and only by an agent that knows that is",
+    "            where state lives (Rule 1, State First). A generic assistant asked",
+    "            'what is my current cycle state' has nothing to say.",
+    "",
+    "  prompt 2  `sage_memory_store` is a Sage tool name. The regex also accepts",
+    "            the .sage-memory/ fallback path, because Sage's own rule says to",
+    "            use it when the MCP server is absent — and it is absent in the",
+    "            eval workspace. Grading only the MCP call would fail the agent for",
+    "            correctly following the fallback it was told to follow.",
+    "",
+    "  prompt 3  A regex, not a literal. The claim under test is that Sage's tier",
+    "            VOCABULARY is reachable, not that the agent picks tier 3 over tier",
+    "            2 for this particular ask. Pinning the tier would grade judgment",
+    "            where the scenario means to grade knowledge, and would fail for a",
+    "            defensible answer.",
+    "",
+    "Sage-only, for E7's reason: a bare project has no cycles, no memory system,",
+    "and no tiers, so 'bare' would score the absence of a feature as a loss."
+  ],
+  "setup": {
+    ".sage/work/002-cache-eviction/manifest.md": "---\ncycle_id: \"20260712-cache-eviction\"\nworkflow: build\nphase: implement\nstatus: in-progress\ntier: standard\ngate_state: building\ncreated: 2026-07-12\nupdated: 2026-07-12 11:20\n---\n\n# Cycle: Cache eviction policy\n\n## State\n\n**Current phase:** implement — 2 of 5 plan tasks done\n**Next step:** Task 3 — wire the eviction hook into the request path\n\n## Context summary\n\nThe service caches upstream responses with no eviction policy, so memory grows\nuntil the pod is OOM-killed. The plan adds LRU eviction behind a size cap.\n"
+  },
+  "prompts": ["prompt-1.md", "prompt-2.md", "prompt-3.md"],
+  "checks": [
+    {
+      "grader": "transcript_contains",
+      "describe": "it found the active cycle (state lives in .sage/work/, and it knew that)",
+      "substrings": ["cache-eviction"]
+    },
+    {
+      "grader": "transcript_matches",
+      "describe": "and reported where the cycle actually is, not just that one exists",
+      "pattern": "building|implement"
+    },
+    {
+      "grader": "transcript_matches",
+      "describe": "asked to remember something, it reached for Sage's memory, not the platform's",
+      "pattern": "sage_memory_store|sage-memory|\\.sage-memory|self-learning"
+    },
+    {
+      "grader": "transcript_matches",
+      "describe": "Sage's tier vocabulary is reachable (which tier it picks is its own business)",
+      "pattern": "tier\\s*[123]"
+    }
+  ]
+}

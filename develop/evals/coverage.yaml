@@ -219,7 +219,7 @@ surfaces:
     path: runtime/platforms/_shared/instructions-body.sh
     kind: eager-block
     anchor: "### Rule 0: Route Every Request"
-    covered-by: [E6]
+    covered-by: [E6, E11]
     notes: >
       E6 grades one routing decision (multi-surface ask → architect, not
       build). The three-layer chain's fallback layers, the tier classifier, and
@@ -230,10 +230,13 @@ surfaces:
     path: runtime/platforms/_shared/instructions-body.sh
     kind: eager-block
     anchor: "### Rule 1A: Memory Before Work (MANDATORY for Standard+)"
-    uncovered: >
-      Nothing measures whether the mandatory pre-work memory search happens, or
-      whether it changes the resulting artifact. Rule 1A is marked MANDATORY in
-      the eager layer and is entirely unverified. L2 (Phase 5) targets it.
+    covered-by: [E11]
+    notes: >
+      E11 grants PARTIAL cover only: asked to remember something, does the agent
+      reach for Sage's memory rather than the platform's? That is the trigger,
+      not the rule. Nothing still measures whether the MANDATORY pre-work search
+      actually happens before a spec, or whether it changes the artifact. L2
+      (Phase 5) is what closes that, and this note is why L2 stays on the list.
 
   eager-workflow-gates:
     path: runtime/platforms/_shared/instructions-body.sh
@@ -249,9 +252,12 @@ surfaces:
     path: runtime/platforms/_shared/instructions-body.sh
     kind: eager-block
     anchor: "### Rule 1: State First"
-    uncovered: >
-      "Never start fresh when there is existing context" — the premise of the
-      whole long-horizon bet, and unmeasured. L1 (Phase 5).
+    covered-by: [E11]
+    notes: >
+      E11 asks "what's my current cycle state?" against a seeded manifest and
+      grades whether the agent finds it. That covers the LOOKUP. It does not
+      cover the rule's actual claim — that state is consulted unprompted, before
+      new work begins — which needs L1 (Phase 5).
 
   eager-rule-2-skills:
     path: runtime/platforms/_shared/instructions-body.sh
@@ -290,9 +296,12 @@ surfaces:
     path: runtime/platforms/_shared/instructions-body.sh
     kind: eager-block
     anchor: "### Rule 6: Capture Corrections"
-    uncovered: >
-      No scenario issues a correction and then checks that it was stored. The
-      self-learning loop — a differentiated feature — is unmeasured.
+    covered-by: [E11]
+    notes: >
+      Partial. E11's second prompt is an explicit "remember this", which grades
+      the storage vocabulary. It is NOT a correction — nobody tells the agent it
+      was wrong — so the mandatory-capture-on-correction path, the one the rule
+      actually promises, remains unmeasured.
 
   eager-rule-7-record-decisions:
     path: runtime/platforms/_shared/instructions-body.sh
@@ -418,10 +427,12 @@ surfaces:
   skill-sage-memory:
     path: skills/sage-memory/SKILL.md
     kind: skill
-    uncovered: >
-      The memory skill is invoked by Rule 1A on every Standard+ task and has no
-      scenario. L2 (Phase 5) measures whether a stored constraint actually
-      shapes a later session — the first real test of this skill.
+    covered-by: [E11]
+    notes: >
+      E11 covers the trigger — the agent reaches for this skill when asked to
+      remember. It does not cover RECALL, which is the skill's entire value
+      proposition: does a constraint stored in session 1 change behavior in
+      session 3? Single-session scenarios cannot answer that. L2 (Phase 5) can.
 
   skill-sage-ontology:
     path: skills/sage-ontology/SKILL.md
