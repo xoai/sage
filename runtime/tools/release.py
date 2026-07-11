@@ -68,6 +68,10 @@ MARKETPLACES = (
 )
 
 SCAN_SUFFIXES = (".md", ".sh", ".yaml", ".yml")
+# …and extensionless scripts. The CLI is `bin/sage`, with no suffix, so it was not
+# scanned — and it sat there hardcoding `sage-version: "1.0.0"` into every project
+# it initialized while VERSION said 1.2.0. The one guard built to catch exactly
+# that literal could not see the one file that actually stamps it.
 SCAN_EXCLUDE_DIRS = (".git", ".sage", ".sage-memory", "node_modules", ".pytest_cache")
 # Test harnesses build fixture trees (fake .sage/config.yaml, plugin.json,
 # CHANGELOG) that deliberately contain version literals — exclude them.
@@ -146,10 +150,23 @@ def marketplace_version_pins(root: pathlib.Path, rel: str) -> list[str]:
     return [e.get("name", "?") for e in entries if "version" in e]
 
 
+def is_script(path: pathlib.Path) -> bool:
+    """An extensionless file that opens with a shebang — bin/sage and its kin."""
+    if path.suffix:
+        return False
+    try:
+        with path.open("rb") as fh:
+            return fh.read(2) == b"#!"
+    except OSError:
+        return False
+
+
 def hardcoded_literals(root: pathlib.Path) -> list[tuple[str, int, str]]:
     hits: list[tuple[str, int, str]] = []
     for path in sorted(root.rglob("*")):
-        if not path.is_file() or path.suffix not in SCAN_SUFFIXES:
+        if not path.is_file():
+            continue
+        if path.suffix not in SCAN_SUFFIXES and not is_script(path):
             continue
         rel = path.relative_to(root)
         if any(part in SCAN_EXCLUDE_DIRS for part in rel.parts):

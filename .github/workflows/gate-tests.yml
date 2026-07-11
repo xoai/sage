@@ -37,6 +37,11 @@ jobs:
       - name: Flag/quality-locked tool tests
         run: python3 develop/validators/tools/test_sage_flags.py
 
+      # `sage init` is the most-run command in the framework and nothing checked
+      # what it WROTE — it emitted a config.yaml no YAML parser accepts.
+      - name: sage init writes a readable project
+        run: python3 develop/validators/tools/test_sage_init.py
+
       # The plugin's copies of these scripts used to be a committed mirror this
       # job diffed against. The mirror is gone (P3-T2b) — build_plugin.py's audit
       # now asserts the generated tree's gate scripts are byte-identical to the

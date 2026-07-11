@@ -542,8 +542,8 @@ command_prefix: $prefix_val
 #   worktree — a worktree per initiative; for parallel sessions.
 isolation: branch
 # worktree_copy / worktree_harvest: which gitignored paths (relative to the repo
-# root) `sage worktree` seeds INTO a new worktree, and which `sage worktree
-# remove` harvests BACK to the main checkout. Tracked paths are skipped (git
+# root) \`sage worktree\` seeds INTO a new worktree, and which \`sage worktree
+# remove\` harvests BACK to the main checkout. Tracked paths are skipped (git
 # already carries them). A trailing /* in worktree_harvest harvests each child
 # independently (per-initiative). Platform runtime (.claude/CLAUDE.md, etc.) is
 # always seeded from your platforms: list. Edit these to match your project's
@@ -1055,7 +1055,7 @@ DECMD
 Shared log for significant decisions and context.
 Both the AI agent and human collaborators write here.
 
-- [$(date +%Y-%m-%d)] Sage updated to v1.0.7
+- [$(date +%Y-%m-%d)] Sage updated to v${SAGE_FRAMEWORK_VERSION}
 DECMD
     migration_notes="${migration_notes}\n  ${GREEN}✓${RESET} decisions.md created"
   fi

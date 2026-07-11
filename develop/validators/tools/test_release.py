@@ -126,6 +126,24 @@ class ReleaseToolTest(unittest.TestCase):
         self.assertEqual(rc, 1, out)
         self.assertIn("hard-coded version", out)
 
+    def test_check_detects_a_literal_in_an_extensionless_script(self):
+        """bin/sage has no suffix, so the scan skipped it — and it sat there
+        stamping `sage-version: "1.0.0"` into every project it initialized while
+        VERSION said 1.2.0. The guard built to catch that literal could not see the
+        one file that writes it."""
+        build_tree(self.dir, extra={
+            "bin/sage": '#!/usr/bin/env bash\necho \'sage-version: "1.0.9"\'\n'})
+        rc, out = run(self.dir, "--check")
+        self.assertEqual(rc, 1, out)
+        self.assertIn("bin/sage", out)
+        self.assertIn("hard-coded version", out)
+
+    def test_check_ignores_an_extensionless_file_that_is_not_a_script(self):
+        """VERSION itself has no suffix. Only shebang files are scanned."""
+        build_tree(self.dir, extra={"NOTES": 'sage-version: "1.0.9"\n'})
+        rc, out = run(self.dir, "--check")
+        self.assertEqual(rc, 0, out)
+
     def test_check_allows_placeholder_in_docs(self):
         build_tree(self.dir, extra={"README.md": 'sage-version: "<stamped by sage init>"\n'})
         rc, out = run(self.dir, "--check")
