@@ -20,14 +20,21 @@ build_constitution_section() {
   local core="$1"
   local project_sage="$2"
 
+  # Each principle names what enforces it. The eval that produced this version of
+  # Sage found that mechanically-enforced rules moved behavior and prose ones, on
+  # their own, did not — so a reader deserves to know which kind each one is.
+  # "Judgment" is not a euphemism for "optional"; it means the only thing standing
+  # behind the rule is someone noticing, and that is worth being honest about.
   local section="## Engineering Principles
 
 Base (all projects):
-1. Tests before code — every behavior has a test before implementation
-2. No silent failures — errors handled, logged, or propagated
-3. Secrets never in code — use env vars or secret managers
-4. Dependencies explicit — declared with pinned versions
-5. Changes reversible — migrations reversible, deployments rollbackable"
+1. Tests before code — every behavior has a test first [sage-tdd-gate: blocks the edit]
+2. No silent failures — errors handled, logged, or propagated [Gate 3: judgment]
+3. Secrets never in code — env vars or a secret manager [Gate 3: judgment]
+4. Dependencies explicit — declared, pinned [Gate 4: sage-hallucination-check]
+5. Changes reversible — migrations reversible, deploys rollbackable [Gate 3: judgment]
+
+Full text, project additions, and the reasoning: the sage-constitution skill."
 
   local num=5
   local const_file="$project_sage/constitution.md"

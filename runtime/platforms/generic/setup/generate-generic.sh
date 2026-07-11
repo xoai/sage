@@ -84,6 +84,34 @@ else
 fi
 rm -f "$CONST_TMP"
 
+# ── Command table (deleted from the shared body; re-inlined here) ──
+#
+# claude-code lists the generated .claude/commands/ in its own `/` menu, so a
+# hand-written table in the eager layer was nineteen lines duplicating a menu the
+# user can already see. Generic platforms have no menu — so the table comes back
+# here, GENERATED from core/workflows/ rather than hand-maintained. The old table
+# had already drifted (it still listed workflows under their pre-v1.2.0 names),
+# which is what a hand-written index of a directory always eventually does.
+if [ -d "$CORE/workflows" ]; then
+  {
+    echo ""
+    echo "## Workflows"
+    echo ""
+    echo "This platform has no slash-command menu. Invoke a workflow by reading"
+    echo "and following its file under \`sage/core/workflows/\`."
+    echo ""
+    echo "| Workflow | File | What it does |"
+    echo "|---|---|---|"
+    for wf in "$CORE"/workflows/*.workflow.md; do
+      [ -f "$wf" ] || continue
+      wf_name=$(basename "$wf" .workflow.md)
+      wf_desc=$(sed -n '/^---$/,/^---$/{ /^description:/s/^description: *//p; }' "$wf" 2>/dev/null | head -1)
+      [ -z "$wf_desc" ] && wf_desc="(no description)"
+      echo "| \`/$wf_name\` | \`sage/core/workflows/$wf_name.workflow.md\` | $wf_desc |"
+    done
+  } >> "$OUT"
+fi
+
 # ── Inline the system skills (no discovery mechanism to trigger them) ──
 #
 # On claude-code these are separate files that load when their description

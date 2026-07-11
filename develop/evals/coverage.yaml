@@ -259,14 +259,24 @@ surfaces:
       cover the rule's actual claim — that state is consulted unprompted, before
       new work begins — which needs L1 (Phase 5).
 
+  eager-skill-check:
+    path: runtime/platforms/_shared/instructions-body.sh
+    kind: eager-block
+    anchor: "## Skill check — before ANY response"
+    covered-by: [E11]
+    notes: >
+      THE dispatcher rule (R91, adapted from Superpowers with attribution). The
+      single point of failure for the entire diet: every system skill reaches the
+      model through this block, so if it stops firing, seven skills go silent at
+      once and every other eval scenario still passes. E11 exists to make that
+      loud. Treat any edit here as a behavioral change, however it reads.
+
   eager-rule-2-skills:
     path: runtime/platforms/_shared/instructions-body.sh
     kind: eager-block
     anchor: "### Rule 2: Skills Before Assumptions"
-    uncovered: >
-      No scenario checks that a Sage skill is read before skill-covered output
-      is produced. This rule becomes load-bearing in Phase 2 (it IS the
-      dispatcher rule, ADR-9), and E11 is written to cover it.
+    covered-by: [E11]
+    notes: "Now a two-line pointer at the Skill check block above, which is the real rule."
 
   eager-rule-3-document-decisions:
     path: runtime/platforms/_shared/instructions-body.sh
@@ -316,11 +326,6 @@ surfaces:
     anchor: "## Learning Triggers"
     uncovered: "The six trigger conditions are never exercised. See eager-rule-6-capture-corrections."
 
-  eager-deep-process-intelligence:
-    path: runtime/platforms/_shared/instructions-body.sh
-    kind: eager-block
-    anchor: "## Deep Process Intelligence"
-    uncovered: "A pointer to sage-navigator. Nothing grades whether it is followed."
 
   eager-communication-style:
     path: runtime/platforms/_shared/instructions-body.sh
@@ -339,32 +344,8 @@ surfaces:
       No grader inspects zone footers. 29 lines paid every turn to format
       prompts the headless driver never sees.
 
-  eager-commands-table:
-    path: runtime/platforms/_shared/instructions-body.sh
-    kind: eager-block
-    anchor: "## Commands"
-    uncovered: >
-      The command table duplicates what the platform's own /-menu already
-      lists from the generated .claude/commands/. Candidate for DELETE.
 
-  eager-enforcement-notes:
-    path: runtime/platforms/_shared/instructions-body.sh
-    kind: eager-block
-    anchor: "## Enforcement (platform-dependent)"
-    covered-by: [E8]
-    notes: >
-      E8 grades the loud-degradation behavior this block describes. The block
-      itself duplicates the README truth table — which Phase 4 (R111) makes
-      generated. Candidate for DELETE once the table is generated.
 
-  eager-available-skills:
-    path: runtime/platforms/_shared/instructions-body.sh
-    kind: eager-block
-    anchor: "## Available Skills"
-    uncovered: >
-      A prose list of skill CATEGORIES, not skills. On a platform with native
-      description-triggered discovery this is redundant with the skill
-      descriptions themselves — which is ADR-9's whole argument.
 
   eager-project-state:
     path: runtime/platforms/_shared/instructions-body.sh
