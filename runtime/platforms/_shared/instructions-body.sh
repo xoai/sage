@@ -366,12 +366,28 @@ Rules:
 | `/design` | Brief → spec → copy (reads research context) |
 | `/analyze` | UX audit → evaluation → findings |
 | `/status` | Compute project state from artifacts |
-| `/review` | Independent evaluation via sub-agent |
+| `/review` | Independent evaluation (sub-agent where the Task tool exists) |
 | `/learn` | Codebase scan → memory storage |
 | `/reflect` | Review cycle → extract learnings → seed next cycle |
 | `/continue` | Resume any active cycle with full context |
 | `/qa` | Browser-based functional testing (optional Lightpanda) |
 | `/design-review` | Design quality audit + design system compliance |
+
+## Enforcement (platform-dependent)
+
+Not every layer runs on every platform. What does not run degrades **loudly** —
+announced and logged to `decisions.md` — never silently.
+
+- **Deterministic gate scripts** (Gate 1/4/5, three-state 0/1/2) run anywhere
+  bash + python3 exist.
+- **Sub-agent reviews** — auto-review, auto-QA, independent Gate 3 — require the
+  Task tool. Where it is unavailable, each is skipped with an announcement
+  (`Quality chain is degraded`) and a `decisions.md` line; there is no
+  self-review fallback that pretends independence.
+- **The spec-gate hook** (blocks source edits before an approved spec; blocks
+  completion before gates pass) is Claude Code only, and only when
+  `hard_enforcement: true` in `.sage/config.yaml`. On other platforms, Rule 3
+  and Rule 5 are enforced by prose alone.
 
 ## Available Skills
 

@@ -415,6 +415,34 @@ Every rule is an **observable condition**, not an action instruction.
 into existence. "MUST write spec" is rationalizable — the agent decides
 the conversation is the spec. File existence beats language.
 
+**On Claude Code, spec-first is mechanical, not just prose.** A `PreToolUse`
+hook (`sage-spec-gate.sh`) blocks edits to source files while a Standard+ cycle
+is still pre-spec, and blocks marking a cycle complete before its gates pass.
+The agent cannot rationalize past a blocked tool call. It is scoped (fires only
+inside a Sage project with an active cycle), escapable (`hard_enforcement:
+false`, `tier: tier1`, or editing under `.sage/`), and fails open — a broken
+hook never bricks your editor. New projects default it on; projects upgraded
+with `sage update` get it installed but **off**, with a notice, so enforcement
+never surprises an established workflow.
+
+#### What is mechanical on each platform
+
+Not every platform can run every layer. Sage degrades **loudly** — a skipped
+review announces itself and logs to `decisions.md` — never silently.
+
+| Layer | Claude Code | Generic / other platforms |
+|---|---|---|
+| Layers 1–3, 5 (prose rules, preambles, capabilities, self-learning) | ✅ prose | ✅ prose |
+| Layer 4 — gate scripts (3-state, self-tested) | ✅ deterministic | ✅ deterministic (run manually) |
+| Spec-gate hook (blocks pre-spec edits, blocks premature completion) | ✅ mechanical (PreToolUse) | ❌ not available — prose rules only |
+| Sub-agent reviews (auto-review, auto-QA, independent Gate 3) | ✅ via Task tool | ⚠️ skipped **loudly** — announced + logged |
+
+The deterministic layers — gate scripts and the spec-gate hook — carry their
+own regression tests (`develop/validators/gates/`, `develop/validators/hooks/`)
+and run in CI on both modern bash and a real bash 3.2 container. A gate or hook
+that fails open is worse than none at all, so they are tested to prove they
+don't.
+
 The agent must bypass all five layers to skip the spec. Each layer is
 independently enforceable.
 
