@@ -80,6 +80,13 @@ SKILL_INCLUDE_DIRS = {"references", "scripts"}
 
 # Files the plugin pulls from core/ and runtime/ (plugin path → repo source).
 FILE_MAP = {
+    # The CLI the plugin's README tells users to run. The overlay used to carry its
+    # own copy, which nothing regenerated: it froze at v1.1.7 (1007 lines against
+    # bin/sage's 2056) and hardcoded `sage-version: "1.0.0"` into every project it
+    # initialized. A second copy of a file that has a canonical source is exactly
+    # what ADR-5 exists to forbid — so it is generated, and audit() now holds it
+    # byte-identical to bin/sage forever.
+    "scripts/sage": "bin/sage",
     "hooks/scripts/sage-hallucination-check.sh": "core/gates/scripts/sage-hallucination-check.sh",
     "hooks/scripts/sage-spec-check.sh": "core/gates/scripts/sage-spec-check.sh",
     "hooks/scripts/sage-verify.sh": "core/gates/scripts/sage-verify.sh",

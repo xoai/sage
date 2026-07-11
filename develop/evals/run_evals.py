@@ -102,6 +102,13 @@ class Scenario:
         self.conditions = tuple(spec.get("conditions", CONDITIONS))
         self.prompt_files = spec["prompts"]
         self.checks = spec["checks"]
+        # Files written AFTER sage init, so a scenario can seed Sage's own state
+        # (a cycle manifest, say) — something the fixture cannot do, because
+        # `sage init` is what creates .sage/ in the first place.
+        self.setup = spec.get("setup", {})
+        # Extra driver flags. E8 has to make the Task tool genuinely absent;
+        # asking the agent to pretend it is absent tests nothing.
+        self.driver_args = spec.get("driver_args", [])
 
     def validate(self) -> list:
         """Everything --offline-check can prove without spending a cent."""
@@ -176,6 +183,18 @@ def make_workspace(scenario: Scenario, condition: str, root: pathlib.Path) -> pa
     if condition == "sage":
         sage_init(ws)
 
+    # Seeded after init, and committed, so a scenario starts from state the agent
+    # did not create and the git history says so.
+    for rel, text in scenario.setup.items():
+        p = ws / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(text if isinstance(text, str) else "\n".join(text),
+                     encoding="utf-8")
+    if scenario.setup:
+        git(ws, "add", "-A")
+        git(ws, "-c", "user.email=evals@sage.test", "-c", "user.name=sage-evals",
+            "commit", "-q", "-m", "fixture: scenario setup")
+
     return ws
 
 
@@ -192,7 +211,10 @@ def sage_init(ws: pathlib.Path) -> None:
                         ignore=shutil.ignore_patterns(".git", "node_modules",
                                                       "__pycache__", "dist"))
 
-    sage_bin = REPO_ROOT / "runtime" / "plugin-overlay" / "scripts" / "sage"
+    # bin/sage — the CLI install.sh actually installs. The plugin overlay used to
+    # carry a second copy, frozen at v1.1.7; driving THAT would have measured a
+    # Sage nobody runs.
+    sage_bin = REPO_ROOT / "bin" / "sage"
     env = dict(os.environ, SAGE_HOME=str(home))
     proc = subprocess.run(
         ["bash", str(sage_bin), "init", "--preset", "base"],
@@ -218,7 +240,8 @@ class Driver:
     """
     name = "abstract"
 
-    def run(self, ws: pathlib.Path, prompts: list, out: pathlib.Path) -> dict:
+    def run(self, ws: pathlib.Path, prompts: list, out: pathlib.Path,
+            extra_args: list = None) -> dict:
         raise NotImplementedError
 
 
@@ -242,7 +265,8 @@ class ClaudeCodeDriver(Driver):
             return "the `claude` CLI is not on PATH"
         return ""
 
-    def run(self, ws: pathlib.Path, prompts: list, out: pathlib.Path) -> dict:
+    def run(self, ws: pathlib.Path, prompts: list, out: pathlib.Path,
+            extra_args: list = None) -> dict:
         events, turns = [], []
         session_id = None
         cost, tok_in, tok_out = 0.0, 0, 0
@@ -253,6 +277,7 @@ class ClaudeCodeDriver(Driver):
                    "--output-format", "stream-json", "--verbose",
                    "--permission-mode", "bypassPermissions",
                    "--max-budget-usd", str(self.budget_usd)]
+            cmd += extra_args or []
             if self.model:
                 cmd += ["--model", self.model]
             # Turns after the first continue the same session — an agent that
@@ -323,7 +348,9 @@ def run_once(scenario: Scenario, condition: str, driver: Driver,
         result["error"] = str(exc)
         return result
 
-    session = driver.run(ws, scenario.prompts(), ws.parent / f"{scenario.id}-{condition}.jsonl")
+    session = driver.run(ws, scenario.prompts(),
+                         ws.parent / f"{scenario.id}-{condition}.jsonl",
+                         extra_args=scenario.driver_args)
     result.update({
         "tokens_in": session["tokens_in"], "tokens_out": session["tokens_out"],
         "cost_usd": session["cost_usd"], "duration_s": session["duration_s"],
