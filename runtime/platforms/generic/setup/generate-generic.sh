@@ -113,37 +113,9 @@ if [ -d "$CORE/workflows" ]; then
 fi
 
 # ── Inline the system skills (no discovery mechanism to trigger them) ──
-#
-# On claude-code these are separate files that load when their description
-# matches. Here they are appended verbatim, because a skill nothing can trigger
-# is a skill that does not exist.
-SYS_COUNT=0
-if [ -d "$CORE/system-skills" ]; then
-  {
-    echo ""
-    echo "---"
-    echo ""
-    echo "# Reference"
-    echo ""
-    echo "On platforms with native skill discovery, everything below is fetched"
-    echo "on demand. This platform has no discovery mechanism, so it is inlined."
-    echo "Read the section that matches what you are doing; ignore the rest."
-  } >> "$OUT"
-
-  for sys_dir in "$CORE/system-skills"/*/; do
-    [ -d "$sys_dir" ] || continue
-    [ -f "$sys_dir/SKILL.md" ] || continue
-
-    {
-      echo ""
-      # Strip the YAML frontmatter — it is trigger metadata for a mechanism this
-      # platform does not have, and it would read as noise.
-      sed '1{/^---$/!q;};1,/^---$/d' "$sys_dir/SKILL.md"
-    } >> "$OUT"
-
-    SYS_COUNT=$((SYS_COUNT + 1))
-  done
-fi
+source "$(dirname "$0")/../../_shared/system-skills.sh"
+emit_system_skills_inline "$CORE" >> "$OUT"
+SYS_COUNT=$(find "$CORE/system-skills" -name SKILL.md 2>/dev/null | wc -l | tr -d ' ')
 
 echo "  ✓ CLAUDE.md generated ($(wc -l < "$OUT" | tr -d ' ') lines, $SYS_COUNT skills inlined)"
 

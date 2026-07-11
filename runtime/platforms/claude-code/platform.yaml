@@ -47,4 +47,9 @@ supported-os: [linux, macos]
 
 command-prefix: "/sage"
 install-method: plugin-marketplace
+artifacts:                        # where THIS platform's generated output lands.
+  instructions: CLAUDE.md         # conformance reads these rather than assuming
+  commands-dir: .claude/commands  # claude-code's layout for everyone (R112).
+  skills-dir: .claude/skills
+  hooks-config: .claude/settings.json
 ---

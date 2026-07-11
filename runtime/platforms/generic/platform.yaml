@@ -22,4 +22,6 @@ supported-os: [linux, macos, windows]
 
 command-prefix: "sage"
 install-method: manual-copy
+artifacts:
+  instructions: CLAUDE.md
 ---

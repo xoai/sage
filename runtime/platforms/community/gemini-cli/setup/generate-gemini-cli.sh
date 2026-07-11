@@ -65,6 +65,20 @@ if [ "$SKIP_GEMINI_MD" = false ]; then
       -e 's|`.claude/commands/\[workflow\].md`|`.gemini/commands/[workflow].toml`|g' \
       -e 's|\$ARGUMENTS|{{args}}|g' \
     > "$SAGE_ROOT/GEMINI.md"
+
+# ── Inline the system skills (ADR-9: no discovery on this platform) ──
+#
+# The eager body no longer carries the routing chain, memory guide, gates
+# explainer, checkpoint protocol, tiers, constitution text or decision protocol —
+# ADR-9 moved them into skills. Claude Code fetches those on demand. This platform
+# has no discovery mechanism, so they must be INLINED, or its users lose the
+# content entirely while their instructions file still points at it ("→ sage-gates
+# skill") as though it were reachable.
+#
+# The conformance suite caught exactly that regression here (P4-T4): "declared
+# false, and nothing is inlined — the content is unreachable on this platform".
+source "$(dirname "$0")/../../../_shared/system-skills.sh"
+emit_system_skills_inline "$CORE" >> ""$SAGE_ROOT/GEMINI.md""
   echo "  ✓ GEMINI.md"
 fi
 

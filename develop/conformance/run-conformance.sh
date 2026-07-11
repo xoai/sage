@@ -104,6 +104,35 @@ PY
 
 cap() { printf '%s\n' "$CAPS" | grep "^$1=" | cut -d= -f2; }
 
+# Artifact layout — read from the CONTRACT, not assumed.
+#
+# The first version of this checker hardcoded claude-code's tree (CLAUDE.md,
+# .claude/commands/) and duly reported gemini-cli as FAILING context-injection
+# while it was writing GEMINI.md exactly as designed. The checker was wrong, not
+# the platform. R112 exists to stop exactly that: per-platform conditionals that
+# duplicate what the contract already says.
+ART="$(python3 - "$PLATFORM" <<'ARTEOF'
+import json, subprocess, sys
+out = subprocess.run(["python3", "runtime/tools/contract.py", "--json"],
+                     capture_output=True, text=True)
+for c in json.loads(out.stdout):
+    if c.get("name") == sys.argv[1]:
+        a = c.get("artifacts") or {}
+        print("instructions=%s" % a.get("instructions", "CLAUDE.md"))
+        print("commands-dir=%s" % a.get("commands-dir", ""))
+        print("skills-dir=%s" % a.get("skills-dir", ""))
+        print("hooks-config=%s" % a.get("hooks-config", ".claude/settings.json"))
+        raise SystemExit(0)
+ARTEOF
+)"
+art() { printf '%s\n' "$ART" | grep "^$1=" | cut -d= -f2; }
+
+INSTR_FILE="$(art instructions)"
+CMDS_DIR="$(art commands-dir)"
+SKILLS_DIR="$(art skills-dir)"
+HOOKS_FILE="$(art hooks-config)"
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # LEVEL 1 — generated-output checks
 #
@@ -136,29 +165,32 @@ if printf '%s' "$LEVELS" | grep -q 1; then
 
     # context-injection — an instructions file the platform will actually read.
     if [ "$(cap context-injection)" = "true" ]; then
-      if [ -f "$WORK/proj/CLAUDE.md" ] || [ -f "$WORK/proj/AGENTS.md" ]; then
-        LINES=$(wc -l < "$WORK/proj/CLAUDE.md" 2>/dev/null || wc -l < "$WORK/proj/AGENTS.md")
-        ok "context-injection" "instructions file generated ($(echo "$LINES" | tr -d ' ') lines)"
+      if [ -f "$WORK/proj/$INSTR_FILE" ]; then
+        LINES=$(wc -l < "$WORK/proj/$INSTR_FILE" | tr -d ' ')
+        ok "context-injection" "$INSTR_FILE generated ($LINES lines)"
       else
-        bad "context-injection" "declared true, but no CLAUDE.md/AGENTS.md was generated"
+        bad "context-injection" "declared true, but $INSTR_FILE was not generated"
       fi
     fi
 
     # command-delivery — commands the platform can offer explicitly.
     case "$(cap command-delivery)" in
       true)
-        if [ -d "$WORK/proj/.claude/commands" ] && \
-           [ "$(find "$WORK/proj/.claude/commands" -name '*.md' | wc -l | tr -d ' ')" -gt 0 ]; then
-          ok "command-delivery" "$(find "$WORK/proj/.claude/commands" -name '*.md' | wc -l | tr -d ' ') commands generated"
+        N_CMD=0
+        if [ -n "$CMDS_DIR" ] && [ -d "$WORK/proj/$CMDS_DIR" ]; then
+          N_CMD="$(find "$WORK/proj/$CMDS_DIR" -type f | wc -l | tr -d ' ')"
+        fi
+        if [ "$N_CMD" -gt 0 ]; then
+          ok "command-delivery" "$N_CMD command(s) in $CMDS_DIR"
         else
-          bad "command-delivery" "declared true, but no commands were generated"
+          bad "command-delivery" "declared true, but $CMDS_DIR is empty or absent"
         fi ;;
       false)
-        # A false must ALSO be true — a platform that says it has no commands must
-        # not be quietly shipping them, or the contract is lying in the safe
-        # direction, which is still lying.
-        if [ -d "$WORK/proj/.claude/commands" ]; then
-          bad "command-delivery" "declared false, but .claude/commands/ was generated anyway"
+        # A `false` must ALSO be true. A platform claiming no commands must not be
+        # quietly shipping them: a contract that lies in the SAFE direction is
+        # still lying, and the user still cannot trust its next line.
+        if [ -n "$CMDS_DIR" ] && [ -d "$WORK/proj/$CMDS_DIR" ]; then
+          bad "command-delivery" "declared false, but $CMDS_DIR was generated anyway"
         else
           ok "command-delivery" "declared false, and none generated"
         fi ;;
@@ -167,28 +199,34 @@ if printf '%s' "$LEVELS" | grep -q 1; then
     # native-skill-discovery — ADR-9's delivery fork, checked on BOTH branches.
     case "$(cap native-skill-discovery)" in
       true|attested)
-        if [ -d "$WORK/proj/.claude/skills" ] && \
-           [ "$(find "$WORK/proj/.claude/skills" -name 'SKILL.md' | wc -l | tr -d ' ')" -gt 0 ]; then
-          ok "native-skill-discovery" "$(find "$WORK/proj/.claude/skills" -name 'SKILL.md' | wc -l | tr -d ' ') skills emitted for on-demand discovery"
+        N_SK=0
+        if [ -n "$SKILLS_DIR" ] && [ -d "$WORK/proj/$SKILLS_DIR" ]; then
+          N_SK="$(find "$WORK/proj/$SKILLS_DIR" -name 'SKILL.md' | wc -l | tr -d ' ')"
+        fi
+        if [ "$N_SK" -gt 0 ]; then
+          ok "native-skill-discovery" "$N_SK skills emitted for on-demand discovery"
         else
-          bad "native-skill-discovery" "declared, but no skills were emitted"
+          bad "native-skill-discovery" "declared, but no skills were emitted to $SKILLS_DIR"
         fi ;;
       false)
-        # No discovery → the generator MUST inline the content instead. If it does
-        # neither, the content simply does not exist for that platform's users, and
-        # the eager diet silently deleted it for them.
-        INSTR="$WORK/proj/CLAUDE.md"; [ -f "$INSTR" ] || INSTR="$WORK/proj/AGENTS.md"
-        if [ -d "$WORK/proj/.claude/skills" ]; then
-          bad "native-skill-discovery" "declared false, but skills were emitted (nothing can trigger them)"
-        elif [ -f "$INSTR" ] && grep -q "^# Reference" "$INSTR"; then
+        # No discovery means the generator MUST inline the content instead. If it
+        # does NEITHER, the content does not exist for that platform's users at all
+        # — while their instructions file still points at it ("→ sage-gates skill")
+        # as though it were reachable. That is worse than never having moved it.
+        #
+        # This check found a real regression on all four community platforms
+        # (P4-T4): ADR-9 took 220 lines out of the eager body and only claude-code
+        # and generic ever got them back.
+        INSTR="$WORK/proj/$INSTR_FILE"
+        if [ -f "$INSTR" ] && grep -q "^# Reference" "$INSTR"; then
           ok "native-skill-discovery" "declared false, and the skills are INLINED instead"
         else
-          bad "native-skill-discovery" "declared false, and nothing is inlined — the content is unreachable on this platform"
+          bad "native-skill-discovery" "declared false, and nothing is inlined — the content is UNREACHABLE for this platform's users"
         fi ;;
     esac
 
     # pre-tool-veto / post-tool-events / session-events — the hooks.
-    HOOKS_JSON="$WORK/proj/.claude/settings.json"
+    HOOKS_JSON="$WORK/proj/$HOOKS_FILE"
     for pair in "pre-tool-veto:PreToolUse" "post-tool-events:PostToolUse" "session-events:SessionStart"; do
       CAPNAME="${pair%%:*}"; EVENT="${pair##*:}"
       case "$(cap "$CAPNAME")" in

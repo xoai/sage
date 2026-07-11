@@ -109,11 +109,24 @@ def parse_contract(text):
     stack = [(0, doc)]
     lines = text.splitlines()
     i = 0
+    seen_open = False
     while i < len(lines):
         raw = lines[i]
         i += 1
         stripped = raw.strip()
-        if not stripped or stripped.startswith("#") or stripped == "---":
+
+        # `---` opens the document and `---` closes it. Everything after the close
+        # is prose for humans — the community contracts carry a "why so many
+        # falses" section, and it is the most useful part of the file. Parsing on
+        # past the closing marker treats that prose as schema and dies on the
+        # first sentence.
+        if stripped == "---":
+            if seen_open:
+                break
+            seen_open = True
+            continue
+
+        if not stripped or stripped.startswith("#"):
             continue
 
         indent = len(raw) - len(raw.lstrip())
@@ -156,6 +169,14 @@ def parse_contract(text):
 
         key, _, value = stripped.partition(":")
         key, value = key.strip(), value.strip()
+
+        # Strip a trailing comment BEFORE deciding whether this key owns a block.
+        # `artifacts:   # where the output lands` has a non-empty raw value (the
+        # comment), so the block check below missed it and the key parsed as an
+        # empty SCALAR — silently producing artifacts={} and a conformance run
+        # that looked for commands in "". The comment strip has to happen first.
+        if value and not value.startswith(('"', "'")) and "#" in value:
+            value = value.split("#", 1)[0].strip()
 
         while len(stack) > 1 and stack[-1][0] >= indent:
             stack.pop()
@@ -402,6 +423,7 @@ def main():
                 "tier": derive_tier(caps),
                 "maintainer": c.get("maintainer"),
                 "supported-os": c.get("supported-os"),
+                "artifacts": c.get("artifacts") or {},
             })
         print(json.dumps(out, indent=2))
         return 0
