@@ -4,7 +4,9 @@
   "title": "The content moved out of every-turn context. Can the agent still find it?",
   "source": "11-spec-phase2-native-skills.md §23 (R86); the safety net for ADR-9",
   "fixture": "py-service",
-  "conditions": ["sage"],
+  "conditions": [
+    "sage"
+  ],
   "rationale": [
     "ADR-9 moves most of the eager layer into description-triggered skills. That",
     "trades a certainty for a probability: content that was previously in front of",
@@ -59,17 +61,32 @@
     "            defensible answer.",
     "",
     "Sage-only, for E7's reason: a bare project has no cycles, no memory system,",
-    "and no tiers, so 'bare' would score the absence of a feature as a loss."
+    "and no tiers, so 'bare' would score the absence of a feature as a loss.",
+    "",
+    "BATCH 1 (P2-T6): memory and tiers left the eager layer, so the two",
+    "consulted_skill checks are now live. They could not have been added before",
+    "the move — the skills existed, but the answers were still being served from",
+    "eager, and a check that passes for the wrong reason is worse than no check.",
+    "",
+    "These graders are reachable because Claude Code emits a `Skill` tool_use",
+    "block on auto-activation ({\"skill\": \"sage-tiers\", ...}). That was probed,",
+    "not assumed — a diagnostic that cannot fire is decoration."
   ],
   "setup": {
     ".sage/work/002-cache-eviction/manifest.md": "---\ncycle_id: \"20260712-cache-eviction\"\nworkflow: build\nphase: implement\nstatus: in-progress\ntier: standard\ngate_state: building\ncreated: 2026-07-12\nupdated: 2026-07-12 11:20\n---\n\n# Cycle: Cache eviction policy\n\n## State\n\n**Current phase:** implement — 2 of 5 plan tasks done\n**Next step:** Task 3 — wire the eviction hook into the request path\n\n## Context summary\n\nThe service caches upstream responses with no eviction policy, so memory grows\nuntil the pod is OOM-killed. The plan adds LRU eviction behind a size cap.\n"
   },
-  "prompts": ["prompt-1.md", "prompt-2.md", "prompt-3.md"],
+  "prompts": [
+    "prompt-1.md",
+    "prompt-2.md",
+    "prompt-3.md"
+  ],
   "checks": [
     {
       "grader": "transcript_contains",
       "describe": "it found the active cycle (state lives in .sage/work/, and it knew that)",
-      "substrings": ["cache-eviction"]
+      "substrings": [
+        "cache-eviction"
+      ]
     },
     {
       "grader": "transcript_matches",
@@ -85,6 +102,16 @@
       "grader": "transcript_matches",
       "describe": "Sage's tier vocabulary is reachable (which tier it picks is its own business)",
       "pattern": "tier\\s*[123]"
+    },
+    {
+      "grader": "consulted_skill",
+      "describe": "the memory answer came from the skill, not from a fatter eager layer than we thought",
+      "skill": "sage-using-memory"
+    },
+    {
+      "grader": "consulted_skill",
+      "describe": "and so did the tier answer",
+      "skill": "sage-tiers"
     }
   ]
 }

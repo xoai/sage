@@ -106,12 +106,9 @@ Skip confirmation ONLY for: explicit slash commands, Tier 1 tasks.
 
 **Tier classification (after routing):**
 
-Tier 1 — Just do it. Single file, no design decisions, quick answer.
-Tier 2 — Announce and proceed. Multiple steps, creates artifacts.
-Tier 3 — Card and choose. Major effort, genuine ambiguity.
-
-Bias toward Standard scope. Any behavior change, API change, or
-team-visible decision → Tier 2 minimum.
+Tier 1 — just do it. Tier 2 — announce and proceed. Tier 3 — card and choose.
+Bias to the higher tier at a boundary; any behavior change, API change, or
+team-visible decision is Tier 2 minimum. → **sage-tiers** skill.
 
 **Routing examples:**
 
@@ -143,23 +140,9 @@ slash command, or is genuinely Tier 1.
 
 ### Rule 1A: Memory Before Work (MANDATORY for Standard+)
 
-Before writing specs, plans, ADRs, or starting an investigation,
-search sage-memory. This prevents repeating past mistakes.
-
-Two searches minimum:
-1. General domain search — query with task domain keywords, limit 5
-2. Self-learning search — same query with filter_tags ["self-learning"], limit 5
-
-**Parameter types (MCP tool schema):** query is a string, limit is an
-integer (not a string — pass 5, not "5"), filter_tags and tags are
-arrays of strings (not JSON strings — pass ["self-learning"], not
-'["self-learning"]'). Get the types right or the call will fail.
-
-Use findings to inform your approach. If sage-memory MCP is
-unavailable, check `.sage-memory/` folder. Skip only for Tier 1 tasks.
-
-**Compliance:** Every Standard+ workflow start includes at least one
-sage_memory_search call before producing artifacts.
+Before writing a spec, plan, or ADR — or starting an investigation — search
+sage-memory. Two searches: the domain, then the same query tagged
+`self-learning`. Skip only for Tier 1. → **sage-using-memory** skill.
 
 ### Workflow Gates (enforced for both slash commands and free input)
 
@@ -277,15 +260,9 @@ and includes pasted test output.
 
 ### Rule 6: Capture Corrections
 
-When a learning moment occurs, store it via sage-self-learning before
-proceeding. This is automatic, not optional.
-
-**Storage target:** Use sage_memory_store() MCP tool — NOT the platform's
-native memory system (MEMORY.md, feedback files). Sage has its own memory.
-Fallback: .sage-memory/ markdown files if MCP is unavailable.
-
-**Compliance:** Every user correction is followed by a sage_memory_store
-call with self-learning tag before continuing.
+A user correction is stored via `sage_memory_store()` — Sage's memory, not the
+platform's — **before you proceed**. Not optional. The other five triggers and
+the storage format: → **sage-using-memory** skill.
 
 ### Rule 7: Record Decisions at Checkpoints
 
@@ -318,21 +295,6 @@ the source of truth for reasoning and context.
 entry (prepended) after each checkpoint that involved a decision.
 
 __CONSTITUTION_PLACEHOLDER__
-
-## Learning Triggers
-
-Store via sage-self-learning skill whenever these occur:
-
-- **User corrects your approach** → `correction` (MANDATORY — never skip)
-- **You tried 3+ approaches before succeeding** → `gotcha`
-- **Root cause analysis revealed non-obvious cause** → `gotcha`
-- **You discovered an undocumented project convention** → `convention`
-- **An API/library behaved differently than expected** → `api-drift`
-- **A test failed for a non-obvious reason** → `error-fix`
-
-Format: title with `[LRN:type]` prefix, content with four parts (what
-happened, why wrong, what's correct, prevention rule), tags with
-`self-learning` + type + domain keywords.
 
 ## Communication Style
 

@@ -232,11 +232,12 @@ surfaces:
     anchor: "### Rule 1A: Memory Before Work (MANDATORY for Standard+)"
     covered-by: [E11]
     notes: >
-      E11 grants PARTIAL cover only: asked to remember something, does the agent
-      reach for Sage's memory rather than the platform's? That is the trigger,
-      not the rule. Nothing still measures whether the MANDATORY pre-work search
-      actually happens before a spec, or whether it changes the artifact. L2
-      (Phase 5) is what closes that, and this note is why L2 stays on the list.
+      Reduced to a pointer in batch 1; the guide now lives in sage-using-memory.
+      E11 grades the trigger — asked to remember, does the agent reach for Sage's
+      memory rather than the platform's — and, since batch 1, that the answer came
+      from the SKILL (consulted_skill) rather than from eager. What still nothing
+      measures: whether the MANDATORY pre-work search actually happens before a
+      spec, or changes the artifact. L2 (Phase 5) closes that.
 
   eager-workflow-gates:
     path: runtime/platforms/_shared/instructions-body.sh
@@ -302,16 +303,18 @@ surfaces:
     covered-by: [E3]
     notes: "E3 is the direct test: the user lies that tests pass; does the agent check?"
 
+
   eager-rule-6-capture-corrections:
     path: runtime/platforms/_shared/instructions-body.sh
     kind: eager-block
     anchor: "### Rule 6: Capture Corrections"
     covered-by: [E11]
     notes: >
-      Partial. E11's second prompt is an explicit "remember this", which grades
-      the storage vocabulary. It is NOT a correction — nobody tells the agent it
-      was wrong — so the mandatory-capture-on-correction path, the one the rule
-      actually promises, remains unmeasured.
+      Reduced to a pointer in batch 1 — the six triggers and the storage format
+      moved to sage-using-memory. E11 grades the storage vocabulary via an
+      explicit "remember this". It is NOT a correction: nobody tells the agent it
+      was wrong, so the mandatory-capture-on-correction path — the one the rule
+      actually promises — remains unmeasured.
 
   eager-rule-7-record-decisions:
     path: runtime/platforms/_shared/instructions-body.sh
@@ -320,11 +323,6 @@ surfaces:
     covered-by: [E8]
     notes: "Partial: E8 asserts a decisions.md line exists, not that it is well-formed or prepended."
 
-  eager-learning-triggers:
-    path: runtime/platforms/_shared/instructions-body.sh
-    kind: eager-block
-    anchor: "## Learning Triggers"
-    uncovered: "The six trigger conditions are never exercised. See eager-rule-6-capture-corrections."
 
 
   eager-communication-style:
