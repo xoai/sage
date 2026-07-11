@@ -377,6 +377,44 @@ class ReportingTest(unittest.TestCase):
         self.assertIn("same", text)
 
 
+class NullAgentGuardTest(unittest.TestCase):
+    """The guard that keeps the suite honest, in both directions.
+
+    A check must be neither always-true nor always-false on an untouched tree. The
+    first baseline run was corrupted by the second kind: E5's Gate 4 check scanned
+    the whole workspace, which in the `sage` condition holds Sage's own vendored
+    framework, so the gate flagged Sage's example code and E5 scored 0/3 sage vs
+    3/3 bare — a manufactured "Sage makes it worse".
+    """
+
+    def setUp(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "run_evals", pathlib.Path(__file__).resolve().parent / "run_evals.py")
+        self.R = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.R)
+
+    def test_gate_exit_is_a_precondition_grader(self):
+        """A gate red before the agent runs is measuring the fixture, not the agent —
+        it cannot pass no matter how well the agent does."""
+        self.assertIn("gate_exit", self.R.PRECONDITION_GRADERS)
+
+    def test_every_shipped_scenario_survives_the_guard(self):
+        """This is the check that would have caught the E5 bug offline, for free."""
+        root = pathlib.Path(tempfile.mkdtemp(prefix="null-agent-"))
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        for s in self.R.load_scenarios():
+            problems = self.R.null_agent_check(s, root)
+            self.assertEqual(problems, [], f"{s.id}: {problems}")
+
+    def test_the_guard_runs_every_declared_condition(self):
+        """It used to run only `bare`, which is precisely why it missed a bug that
+        only exists in `sage` — the vendored framework is not there in bare."""
+        import inspect
+        src = inspect.getsource(self.R.null_agent_check)
+        self.assertIn("for condition in scenario.conditions", src)
+
+
 class TranscriptTest(unittest.TestCase):
     def test_text_collects_assistant_prose_in_order(self):
         tx = transcript(("say", "first"), ("tool", "Bash", {"command": "ls"}),

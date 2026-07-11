@@ -1,1 +1,1 @@
-Continue until the change is in place.
+[A] Approved. Now implement it.

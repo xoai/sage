@@ -548,25 +548,54 @@ def write_report(results: list, runs: int, path: pathlib.Path) -> None:
 # Offline check (the per-PR CI job)
 # ─────────────────────────────────────────────────────────────────────────────
 def null_agent_check(scenario: Scenario, root: pathlib.Path) -> list:
-    """A scenario must NOT pass on an untouched fixture.
+    """Grade every condition against an agent that did absolutely nothing.
 
-    The one way an eval suite silently becomes worthless: a scenario whose checks
-    are already satisfied by the fixture. It then passes in both conditions, forever,
-    and reads as evidence that Sage works. So grade every scenario against an agent
-    that did absolutely nothing — no edits, no commits, no transcript — and require
-    it to fail. Any check that passes here is a check that measures nothing.
+    Two failure modes, and the first baseline run hit BOTH:
 
-    Free to run and needs no model, so it belongs in --offline-check rather than in
-    a reviewer's good intentions.
+    1. A check the fixture already satisfies. The scenario then passes in every
+       condition, forever, and reads as evidence that Sage works.
+
+    2. A check the fixture already FAILS for reasons that have nothing to do with
+       the agent. E5's Gate 4 check ran against the whole workspace, which in the
+       `sage` condition contains Sage's own vendored framework — so Gate 4 found
+       phantom imports in Sage's example code and failed. E5 scored 0/3 for sage
+       and 3/3 for bare: a clean "Sage makes the agent worse" result, produced
+       entirely by the harness.
+
+    So a check must be neither always-true nor always-false on an untouched tree.
+    The original version of this guard only ran the `bare` condition, which is
+    exactly why it missed a bug that only exists in `sage` — the vendored framework
+    is not there in bare. It runs every condition the scenario declares now.
     """
-    ws = make_workspace(scenario, "bare", root)
+    problems = []
     empty = graders.Transcript([], [])
-    passing = [graders.run_check(c, ws, empty) for c in scenario.checks]
-    passing = [c for c in passing if c["pass"]]
-    if len(passing) == len(scenario.checks):
-        return [f"every check passes on the untouched fixture — this scenario "
-                f"cannot fail, so it measures nothing"]
-    return []
+    for condition in scenario.conditions:
+        ws = make_workspace(scenario, condition, root)
+        results = [graders.run_check(c, ws, empty) for c in scenario.checks]
+
+        if all(r["pass"] for r in results):
+            problems.append(
+                f"[{condition}] every check passes on the untouched fixture — "
+                f"this scenario cannot fail, so it measures nothing")
+
+        # A check that the fixture itself fails is not measuring the agent. It is
+        # measuring the fixture, and it will fail no matter how well the agent does.
+        for c, r in zip(scenario.checks, results):
+            if r["pass"]:
+                continue
+            if c["grader"] in PRECONDITION_GRADERS:
+                problems.append(
+                    f"[{condition}] check {c['grader']!r} ({c.get('describe', '')}) "
+                    f"already fails on the untouched fixture — it cannot pass no "
+                    f"matter what the agent does: {r['detail']}")
+    return problems
+
+
+# Graders whose subject exists in the fixture BEFORE the agent runs, and so must
+# be green on an untouched tree. A gate that is already red is measuring the
+# fixture, not the agent. (file_exists is excluded: the agent is supposed to
+# create things.)
+PRECONDITION_GRADERS = {"gate_exit"}
 
 
 def offline_check(scenarios: list) -> int:
