@@ -47,6 +47,78 @@ re-baseline is a model-in-loop run (Phase 5, P5-T2) and it will be published
 whatever it shows. Until then: the layer is 56% smaller, and what that does to
 the ratio is not yet known.
 
+### Phase 3 — Subagent execution (ADR-10)
+
+An opt-in execution mode for `/build` and `/fix`: a fresh implementer subagent per
+plan task, a fresh reviewer per task, a whole-branch reviewer at the end. **Off by
+default** (C13) — flipping that is a v1.4 decision, and Phase 5's cost data gets
+to make it.
+
+**The mechanism it rests on was verified, not assumed.** PreToolUse hooks fire for
+tool calls made *inside* subagents, and exit 2 genuinely blocks them. That was the
+whole risk: if hooks stopped at the subagent boundary, a fresh implementer would
+be an *unpoliced* context, and the quality argument would invert — you would have
+moved the work out of the one context where the gates run. Probed with an
+instrumented hook; the transcript is in `docs/attestations/`.
+
+- **The task ledger.** The manifest now records, per task, `status` (the
+  implementer's claim about itself) and `review` (an independent reviewer's claim
+  about the implementer). They are different fields on purpose. The spec-gate hook
+  will not let a cycle reach `gate_state: gates-passed` while they disagree — so a
+  cycle cannot claim its quality chain ran on tasks that chain never saw.
+  Backward compatible: a manifest with no ledger is unaffected.
+- **`--subagents` is the one flag a platform may refuse.** Where the contract
+  lacks `subagent-dispatch`, the request degrades *loudly*: announced, logged to
+  `decisions.md`, and recorded as `execution_mode: inline (subagents-unavailable)`.
+  A user who asked for independent review and silently got one context reviewing
+  its own work has been lied to by omission.
+- New scenarios **E9** (every task done AND independently approved; ledger commit
+  ranges resolve to real shas) and **E10** (a planted spec violation is caught by
+  the reviewer and fixed before completion).
+
+### Phase 4 — The capability contract (ADR-11)
+
+`platform.yaml` stops being decoration. It declared capabilities nothing read,
+`supported-os: [linux, macos, windows]` that nobody had ever tested on Windows,
+and `tier: 1` because someone typed a 1. **Nothing in the build pipeline had ever
+opened these files.**
+
+- **Schema v2** names the capabilities that decide *enforcement* —
+  `pre-tool-veto`, `post-tool-events`, `subagent-dispatch`,
+  `native-skill-discovery`, `context-injection`, `command-delivery`,
+  `session-events`. The old schema had `hooks: true`, which conflates "we can
+  watch" with "we can stop" — the two things that decide whether Sage is a
+  framework or a suggestion.
+- **Tier is derived, never declared.** A = veto ∧ post-tool ∧ subagents.
+  B = veto ∧ context-injection. C = context-injection. claude-code derives to A;
+  everything else, including all four community platforms, to C — all of them for
+  the same reason: no hook surface, so nothing blocks an edit.
+- **Windows is now `[linux, macos]`.** It was claimed for releases and never
+  tested once.
+- **`attested` is a loan, not a gift.** Two claude-code capabilities are attested
+  against real transcripts from this program, and both **expire at 1.4**. An
+  expired attestation *fails* conformance rather than warning.
+- **The conformance suite** checks declarations against reality — including the
+  `false`s, because a contract that lies in the safe direction is still lying.
+- **The README's enforcement table is generated.** Hand-editing it fails CI.
+
+**The conformance suite immediately caught a regression this release introduced.**
+ADR-9 moved 220 lines out of the eager layer; claude-code fetches them on demand,
+generic inlines them, and the four community generators did *neither* — so their
+users silently lost the routing chain, the memory guide, the gates explainer and
+the constitution, while their instructions file still pointed at that content as
+though it were reachable. Nothing else would have found it: not the budget check,
+not the eval suite, not the coverage contract. Fixed, and the check that found it
+now runs in CI.
+
+### Pi
+
+**Unresolved.** The spike did not run, so Pi has no contract row, no tier, and no
+port plan. Writing a plausible one from the API surface would have been easy and
+would have been a guess — which is precisely the class of claim this release
+spent its length deleting. See `docs/pi-spike-verdict.md`.
+
+
 ### Also in this phase
 
 - **`--platform generic` was silently broken.** Three separate whitelists in
