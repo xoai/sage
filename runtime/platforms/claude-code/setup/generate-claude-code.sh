@@ -512,6 +512,68 @@ else
   rm -f "$TEMP_SETTINGS" 2>/dev/null
 fi
 
+# ── PreToolUse spec-gate hook (mechanical Rule 3 / Rule 5 enforcement) ──
+# Registered in settings.json (committed, shared) — unlike the informational
+# session hook, enforcement is a project policy and should travel with the repo.
+# Whether it actually blocks is gated by hard_enforcement in .sage/config.yaml.
+SPEC_GATE_SRC="$CORE/../runtime/platforms/claude-code/hooks/sage-spec-gate.sh"
+if [ -f "$SPEC_GATE_SRC" ]; then
+  cp "$SPEC_GATE_SRC" "$CLAUDE_DIR/hooks/sage-spec-gate.sh"
+  chmod +x "$CLAUDE_DIR/hooks/sage-spec-gate.sh"
+
+  # Merge the hook into settings.json rather than overwriting, so the user's
+  # own settings survive; idempotent so re-running never duplicates the entry.
+  SETTINGS_JSON="$CLAUDE_DIR/settings.json"
+  MERGE_PY=$(mktemp "${TMPDIR:-/tmp}/sage-hookmerge-XXXXXX" 2>/dev/null || echo "")
+  if [ -n "$MERGE_PY" ] && command -v python3 >/dev/null 2>&1; then
+    cat > "$MERGE_PY" <<'PYEOF'
+import json
+import sys
+
+path = sys.argv[1]
+command = 'bash "$CLAUDE_PROJECT_DIR/.claude/hooks/sage-spec-gate.sh"'
+
+try:
+    with open(path) as fh:
+        data = json.load(fh)
+    if not isinstance(data, dict):
+        data = {}
+except (OSError, ValueError):
+    data = {}
+
+hooks = data.setdefault("hooks", {})
+pre = hooks.get("PreToolUse")
+if not isinstance(pre, list):
+    pre = []
+
+
+def is_ours(entry):
+    for h in (entry or {}).get("hooks", []):
+        if "sage-spec-gate.sh" in (h.get("command") or ""):
+            return True
+    return False
+
+
+pre = [e for e in pre if not is_ours(e)]
+pre.append({
+    "matcher": "Edit|Write|MultiEdit",
+    "hooks": [{"type": "command", "command": command}],
+})
+hooks["PreToolUse"] = pre
+
+with open(path, "w") as fh:
+    json.dump(data, fh, indent=2)
+    fh.write("\n")
+PYEOF
+    if python3 "$MERGE_PY" "$SETTINGS_JSON" 2>/dev/null; then
+      echo "  ✓ settings.json (spec-gate hook)"
+    else
+      echo "  ✗ Could not register spec-gate hook in settings.json"
+    fi
+    rm -f "$MERGE_PY"
+  fi
+fi
+
 # IDE restart warning (only during update, not init)
 if [ "${SAGE_UPDATE_MODE:-}" = "true" ]; then
   echo ""

@@ -24,6 +24,16 @@ jobs:
       - name: Run spec-gate hook tests
         run: bash develop/validators/hooks/run-hook-tests.sh
 
+      - name: Hook and its plugin mirror are identical
+        run: |
+          diff runtime/platforms/claude-code/hooks/sage-spec-gate.sh \
+               tools/sage-claude-plugin/hooks/scripts/sage-spec-gate.sh
+
+      - name: The plugin mirror behaves identically
+        run: |
+          SAGE_SPEC_GATE="$PWD/tools/sage-claude-plugin/hooks/scripts/sage-spec-gate.sh" \
+            bash develop/validators/hooks/run-hook-tests.sh
+
   hook-tests-bash32:
     name: spec-gate hook tests (bash 3.2 — macOS system shell)
     runs-on: ubuntu-latest

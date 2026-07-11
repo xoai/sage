@@ -7,6 +7,14 @@
         "timeout": 10
       }]
     }],
+    "PreToolUse": [{
+      "matcher": "Edit|Write|MultiEdit",
+      "hooks": [{
+        "type": "command",
+        "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/scripts/sage-spec-gate.sh",
+        "timeout": 10
+      }]
+    }],
     "PostToolUse": [{
       "matcher": "Write|Edit",
       "hooks": [{

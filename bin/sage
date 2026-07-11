@@ -498,6 +498,11 @@ platforms: $platforms_yaml
 auto_review: true
 auto_qa: true
 independent_gate3: true
+# hard_enforcement: the Claude Code spec-gate hook blocks edits to source files
+# while a Standard+ cycle is pre-spec (Rule 3), and blocks marking a cycle
+# complete before its gates pass (Rule 5). New projects default ON. Set false to
+# disable, or set tier: tier1 on a manifest to exempt one trivial cycle.
+hard_enforcement: true
 command_prefix: $prefix_val
 # isolation: how delivery workflows isolate an initiative.
 #   branch   — (default) branch in place; one session at a time.
@@ -1030,6 +1035,17 @@ DECMD
     platforms_yaml="[$(printf '"%s", ' ${PLATFORMS[@]+"${PLATFORMS[@]}"} | sed 's/, $//')]"
     echo "platforms: $platforms_yaml" >> "$config_file"
     migration_notes="${migration_notes}\n  ${GREEN}✓${RESET} Backfilled platforms: ${platforms_yaml} into config.yaml"
+  fi
+
+  # ── Migration: add hard_enforcement to existing projects (default OFF, R27) ──
+  # The Claude Code spec-gate hook is now installed on every update, but turning
+  # it ON silently under an established workflow would surprise-block someone
+  # mid-task. So existing projects default hard_enforcement: false and are told
+  # how to opt in; only fresh `sage init` defaults true. Appending only when the
+  # key is absent is the idempotency guard (a later update finds it and skips).
+  if [ -f "$config_file" ] && ! grep -q '^hard_enforcement:' "$config_file" 2>/dev/null; then
+    echo "hard_enforcement: false" >> "$config_file"
+    migration_notes="${migration_notes}\n  ${GREEN}✓${RESET} Installed the spec-gate hook (hard_enforcement: false — OFF).\n     To enforce spec-before-code, set hard_enforcement: true in .sage/config.yaml"
   fi
 
   if [ -n "$migration_notes" ]; then
