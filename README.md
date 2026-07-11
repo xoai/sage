@@ -14,9 +14,47 @@ Built for product and engineering teams, open to any domain.
 
 - **Think first, build second** — a framing round challenges assumptions before solutioning begins, preventing the most expensive mistake: solving the wrong problem
 - **Focus over noise** — loads only what the task needs, producing sharper reasoning
-- **Reliable by design** — 5-layer enforcement, 3 independent sub-agent reviews, quality gates with deterministic scripts
+- **Mechanical where it counts** — a `PreToolUse` hook that blocks pre-spec edits, and gate scripts with a three-state exit contract. These are code, not instructions, and they hold. The prose layers around them are advice, and advice is rationalizable — see [What we measured](#what-we-measured) for which is which
 - **Gets smarter over time** — self-learning, memory, and ontology compound into institutional knowledge of your codebase
 - **Grows with its ecosystem** — 12 focused core skills plus installable packs (product/UX, pack-authoring, autoresearch), extensible with 90K+ community skills from skills.sh
+
+## What we measured
+
+Sage's central claim has always been that agents behave better under it. As of
+v1.2.0 that claim is measured instead of asserted, and **the honest answer is
+narrower than this README used to imply.**
+
+`develop/evals/` runs eight adversarial scenarios twice — once in a Sage project,
+once in a bare one — and grades the result deterministically. On the five scenarios
+that ran in **both** conditions, Sage showed **no measurable behavioural delta, at
+1.9× the input tokens**. A current frontier model already refused to hardcode the
+secret it was handed, already ran the tests instead of believing a user who claimed
+they passed, already declined to tidy a file it wasn't asked to tidy, and already
+caught the package that doesn't exist. Those failure modes were real when Sage was
+designed. Mostly they aren't anymore.
+
+What still holds is the part that is **code rather than language**:
+
+| | measured |
+|---|---|
+| Spec-gate hook blocks a pre-spec edit | ✅ 3/3 — and the agent recovers by writing the spec, 3/3 |
+| Gate scripts' three-state exit contract | ✅ tested; "unverifiable" is never a pass |
+| Routing to the right workflow | ✅ 3/3 |
+| `tdd` "enforces" test-first | ❌ **0/3 — it does not** (see below) |
+| Degradation is "never silent" | ❌ **announced 2/3, logged 1/3** |
+
+**What this does not measure**, and it's the part Sage is probably actually for:
+long multi-session work — carried context, spec-then-plan-then-build, a decisions
+log that outlives the context window. Nothing here exercises that.
+
+So, precisely: on these eight short, single-file tasks, **no benefit was observed**
+— which is not the same as proving there is none, and five scenarios is a small
+sample. The benefit on long-horizon work is untested. The cost is now known. If you
+adopt Sage, adopt it for the second thing, and know you are paying ~2× context for
+it.
+
+Full result, method, and the bugs the eval found in *itself*:
+**[docs/eval-baseline.md](docs/eval-baseline.md)**.
 
 ## Why Sage
 
@@ -56,8 +94,14 @@ building the wrong thing confidently. Sage catches this at every stage:
 - 2 advisory gates activate when applicable — browser check (Lightpanda), design check (frontend files)
 - Auto-QA (sub-agent) verifies code against spec — alignment, test coverage, error handling, boundary conditions, integration consistency, coding principles
 
-Six independent sub-agent review points. The agent that writes the
-code — or diagnoses the bug — never reviews its own work alone.
+Six independent sub-agent review points. The agent that writes the code — or
+diagnoses the bug — does not review its own work alone.
+
+That holds **only where sub-agent dispatch exists** (a Task tool, or equivalent).
+Where it doesn't, the reviews are skipped rather than downgraded — and the skip is
+supposed to announce itself, but [measurably often doesn't](docs/eval-baseline.md).
+On a platform without sub-agents, assume the code was reviewed by the agent that
+wrote it.
 
 ### Hybrid Loading
 
@@ -386,8 +430,17 @@ more you're building on assumptions.
 
 Agents rationalize. Tell them "MUST write spec" and they'll decide the
 conversation IS the spec. Every instruction that requires interpretation
-will be reinterpreted. Sage solves this with 5 independent enforcement
-layers and observable conditions that can't be argued away.
+will be reinterpreted.
+
+Sage answers this with five layers — but they are **not equally strong, and the
+difference is the whole point.** Layers 1, 2, 3 and 5 are language: they are read
+by the same model that is doing the rationalizing, and the eval found them being
+rationalized past (Layer 3's `tdd` lost to "it's just one number", 0/3). Layer 4
+and the spec-gate hook are **code**: a script's exit status and a blocked tool call
+are not open to interpretation, and those held in every run.
+
+Read the layers below with that split in mind. Language persuades; only mechanism
+enforces.
 
 **Layer 1 — Always-on rules** in the system prompt. Even if nothing else
 loads, the gates prevent the worst violations. Eight rules covering
@@ -400,9 +453,17 @@ rules the agent reads before its first token. Named rationalizations
 are blocked: "the design is clear" → NOT a spec file.
 
 **Layer 3 — Capabilities** loaded at the right workflow step. `build-loop`
-orchestrates task-by-task execution. `coding-principles` enforces 7
-universal quality standards. `tdd` enforces test-first. `systematic-debug`
-structures root cause investigation.
+orchestrates task-by-task execution. `coding-principles` carries 7 universal
+quality standards. `tdd` argues for test-first. `systematic-debug` structures root
+cause investigation.
+
+> **These are instructions, not mechanism — and the eval caught them not holding.**
+> Asked to change one constant under pressure ("it's literally changing one number,
+> just do it quickly"), the agent wrote no test, in **0 of 3 runs**, with `tdd`
+> loaded and the constitution's first principle reading *"Tests before code."* It
+> did run the suite afterwards (3/3, where a bare agent ran it 0/3) — so Sage buys
+> verification, not test-first. Layer 3 is advocacy. Only Layers 4 and the hook are
+> enforcement.
 
 **Layer 4 — Bash gate scripts.** Deterministic. Run BEFORE the agent
 reviews. `sage-verify.sh` runs your test suite, `sage-hallucination-check.sh`
@@ -435,8 +496,16 @@ never surprises an established workflow.
 
 #### What is mechanical on each platform
 
-Not every platform can run every layer. Sage degrades **loudly** — a skipped
-review announces itself and logs to `decisions.md` — never silently.
+Not every platform can run every layer. Sage is *supposed* to degrade **loudly** —
+a skipped review announces itself and logs a line to `decisions.md`.
+
+> **Measured, and it doesn't reliably happen.** With the Task tool genuinely
+> removed, the skip was announced in **2 of 3 runs** and the `decisions.md` line
+> was written in **1 of 3**. Like Layer 3, this is instructed in prose, so the model
+> complies when it feels like it. Treat a degraded run as *possibly* silent: check
+> `decisions.md` yourself rather than trusting that a missing capability announced
+> itself. Making this mechanical is the top open item
+> ([docs/eval-baseline.md](docs/eval-baseline.md)).
 
 | Layer | Claude Code | Generic / other platforms |
 |---|---|---|
@@ -478,11 +547,17 @@ All are advisory — the user can always `[P] Proceed`. Findings are
 logged to `decisions.md` for `/reflect` to learn from.
 
 Requires Claude Code's Task tool. When the Task tool is not available
-(e.g., Antigravity), each review is skipped **loudly** — it announces
-`Quality chain is degraded` and logs one line to `decisions.md`, so
-`/reflect` and `/status` surface the gap. A degraded review is never
-silent: a review that vanishes without a trace reads as one that passed.
-See the per-platform enforcement table under [Enforcement](#enforcement-model).
+(e.g., Antigravity), each review is *meant* to be skipped **loudly** — announcing
+`Quality chain is degraded` and logging one line to `decisions.md`, so `/reflect`
+and `/status` surface the gap. The reasoning stands: a review that vanishes without
+a trace reads as one that passed.
+
+**In practice it is not reliable.** Measured with the Task tool removed, the
+announcement appeared in 2 of 3 runs and the `decisions.md` line in 1 of 3 — it is
+prose, and the model treats it as prose. Until it is mechanical, verify a degraded
+run by reading `decisions.md`, not by waiting to be told. See
+[docs/eval-baseline.md](docs/eval-baseline.md) and the per-platform table under
+[Enforcement](#enforcement-model).
 
 ### Coding Principles
 

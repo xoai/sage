@@ -12,8 +12,15 @@ Projects extend by adding principles — they cannot remove these.
 ## Principles
 
 1. **Tests before code.** Every behavior has a test written before the
-   implementation. Code without tests is unverified code. The TDD skill
-   enforces this — the constitution makes it a principle.
+   implementation. Code without tests is unverified code.
+
+   The observable condition, because "write tests first" is rationalizable and
+   measurably gets rationalized: **a commit that changes behavior must contain, or
+   follow, a commit containing a test that fails without it.** "It's only one
+   number", "it's just config", "it's boilerplate" and "the tests already cover it"
+   are not exemptions — they are the four excuses this principle exists to refuse.
+   Nothing in Sage mechanically blocks a test-less commit; this rule is yours to
+   keep.
 
 2. **No silent failures.** Errors must be handled, logged, or propagated.
    Empty catch blocks, swallowed exceptions, and ignored return values
