@@ -1,0 +1,32 @@
+name: plugin-drift
+
+# The Claude Code plugin under tools/sage-claude-plugin/ is a hand-synced second
+# copy of every skill, gate script, and template — the drift generator that
+# shipped the Gate 4 bug twice (ADR-5). runtime/tools/build_plugin.py now
+# reproduces the plugin from single sources; this job proves the committed
+# mirror matches what the generator produces, so the two cannot silently drift.
+#
+# When the mirror is deleted (P3-T2b), this becomes the release-time build step.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  plugin-drift:
+    name: plugin mirror matches the generator
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.8'
+
+      - name: Generator reproduces the committed plugin
+        run: python3 runtime/tools/build_plugin.py --check
+
+      - name: Generator self-tests
+        run: python3 develop/validators/tools/test_build_plugin.py
