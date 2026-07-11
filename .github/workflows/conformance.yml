@@ -29,6 +29,11 @@ jobs:
       - name: Contracts parse, tiers derive, no legacy mismatches
         run: python3 runtime/tools/contract.py --check
 
+      - name: The README's platform table matches the contracts
+        # Same pattern as plugin-drift and version-drift: a generated artifact
+        # that someone hand-edited is a claim the mechanism does not support.
+        run: python3 runtime/tools/gen_truth_table.py --check
+
   first-class:
     runs-on: ubuntu-latest
     needs: contract
