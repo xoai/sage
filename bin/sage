@@ -536,6 +536,14 @@ independent_gate3: true
 # complete before its gates pass (Rule 5). New projects default ON. Set false to
 # disable, or set tier: tier1 on a manifest to exempt one trivial cycle.
 hard_enforcement: true
+# tdd_enforcement: the TDD gate blocks an edit to a source file when no test has
+# been written for it (constitution principle 1, "tests before code"). It allows the
+# edit the moment a test file is dirty or untracked, or the last commit touched a
+# test. New projects default ON, because the rule was measured and it did not hold:
+# asked to change one constant under pressure the agent wrote no test in 3 runs of 3,
+# with the tdd skill loaded. A rule the model can talk itself out of is not a rule.
+# Escape with `tier: tier1` on a manifest, or set this to false.
+tdd_enforcement: true
 command_prefix: $prefix_val
 # isolation: how delivery workflows isolate an initiative.
 #   branch   — (default) branch in place; one session at a time.

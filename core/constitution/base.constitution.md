@@ -19,8 +19,16 @@ Projects extend by adding principles — they cannot remove these.
    follow, a commit containing a test that fails without it.** "It's only one
    number", "it's just config", "it's boilerplate" and "the tests already cover it"
    are not exemptions — they are the four excuses this principle exists to refuse.
-   Nothing in Sage mechanically blocks a test-less commit; this rule is yours to
-   keep.
+   Measured, they were used in three runs out of three.
+
+   **On Claude Code this is mechanical.** The TDD gate (`sage-tdd-gate.sh`,
+   PreToolUse) blocks an edit to a source file when no test has been written for it.
+   It stops being an argument you can win: write the failing test, and the edit goes
+   through. Escapes exist, and are deliberate — `tier: tier1` on the manifest for
+   genuinely trivial work, or `tdd_enforcement: false` — because a gate nobody can
+   escape is a gate everybody disables.
+
+   Elsewhere, this rule is yours to keep.
 
 2. **No silent failures.** Errors must be handled, logged, or propagated.
    Empty catch blocks, swallowed exceptions, and ignored return values

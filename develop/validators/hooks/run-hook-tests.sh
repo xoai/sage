@@ -18,6 +18,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 HOOK="${SAGE_SPEC_GATE:-$REPO_ROOT/runtime/platforms/claude-code/hooks/sage-spec-gate.sh}"
 DEG_LOG="${SAGE_DEG_LOG:-$REPO_ROOT/runtime/platforms/claude-code/hooks/sage-degradation-log.sh}"
+TDD_GATE="${SAGE_TDD_GATE:-$REPO_ROOT/runtime/platforms/claude-code/hooks/sage-tdd-gate.sh}"
 
 ONLY=""
 VERBOSE=false
@@ -54,6 +55,20 @@ add_manifest() {  # add_manifest <proj> <slug> <gate_state> [status] [qa]
   # never be surprise-blocked by a field it has never heard of.
   [ -n "$qa" ] && printf -- 'qa: %s\n' "$qa" >> "$1/.sage/work/$2/manifest.md"
   printf -- '---\n\n# Cycle: %s\n' "$2" >> "$1/.sage/work/$2/manifest.md"
+}
+
+
+# ── TDD-gate fixtures (the gate reads git, so these are real repos) ──────────
+tdd_project() {  # tdd_project [--no-tests] → prints project dir; has a committed suite
+  local d; d="$(mktemp -d "${TMPDIR:-/tmp}/sage-tddtest-XXXXXX")/proj"
+  mkdir -p "$d/src" "$d/tests" "$d/.sage"
+  printf 'sage-version: "1.2.0"\ntdd_enforcement: true\n' > "$d/.sage/config.yaml"
+  printf 'TIMEOUT = 30\n' > "$d/src/config.py"
+  [ "${1:-}" = "--no-tests" ] || printf 'def test_x():\n    assert True\n' > "$d/tests/test_x.py"
+  ( cd "$d" && git init -q \
+      && git -c user.email=t@t -c user.name=t add -A \
+      && git -c user.email=t@t -c user.name=t commit -qm seed ) >/dev/null 2>&1
+  echo "$d"
 }
 
 report() {  # report <status> <id> <label> [detail...]
@@ -282,6 +297,103 @@ P=$(new_project)
 assert H20 "the degradation hook never blocks, even on garbage" "$P" \
   '{"tool_name":"Edit","tool_input":{"file_path":"/nonexistent/manifest.md"}}' \
   --hook "$DEG_LOG" --exit 0
+
+
+# ─── Rule 1: tests before code, made mechanical ─────────────────────────────
+# Measured at v1.2.0: asked to change one constant under pressure, the agent wrote
+# no test in 3 runs of 3, with the tdd skill loaded and the constitution in context.
+# It also created no cycle, so every gate Sage owns — all of which fire on a cycle —
+# was bypassed by declaring the work small. This gate fires on the EDIT instead.
+
+SRCEDIT='{"tool_name":"Edit","tool_input":{"file_path":"src/config.py"}}'
+
+# H21 — the exact move E1 measured: edit source, no test written → BLOCK
+P=$(tdd_project)
+assert H21 "a source edit with no test written is blocked" "$P" "$SRCEDIT" \
+  --hook "$TDD_GATE" --exit 2 --stderr "tests before code" --stderr "src/config.py"
+
+# H22 — write the test first (dirty tree) → ALLOW. This is the intended path.
+P=$(tdd_project); printf 'def test_new():\n    assert True\n' > "$P/tests/test_new.py"
+assert H22 "a source edit is allowed once a test is written" "$P" "$SRCEDIT" \
+  --hook "$TDD_GATE" --exit 0
+
+# H23 — the test was COMMITTED first, tree now clean → ALLOW. Committing the failing
+# test before the implementation is textbook TDD; a gate that blocked it would be
+# punishing the very thing it exists to demand.
+P=$(tdd_project)
+printf 'def test_new():\n    assert True\n' > "$P/tests/test_new.py"
+( cd "$P" && git -c user.email=t@t -c user.name=t add -A \
+    && git -c user.email=t@t -c user.name=t commit -qm "test: first" ) >/dev/null 2>&1
+assert H23 "a source edit is allowed when the last commit was a test" "$P" "$SRCEDIT" \
+  --hook "$TDD_GATE" --exit 0
+
+# H23b — a commit containing a test AND source is NOT a red commit, and grants
+# nothing. This is the distinction the whole gate turns on: nearly every repo's
+# initial import commits src/ and tests/ together, so "the last commit touched a
+# test" would hand out a free pass on the very next source edit — the exact edit
+# this gate exists to stop. Only a test-ONLY commit is the red step.
+P=$(tdd_project)
+printf 'def test_new():\n    assert True\n' > "$P/tests/test_new.py"
+printf 'TIMEOUT = 31\n' > "$P/src/config.py"
+( cd "$P" && git -c user.email=t@t -c user.name=t add -A \
+    && git -c user.email=t@t -c user.name=t commit -qm "test + impl together" ) >/dev/null 2>&1
+assert H23b "a test+source commit is not a red commit and grants nothing" "$P" "$SRCEDIT" \
+  --hook "$TDD_GATE" --exit 2 --stderr "tests before code"
+
+# H24 — editing a test is never blocked (writing the test IS the point)
+P=$(tdd_project)
+assert H24 "editing a test file is never blocked" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"tests/test_x.py"}}' \
+  --hook "$TDD_GATE" --exit 0
+
+# H25 — non-source files are not gated. A README is not a behavior.
+P=$(tdd_project)
+assert H25 "editing a non-source file is not gated" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"README.md"}}' \
+  --hook "$TDD_GATE" --exit 0
+
+# H26 — a project with no test suite at all → ALLOW. Blocking every edit in a repo
+# that has no tests yet would make it impossible to bootstrap one. Documented hole.
+P=$(tdd_project --no-tests)
+assert H26 "a project with no test suite is not gated" "$P" "$SRCEDIT" \
+  --hook "$TDD_GATE" --exit 0
+
+# H27 — tdd_enforcement: false → ALLOW. An inescapable gate gets disabled wholesale.
+P=$(tdd_project); printf 'sage-version: "1.2.0"\ntdd_enforcement: false\n' > "$P/.sage/config.yaml"
+assert H27 "tdd_enforcement: false disables the gate" "$P" "$SRCEDIT" \
+  --hook "$TDD_GATE" --exit 0
+
+# H28 — the key absent entirely → ALLOW. Never surprise-block an upgraded project.
+P=$(tdd_project); printf 'sage-version: "1.2.0"\n' > "$P/.sage/config.yaml"
+assert H28 "an absent tdd_enforcement key allows (no surprise block)" "$P" "$SRCEDIT" \
+  --hook "$TDD_GATE" --exit 0
+
+# H29 — tier: tier1 exempts genuinely trivial work
+P=$(tdd_project); mkdir -p "$P/.sage/work/t"
+printf -- '---\ncycle_id: "t"\nstatus: in-progress\ntier: tier1\ngate_state: building\n---\n' \
+  > "$P/.sage/work/t/manifest.md"
+assert H29 "a tier1 cycle exempts the source edit" "$P" "$SRCEDIT" \
+  --hook "$TDD_GATE" --exit 0
+
+# H30 — SAGE'S OWN VENDORED TESTS MUST NOT COUNT. sage/ is full of test files, and
+# `sage init` commits the whole tree — so the first version of this gate saw that
+# commit, thought "the developer just wrote a test", and waved the next source edit
+# straight through. It passed a change with no test at all. This is that regression.
+P=$(tdd_project)
+mkdir -p "$P/sage/develop/validators/gates/fixtures/verify/passing-pytest/tests"
+printf 'def test_framework():\n    assert True\n' \
+  > "$P/sage/develop/validators/gates/fixtures/verify/passing-pytest/tests/test_ok.py"
+( cd "$P" && git -c user.email=t@t -c user.name=t add -A \
+    && git -c user.email=t@t -c user.name=t commit -qm "sage init" ) >/dev/null 2>&1
+assert H30 "the vendored framework's own tests do not satisfy the gate" "$P" "$SRCEDIT" \
+  --hook "$TDD_GATE" --exit 2 --stderr "tests before code"
+
+# H31 — not a git repo → fail open. A broken hook must never brick the editor.
+P="$(mktemp -d "${TMPDIR:-/tmp}/sage-tddtest-XXXXXX")/nogit"
+mkdir -p "$P/.sage" "$P/src"
+printf 'tdd_enforcement: true\n' > "$P/.sage/config.yaml"
+assert H31 "a non-git project fails open" "$P" "$SRCEDIT" \
+  --hook "$TDD_GATE" --exit 0
 
 # H9 — hard_enforcement not set at all (key absent) → allow (never surprise-block)
 P=$(new_project); printf 'sage-version: "1.1.11"\n' > "$P/.sage/config.yaml"; add_manifest "$P" demo pre-spec

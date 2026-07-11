@@ -525,12 +525,17 @@ fi
 #                                         cannot forget to
 SPEC_GATE_SRC="$CORE/../runtime/platforms/claude-code/hooks/sage-spec-gate.sh"
 DEG_LOG_SRC="$CORE/../runtime/platforms/claude-code/hooks/sage-degradation-log.sh"
+TDD_GATE_SRC="$CORE/../runtime/platforms/claude-code/hooks/sage-tdd-gate.sh"
 if [ -f "$SPEC_GATE_SRC" ]; then
   cp "$SPEC_GATE_SRC" "$CLAUDE_DIR/hooks/sage-spec-gate.sh"
   chmod +x "$CLAUDE_DIR/hooks/sage-spec-gate.sh"
   if [ -f "$DEG_LOG_SRC" ]; then
     cp "$DEG_LOG_SRC" "$CLAUDE_DIR/hooks/sage-degradation-log.sh"
     chmod +x "$CLAUDE_DIR/hooks/sage-degradation-log.sh"
+  fi
+  if [ -f "$TDD_GATE_SRC" ]; then
+    cp "$TDD_GATE_SRC" "$CLAUDE_DIR/hooks/sage-tdd-gate.sh"
+    chmod +x "$CLAUDE_DIR/hooks/sage-tdd-gate.sh"
   fi
 
   # Merge the hook into settings.json rather than overwriting, so the user's
@@ -548,6 +553,7 @@ path = sys.argv[1]
 # generator never duplicates an entry and never clobbers the user's own hooks.
 WANTED = [
     ("PreToolUse", "Edit|Write|MultiEdit", "sage-spec-gate.sh"),
+    ("PreToolUse", "Edit|Write|MultiEdit", "sage-tdd-gate.sh"),
     ("PostToolUse", "Write|Edit", "sage-degradation-log.sh"),
 ]
 
@@ -587,7 +593,7 @@ with open(path, "w") as fh:
     fh.write("\n")
 PYEOF
     if python3 "$MERGE_PY" "$SETTINGS_JSON" 2>/dev/null; then
-      echo "  ✓ settings.json (spec-gate + degradation-log hooks)"
+      echo "  ✓ settings.json (spec-gate + tdd-gate + degradation-log hooks)"
     else
       echo "  ✗ Could not register enforcement hooks in settings.json"
     fi

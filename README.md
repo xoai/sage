@@ -14,7 +14,7 @@ Built for product and engineering teams, open to any domain.
 
 - **Think first, build second** — a framing round challenges assumptions before solutioning begins, preventing the most expensive mistake: solving the wrong problem
 - **Focus over noise** — loads only what the task needs, producing sharper reasoning
-- **Mechanical where it counts** — a `PreToolUse` hook that blocks pre-spec edits, and gate scripts with a three-state exit contract. These are code, not instructions, and they hold. The prose layers around them are advice, and advice is rationalizable — see [What we measured](#what-we-measured) for which is which
+- **Mechanical where it counts** — hooks that block a source edit until a test exists and an edit before a spec exists, and gate scripts with a three-state exit contract. These are code, not instructions, and they hold: test-first measures **3/3 against a bare agent's 0/3**. The prose layers around them are advice, and advice is rationalizable — see [What we measured](#what-we-measured) for which is which
 - **Gets smarter over time** — self-learning, memory, and ontology compound into institutional knowledge of your codebase
 - **Grows with its ecosystem** — 12 focused core skills plus installable packs (product/UX, pack-authoring, autoresearch), extensible with 90K+ community skills from skills.sh
 
@@ -25,33 +25,47 @@ v1.2.0 that claim is measured instead of asserted, and **the honest answer is
 narrower than this README used to imply.**
 
 `develop/evals/` runs eight adversarial scenarios twice — once in a Sage project,
-once in a bare one — and grades the result deterministically. On the five scenarios
-that ran in **both** conditions, Sage showed **no measurable behavioural delta, at
-1.9× the input tokens**. A current frontier model already refused to hardcode the
-secret it was handed, already ran the tests instead of believing a user who claimed
-they passed, already declined to tidy a file it wasn't asked to tidy, and already
-caught the package that doesn't exist. Those failure modes were real when Sage was
-designed. Mostly they aren't anymore.
+once in a bare one — and grades the result deterministically.
 
-What still holds is the part that is **code rather than language**:
+**Most of what Sage claimed, a frontier model already does on its own.** It refused
+to hardcode the secret it was handed, ran the tests instead of believing a user who
+claimed they passed, declined to tidy a file it wasn't asked to tidy, and caught the
+package that doesn't exist — all with no Sage at all. Those failure modes were real
+when Sage was designed. Mostly they aren't anymore, and on four of the five
+scenarios that ran in both conditions there is **no measurable difference**, at
+**1.9× the input tokens**.
 
-| | measured |
-|---|---|
-| Spec-gate hook blocks a pre-spec edit | ✅ 3/3 — and the agent recovers by writing the spec, 3/3 |
-| Gate scripts' three-state exit contract | ✅ tested; "unverifiable" is never a pass |
-| Routing to the right workflow | ✅ 3/3 |
-| `tdd` "enforces" test-first | ❌ **0/3 — it does not** (see below) |
-| Degradation is "never silent" | ✅ **3/3 — now mechanical.** Was 1/3 when it was prose. A hook writes the record; a cycle cannot complete while silent about QA |
+**Where Sage does win, it wins because something is mechanical.** The exception is
+test-first, and it is instructive: at v1.2.0 it was prose, and it failed 0/3. It is
+a hook now, and it passes 3/3 while a bare agent still fails 0/3. That is the whole
+thesis in one row — not "the framework says to write tests", but "the edit does not
+go through until you have".
+
+| | measured (sage) | bare |
+|---|---|---|
+| Test-first on a "it's just one number" change | ✅ **3/3** — a hook blocks the edit until a test exists | ❌ **0/3** |
+| Spec-gate hook blocks a pre-spec edit | ✅ 3/3 — and the agent recovers by writing the spec, 3/3 | n/a |
+| A degraded run is recorded in `decisions.md` | ✅ 3/3 — a hook writes it | n/a |
+| Gate scripts' three-state exit contract | ✅ tested; "unverifiable" is never a pass | — |
+| Routing to the right workflow | ✅ 3/3 | n/a |
+
+Every one of those is **code**. Every claim that rested on prose — including, at
+v1.2.0, test-first and loud degradation — was measured and found false, and then
+either made mechanical or withdrawn.
 
 **What this does not measure**, and it's the part Sage is probably actually for:
 long multi-session work — carried context, spec-then-plan-then-build, a decisions
 log that outlives the context window. Nothing here exercises that.
 
-So, precisely: on these eight short, single-file tasks, **no benefit was observed**
-— which is not the same as proving there is none, and five scenarios is a small
-sample. The benefit on long-horizon work is untested. The cost is now known. If you
-adopt Sage, adopt it for the second thing, and know you are paying ~2× context for
-it.
+So, precisely: on these short, single-file tasks Sage's benefit is **whatever it has
+made mechanical, and nothing else.** Where a rule is a hook, it holds (test-first,
+3/3 vs 0/3; the spec gate; the degradation record). Where a rule is a paragraph, a
+frontier model was going to do the right thing anyway — or wasn't, and the paragraph
+didn't change that. Five scenarios is a small sample and the benefit on long-horizon
+work is untested. The cost is known: ~2× context.
+
+The lesson we'd offer, having measured our own framework and not much liked the
+first answer: **if a rule matters, make it code. If you can't, don't claim it.**
 
 Full result, method, and the bugs the eval found in *itself*:
 **[docs/eval-baseline.md](docs/eval-baseline.md)**.
@@ -459,13 +473,17 @@ orchestrates task-by-task execution. `coding-principles` carries 7 universal
 quality standards. `tdd` argues for test-first. `systematic-debug` structures root
 cause investigation.
 
-> **These are instructions, not mechanism — and the eval caught them not holding.**
+> **These are instructions, and instructions get rationalized — the eval caught it.**
 > Asked to change one constant under pressure ("it's literally changing one number,
-> just do it quickly"), the agent wrote no test, in **0 of 3 runs**, with `tdd`
-> loaded and the constitution's first principle reading *"Tests before code."* It
-> did run the suite afterwards (3/3, where a bare agent ran it 0/3) — so Sage buys
-> verification, not test-first. Layer 3 is advocacy. Only Layers 4 and the hook are
-> enforcement.
+> just do it quickly"), the agent wrote no test in **0 of 3 runs**, with `tdd` loaded
+> and the constitution's first principle reading *"Tests before code."* It didn't
+> even create a cycle, so every gate Sage owns — all of which fire on a cycle — was
+> bypassed by declaring the work small.
+>
+> **So test-first stopped being a Layer-3 argument and became a Layer-4 gate.** The
+> TDD gate (PreToolUse) blocks an edit to a source file when no test has been written
+> for it. Re-measured: **3/3, against 0/3 for a bare agent.** The rest of Layer 3 is
+> still advocacy — read it as persuasion, not enforcement.
 
 **Layer 4 — Bash gate scripts.** Deterministic. Run BEFORE the agent
 reviews. `sage-verify.sh` runs your test suite, `sage-hallucination-check.sh`
@@ -526,6 +544,7 @@ Off Claude Code (no hooks), this is still prose — see the table below.
 |---|---|---|
 | Layers 1–3, 5 (prose rules, preambles, capabilities, self-learning) | ⚠️ prose — *rationalizable, and measurably rationalized* | ⚠️ prose |
 | Layer 4 — gate scripts (3-state, self-tested) | ✅ deterministic | ✅ deterministic (run manually) |
+| **Tests before code** (blocks a source edit until a test exists) | ✅ **mechanical (PreToolUse)** — 3/3 vs bare 0/3 | ❌ prose only — measured 0/3 |
 | Spec-gate hook (blocks pre-spec edits, blocks premature completion) | ✅ mechanical (PreToolUse) | ❌ not available — prose rules only |
 | Completion must declare what happened to QA (R29) | ✅ mechanical — the hook blocks a cycle that stays silent | ❌ prose only |
 | A degraded run is recorded in `decisions.md` (R29) | ✅ mechanical — a hook writes it; the model is not asked to | ⚠️ prose — *was written in 1 run of 3 when measured* |

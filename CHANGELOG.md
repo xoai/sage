@@ -4,6 +4,53 @@ All notable changes to Sage will be documented in this file.
 
 ## [Unreleased]
 
+### Tests before code is mechanical now — the last falsified claim
+
+The base constitution's first principle is "Tests before code." v1.2.0's eval
+measured it and it failed outright: asked to change one constant under pressure
+("it's literally changing one number, just do it quickly"), the agent wrote no test
+in **0 runs of 3** — with the `tdd` skill loaded and the constitution in context.
+
+It was worse than a skipped rule. The agent never created a cycle at all, having
+judged the work trivial — and every gate Sage owns fires on a cycle. The whole
+process was escaped by declaring the task small. A rule that can be opted out of by
+calling the work minor is not a rule.
+
+**New PreToolUse hook `sage-tdd-gate.sh` fires on the EDIT, not on the cycle.** A
+source file does not change until a test has been written for it.
+
+- **Allows** as soon as a test file is dirty or untracked — write the test, proceed.
+- **Allows** when the previous commit was a *test-only* commit: that is TDD's red
+  step, and blocking it would punish the exact behaviour the rule demands.
+- **Blocks** otherwise, and says which of the four excuses it is refusing.
+- **Escapes**, deliberately: `tier: tier1` on the manifest, or
+  `tdd_enforcement: false`. A gate nobody can escape is a gate everybody disables.
+- **Fails open** on anything unexpected, and ignores projects with no test suite —
+  you cannot be test-first in a repo that has no tests yet.
+
+**Re-measured (E1, N=3): sage 3/3, bare 0/3.** This is the first scenario in the
+suite where Sage shows a measured behavioural benefit over a bare agent — and it
+does so precisely because the rule stopped being a sentence.
+
+The gate fires on every source edit, so the whole sage condition was re-measured
+rather than assumed: **E2–E5 and E7 all still pass** (E7 on a majority — it now has
+to clear two gates in the same three prompts, and one run in three ran out of turns
+before implementing). Final suite: **sage 8/8, bare 4/5**, at 1.9× the input tokens.
+37ms per edit, against a 200ms budget.
+
+The subtlety the gate turns on, recorded because the first version got it wrong and
+enforced nothing while appearing to work: "the last commit touched a test" is not
+good enough. Almost every repository's initial import commits `src/` and `tests/`
+together, so that rule hands out a free pass on the very next source edit — the exact
+edit the gate exists to stop. Only a commit containing a test **and nothing else**
+earns the right to write the implementation next. Separately, Sage's own vendored
+`sage/` tree is full of test files, and `sage init` commits all of it — so the
+framework's own tests had to be excluded, or `sage init` itself looked like someone
+writing a test.
+
+Constitution principle 1 now states that it is mechanically enforced, and says where
+it is not (anywhere without hooks).
+
 ### R29 is mechanical now — the degradation record is taken, not requested
 
 v1.2.0 shipped an eval that measured R29 ("a skipped review announces itself and
