@@ -3,7 +3,7 @@
 **An intelligent skills framework for AI agents.**
 
 <p align="center">
-  <img src="sage-logo-eagle.svg" alt="Sage - An intelligent skills framework for AI agents." width="150" />
+  <img src="https://raw.githubusercontent.com/xoai/sage/main/docs/assets/sage-logo-eagle.svg" alt="Sage - An intelligent skills framework for AI agents." width="150" />
 </p>
 
 <p align="center">Think clearly. Work thoroughly. Deliver excellence.</p>
@@ -178,7 +178,7 @@ recommended next step. You stay in control — Sage stays intelligent.
 ## How Sage Works
 
 <p align="center">
-  <img src="sage_routing.svg" alt="Sage Routing." width="600" />
+  <img src="https://raw.githubusercontent.com/xoai/sage/main/docs/assets/sage_routing.svg" alt="Sage Routing." width="600" />
 </p>
 
 ### Slash Commands
@@ -223,7 +223,7 @@ across sessions.
 ### Enforcement Model
 
 <p align="center">
-  <img src="sage_enforcement.svg" alt="Sage Enforcement." width="600" />
+  <img src="https://raw.githubusercontent.com/xoai/sage/main/docs/assets/sage_enforcement.svg" alt="Sage Enforcement." width="600" />
 </p>
 
 Sage uses triple reinforcement to ensure agents follow the process:
@@ -266,7 +266,7 @@ Lower tiers add constraints but cannot remove inherited ones.
 ### The Pipeline: UNDERSTAND → ENVISION → DELIVER → REFLECT
 
 <p align="center">
-  <img src="sage_workflows.svg" alt="Sage Workflows." width="600" />
+  <img src="https://raw.githubusercontent.com/xoai/sage/main/docs/assets/sage_workflows.svg" alt="Sage Workflows." width="600" />
 </p>
 
 Sage organizes work into four phases. Each phase has dedicated

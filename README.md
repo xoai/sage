@@ -3,7 +3,7 @@
 **An intelligent skills framework for AI agents.**
 
 <p align="center">
-  <img src="sage-logo-eagle.svg" alt="Sage - An intelligent skills framework for AI agents." width="150" />
+  <img src="docs/assets/sage-logo-eagle.svg" alt="Sage - An intelligent skills framework for AI agents." width="150" />
 </p>
 
 <p align="center">Think clearly. Work thoroughly. Deliver excellence.</p>
@@ -83,7 +83,7 @@ be lost.
 ### Memory That Compounds
 
 <p align="center">
-  <img src="sage_memory.svg" alt="Sage Memory System — 3 skills, 1 MCP, compounding knowledge." width="600" />
+  <img src="docs/assets/sage_memory.svg" alt="Sage Memory System — 3 skills, 1 MCP, compounding knowledge." width="600" />
 </p>
 
 Most agent frameworks are stateless. The agent that made a mistake
@@ -252,7 +252,7 @@ Run in your terminal:
 ### Routing
 
 <p align="center">
-  <img src="sage_routing.svg" alt="Sage Routing — 3-layer funnel from keywords to confirmation." width="600" />
+  <img src="docs/assets/sage_routing.svg" alt="Sage Routing — 3-layer funnel from keywords to confirmation." width="600" />
 </p>
 
 Three layers, deterministic first:
@@ -346,7 +346,7 @@ Free-form input always works. These patterns guide, they don't constrain.
 ### The Pipeline: UNDERSTAND → ENVISION → DELIVER → REFLECT
 
 <p align="center">
-  <img src="sage_workflows.svg" alt="Sage Workflows — 14 commands chaining 37 skills across 4 phases." width="600" />
+  <img src="docs/assets/sage_workflows.svg" alt="Sage Workflows — 14 commands chaining 37 skills across 4 phases." width="600" />
 </p>
 
 Sage organizes work into four phases. Each phase has dedicated
@@ -373,7 +373,7 @@ more you're building on assumptions.
 ### Enforcement Model
 
 <p align="center">
-  <img src="sage_enforcement.svg" alt="Sage Enforcement — 5 independent layers." width="600" />
+  <img src="docs/assets/sage_enforcement.svg" alt="Sage Enforcement — 5 independent layers." width="600" />
 </p>
 
 Agents rationalize. Tell them "MUST write spec" and they'll decide the
@@ -449,7 +449,7 @@ independently enforceable.
 ### Independent Reviews (Sub-Agent)
 
 <p align="center">
-  <img src="sage_quality_chain.svg" alt="Sage Quality Chain." width="600" />
+  <img src="docs/assets/sage_quality_chain.svg" alt="Sage Quality Chain." width="600" />
 </p>
 
 Sage delegates three review points to sub-agents with independent

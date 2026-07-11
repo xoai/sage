@@ -208,8 +208,41 @@ prune_framework_copy() {
     echo -e "  ${YELLOW}⚠${RESET} Skipped pruning '$sage_dir' — it is a symlink, not a copy" >&2
     return 0
   fi
-  rm -rf "$sage_dir/.git" "$sage_dir/.github" "$sage_dir/.tmp"
-  rm -f "$sage_dir/.DS_Store"
+
+  # Allowlist vendoring (ADR-6/§16): a project needs only the runtime — core/,
+  # skills/, runtime/, bin/, LICENSE, VERSION. Everything else the repo carries
+  # is framework-dev material (docs/, develop/, tools/, marketing SVGs,
+  # CHANGELOG, the repo README, .claude-plugin/, install.sh, RELEASING/
+  # CONTRIBUTING, VCS/OS litter) and is not shipped into user projects. This
+  # drops the per-project footprint from ~5.4 MB to well under 1.5 MB.
+  local keep=" core skills runtime bin LICENSE VERSION "
+  local entry name
+  for entry in "$sage_dir"/* "$sage_dir"/.[!.]*; do
+    [ -e "$entry" ] || continue
+    name=$(basename "$entry")
+    case "$keep" in
+      *" $name "*) : ;;              # keep
+      *) rm -rf "$entry" ;;          # prune
+    esac
+  done
+
+  # Dev-side pieces that live under the vendored runtime/ but are only used to
+  # build/release the framework, never at project runtime.
+  rm -f "$sage_dir/runtime/tools/release.py" "$sage_dir/runtime/tools/build_plugin.py"
+  rm -rf "$sage_dir/runtime/plugin-overlay"
+
+  # A short pointer README so the vendored dir isn't opaque.
+  local vendored_version="unknown"
+  [ -f "$sage_dir/VERSION" ] && vendored_version="$(tr -d ' \t\n\r' < "$sage_dir/VERSION")"
+  cat > "$sage_dir/README.md" <<EOF
+# Sage (vendored runtime)
+
+Vendored Sage ${vendored_version} runtime for this project: \`core/\`, \`skills/\`,
+\`runtime/\`, \`bin/\`. This is a generated copy — do not edit it by hand.
+
+- Framework source and docs: https://github.com/xoai/sage
+- Regenerate platform files: \`sage update\`
+EOF
 }
 
 ask_choice() {
