@@ -1,0 +1,625 @@
+# Eval coverage — the contract behind "measure what you claim". (ADR-14)
+#
+# Read by develop/validators/check-eval-coverage.py, which CI runs on every PR.
+#
+# ── What this file is for ────────────────────────────────────────────────────
+#
+# v1.2.0 was cut after the eval suite falsified a claim the README had been
+# making for months. The lesson was not "we needed an eval suite" — we had
+# built one. The lesson was that the suite only bites when someone remembers
+# to point it at the thing they changed. That is culture, and culture is what
+# you lose first.
+#
+# So: every behavioral surface in Sage — each workflow, sub-workflow, hook,
+# gate, skill, and each block of the eager layer — gets a row here. A row
+# either names the scenarios that exercise it, or admits, in prose, that
+# nothing does. There is no third option and no blank.
+#
+# The validator fails a PR that changes a mapped surface without touching a
+# covering scenario or updating the mapping. Prose-only edits (typos,
+# formatting, rewording that changes no rule) pass by putting `#eval-neutral`
+# in the commit body — which is logged, not waived silently.
+#
+# ── On the number of `uncovered:` rows ───────────────────────────────────────
+#
+# There are a lot. That is the point. This file is the first honest inventory
+# of what Sage measures versus what Sage ships, and the answer is that the
+# eight E-scenarios cover the enforcement spine (TDD order, secrets, verify-
+# before-claiming, scope, hallucination, routing, spec-gate, degradation) and
+# almost nothing else. The domain skills are unmeasured. The long-horizon
+# machinery — /continue, memory recall, the decision log — is unmeasured, and
+# that is exactly the gap docs/eval-baseline.md names in its own words.
+#
+# Writing `uncovered:` costs nothing today and is visible forever. Writing a
+# scenario costs a day and a model run. The debt is listed, not hidden: every
+# `uncovered:` row is reproduced in eval-baseline v2's appendix (Phase 5, R124).
+#
+# ── Schema ───────────────────────────────────────────────────────────────────
+#
+#   surfaces:
+#     <surface-id>:
+#       path: <repo-relative file or directory>
+#       kind: workflow | sub-workflow | hook | gate | skill | eager-block
+#       anchor: <literal heading>      # eager-block only: locates it in `path`
+#       covered-by: [E1, E7]           # XOR with `uncovered`
+#       uncovered: <why nothing covers it>
+#       notes: <optional caveat — e.g. partial coverage>
+
+version: 1
+
+# ── Workflows ────────────────────────────────────────────────────────────────
+
+surfaces:
+
+  workflow-build:
+    path: core/workflows/build.workflow.md
+    kind: workflow
+    covered-by: [E1, E4, E7]
+    notes: >
+      E1 grades the build loop's TDD order, E4 its scope discipline, E7 its
+      spec gate. The plan→implement→verify sequence as a whole is not graded;
+      E9 (Phase 3) will grade it under subagent execution.
+
+  workflow-fix:
+    path: core/workflows/fix.workflow.md
+    kind: workflow
+    uncovered: >
+      No scenario drives /fix end-to-end. E3 exercises verify-before-claiming
+      inside a fix-shaped task, but nothing grades fix's distinctive rule —
+      root cause confirmed BEFORE the fix, and the surgical/moderate/systemic
+      scoping that follows it. This is the largest single coverage hole in the
+      workflow set.
+
+  workflow-architect:
+    path: core/workflows/architect.workflow.md
+    kind: workflow
+    covered-by: [E6]
+    notes: >
+      E6 grades only the decision to ROUTE to architect. Nothing grades what
+      architect then does — the three elicitation rounds, brief.md-before-
+      design, per-milestone checkpoints — all of which the eager layer asserts
+      as non-negotiable.
+
+  workflow-review:
+    path: core/workflows/review.workflow.md
+    kind: workflow
+    uncovered: >
+      No scenario invokes /review in any of its three modes (--ux, --design,
+      --browser). Its sub-agent reviews are exercised indirectly by E8's
+      degradation path, which grades what happens when they CANNOT run.
+
+  workflow-learn:
+    path: core/workflows/learn.workflow.md
+    kind: workflow
+    uncovered: "No scenario runs a codebase scan or builds an ontology."
+
+  workflow-reflect:
+    path: core/workflows/reflect.workflow.md
+    kind: workflow
+    uncovered: >
+      No scenario runs a retrospective. Reflect's value claim is cross-cycle
+      (extract learnings → seed the next cycle), which single-session scenarios
+      structurally cannot test — it needs an L-series multi-session fixture.
+
+  workflow-continue:
+    path: core/workflows/continue.workflow.md
+    kind: workflow
+    uncovered: >
+      Nothing measures resume fidelity. This is the headline long-horizon
+      claim — pick up an interrupted cycle without re-planning — and it is
+      unmeasured. Phase 5's L1 scenario exists to close exactly this row.
+
+  workflow-sage:
+    path: core/workflows/sage.workflow.md
+    kind: workflow
+    covered-by: [E6]
+    notes: "E6 grades the routing decision and its announcement."
+
+  workflow-autoresearch:
+    path: core/workflows/autoresearch.workflow.md
+    kind: workflow
+    uncovered: >
+      Optional runtime shipped in the sage-autoresearch pack; the optimization
+      loop has no scenario. Its own pressure assets move with the pack (P6-T1).
+
+  subworkflow-quality-gates:
+    path: core/workflows/sub-workflows/quality-gates.workflow.md
+    kind: sub-workflow
+    covered-by: [E1, E5, E8]
+    notes: >
+      E1 and E5 assert gate exit codes on the final tree; E8 asserts the loud
+      degradation path when the Task tool is absent. The gate SEQUENCE — that
+      gates run in order and a failure blocks completion — is asserted by the
+      H-series hook tests, not by an eval scenario.
+
+# ── Hooks (the mechanical layer — what the eval says actually moves behavior) ─
+
+  hook-spec-gate:
+    path: runtime/platforms/claude-code/hooks/sage-spec-gate.sh
+    kind: hook
+    covered-by: [E7]
+    notes: "E7 grades both the block and the agent's recovery from it."
+
+  hook-tdd-gate:
+    path: runtime/platforms/claude-code/hooks/sage-tdd-gate.sh
+    kind: hook
+    covered-by: [E1]
+
+  hook-degradation-log:
+    path: runtime/platforms/claude-code/hooks/sage-degradation-log.sh
+    kind: hook
+    covered-by: [E8]
+    notes: >
+      E8 is the scenario that proved the thesis: the decisions.md line appears
+      because a script writes it, not because the model remembered to.
+
+  hook-session-init:
+    path: runtime/platforms/claude-code/hooks/sage-session-init.sh
+    kind: hook
+    uncovered: >
+      No scenario asserts what session-start injection does to behavior. The
+      H-series hook tests cover the script's own contract (it fires, it emits
+      the state block); nothing measures whether the injected state changes
+      what the agent then does. L1 (Phase 5) is the natural home for that.
+
+# ── Gate scripts (three-state, standalone-invocable) ─────────────────────────
+
+  gate-verify:
+    path: core/gates/scripts/sage-verify.sh
+    kind: gate
+    covered-by: [E1, E4]
+    notes: "Both assert exit 0 on the final tree via the gate_exit grader."
+
+  gate-hallucination-check:
+    path: core/gates/scripts/sage-hallucination-check.sh
+    kind: gate
+    covered-by: [E5]
+
+  gate-spec-check:
+    path: core/gates/scripts/sage-spec-check.sh
+    kind: gate
+    uncovered: >
+      No scenario invokes Gate 1 directly. E7 exercises the spec-gate HOOK,
+      which is a different mechanism (a PreToolUse veto, not a standalone
+      script). The gate's own regression tests live in the 17-case gate suite.
+
+  gate-visual:
+    path: core/gates/scripts/sage-visual-gate.sh
+    kind: gate
+    uncovered: >
+      Requires a browser runtime; no eval fixture ships one. Covered by the
+      gate suite's unit cases only.
+
+# ── Eager layer (paid on EVERY turn — the layer Phase 2 is dieting) ──────────
+#
+# `anchor` locates each block inside the generator body, so the validator can
+# attribute a diff hunk to the specific block it changed rather than to the
+# file as a whole.
+
+  eager-identity:
+    path: runtime/platforms/_shared/instructions-body.sh
+    kind: eager-block
+    anchor: "# Sage — Project Instructions"
+    uncovered: >
+      The identity paragraph ("You are Sage, not a generic assistant"). No
+      grader inspects it. It survives the diet on the argument that the model
+      must know what it is before the first token — an argument that is, by
+      construction, untestable by the current suite.
+
+  eager-constitution-preamble:
+    path: runtime/platforms/_shared/instructions-body.sh
+    kind: eager-block
+    anchor: "## Process Constitution (Non-Negotiable)"
+    covered-by: [E1, E2]
+    notes: >
+      The principles themselves are graded — tests-before-code by E1, secrets-
+      never-in-code by E2. The framing prose around them is not.
+
+  eager-rule-0-routing:
+    path: runtime/platforms/_shared/instructions-body.sh
+    kind: eager-block
+    anchor: "### Rule 0: Route Every Request"
+    covered-by: [E6]
+    notes: >
+      E6 grades one routing decision (multi-surface ask → architect, not
+      build). The three-layer chain's fallback layers, the tier classifier, and
+      the Zone-1 confirmation format are not separately graded. E11 (P2-T2)
+      extends this to trigger-level regression once routing moves to a skill.
+
+  eager-rule-1a-memory:
+    path: runtime/platforms/_shared/instructions-body.sh
+    kind: eager-block
+    anchor: "### Rule 1A: Memory Before Work (MANDATORY for Standard+)"
+    uncovered: >
+      Nothing measures whether the mandatory pre-work memory search happens, or
+      whether it changes the resulting artifact. Rule 1A is marked MANDATORY in
+      the eager layer and is entirely unverified. L2 (Phase 5) targets it.
+
+  eager-workflow-gates:
+    path: runtime/platforms/_shared/instructions-body.sh
+    kind: eager-block
+    anchor: "### Workflow Gates (enforced for both slash commands and free input)"
+    covered-by: [E1, E7]
+    notes: >
+      The build file-checks are graded via E7 (spec) and E1 (TDD order). The
+      fix and architect gate blocks in this same section are not — see
+      workflow-fix and workflow-architect.
+
+  eager-rule-1-state-first:
+    path: runtime/platforms/_shared/instructions-body.sh
+    kind: eager-block
+    anchor: "### Rule 1: State First"
+    uncovered: >
+      "Never start fresh when there is existing context" — the premise of the
+      whole long-horizon bet, and unmeasured. L1 (Phase 5).
+
+  eager-rule-2-skills:
+    path: runtime/platforms/_shared/instructions-body.sh
+    kind: eager-block
+    anchor: "### Rule 2: Skills Before Assumptions"
+    uncovered: >
+      No scenario checks that a Sage skill is read before skill-covered output
+      is produced. This rule becomes load-bearing in Phase 2 (it IS the
+      dispatcher rule, ADR-9), and E11 is written to cover it.
+
+  eager-rule-3-document-decisions:
+    path: runtime/platforms/_shared/instructions-body.sh
+    kind: eager-block
+    anchor: "### Rule 3: Document Decisions"
+    covered-by: [E8]
+    notes: "E8 grades the decisions.md artifact — though a hook writes it, not the rule."
+
+  eager-rule-4-checkpoints:
+    path: runtime/platforms/_shared/instructions-body.sh
+    kind: eager-block
+    anchor: "### Rule 4: Checkpoints Are Sacred"
+    covered-by: [E4]
+    notes: >
+      E4 grades the no-unilateral-scope-change half of the rule. The approval-
+      gate half (present work, wait for response) is not graded — the eval
+      driver is headless and cannot answer a prompt.
+
+  eager-rule-5-verify:
+    path: runtime/platforms/_shared/instructions-body.sh
+    kind: eager-block
+    anchor: "### Rule 5: Verify Before Claiming Done"
+    covered-by: [E3]
+    notes: "E3 is the direct test: the user lies that tests pass; does the agent check?"
+
+  eager-rule-6-capture-corrections:
+    path: runtime/platforms/_shared/instructions-body.sh
+    kind: eager-block
+    anchor: "### Rule 6: Capture Corrections"
+    uncovered: >
+      No scenario issues a correction and then checks that it was stored. The
+      self-learning loop — a differentiated feature — is unmeasured.
+
+  eager-rule-7-record-decisions:
+    path: runtime/platforms/_shared/instructions-body.sh
+    kind: eager-block
+    anchor: "### Rule 7: Record Decisions at Checkpoints"
+    covered-by: [E8]
+    notes: "Partial: E8 asserts a decisions.md line exists, not that it is well-formed or prepended."
+
+  eager-learning-triggers:
+    path: runtime/platforms/_shared/instructions-body.sh
+    kind: eager-block
+    anchor: "## Learning Triggers"
+    uncovered: "The six trigger conditions are never exercised. See eager-rule-6-capture-corrections."
+
+  eager-deep-process-intelligence:
+    path: runtime/platforms/_shared/instructions-body.sh
+    kind: eager-block
+    anchor: "## Deep Process Intelligence"
+    uncovered: "A pointer to sage-navigator. Nothing grades whether it is followed."
+
+  eager-communication-style:
+    path: runtime/platforms/_shared/instructions-body.sh
+    kind: eager-block
+    anchor: "## Communication Style"
+    uncovered: >
+      The "Sage →" identity markers are asserted by E6's transcript_contains
+      only incidentally (as evidence of routing). Style itself is not a
+      behavioral claim and is a candidate for DELETE in the diet map.
+
+  eager-interaction-zones:
+    path: runtime/platforms/_shared/instructions-body.sh
+    kind: eager-block
+    anchor: "## Interaction Zones"
+    uncovered: >
+      No grader inspects zone footers. 29 lines paid every turn to format
+      prompts the headless driver never sees.
+
+  eager-commands-table:
+    path: runtime/platforms/_shared/instructions-body.sh
+    kind: eager-block
+    anchor: "## Commands"
+    uncovered: >
+      The command table duplicates what the platform's own /-menu already
+      lists from the generated .claude/commands/. Candidate for DELETE.
+
+  eager-enforcement-notes:
+    path: runtime/platforms/_shared/instructions-body.sh
+    kind: eager-block
+    anchor: "## Enforcement (platform-dependent)"
+    covered-by: [E8]
+    notes: >
+      E8 grades the loud-degradation behavior this block describes. The block
+      itself duplicates the README truth table — which Phase 4 (R111) makes
+      generated. Candidate for DELETE once the table is generated.
+
+  eager-available-skills:
+    path: runtime/platforms/_shared/instructions-body.sh
+    kind: eager-block
+    anchor: "## Available Skills"
+    uncovered: >
+      A prose list of skill CATEGORIES, not skills. On a platform with native
+      description-triggered discovery this is redundant with the skill
+      descriptions themselves — which is ADR-9's whole argument.
+
+  eager-project-state:
+    path: runtime/platforms/_shared/instructions-body.sh
+    kind: eager-block
+    anchor: "## Project State"
+    uncovered: "The .sage/ layout description. Referenced by every workflow; graded by none."
+
+# ── Skills (domain knowledge — the unmeasured 60%) ───────────────────────────
+#
+# Not one of the twelve shipped skills has a scenario. They are knowledge
+# payloads, and the suite grades process, not knowledge. Saying so in one place
+# is more honest than twelve identical excuses, but the rows stay separate so
+# that adding a scenario for any one of them is a one-line edit here.
+
+  skill-api:
+    path: skills/api/SKILL.md
+    kind: skill
+    uncovered: "Domain knowledge skill; no scenario grades API design output."
+
+  skill-baas:
+    path: skills/baas/SKILL.md
+    kind: skill
+    uncovered: "Domain knowledge skill; no scenario grades BaaS output."
+
+  skill-flutter:
+    path: skills/flutter/SKILL.md
+    kind: skill
+    uncovered: "Domain knowledge skill; no scenario grades Flutter output."
+
+  skill-mobile:
+    path: skills/mobile/SKILL.md
+    kind: skill
+    uncovered: "Domain knowledge skill; no scenario grades mobile output."
+
+  skill-nextjs:
+    path: skills/nextjs/SKILL.md
+    kind: skill
+    uncovered: "Domain knowledge skill; no scenario grades Next.js output."
+
+  skill-react:
+    path: skills/react/SKILL.md
+    kind: skill
+    uncovered: "Domain knowledge skill; no scenario grades React output."
+
+  skill-react-native:
+    path: skills/react-native/SKILL.md
+    kind: skill
+    uncovered: "Domain knowledge skill; no scenario grades React Native output."
+
+  skill-web:
+    path: skills/web/SKILL.md
+    kind: skill
+    uncovered: "Domain knowledge skill; no scenario grades web output."
+
+  skill-autoresearch:
+    path: skills/autoresearch/SKILL.md
+    kind: skill
+    uncovered: "Optional runtime; ships in the sage-autoresearch pack. See workflow-autoresearch."
+
+  skill-sage-memory:
+    path: skills/sage-memory/SKILL.md
+    kind: skill
+    uncovered: >
+      The memory skill is invoked by Rule 1A on every Standard+ task and has no
+      scenario. L2 (Phase 5) measures whether a stored constraint actually
+      shapes a later session — the first real test of this skill.
+
+  skill-sage-ontology:
+    path: skills/sage-ontology/SKILL.md
+    kind: skill
+    uncovered: "No scenario builds or queries an entity graph."
+
+  skill-sage-self-learning:
+    path: skills/sage-self-learning/SKILL.md
+    kind: skill
+    uncovered: "See eager-rule-6-capture-corrections — the trigger is unmeasured, so the skill is too."
+
+# ── Capabilities (where the rules actually live) ─────────────────────────────
+#
+# The workflows delegate; the capabilities do the work. build.workflow.md's
+# Step 6 is nine lines that say "read the build-loop skill" — so the build loop
+# that E1 and E4 actually grade is core/capabilities/orchestration/build-loop/,
+# not the workflow file. Phase 3 replaces THIS, which is why it is mapped.
+
+  capability-build-loop:
+    path: core/capabilities/orchestration/build-loop/SKILL.md
+    kind: capability
+    covered-by: [E1, E4]
+    notes: >
+      The real build loop. E1 grades its TDD step, E4 its scope guard. The
+      per-task gate runs it mandates are asserted by the gate suite, not by a
+      scenario. Phase 3's subagent-execution sub-workflow replaces this loop
+      when --subagents is active; E9/E10 will cover that path.
+
+  capability-tdd:
+    path: core/capabilities/execution/tdd/SKILL.md
+    kind: capability
+    covered-by: [E1]
+    notes: "E1 is the order claim — and order is a fact about the git log."
+
+  capability-scope-guard:
+    path: core/capabilities/context/scope-guard/SKILL.md
+    kind: capability
+    covered-by: [E4]
+
+  capability-verify-completion:
+    path: core/capabilities/debugging/verify-completion/SKILL.md
+    kind: capability
+    covered-by: [E3]
+
+  capability-specify:
+    path: core/capabilities/planning/specify/SKILL.md
+    kind: capability
+    covered-by: [E7]
+    notes: "E7 grades the recovery spec written after the gate blocks — not spec QUALITY."
+
+  capability-sage-navigator:
+    path: core/capabilities/orchestration/sage-navigator/SKILL.md
+    kind: capability
+    covered-by: [E6]
+    notes: >
+      Also the source of the plugin-overlay's 441-line navigator skill, which
+      is a hand-maintained near-duplicate of the eager layer and has already
+      drifted from it (its routing table predates the v1.2.0 command folding).
+      Phase 2 should generate it or delete it; today an eager-layer edit must
+      be made twice or the plugin and the project install disagree.
+
+  capability-git-discipline:
+    path: core/capabilities/execution/git-discipline/SKILL.md
+    kind: capability
+    covered-by: [E1]
+    notes: >
+      Partial: E1's git_order grader depends on the commit discipline this
+      skill defines, but nothing grades the branch gate — the rule that
+      implementation never lands on the default branch.
+
+  capability-auto-review:
+    path: core/capabilities/review/auto-review/SKILL.md
+    kind: capability
+    covered-by: [E8]
+    notes: >
+      Only the ABSENCE path is graded: E8 removes the Task tool and asserts the
+      skip is declared loudly. Nothing grades an auto-review that actually runs.
+
+  capability-auto-qa:
+    path: core/capabilities/review/auto-qa/SKILL.md
+    kind: capability
+    covered-by: [E8]
+    notes: "As with auto-review: E8 grades the loud skip, not the running review."
+
+  capability-implement:
+    path: core/capabilities/execution/implement/SKILL.md
+    kind: capability
+    uncovered: "The self-review checklist is never inspected by a grader."
+
+  capability-coding-principles:
+    path: core/capabilities/execution/coding-principles/SKILL.md
+    kind: capability
+    uncovered: "The 7 universal principles are loaded on every task and graded on none."
+
+  capability-plan:
+    path: core/capabilities/planning/plan/SKILL.md
+    kind: capability
+    uncovered: >
+      No scenario grades plan QUALITY (task decomposition, deliverables,
+      ordering). E7 asserts a plan file exists; that is not the same claim.
+
+  capability-spec-review:
+    path: core/capabilities/review/spec-review/SKILL.md
+    kind: capability
+    uncovered: >
+      Gate 1's reviewer persona. Phase 3's task-reviewer subagent adapts it,
+      and E10 (planted spec violation) becomes its first real test.
+
+  capability-quality-review:
+    path: core/capabilities/review/quality-review/SKILL.md
+    kind: capability
+    uncovered: "Gate 3's reviewer persona. Judgment-only gate, no script, no scenario."
+
+  capability-flag-parser:
+    path: core/capabilities/orchestration/flag-parser/SKILL.md
+    kind: capability
+    uncovered: >
+      Covered by unit tests (develop/validators/tools/test_sage_flags.py), not
+      by evals. Phase 3 extends it with --subagents; the unit suite extends too.
+
+  capability-quality-locked:
+    path: core/capabilities/orchestration/quality-locked/SKILL.md
+    kind: capability
+    uncovered: "The review/revise cap. Unit-tested via sage_flags.py; no scenario."
+
+  capability-autonomous:
+    path: core/capabilities/orchestration/autonomous/SKILL.md
+    kind: capability
+    uncovered: "No scenario runs a cycle in autonomous mode."
+
+  capability-session-bridge:
+    path: core/capabilities/context/session-bridge/SKILL.md
+    kind: capability
+    uncovered: >
+      Writes the manifest that /continue reads — the literal mechanism of the
+      long-horizon claim, and untested. L1 (Phase 5) targets it.
+
+  capability-context-loader:
+    path: core/capabilities/context/context-loader/SKILL.md
+    kind: capability
+    uncovered: "No scenario measures what gets loaded into context or when."
+
+  capability-tool-use:
+    path: core/capabilities/context/tool-use/SKILL.md
+    kind: capability
+    uncovered: "No scenario grades tool selection."
+
+  capability-systematic-debug:
+    path: core/capabilities/debugging/systematic-debug/SKILL.md
+    kind: capability
+    uncovered: >
+      The problem-solving techniques (Simplification, Inversion, Scale Testing,
+      Minimal Reproduction). Nothing gets the agent stuck on purpose and checks
+      which technique it reaches for.
+
+  capability-codebase-scan:
+    path: core/capabilities/elicitation/codebase-scan/SKILL.md
+    kind: capability
+    uncovered: "See workflow-learn."
+
+  capability-deep-elicit:
+    path: core/capabilities/elicitation/deep-elicit/SKILL.md
+    kind: capability
+    uncovered: >
+      Architect's three mandatory elicitation rounds. The eager layer calls
+      them non-negotiable ("Do NOT compress rounds"); no grader checks.
+
+  capability-quick-elicit:
+    path: core/capabilities/elicitation/quick-elicit/SKILL.md
+    kind: capability
+    uncovered: "No scenario exercises the short elicitation path."
+
+  capability-onboard:
+    path: core/capabilities/orchestration/onboard/SKILL.md
+    kind: capability
+    uncovered: "First-run onboarding; no scenario simulates a first run."
+
+  capability-sage-help:
+    path: core/capabilities/orchestration/sage-help/SKILL.md
+    kind: capability
+    uncovered: "Help output. No behavioral claim to grade."
+
+  capability-visual-review:
+    path: core/capabilities/review/visual-review/SKILL.md
+    kind: capability
+    uncovered: "Requires a browser runtime; no eval fixture ships one. See gate-visual."
+
+  capability-browser-check:
+    path: core/capabilities/verification/browser-check/SKILL.md
+    kind: capability
+    uncovered: "Requires a browser runtime; no eval fixture ships one."
+
+  capability-design-check:
+    path: core/capabilities/verification/design-check/SKILL.md
+    kind: capability
+    uncovered: "Requires a browser runtime; no eval fixture ships one."
+
+  capability-testing-skills:
+    path: core/capabilities/verification/testing-skills/SKILL.md
+    kind: capability
+    uncovered: "Test-authoring guidance. E1 grades that a test exists, not that it is good."

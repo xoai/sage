@@ -1,0 +1,39 @@
+# ADR-14: a behavioral surface is measured, or its debt is written down.
+#
+# Two checks, and the second is the one that matters. Registry integrity says
+# every surface has a row. The change contract says you cannot quietly edit a
+# surface and leave its scenarios unexamined — which is exactly how a claim
+# rots into a lie between releases.
+name: eval-coverage
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # the change contract needs history to diff
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.8'
+
+      - name: Registry integrity — every surface is mapped
+        run: python3 develop/validators/check-eval-coverage.py --check
+
+      - name: Change contract — a changed surface was re-measured
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch --no-tags origin "${{ github.base_ref }}"
+          python3 develop/validators/check-eval-coverage.py \
+            --diff "origin/${{ github.base_ref }}"
+
+      - name: Coverage debt (informational)
+        if: always()
+        run: python3 develop/validators/check-eval-coverage.py --list-uncovered
