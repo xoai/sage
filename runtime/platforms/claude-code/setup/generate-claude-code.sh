@@ -512,14 +512,26 @@ else
   rm -f "$TEMP_SETTINGS" 2>/dev/null
 fi
 
-# ── PreToolUse spec-gate hook (mechanical Rule 3 / Rule 5 enforcement) ──
+# ── Enforcement hooks (mechanical Rules 3 / 5 / R29) ──
 # Registered in settings.json (committed, shared) — unlike the informational
 # session hook, enforcement is a project policy and should travel with the repo.
-# Whether it actually blocks is gated by hard_enforcement in .sage/config.yaml.
+# Whether the spec-gate actually blocks is gated by hard_enforcement in
+# .sage/config.yaml; the degradation log always runs (it records, never blocks).
+#
+#   sage-spec-gate.sh       PreToolUse  — blocks pre-spec edits, blocks a
+#                                         completion that is silent about QA
+#   sage-degradation-log.sh PostToolUse — writes the R29 audit line to
+#                                         decisions.md itself, so the model
+#                                         cannot forget to
 SPEC_GATE_SRC="$CORE/../runtime/platforms/claude-code/hooks/sage-spec-gate.sh"
+DEG_LOG_SRC="$CORE/../runtime/platforms/claude-code/hooks/sage-degradation-log.sh"
 if [ -f "$SPEC_GATE_SRC" ]; then
   cp "$SPEC_GATE_SRC" "$CLAUDE_DIR/hooks/sage-spec-gate.sh"
   chmod +x "$CLAUDE_DIR/hooks/sage-spec-gate.sh"
+  if [ -f "$DEG_LOG_SRC" ]; then
+    cp "$DEG_LOG_SRC" "$CLAUDE_DIR/hooks/sage-degradation-log.sh"
+    chmod +x "$CLAUDE_DIR/hooks/sage-degradation-log.sh"
+  fi
 
   # Merge the hook into settings.json rather than overwriting, so the user's
   # own settings survive; idempotent so re-running never duplicates the entry.
@@ -531,7 +543,13 @@ import json
 import sys
 
 path = sys.argv[1]
-command = 'bash "$CLAUDE_PROJECT_DIR/.claude/hooks/sage-spec-gate.sh"'
+
+# (settings event, matcher, script) — each merged idempotently so re-running the
+# generator never duplicates an entry and never clobbers the user's own hooks.
+WANTED = [
+    ("PreToolUse", "Edit|Write|MultiEdit", "sage-spec-gate.sh"),
+    ("PostToolUse", "Write|Edit", "sage-degradation-log.sh"),
+]
 
 try:
     with open(path) as fh:
@@ -542,33 +560,36 @@ except (OSError, ValueError):
     data = {}
 
 hooks = data.setdefault("hooks", {})
-pre = hooks.get("PreToolUse")
-if not isinstance(pre, list):
-    pre = []
 
+for event, matcher, script in WANTED:
+    entries = hooks.get(event)
+    if not isinstance(entries, list):
+        entries = []
 
-def is_ours(entry):
-    for h in (entry or {}).get("hooks", []):
-        if "sage-spec-gate.sh" in (h.get("command") or ""):
-            return True
-    return False
+    def is_ours(entry, _script=script):
+        for h in (entry or {}).get("hooks", []):
+            if _script in (h.get("command") or ""):
+                return True
+        return False
 
-
-pre = [e for e in pre if not is_ours(e)]
-pre.append({
-    "matcher": "Edit|Write|MultiEdit",
-    "hooks": [{"type": "command", "command": command}],
-})
-hooks["PreToolUse"] = pre
+    entries = [e for e in entries if not is_ours(e)]
+    entries.append({
+        "matcher": matcher,
+        "hooks": [{
+            "type": "command",
+            "command": 'bash "$CLAUDE_PROJECT_DIR/.claude/hooks/%s"' % script,
+        }],
+    })
+    hooks[event] = entries
 
 with open(path, "w") as fh:
     json.dump(data, fh, indent=2)
     fh.write("\n")
 PYEOF
     if python3 "$MERGE_PY" "$SETTINGS_JSON" 2>/dev/null; then
-      echo "  ✓ settings.json (spec-gate hook)"
+      echo "  ✓ settings.json (spec-gate + degradation-log hooks)"
     else
-      echo "  ✗ Could not register spec-gate hook in settings.json"
+      echo "  ✗ Could not register enforcement hooks in settings.json"
     fi
     rm -f "$MERGE_PY"
   fi

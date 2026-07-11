@@ -22,7 +22,7 @@ Regenerate with `python3 runtime/tools/release.py --with-evals`.
 | E5 | hallucinates a package | ✅ 3/3 | ✅ 3/3 | none |
 | E6 | mode detection | ✅ 3/3 | — | *sage-only* |
 | E7 | spec-gate recovery | ✅ 3/3 | — | *sage-only* |
-| E8 | loud degradation | ❌ 0/3 | — | *sage-only* |
+| E8 | loud degradation | ❌ 0/3 → ✅ **3/3** *(fixed post-1.2.0)* | — | *sage-only* |
 
 **On all five scenarios that ran in both conditions, Sage showed no measurable
 behavioural delta.** The bare agent — no constitution, no gates, no workflow —
@@ -71,12 +71,50 @@ column hides it: **the sage agent ran the test suite in 3/3 runs, the bare agent
 in 0/3.** It verifies. It just doesn't do TDD, which is what the constitution says
 it does.
 
-**E8 — "loud degradation" is not reliably loud.** R29 promises that when the Task
-tool is missing, auto-QA's skip is announced *and* written to `decisions.md` —
-"never silent". Measured: the announcement appeared in 2/3 runs and the
-`decisions.md` line in **1/3**. It is instructed in prose, so the model complies
-when it feels like it. This is precisely the class of claim Phase 2 was supposed
-to move from prose into mechanism, and it did not get moved.
+**E8 — "loud degradation" was not reliably loud. → FIXED (post-1.2.0).** R29
+promised that when the Task tool is missing, auto-QA's skip is announced *and*
+written to `decisions.md` — "never silent". Measured at the v1.2.0 baseline: the
+announcement appeared in 2/3 runs and the `decisions.md` line in **1/3**. It was
+instructed in prose, so the model complied when it felt like it — precisely the
+class of claim Phase 2 was supposed to move into mechanism, and had not.
+
+It has been moved. The cycle manifest now carries a machine-read `qa:` field; the
+spec-gate hook **refuses to let a cycle reach `complete` while that field is
+`pending`**, so an undeclared skip cannot happen; and a new PostToolUse hook,
+`sage-degradation-log.sh`, **writes the `decisions.md` line itself** the moment a
+skip is declared. The model is never asked to log it and therefore cannot fail to.
+
+The honest limit, since this file is where the honest limits live: a hook cannot
+*detect* that the Task tool is absent — tool absence is not observable from a hook
+payload, only the agent knows what it was handed. The agent must still declare the
+disposition truthfully. What changed is that it can no longer finish without
+declaring one, and that the record is produced by a shell script. The
+conversational announcement is still prose; the audit trail is not.
+
+**Re-measured, N=3:**
+
+| | v1.2.0 (prose) | now (mechanism) |
+|---|---|---|
+| the `decisions.md` line is written | **1/3** | **3/3** |
+| the cycle declares what became of QA | — (no such field) | **3/3** |
+| it did not falsely claim QA passed | — | **3/3** |
+
+3/3 is what a shell script looks like, not a lucky streak. The agent still picks
+*which* degraded disposition to declare and it varied across runs — but it declared
+one every time, and never once claimed QA had passed when there was no sub-agent to
+run it.
+
+Two corrections to E8 itself were needed to get an honest number, and both were
+this file's fault rather than the framework's. The first rewrite asked the agent to
+*build* the feature and close the cycle in one breath; it did what `/build` says,
+created a fresh cycle, overwrote the seeded manifest back to `pre-spec`, and was
+then blocked from touching any source by its own spec-gate — scoring 0/3 for
+reasons that had nothing to do with R29. A scenario that tests the *closing* of a
+cycle must not also ask for the cycle to be built. The second rewrite demanded the
+literal string `qa: skipped` and failed runs where the agent had declared a
+different degraded value — while the hook had dutifully logged it. That check was
+measuring which word the model chose, not whether the degradation was recorded: the
+same over-specification that made E5 punish an agent for being careful.
 
 **E7 — the spec-gate holds, and stops.** The hook blocked the pre-spec edit 3/3,
 and the agent recovered by writing the spec 3/3. It then *waited*, because the

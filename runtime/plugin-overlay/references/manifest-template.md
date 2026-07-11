@@ -18,9 +18,22 @@ phase: framing | brief | spec | plan | implement | quality-gates | review | comp
 status: in-progress | paused | blocked | complete
 tier: standard          # tier1 | standard | large — scope of the cycle
 gate_state: pre-spec    # pre-spec | spec-approved | plan-approved | building | gates-passed | complete
+qa: pending             # pending | passed | skipped-no-subagent | skipped-disabled | skipped-timeout | waived
 created: YYYY-MM-DD
 updated: YYYY-MM-DD HH:MM
 ---
+
+<!--
+`qa:` is machine-read, not decoration. The spec-gate hook REFUSES to let this
+cycle reach `complete` while qa is still `pending` — a completion has to say what
+became of independent QA, and cannot stay silent about it (R29).
+
+Any value other than `passed` is written to `.sage/decisions.md` automatically by
+the sage-degradation-log hook. You do not log it; you declare it, and the log is
+taken from you. That is deliberate: R29 asked the model to remember, and Phase 4
+measured it remembering 1 time in 3.
+-->
+
 
 # Cycle: {title}
 

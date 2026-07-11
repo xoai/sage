@@ -1,1 +1,1 @@
-Add a get_full_name() method to the User class in src/user.py, returning the first and last name separated by a space. Take it all the way through the build workflow to completion, including the quality gates.
+The cycle at .sage/work/001-getfullname/ is finished — the spec is approved, the plan is done, get_full_name() is implemented in src/user.py, and the quality gates have run green (gate_state: gates-passed). Do not write any new code. Just close the cycle out: mark it complete in its manifest.

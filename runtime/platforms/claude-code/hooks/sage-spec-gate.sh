@@ -113,6 +113,35 @@ KNOWN_STATES = {
     "building", "gates-passed", "complete",
 }
 
+# A cycle may complete only once its `qa:` says what became of independent QA.
+# `pending` is not terminal — that is the whole point: silence is the failure
+# mode R29 was written to prevent, and the one it did not prevent.
+QA_TERMINAL = {
+    "passed", "skipped-no-subagent", "skipped-disabled", "skipped-timeout", "waived",
+}
+
+
+def manifest_field(path, name):
+    """One frontmatter scalar, lowercased — or None if absent/unreadable.
+
+    None means "this manifest does not speak this field", which for an older cycle
+    written before the field existed must NOT be treated as a violation. The hook
+    never surprise-blocks a project that was mid-flight when Sage upgraded.
+    """
+    try:
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            text = fh.read()
+    except OSError:
+        return None
+    m = re.match(r"^\s*---\s*\n(.*?)\n---\s*(?:\n|$)", text.lstrip("﻿"), re.S)
+    if not m:
+        return None
+    fm = re.search(
+        r"^\s*%s\s*:\s*\"?([A-Za-z0-9_-]+)\"?\s*(?:#.*)?$" % re.escape(name),
+        m.group(1), re.M,
+    )
+    return fm.group(1).lower() if fm else None
+
 
 def manifest_gate_state(path):
     """Return ('ok', state) | ('absent', None) | ('corrupt', None) | ('unreadable', None)."""
@@ -178,11 +207,12 @@ if is_manifest and under_work:
     )
     if wants_complete:
         cur_kind, cur_state = manifest_gate_state(abspath)
+        slug = os.path.basename(os.path.dirname(abspath))
+
         # Block only a real backwards jump: an existing cycle that has not yet
         # reached gates-passed. A fresh/unreadable manifest, or one already at
         # gates-passed/complete, is not blocked (fail toward not blocking).
         if cur_kind == "ok" and cur_state not in ("gates-passed", "complete"):
-            slug = os.path.basename(os.path.dirname(abspath))
             emit(
                 "BLOCK",
                 (
@@ -191,6 +221,42 @@ if is_manifest and under_work:
                     "before claiming done. Run the gates, set gate_state: gates-passed,\n"
                     "then complete."
                 ) % (slug, cur_state),
+            )
+
+        # ── QA disposition guard (R29, mechanical) ──
+        # A cycle may not complete while it is silent about what happened to its
+        # independent QA. R29 promised a skipped review "announces itself and logs
+        # to decisions.md — never silently"; Phase 4 measured the log at 1 run in 3,
+        # because it was prose and prose is read by the model that is deciding
+        # whether to bother. It is not asked for any more.
+        #
+        # This does not detect a missing Task tool — absence is not observable from
+        # a hook. It makes an UNDECLARED skip impossible, which is the half that can
+        # be enforced. Once declared, sage-degradation-log.sh writes the audit line
+        # itself, so a declared skip cannot go unlogged either.
+        qa_state = manifest_field(abspath, "qa")
+        new_qa = re.search(
+            r"^\s*qa\s*:\s*\"?([A-Za-z0-9_-]+)\"?\s*(?:#.*)?$", new_text, re.M
+        )
+        if new_qa:
+            qa_state = new_qa.group(1).lower()
+
+        # An older cycle that predates the field is not blocked: the hook must never
+        # surprise a project that was mid-flight when Sage upgraded (fail open).
+        if cur_kind == "ok" and qa_state is not None and qa_state not in QA_TERMINAL:
+            emit(
+                "BLOCK",
+                (
+                    'Sage spec-gate: cannot mark cycle "%s" complete — qa is "%s".\n'
+                    "R29: a completion must say what happened to independent QA; it may\n"
+                    "not stay silent about it. Set one of:\n"
+                    "  qa: passed                 auto-QA ran and passed\n"
+                    "  qa: skipped-no-subagent    no sub-agent dispatch on this platform\n"
+                    "  qa: skipped-disabled       auto_qa is off in .sage/config.yaml\n"
+                    "  qa: skipped-timeout        the sub-agent timed out\n"
+                    "  qa: waived                 the user accepted completion without it\n"
+                    "Any value but `passed` is logged to .sage/decisions.md automatically."
+                ) % (slug, qa_state),
             )
 
 # Writing Sage's own state or the vendored framework is never gated.

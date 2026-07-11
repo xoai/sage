@@ -41,7 +41,7 @@ What still holds is the part that is **code rather than language**:
 | Gate scripts' three-state exit contract | ✅ tested; "unverifiable" is never a pass |
 | Routing to the right workflow | ✅ 3/3 |
 | `tdd` "enforces" test-first | ❌ **0/3 — it does not** (see below) |
-| Degradation is "never silent" | ❌ **announced 2/3, logged 1/3** |
+| Degradation is "never silent" | ✅ **3/3 — now mechanical.** Was 1/3 when it was prose. A hook writes the record; a cycle cannot complete while silent about QA |
 
 **What this does not measure**, and it's the part Sage is probably actually for:
 long multi-session work — carried context, spec-then-plan-then-build, a decisions
@@ -98,10 +98,12 @@ Six independent sub-agent review points. The agent that writes the code — or
 diagnoses the bug — does not review its own work alone.
 
 That holds **only where sub-agent dispatch exists** (a Task tool, or equivalent).
-Where it doesn't, the reviews are skipped rather than downgraded — and the skip is
-supposed to announce itself, but [measurably often doesn't](docs/eval-baseline.md).
-On a platform without sub-agents, assume the code was reviewed by the agent that
-wrote it.
+Where it doesn't, the reviews are skipped rather than downgraded. On Claude Code
+the skip is now recorded mechanically — a hook writes it to `decisions.md`, and the
+cycle cannot be marked complete while its manifest is silent about QA — so a
+degraded run is legible after the fact instead of indistinguishable from a clean
+one. On a platform without hooks, assume the code was reviewed by the agent that
+wrote it, and check `decisions.md` yourself.
 
 ### Hybrid Loading
 
@@ -496,23 +498,38 @@ never surprises an established workflow.
 
 #### What is mechanical on each platform
 
-Not every platform can run every layer. Sage is *supposed* to degrade **loudly** —
-a skipped review announces itself and logs a line to `decisions.md`.
+Not every platform can run every layer. When one is missing, Sage degrades —
+and on Claude Code, **the record of that degradation is now taken, not requested.**
 
-> **Measured, and it doesn't reliably happen.** With the Task tool genuinely
-> removed, the skip was announced in **2 of 3 runs** and the `decisions.md` line
-> was written in **1 of 3**. Like Layer 3, this is instructed in prose, so the model
-> complies when it feels like it. Treat a degraded run as *possibly* silent: check
-> `decisions.md` yourself rather than trusting that a missing capability announced
-> itself. Making this mechanical is the top open item
-> ([docs/eval-baseline.md](docs/eval-baseline.md)).
+This claim used to be prose ("a skipped review announces itself and logs to
+`decisions.md` — never silently"), and the eval caught it being false: the line was
+written in **1 run out of 3**. A rule the model has to remember is a rule the model
+will forget. So two hooks carry it instead:
+
+- The **spec-gate refuses to let a cycle reach `complete`** while its manifest's
+  `qa:` field is still `pending`. A completion that says nothing about independent
+  QA is not a thing that can happen.
+- The **degradation-log hook writes the `decisions.md` line itself**, once, the
+  moment a skip is declared. The model is not asked to log it and therefore cannot
+  fail to.
+
+**What is still not mechanical, stated plainly:** a hook cannot *detect* that the
+Task tool is missing — tool absence isn't observable from a hook payload; only the
+agent knows what it was handed. The agent still has to declare the disposition
+honestly. What changed is that it can no longer finish the cycle without declaring
+one, and that the durable record is produced by code. The conversational
+announcement remains prose; the audit trail does not.
+
+Off Claude Code (no hooks), this is still prose — see the table below.
 
 | Layer | Claude Code | Generic / other platforms |
 |---|---|---|
-| Layers 1–3, 5 (prose rules, preambles, capabilities, self-learning) | ✅ prose | ✅ prose |
+| Layers 1–3, 5 (prose rules, preambles, capabilities, self-learning) | ⚠️ prose — *rationalizable, and measurably rationalized* | ⚠️ prose |
 | Layer 4 — gate scripts (3-state, self-tested) | ✅ deterministic | ✅ deterministic (run manually) |
 | Spec-gate hook (blocks pre-spec edits, blocks premature completion) | ✅ mechanical (PreToolUse) | ❌ not available — prose rules only |
-| Sub-agent reviews (auto-review, auto-QA, independent Gate 3) | ✅ via Task tool | ⚠️ skipped **loudly** — announced + logged |
+| Completion must declare what happened to QA (R29) | ✅ mechanical — the hook blocks a cycle that stays silent | ❌ prose only |
+| A degraded run is recorded in `decisions.md` (R29) | ✅ mechanical — a hook writes it; the model is not asked to | ⚠️ prose — *was written in 1 run of 3 when measured* |
+| Sub-agent reviews (auto-review, auto-QA, independent Gate 3) | ✅ via Task tool | ❌ skipped — see the two rows above for whether you'll find out |
 
 The deterministic layers — gate scripts and the spec-gate hook — carry their
 own regression tests (`develop/validators/gates/`, `develop/validators/hooks/`)
@@ -547,17 +564,25 @@ All are advisory — the user can always `[P] Proceed`. Findings are
 logged to `decisions.md` for `/reflect` to learn from.
 
 Requires Claude Code's Task tool. When the Task tool is not available
-(e.g., Antigravity), each review is *meant* to be skipped **loudly** — announcing
-`Quality chain is degraded` and logging one line to `decisions.md`, so `/reflect`
-and `/status` surface the gap. The reasoning stands: a review that vanishes without
-a trace reads as one that passed.
+(e.g., Antigravity), each review is skipped — a review cannot be downgraded to a
+self-review, because self-review shares the author's blind spots, which is the
+whole thing an independent pass exists to avoid.
 
-**In practice it is not reliable.** Measured with the Task tool removed, the
-announcement appeared in 2 of 3 runs and the `decisions.md` line in 1 of 3 — it is
-prose, and the model treats it as prose. Until it is mechanical, verify a degraded
-run by reading `decisions.md`, not by waiting to be told. See
-[docs/eval-baseline.md](docs/eval-baseline.md) and the per-platform table under
-[Enforcement](#enforcement-model).
+The reasoning behind logging that skip has always been sound: **a review that
+vanishes without a trace reads as one that passed.** The implementation was not.
+Asking the model to announce and log it produced the log in **1 run out of 3** when
+it was finally measured.
+
+**On Claude Code the record is now mechanical.** The cycle manifest must declare
+what became of QA (`qa: skipped-no-subagent`, etc.), the spec-gate hook refuses to
+let the cycle complete while that field is `pending`, and a PostToolUse hook writes
+the `decisions.md` line itself. The model is not asked to log it, so it cannot
+forget. A degraded run is legible after the fact instead of indistinguishable from
+a clean one.
+
+Elsewhere there are no hooks, so it is still prose — read `decisions.md` yourself
+rather than waiting to be told. See [docs/eval-baseline.md](docs/eval-baseline.md)
+and the per-platform table under [Enforcement](#enforcement-model).
 
 ### Coding Principles
 

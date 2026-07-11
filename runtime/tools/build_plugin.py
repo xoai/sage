@@ -92,6 +92,7 @@ FILE_MAP = {
     "hooks/scripts/sage-verify.sh": "core/gates/scripts/sage-verify.sh",
     "hooks/scripts/sage-visual-gate.sh": "core/gates/scripts/sage-visual-gate.sh",
     "hooks/scripts/sage-spec-gate.sh": "runtime/platforms/claude-code/hooks/sage-spec-gate.sh",
+    "hooks/scripts/sage-degradation-log.sh": "runtime/platforms/claude-code/hooks/sage-degradation-log.sh",
     "references/decision-template.md": "core/templates/architecture/decision-template.md",
     "references/full-spec-template.md": "core/templates/spec/full.spec-template.md",
     "references/plan-template.md": "core/templates/plan/standard.plan-template.md",

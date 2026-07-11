@@ -2,6 +2,64 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [Unreleased]
+
+### R29 is mechanical now — the degradation record is taken, not requested
+
+v1.2.0 shipped an eval that measured R29 ("a skipped review announces itself and
+logs one line to `decisions.md` — never silently") and found it false: the
+announcement appeared in 2 runs of 3, the `decisions.md` line in **1 of 3**. It was
+instructed in prose, and prose is read by the same model that is deciding whether
+it is worth the trouble. A rule the model has to remember is a rule the model will
+forget.
+
+So it stopped being a rule and became a mechanism. On Claude Code:
+
+- **A cycle cannot reach `complete` while it is silent about independent QA.** The
+  manifest gains a machine-read `qa:` field (`pending | passed | skipped-no-subagent
+  | skipped-disabled | skipped-timeout | waived`), and `sage-spec-gate.sh` blocks
+  the completion while it is still `pending`, naming the values it will accept. An
+  *undeclared* skip is no longer a thing that can happen.
+- **The `decisions.md` line is written by code.** New PostToolUse hook
+  `sage-degradation-log.sh` writes it the moment a skip is declared — once, however
+  many times the manifest is edited. The model is never asked to log it, and so
+  cannot fail to.
+
+`auto-qa`'s skill text no longer asks for the log; it tells the agent to declare
+the disposition and says plainly that the record will be taken from it.
+
+**What is still NOT mechanical, stated rather than glossed:** a hook cannot *detect*
+that the Task tool is missing — tool absence is not observable from a hook payload;
+only the agent knows what it was handed. The agent must still declare the
+disposition honestly. What changed is that it can no longer finish the cycle
+without declaring one, and that the durable record is produced by a shell script
+rather than by good intentions. The conversational announcement remains prose. The
+audit trail does not.
+
+Off Claude Code there are no hooks, so this remains prose — the per-platform
+enforcement table in the README says so, row by row.
+
+Backward compatible: a manifest written before the `qa:` field existed is never
+blocked. An upgrade must not freeze a cycle that was mid-flight when it landed.
+
+Nine new hook tests (22 total) pin it in both directions, including the cases that
+must NOT fire: `qa: passed` writes no degradation line, the logger never fails a
+tool call on garbage input, and the audit line is written once rather than once per
+manifest edit.
+
+**Re-measured against a real model (E8, N=3):**
+
+| | v1.2.0 (prose) | now (mechanism) |
+|---|---|---|
+| the `decisions.md` line is written | **1/3** | **3/3** |
+| the cycle declares what became of QA | — (no such field) | **3/3** |
+| it did not falsely claim QA passed | — | **3/3** |
+
+The audit line is now written by a shell script, so 3/3 is what "deterministic"
+looks like rather than a lucky streak. The agent still chooses *which* degraded
+disposition to declare, and it varied between runs — but it declared one every
+time, and never claimed QA had passed when no sub-agent existed to run it.
+
 ## [1.2.0] — Correctness, enforcement, simplification, and evidence
 
 A four-part upgrade: make the deterministic layer honest and tested (Phase 1),

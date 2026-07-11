@@ -17,6 +17,7 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 HOOK="${SAGE_SPEC_GATE:-$REPO_ROOT/runtime/platforms/claude-code/hooks/sage-spec-gate.sh}"
+DEG_LOG="${SAGE_DEG_LOG:-$REPO_ROOT/runtime/platforms/claude-code/hooks/sage-degradation-log.sh}"
 
 ONLY=""
 VERBOSE=false
@@ -43,11 +44,16 @@ set_config() {  # set_config <proj> <yaml-line>
   printf 'sage-version: "1.1.11"\n%s\n' "$2" > "$1/.sage/config.yaml"
 }
 
-add_manifest() {  # add_manifest <proj> <slug> <gate_state> [status]
+add_manifest() {  # add_manifest <proj> <slug> <gate_state> [status] [qa]
   local status="${4:-in-progress}"
+  local qa="${5:-}"
   mkdir -p "$1/.sage/work/$2"
-  printf -- '---\ncycle_id: "%s"\nworkflow: build\nphase: spec\nstatus: %s\ntier: standard\ngate_state: %s\n---\n\n# Cycle: %s\n' \
-    "$2" "$status" "$3" "$2" > "$1/.sage/work/$2/manifest.md"
+  printf -- '---\ncycle_id: "%s"\nworkflow: build\nphase: spec\nstatus: %s\ntier: standard\ngate_state: %s\n' \
+    "$2" "$status" "$3" > "$1/.sage/work/$2/manifest.md"
+  # Omitted entirely when empty — that is the pre-upgrade manifest, which must
+  # never be surprise-blocked by a field it has never heard of.
+  [ -n "$qa" ] && printf -- 'qa: %s\n' "$qa" >> "$1/.sage/work/$2/manifest.md"
+  printf -- '---\n\n# Cycle: %s\n' "$2" >> "$1/.sage/work/$2/manifest.md"
 }
 
 report() {  # report <status> <id> <label> [detail...]
@@ -63,7 +69,7 @@ assert() {
   local id="$1" label="$2" proj="$3" json="$4"; shift 4
   [ -n "$ONLY" ] && [ "$ONLY" != "$id" ] && return 0
 
-  local want_exit="" xfail=""
+  local want_exit="" xfail="" hook="$HOOK"
   local want=() nowant=() envs=()
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -71,6 +77,7 @@ assert() {
       --stderr)    want+=("$2"); shift 2 ;;
       --no-stderr) nowant+=("$2"); shift 2 ;;
       --env)       envs+=("$2"); shift 2 ;;
+      --hook)      hook="$2"; shift 2 ;;
       --xfail)     xfail="$2"; shift 2 ;;
       *) echo "assert $id: unknown option $1" >&2; exit 2 ;;
     esac
@@ -79,7 +86,7 @@ assert() {
   local errfile rc stderr
   errfile="$(mktemp)"
   ( cd "$proj" && printf '%s' "$json" \
-      | env ${envs[@]+"${envs[@]}"} bash "$HOOK" >/dev/null 2>"$errfile" )
+      | env ${envs[@]+"${envs[@]}"} bash "$hook" >/dev/null 2>"$errfile" )
   rc=$?
   stderr="$(cat "$errfile")"; rm -f "$errfile"
 
@@ -188,6 +195,93 @@ P=$(new_project); set_config "$P" "hard_enforcement: true"; add_manifest "$P" de
 assert H8d "advancing gate_state (not to complete) is allowed" "$P" \
   '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/demo/manifest.md","old_string":"gate_state: spec-approved","new_string":"gate_state: plan-approved"}}' \
   --exit 0
+
+# ─── R29: a completion may not be silent about independent QA ───────────────
+# Phase 4 measured the old prose version: the decisions.md line was written in 1
+# run of 3. These cases pin the mechanism that replaced it.
+
+# H12 — gates passed, but qa is still `pending` → BLOCK. This is the whole point:
+# silence about a skipped review is the failure mode, and it is now impossible.
+P=$(new_project); set_config "$P" "hard_enforcement: true"
+add_manifest "$P" demo gates-passed in-progress pending
+assert H12 "completing while qa is 'pending' is blocked" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/demo/manifest.md","old_string":"status: in-progress","new_string":"status: complete"}}' \
+  --exit 2 --stderr "R29" --stderr "skipped-no-subagent"
+
+# H13 — the skip is DECLARED → allowed. Sage does not forbid degrading; it forbids
+# degrading quietly.
+P=$(new_project); set_config "$P" "hard_enforcement: true"
+add_manifest "$P" demo gates-passed in-progress skipped-no-subagent
+assert H13 "completing with a declared skip is allowed" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/demo/manifest.md","old_string":"status: in-progress","new_string":"status: complete"}}' \
+  --exit 0
+
+# H14 — QA actually ran → allowed.
+P=$(new_project); set_config "$P" "hard_enforcement: true"
+add_manifest "$P" demo gates-passed in-progress passed
+assert H14 "completing with qa: passed is allowed" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/demo/manifest.md","old_string":"status: in-progress","new_string":"status: complete"}}' \
+  --exit 0
+
+# H15 — declaring the disposition IN the same edit that completes is allowed. The
+# agent should not have to make two round-trips to satisfy the gate.
+P=$(new_project); set_config "$P" "hard_enforcement: true"
+add_manifest "$P" demo gates-passed in-progress pending
+assert H15 "declaring qa in the same edit that completes is allowed" "$P" \
+  '{"tool_name":"Write","tool_input":{"file_path":".sage/work/demo/manifest.md","content":"---\ngate_state: complete\nstatus: complete\nqa: waived\n---\n"}}' \
+  --exit 0
+
+# H16 — a manifest written before the field existed → allowed. An upgrade must not
+# freeze a cycle that was mid-flight when it landed.
+P=$(new_project); set_config "$P" "hard_enforcement: true"
+add_manifest "$P" demo gates-passed
+assert H16 "a pre-upgrade manifest with no qa field still completes" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/demo/manifest.md","old_string":"status: in-progress","new_string":"status: complete"}}' \
+  --exit 0 --no-stderr "R29"
+
+# ─── R29: the audit line is written by CODE, not asked for ──────────────────
+# H17 — a declared skip lands in decisions.md without the model touching it.
+P=$(new_project); add_manifest "$P" demo gates-passed in-progress skipped-no-subagent
+: > "$P/.sage/decisions.md"
+assert H17 "the degradation hook records a declared skip" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"'"$P"'/.sage/work/demo/manifest.md"}}' \
+  --hook "$DEG_LOG" --exit 0 --stderr "recorded a degraded completion"
+if [ -z "$ONLY" ] || [ "$ONLY" = "H17b" ]; then
+  if grep -Fq "auto-logged by sage-degradation-log" "$P/.sage/decisions.md" 2>/dev/null; then
+    report PASS H17b "the line is actually in decisions.md"
+  else
+    report FAIL H17b "the line is actually in decisions.md" "decisions.md has no audit line"
+  fi
+fi
+
+# H18 — idempotent. A manifest is edited many times per cycle; the record is one line.
+P=$(new_project); add_manifest "$P" demo gates-passed in-progress skipped-no-subagent
+: > "$P/.sage/decisions.md"
+if [ -z "$ONLY" ] || [ "$ONLY" = "H18" ]; then
+  for _ in 1 2 3; do
+    ( cd "$P" && printf '%s' '{"tool_name":"Edit","tool_input":{"file_path":"'"$P"'/.sage/work/demo/manifest.md"}}' \
+        | bash "$DEG_LOG" >/dev/null 2>&1 )
+  done
+  n=$(grep -c "auto-logged by sage-degradation-log" "$P/.sage/decisions.md" 2>/dev/null || echo 0)
+  if [ "$n" = "1" ]; then
+    report PASS H18 "the audit line is written once, not once per edit"
+  else
+    report FAIL H18 "the audit line is written once, not once per edit" "found $n lines"
+  fi
+fi
+
+# H19 — qa: passed is not a degradation and must NOT be logged as one.
+P=$(new_project); add_manifest "$P" demo gates-passed in-progress passed
+: > "$P/.sage/decisions.md"
+assert H19 "qa: passed writes no degradation line" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"'"$P"'/.sage/work/demo/manifest.md"}}' \
+  --hook "$DEG_LOG" --exit 0 --no-stderr "recorded a degraded completion"
+
+# H20 — the logger never fails a tool call, whatever it is handed.
+P=$(new_project)
+assert H20 "the degradation hook never blocks, even on garbage" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"/nonexistent/manifest.md"}}' \
+  --hook "$DEG_LOG" --exit 0
 
 # H9 — hard_enforcement not set at all (key absent) → allow (never surprise-block)
 P=$(new_project); printf 'sage-version: "1.1.11"\n' > "$P/.sage/config.yaml"; add_manifest "$P" demo pre-spec

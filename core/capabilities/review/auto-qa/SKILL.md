@@ -37,12 +37,31 @@ sequence triggers it — the agent does not decide whether to run it.
 **Activation conditions (checked by quality-gates workflow):**
 
 1. **Task tool is available.** If not (e.g., Antigravity), there is no
-   self-review fallback — but the skip is LOUD, never silent (R29):
-   - Announce: `Sage: auto-QA skipped — Task tool unavailable on this
-     platform. Quality chain is degraded.`
-   - Append one line to the initiative's `decisions.md`:
-     `[<date>] auto-QA skipped (Task tool unavailable) — completion
-     accepted without independent QA.`
+   self-review fallback — self-review shares the author's blind spots, which is
+   the entire thing auto-QA exists to avoid. So the review is skipped.
+
+   **Declare the skip in the cycle manifest. Do not log it — the log is taken.**
+
+   ```yaml
+   qa: skipped-no-subagent    # or: passed | skipped-disabled | skipped-timeout | waived
+   ```
+
+   Two mechanisms then act on that, and neither is your discretion (R29):
+
+   - The **spec-gate hook refuses to let the cycle reach `complete`** while `qa:`
+     is still `pending`. A completion that says nothing about independent QA is
+     not possible. You will be blocked, and told exactly what to write.
+   - The **degradation-log hook writes the `decisions.md` line itself**, once,
+     the moment you declare anything but `passed`.
+
+   Announce it in the conversation too — `Sage: auto-QA skipped (no sub-agent
+   dispatch). Quality chain is degraded.` — but understand what changed: the
+   announcement is courtesy, the manifest field is the requirement, and the
+   durable record is no longer your job.
+
+   This used to be prose asking you to remember. Phase 4 measured the result:
+   the `decisions.md` line got written in **one run out of three**. A rule the
+   model must remember is a rule the model will forget, so it stopped being one.
 
 2. **Scope is Standard or Comprehensive.** Lightweight tasks skip.
 
@@ -237,8 +256,11 @@ MUST appear — it is not the agent's discretion.
 ## Failure Modes
 
 - **Task tool not available:** No self-review fallback (it shares the author's
-  blind spots). Skip the sub-agent, but LOUDLY per Activation condition #1:
-  announce the degradation and log one line to decisions.md. Never silent.
+  blind spots). Skip the sub-agent and set `qa: skipped-no-subagent` in the cycle
+  manifest — see Activation condition #1. The `decisions.md` line is written for
+  you by the degradation-log hook, and the spec-gate will not let the cycle
+  complete until you have declared *something*. Silence is not an available
+  option any more; it used to be, and it was taken 2 times in 3.
 - **Sub-agent times out:** Skip with note. Do NOT block workflow.
 - **Sub-agent returns malformed output:** Present raw output to user
   with note: "QA format was unexpected. Please interpret."
