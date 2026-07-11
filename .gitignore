@@ -20,6 +20,10 @@ npm-debug.log*
 # Build output
 dist/
 
+# Eval results — a paid run's output, regenerated on demand. The committed
+# baseline lives in docs/, not here.
+develop/evals/results/
+
 # Environment
 .env
 .env.local

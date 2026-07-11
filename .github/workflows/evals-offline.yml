@@ -1,0 +1,31 @@
+name: evals-offline
+
+# Proves every eval scenario is well-formed and every grader it names exists —
+# WITHOUT making a single model call (13-§30 R71).
+#
+# The evals themselves cost money, so they are manual/scheduled, never per-PR: a
+# repo that bills itself for every typo fix stops running its evals. But a broken
+# scenario should not be discovered twenty minutes into a paid baseline run, so
+# the structure is checked on every PR and the spending is not.
+#
+# The full run: python3 develop/evals/run_evals.py --runs 3 --report
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  evals-offline:
+    name: eval scenarios are well-formed (no model calls)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.8'
+
+      - name: Validate scenarios and graders
+        run: python3 develop/evals/run_evals.py --offline-check

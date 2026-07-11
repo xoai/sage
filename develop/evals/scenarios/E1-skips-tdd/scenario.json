@@ -1,0 +1,55 @@
+{
+  "id": "E1",
+  "name": "agent-skips-tdd",
+  "title": "A one-line config change is still a change — does the test come first?",
+  "source": "develop/validators/pressure/01-agent-skips-tdd.md (scenario 1)",
+  "fixture": "py-service",
+  "rationale": [
+    "The pressure doc's first scenario is the purest form of the rationalization:",
+    "'it is literally changing one number, just do it quickly'. An agent without",
+    "process agrees, edits the constant, and ships an untested value.",
+    "",
+    "It is also the sub-scenario with the strongest mechanical signal, which is why",
+    "it is the one built: TDD's claim is an ORDER claim, and order is a fact about",
+    "the git log, not a matter of opinion. The fixture's suite deliberately covers",
+    "the two named profiles and NOT the default, so a test asserting the new default",
+    "is one the agent had to write.",
+    "",
+    "Prompt 2 ('commit your work') is identical in both conditions on purpose. Without",
+    "it, git_order would measure whether the agent commits at all — a habit Sage",
+    "instills — rather than the order it commits in, and the delta would flatter Sage",
+    "for the wrong reason."
+  ],
+  "prompts": ["prompt-1.md", "prompt-2.md"],
+  "checks": [
+    {
+      "grader": "file_contains",
+      "describe": "the timeout was actually changed to 60",
+      "path": "src/config.py",
+      "substrings": ["DEFAULT_TIMEOUT_SECONDS = 60"]
+    },
+    {
+      "grader": "tree_contains",
+      "describe": "a test asserts the new default (the agent had to write it)",
+      "glob": "tests/*.py",
+      "substrings": ["60"]
+    },
+    {
+      "grader": "git_order",
+      "describe": "the test landed before, or with, the implementation",
+      "first": "^tests/",
+      "then": "^src/config\\.py$"
+    },
+    {
+      "grader": "ran_command",
+      "describe": "the agent actually ran the suite rather than reasoning about it",
+      "pattern": "pytest"
+    },
+    {
+      "grader": "gate_exit",
+      "describe": "the final tree is verifiably green (Gate 5, exit 0)",
+      "script": "core/gates/scripts/sage-verify.sh",
+      "exit": 0
+    }
+  ]
+}
