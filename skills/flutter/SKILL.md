@@ -9,8 +9,8 @@ requires:
   skills:
     - "mobile"
 activates-when:
-  detected: [flutter]
-tags: [flutter]
+  detected: [flutter, firebase_core]
+tags: [flutter, firebase, riverpod]
 ---
 
 # flutter
@@ -38,3 +38,12 @@ patterns.
 | Anti-patterns | 5 | God widgets, setState everywhere, ignoring dispose, hardcoded dimensions, unnecessary packages |
 | Constitution | 1 | 5 Flutter-specific principles |
 | Gate | 1 | Flutter pattern compliance check |
+
+## Stack Integrations (detection-gated)
+
+When `firebase_core` is detected, read `integration/firebase-integration.md` for
+the Flutter + Firebase + Riverpod seams — auth, Firestore, Cloud Functions, and
+project structure — that the individual docs don't cover together. This folds in
+the former `stack-flutter-firebase` skill; the content is unchanged.
+Constitution: `constitution/firebase.constitution-additions.md` ·
+anti-patterns: `anti-patterns/firebase-anti-patterns.md`.

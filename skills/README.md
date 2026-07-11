@@ -17,7 +17,7 @@ process, or judgment that makes the AI agent better at a specific job.
 |------|-------------|---------|
 | `knowledge` | Technology-specific patterns and judgment | react, nextjs, web |
 | `process` | Methodology with steps and references | jtbd, prd, ux-writing |
-| `composite` | Composes multiple knowledge skills for a stack | stack-nextjs-supabase |
+| `knowledge` (with integration/) | Framework skill that surfaces stack seams on detection | nextjs, flutter |
 | `bundle` | Metapackage that installs related skills | ux-design |
 
 ## Official Skills
@@ -35,14 +35,18 @@ process, or judgment that makes the AI agent better at a specific job.
 | [flutter](flutter/) | framework | Flutter/Dart widget patterns |
 | [react-native](react-native/) | framework | React Native mobile patterns |
 
-### Composite Skills (Stacks)
+### Stack Integrations (detection-gated, inside the parent skill)
 
-| Skill | Composes | Description |
-|-------|----------|-------------|
-| [stack-nextjs-supabase](stack-nextjs-supabase/) | web + react + nextjs + baas | Full-stack Next.js + Supabase |
-| [stack-nextjs-fullstack](stack-nextjs-fullstack/) | web + react + nextjs + api | Full-stack Next.js |
-| [stack-flutter-firebase](stack-flutter-firebase/) | mobile + flutter + baas | Flutter + Firebase |
-| [stack-react-native-expo](stack-react-native-expo/) | mobile + react-native | React Native + Expo |
+The former `stack-*` skills are folded into their parent framework skills as
+detection-gated integration sections — surfaced automatically when the relevant
+dependency is present, so there is nothing separate to install.
+
+| Detected | Integration reference | Home skill |
+|----------|-----------------------|------------|
+| `@supabase/ssr` | `nextjs/integration/supabase-integration.md` | [nextjs](nextjs/) |
+| `prisma` + `tailwindcss` | `nextjs/integration/fullstack-integration.md` | [nextjs](nextjs/) |
+| `firebase_core` | `flutter/integration/firebase-integration.md` | [flutter](flutter/) |
+| `expo` | `react-native/integration/expo-integration.md` | [react-native](react-native/) |
 
 ### Process Skills (Methodology)
 

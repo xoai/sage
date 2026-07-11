@@ -80,7 +80,7 @@ PACKS TO LOAD:
   L1: baas (Supabase detected)
   L2: nextjs (Next.js detected)
   L2: react (React detected)
-  L3: stack-nextjs-supabase (Next.js + Supabase detected)
+  nextjs surfaces integration/supabase-integration.md (Supabase detected)
 ```
 
 Show to user: "These packs will guide code quality. Look right?"
@@ -192,7 +192,6 @@ packs:
     - baas
     - nextjs
     - react
-    - stack-nextjs-supabase
 constitution:
   base: sage/core/constitution/base.constitution.md
   preset: startup  # or enterprise, opensource

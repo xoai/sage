@@ -10,8 +10,8 @@ requires:
     - "mobile"
     - "react"
 activates-when:
-  detected: [react-native]
-tags: [react-native]
+  detected: [react-native, expo]
+tags: [react-native, expo]
 ---
 
 # react-native
@@ -41,3 +41,13 @@ pack establishes New Architecture as the baseline and corrects stale patterns.
 | Anti-patterns | 5 | Bridge-era patterns, wrong navigation library, blocking JS thread, inline styles everywhere, unnecessary native modules |
 | Constitution | 1 | 5 React Native-specific principles |
 | Gate | 1 | RN pattern compliance check |
+
+## Stack Integrations (detection-gated)
+
+When `expo` is detected, read `integration/expo-integration.md` for the Expo +
+React Navigation + Zustand + MMKV + TanStack Query seams — navigation guards,
+store hydration, offline cache, and Expo Router auth flows — that the individual
+docs don't cover together. This folds in the former `stack-react-native-expo`
+skill; the content is unchanged.
+Constitution: `constitution/expo.constitution-additions.md` ·
+anti-patterns: `anti-patterns/expo-anti-patterns.md`.

@@ -10,8 +10,8 @@ requires:
     - "web"
     - "react"
 activates-when:
-  detected: [next]
-tags: [next]
+  detected: [next, "@supabase/ssr", "@supabase/supabase-js", prisma, tailwindcss]
+tags: [next, supabase, prisma, tailwindcss, fullstack]
 ---
 
 # nextjs
@@ -60,3 +60,22 @@ server, have direct access to databases and file systems, and ship zero JavaScri
 to the browser. Only add `'use client'` when you need interactivity (event handlers,
 hooks, browser APIs). Most components (70-90% in a typical app) should remain
 server components.
+
+## Stack Integrations (detection-gated)
+
+Next.js rarely ships alone. When a dependency below is detected, read the
+matching integration reference — the cross-framework seams that neither tool's
+own docs cover. These fold in the former `stack-nextjs-supabase` and
+`stack-nextjs-fullstack` skills; the content is unchanged, now surfaced through
+`nextjs` on detection.
+
+- **`@supabase/ssr` / `@supabase/supabase-js`** → `integration/supabase-integration.md`
+  — dual browser/server clients, middleware token refresh, RLS as authorization,
+  typed queries, Server Actions.
+  Constitution: `constitution/supabase.constitution-additions.md` ·
+  anti-patterns: `anti-patterns/supabase-anti-patterns.md`.
+- **`prisma` + `tailwindcss` (+ Auth.js)** → `integration/fullstack-integration.md`
+  — Prisma client singleton, Auth.js × App Router middleware, Tailwind × server
+  components.
+  Constitution: `constitution/fullstack.constitution-additions.md` ·
+  anti-patterns: `anti-patterns/fullstack-anti-patterns.md`.

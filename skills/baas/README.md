@@ -35,5 +35,6 @@ Supabase client, or similar in dependencies).
 ## What This Pack Does NOT Cover
 
 - Platform-specific API details (see future `firebase`, `supabase`)
-- Framework integration patterns (see `stack-flutter-firebase`, etc.)
+- Framework integration patterns (detection-gated inside the framework skill,
+  e.g. `flutter/integration/firebase-integration.md`)
 - Custom backend patterns (see `api` for custom API development)

@@ -76,22 +76,6 @@
       "source": "built-in",
       "version": "1.0.0"
     },
-    "stack-flutter-firebase": {
-      "source": "built-in",
-      "version": "1.0.0"
-    },
-    "stack-nextjs-fullstack": {
-      "source": "built-in",
-      "version": "1.0.0"
-    },
-    "stack-nextjs-supabase": {
-      "source": "built-in",
-      "version": "1.0.0"
-    },
-    "stack-react-native-expo": {
-      "source": "built-in",
-      "version": "1.0.0"
-    },
     "user-interview": {
       "source": "built-in",
       "version": "1.0.0"
