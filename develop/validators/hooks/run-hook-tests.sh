@@ -59,6 +59,50 @@ add_manifest() {  # add_manifest <proj> <slug> <gate_state> [status] [qa]
 }
 
 
+add_ledger_manifest() {  # <proj> <slug> <gate_state> <ledger-yaml>
+  mkdir -p "$1/.sage/work/$2"
+  {
+    printf -- '---\ncycle_id: "%s"\nworkflow: build\nphase: implement\n' "$2"
+    printf -- 'status: in-progress\ntier: standard\ngate_state: %s\n' "$3"
+    printf -- 'execution_mode: subagent\n'
+    printf -- '%s' "$4"
+    printf -- '---\n\n# Cycle: %s\n' "$2"
+  } > "$1/.sage/work/$2/manifest.md"
+}
+
+LEDGER_ALL_DONE='tasks:
+  - id: 1
+    status: done
+    review: approved
+    commits: aaa1111..bbb2222
+  - id: 2
+    status: done
+    review: approved
+    commits: bbb2222..ccc3333
+'
+
+LEDGER_ONE_UNREVIEWED='tasks:
+  - id: 1
+    status: done
+    review: approved
+    commits: aaa1111..bbb2222
+  - id: 2
+    status: done
+    review: pending
+    commits: bbb2222..ccc3333
+'
+
+LEDGER_ONE_UNFINISHED='tasks:
+  - id: 1
+    status: done
+    review: approved
+    commits: aaa1111..bbb2222
+  - id: 2
+    status: in-progress
+    review: pending
+    commits: ""
+'
+
 # ── TDD-gate fixtures (the gate reads git, so these are real repos) ──────────
 tdd_project() {  # tdd_project [--no-tests] → prints project dir; has a committed suite
   local d; d="$(mktemp -d "${TMPDIR:-/tmp}/sage-tddtest-XXXXXX")/proj"
@@ -470,6 +514,72 @@ if [ -z "$ONLY" ] || [ "$ONLY" = "H11" ]; then
     report FAIL H11 "timing" "took ${ms}ms, budget is 200ms"
   fi
 fi
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# H35-H40 — the subagent task ledger (R101)
+#
+# The claim: in subagent execution, a task is finished when an INDEPENDENT
+# reviewer approved it — not when the implementer said it was done. The ledger
+# records both, and gates-passed is blocked while they disagree.
+#
+# gates-passed is the trigger, not complete. gates-passed is the state that
+# ASSERTS the quality chain ran; a cycle reaching it with an unreviewed task has
+# already made a false claim, and blocking only at completion would let that
+# claim sit in the manifest where /continue and the next session read it as true.
+# ═══════════════════════════════════════════════════════════════════════════
+echo ""
+echo "── Ledger guard (R101, subagent execution) ──"
+
+P="$(new_project)"; set_config "$P" "hard_enforcement: true"
+add_ledger_manifest "$P" "led-a" "building" "$LEDGER_ALL_DONE"
+assert H35 "every ledger task done+approved → gates-passed allowed" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/led-a/manifest.md","new_string":"gate_state: gates-passed"}}' \
+  --exit 0
+
+P="$(new_project)"; set_config "$P" "hard_enforcement: true"
+add_ledger_manifest "$P" "led-b" "building" "$LEDGER_ONE_UNREVIEWED"
+assert H36 "a task the implementer called done but NO REVIEWER approved → blocked" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/led-b/manifest.md","new_string":"gate_state: gates-passed"}}' \
+  --exit 2 --stderr "R101" --stderr "task 2"
+
+P="$(new_project)"; set_config "$P" "hard_enforcement: true"
+add_ledger_manifest "$P" "led-c" "building" "$LEDGER_ONE_UNFINISHED"
+assert H37 "an unfinished task → blocked" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/led-c/manifest.md","new_string":"gate_state: gates-passed"}}' \
+  --exit 2 --stderr "R101"
+
+# BACKWARD COMPATIBILITY — the case that matters most.
+#
+# Every manifest written before v1.3.0, and every inline-mode cycle, has no
+# `tasks:` block. parse_ledger() returns None for those, and None disables the
+# guard entirely. A project mid-flight when Sage upgraded must never be
+# surprise-blocked by a field it has never heard of. This is the same promise
+# H16 makes for `qa:`, and it is the promise that makes upgrades safe.
+P="$(new_project)"; set_config "$P" "hard_enforcement: true"
+add_manifest "$P" "no-ledger" "building"
+assert H38 "a manifest with NO ledger is unaffected (pre-1.3.0 / inline mode)" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/no-ledger/manifest.md","new_string":"gate_state: gates-passed"}}' \
+  --exit 0 --no-stderr "R101"
+
+# A Write carries the WHOLE manifest, so the ledger it declares is in the payload
+# rather than on disk. If the guard only ever read the file, an agent could write
+# a fresh manifest declaring gates-passed AND an unreviewed ledger in one call,
+# and the guard would read the old file and wave it through.
+P="$(new_project)"; set_config "$P" "hard_enforcement: true"
+add_ledger_manifest "$P" "led-d" "building" "$LEDGER_ALL_DONE"
+assert H39 "a Write declaring gates-passed with an unreviewed ledger in the SAME payload → blocked" "$P" \
+  '{"tool_name":"Write","tool_input":{"file_path":".sage/work/led-d/manifest.md","content":"---\ncycle_id: \"led-d\"\ngate_state: gates-passed\nexecution_mode: subagent\ntasks:\n  - id: 1\n    status: done\n    review: pending\n---\n"}}' \
+  --exit 2 --stderr "R101"
+
+# The guard must not fire on ordinary ledger updates mid-cycle — only on the
+# claim that the chain has run. A hook that blocks every manifest write is a hook
+# people disable.
+P="$(new_project)"; set_config "$P" "hard_enforcement: true"
+add_ledger_manifest "$P" "led-e" "building" "$LEDGER_ONE_UNFINISHED"
+assert H40 "updating the ledger mid-cycle (no gates-passed claim) → allowed" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/led-e/manifest.md","new_string":"    status: done"}}' \
+  --exit 0
 
 echo ""
 echo "═══ Summary ═══"

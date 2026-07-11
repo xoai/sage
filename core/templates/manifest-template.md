@@ -21,9 +21,15 @@ tier: standard          # tier1 | standard | large — scope of the cycle
 gate_state: pre-spec    # pre-spec | spec-approved | plan-approved | building | gates-passed | complete
 created: YYYY-MM-DD
 updated: YYYY-MM-DD HH:MM
+execution_mode: inline       # inline | subagent | inline (subagents-unavailable)
 flags:
   quality_locked: false        # resolved value (flag or config-default)
   autonomous: false            # resolved value (flag or config-default)
+  subagents: false             # resolved value (flag or config-default)
+tasks: []                      # the task ledger — subagent execution only (R101).
+                               # Omit entirely in inline mode; an absent ledger
+                               # disables the gates-passed guard, which is what
+                               # keeps pre-1.3.0 cycles working.
 quality_locked_history: []     # per-checkpoint review/revise iterations (when active)
 autonomous_decisions: []       # per-phase counts of decisions made vs asked (when active)
 auto_picked_checkpoints: []    # checkpoints auto-resolved when both flags active;
@@ -64,6 +70,27 @@ Exclude:
 - Generic statements ("The user wants high quality")
 
 Max 200 words.}
+
+## Task ledger
+
+{Subagent execution only. Omit this section entirely in inline mode.
+
+The machine-readable copy lives in the frontmatter `tasks:` block; this is the
+human-readable view of the same thing.
+
+| Task | Status | Attempts | Review | Commits |
+|---|---|---:|---|---|
+| 1 — {title} | done | 1 | approved | `abc1234..def5678` |
+| 2 — {title} | in-progress | 2 | pending | — |
+
+A task is FINISHED when an independent reviewer approved it — not when the
+implementer said it was done. Those are different claims, they are recorded in
+different columns, and the spec-gate hook will not let the cycle reach
+`gate_state: gates-passed` while they disagree.
+
+The attempts column is the one to read at the end. A task with three implementer
+attempts and two review rounds is usually not a task that was hard — it is a task
+whose PLAN was wrong, and the branch reviewer is told to say so.}
 
 ## Decisions so far
 
@@ -138,6 +165,39 @@ Max 150 words.}
 ```
 
 # Rules
+
+## Task ledger contract (R101, subagent execution)
+
+WHEN: A cycle runs under subagent execution (`execution_mode: subagent`).
+CHECK: The frontmatter carries a `tasks:` ledger, one entry per plan task, each
+       with `id`, `status` (pending|in-progress|done|blocked), `attempts`,
+       `review` (pending|approved|findings), and `commits` (the range).
+       The cycle may not reach `gate_state: gates-passed` while any entry is not
+       BOTH `status: done` AND `review: approved`.
+
+BECAUSE: The orchestrator does not write the code and does not read the diffs. It
+         has exactly one source of truth about what happened inside its
+         subagents, and this is it. If the ledger can say "done" on the strength
+         of an implementer's own report, then the independent review that
+         justifies the entire cost of subagent execution is optional — and the
+         thing you paid a whole extra context per task for is a formality.
+
+         `gates-passed` is the guarded transition rather than `complete` because
+         gates-passed is the state that ASSERTS the quality chain ran. A cycle
+         that reaches it with an unreviewed task has already made a false claim,
+         and that claim is then read as true by /continue, by the branch
+         reviewer, and by the next session.
+
+BLOCKED RATIONALIZATIONS:
+- "The implementer said it was done and its tests passed" — the implementer is
+  the one agent in the system that cannot review its own work, which is why it
+  was given a reviewer.
+- "The reviewer only had Minor findings, so it's approved" — Minor findings do
+  not block, and `review: approved` is what records that. Write it down.
+- "It's a small task" — then the review is cheap. This is not the argument you
+  think it is.
+- "I'll fill in the ledger at the end" — a ledger written from memory at the end
+  is a story about what happened, not a record of it.
 
 ## Machine state contract (tier, gate_state)
 
