@@ -113,6 +113,131 @@ copies of itself.
 - **Integrity.** Install and upgrade pin to release tags and verify SHA-256; a
   root `VERSION` file is the single source of truth with a CI drift check.
 
+### Distribution
+
+**The plugin is generated, not committed.** `tools/sage-claude-plugin/` was a
+hand-synced second copy of every skill, gate script and template — the
+duplication that shipped the Gate 4 bug twice. It is gone. `build_plugin.py` is
+now the only way the plugin comes into existence, and the release workflow
+publishes what it builds to a `plugin-dist` branch, which the marketplace entry
+pins with `"ref": "plugin-dist"`. `main` holds exactly one copy of every file.
+
+- `PLUGIN_SKILLS` in the generator is the reviewable statement of what ships. A
+  skill in `skills/` that is neither listed there nor explicitly excluded is a
+  build error, so the decision can't be made by accident.
+- `build_plugin.py --check` no longer diffs against a mirror; it audits the
+  artifact: the build is reproducible, no `{{VERSION}}` survives, `plugin.json`
+  agrees with `VERSION`, the marketplace pins the dist branch, every gate script
+  is byte-identical to the one the repo tests, every registered hook actually
+  ships, and every build input is tracked by git.
+- The marketplace *entry* no longer pins a version. Claude Code silently prefers
+  `plugin.json` when both are set, so a second number was drift with no reader.
+
+**The plugin had been shipping a stale CLI.** `runtime/plugin-overlay/scripts/sage`
+was a second copy of `bin/sage` that nothing regenerated and nothing referenced —
+frozen at v1.1.7 (1007 lines against 2056) and still hardcoding
+`sage-version: "1.0.0"` into every project it initialized. It is generated from
+`bin/sage` now, and held byte-identical.
+
+### Evidence
+
+Sage's central claim — that agents behave better under it — was prose for three
+phases. It is a number now.
+
+**`develop/evals/`** runs the same scenario twice, once in a `sage init`-ed
+project and once without, and grades the result deterministically. Eight
+scenarios drawn from the pressure docs: skipped TDD, a hardcoded secret, a false
+"the tests passed" claim, scope creep, a hallucinated package, routing, the
+spec-gate hook, and loud degradation. Graders are facts — a file exists, a commit
+precedes another commit, a gate exits 0, a command actually ran. No LLM judge, so
+results are reproducible and free.
+
+- `--offline-check` runs in CI on every PR: it proves every scenario is
+  well-formed and every grader resolves without spending a cent. It also grades
+  each scenario against an agent that did **nothing** and requires it to fail —
+  a scenario the fixture already satisfies would pass forever and read as
+  evidence.
+- N=3 by default; a scenario passes on a majority. One green run is an anecdote.
+- `release.py --with-evals` runs the suite at release time and writes the summary.
+
+**Context is measured and ratcheted.** The README advertised "~200 lines" of
+always-on context. It is **398** (~4.4k tokens), loaded on every turn of every
+session. The claim had been wrong by a factor of two for a long time, because
+nothing counted it — context growth is the definitive slow leak: every addition
+is individually justified, no single commit looks careless, and the total is
+nobody's job.
+
+- `runtime/tools/context_budget.py` measures a real generated project, not the
+  source templates.
+- `develop/validators/budgets.yaml` freezes today's cost; the `context-budget` CI
+  job fails a PR that grows it. Growth is still allowed — it just has to be
+  deliberate, by editing the budget in the same change where a reviewer sees the
+  number move.
+- `docs/context-budget.md` is the committed baseline.
+
+### Fixed
+
+Five bugs found by building the evals — every one of them by using the framework
+the way a user does, which nothing had done before.
+
+- **`sage init` wrote a `.sage/config.yaml` that no YAML parser accepts.** The
+  heredoc that writes it has an unquoted delimiter, and a comment inside it
+  wrapped `sage worktree` in backticks. In an unquoted heredoc backticks are
+  command substitution — so bash *executed* `sage worktree` during init and
+  spliced its ANSI-coloured usage text into the config. Every project Sage has
+  ever initialized has one. It survived because every reader scans config.yaml
+  with line regexes rather than parsing it.
+- **`release.yml` was invalid YAML** and had been since Phase 1. Its publish step
+  embedded a Python heredoc whose body starts at column 0, which closes the
+  enclosing `run: |` block scalar. GitHub rejects a workflow it cannot parse, so
+  the release workflow had never run — and would have failed at `git tag v1.2.0`,
+  the last step of the program. Changelog extraction moved into `release.py
+  --notes`, which is tested. New `check-workflows` CI job parses every workflow
+  file: nothing in this repo had ever parsed its own CI definitions.
+- **`.gitignore` swallowed the `/sage` router skill.** The `sage/` rule was
+  unanchored, so it matched a directory named `sage` at any depth and quietly
+  excluded `runtime/plugin-overlay/skills/sage/` — the plugin's entry point. The
+  file was on every developer's disk and in no clean checkout. Once the mirror was
+  deleted the overlay became its only source, so the published plugin would have
+  shipped with no `/sage` command at all.
+- **Gate 5 missed `pytest.ini` projects.** It detected a Python runner by looking
+  for packaging metadata, so a project configured the way pytest documents it — a
+  `pytest.ini` and a `tests/` directory — was reported "no test runner detected"
+  in a repo where `pytest` runs green.
+- **`sage update` stamped a five-release-stale version** ("Sage updated to
+  v1.0.7") into `decisions.md`. `release.py`'s version-drift scan could not see
+  either literal, because it only read `.md/.sh/.yaml/.yml` and the CLI is
+  `bin/sage` — no suffix. The guard built to catch a hardcoded `sage-version:`
+  was blind to the one file that stamps it. It now scans extensionless scripts.
+
+**The first baseline says the delta is zero.** Eight scenarios, N=3, both
+conditions, $33.55. On all five scenarios that ran in *both* conditions, Sage
+showed **no measurable behavioural delta** — and read **1.9× the input tokens**
+for it. The bare agent already refused to hardcode the secret, already ran the
+tests rather than believing the user's false claim that they passed, already
+declined to tidy a file it wasn't asked to tidy, and already caught the package
+that doesn't exist. Five of the six pressure documents describe failure modes that
+were real when they were written; on a frontier model, most no longer are.
+
+This does not make Sage worthless — it means the benefit on *short* tasks is
+unproven while the cost is now measured, and what Sage is probably actually for
+(long multi-session work, carried context, a decisions log that outlives the
+window) is not exercised by these scenarios at all. See
+[docs/eval-baseline.md](docs/eval-baseline.md), which states the gap rather than
+hiding it.
+
+Two claims the baseline falsified outright:
+
+- **Sage does not enforce TDD.** Constitution principle 1 is "tests before code".
+  Under "it's literally changing one number, just do it quickly", *neither*
+  condition wrote a test. Sage's one measurable win in the suite is that the sage
+  agent ran the test suite in 3/3 runs and the bare agent in 0/3 — it verifies, it
+  just doesn't do TDD.
+- **"Loud degradation" is not reliably loud.** R29 promises the Task-tool skip is
+  announced and written to `decisions.md`, "never silent". Announcement: 2/3 runs.
+  `decisions.md` line: 1/3. It is instructed in prose, so the model complies when
+  it feels like it.
+
 ### Migration
 
 | Removed / moved | New home | User action |
