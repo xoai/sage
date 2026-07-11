@@ -151,6 +151,36 @@ class ReleaseToolTest(unittest.TestCase):
         self.assertEqual(rc, 1, out)
         self.assertIn("marketplace.json", out)
 
+    # ── --notes ──
+    # This logic used to be a heredoc inside release.yml's publish step, which
+    # made the workflow file invalid YAML and could never have run. It is a
+    # tested code path now.
+    def test_notes_extracts_only_the_requested_section(self):
+        build_tree(self.dir)
+        (self.dir / "CHANGELOG.md").write_text(
+            "# Changelog\n\n"
+            "## [1.2.3] — Current\n\n- new thing\n\n"
+            "## [1.0.0] — Ancient\n\n- old thing\n"
+        )
+        rc, out = run(self.dir, "--notes", "v1.2.3")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("new thing", out)
+        self.assertNotIn("old thing", out)
+        self.assertNotIn("Ancient", out)
+
+    def test_notes_accepts_a_bare_version_without_the_v(self):
+        build_tree(self.dir)
+        rc, out = run(self.dir, "--notes", "1.2.3")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("Test entry", out)
+
+    def test_notes_fails_loudly_on_a_missing_entry(self):
+        """Publishing a release with empty notes is worse than not publishing."""
+        build_tree(self.dir)
+        rc, out = run(self.dir, "--notes", "v9.9.9")
+        self.assertEqual(rc, 1, out)
+        self.assertIn("9.9.9", out)
+
     # ── --sync ──
     def test_sync_propagates_to_every_manifest(self):
         build_tree(self.dir, version="2.0.0", plugin_version="1.0.0",

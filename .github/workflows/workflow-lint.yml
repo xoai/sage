@@ -1,0 +1,37 @@
+name: workflow-lint
+
+# Parses .github/workflows/*.yml. Nothing did, until P3-T2b — and release.yml
+# had been invalid YAML since Phase 1 without anyone noticing, because it only
+# fires on a tag push and no tag was ever pushed. It would have failed on the
+# first real release, which is the worst possible moment to discover that your
+# release automation does not parse.
+#
+# A workflow that cannot be parsed does not run, and a gate that does not run is
+# not a gate — the exact failure mode Sage exists to prevent, in Sage's own CI.
+# See develop/validators/check-workflows.py.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  workflow-lint:
+    name: CI workflow files parse and are well-formed
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.8'
+
+      # The one validator that is not stdlib-only: writing a YAML parser to
+      # check YAML is not the job. Absent PyYAML the check exits 2
+      # (unverifiable), never 0 — so a missing parser cannot read as a pass.
+      - name: Install PyYAML
+        run: python3 -m pip install --quiet pyyaml
+
+      - name: Check the workflow files
+        run: python3 develop/validators/check-workflows.py

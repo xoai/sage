@@ -20,6 +20,7 @@ Usage:
   release.py --bump patch|minor|major
                                  raise VERSION, then --sync
   release.py --artifacts         build the release tarball + checksums.txt
+  release.py --notes vX.Y.Z      print that version's CHANGELOG section
   release.py --repo-root PATH    operate on a tree other than this checkout
 
 Exit: 0 = agree / written   |   1 = drift or refusal   |   2 = bad invocation
@@ -101,6 +102,28 @@ def plugin_version(root: pathlib.Path, rel: str) -> str:
     if not m:
         raise Problem(f'{rel} has no "version" field')
     return m.group(2)
+
+
+def notes(root: pathlib.Path, version: str) -> str:
+    """The CHANGELOG section for one version — the text of the release notes.
+
+    This lived as a Python heredoc inside release.yml's publish step, where it
+    was both untestable and, because the heredoc body sat at column 0, enough to
+    make the whole workflow file invalid YAML. It belongs here: the CHANGELOG is
+    already this module's business.
+    """
+    version = version.lstrip("v")
+    path = root / "CHANGELOG.md"
+    if not path.is_file():
+        raise Problem("CHANGELOG.md not found")
+    # This version's heading, up to the next one (or end of file).
+    m = re.search(
+        r"^##\s*\[%s\].*?(?=^##\s*\[|\Z)" % re.escape(version),
+        path.read_text(), re.M | re.S,
+    )
+    if not m:
+        raise Problem(f"CHANGELOG.md has no `## [{version}]` entry")
+    return m.group(0).strip()
 
 
 def hardcoded_literals(root: pathlib.Path) -> list[tuple[str, int, str]]:
@@ -275,6 +298,8 @@ def main() -> int:
                        help="raise VERSION, then sync")
     group.add_argument("--artifacts", action="store_true",
                        help="build the release tarball and checksums.txt")
+    group.add_argument("--notes", metavar="VERSION",
+                       help="print that version's CHANGELOG section (release notes)")
     parser.add_argument("--ref", default=None,
                         help="git ref to archive (default: the tag vX.Y.Z)")
     parser.add_argument("--out", type=pathlib.Path, default=None,
@@ -292,6 +317,9 @@ def main() -> int:
             return sync(root)
         if args.artifacts:
             return artifacts(root, args.ref, args.out or root / "dist")
+        if args.notes:
+            print(notes(root, args.notes))
+            return 0
         return bump(root, args.bump)
     except Problem as exc:
         print(f"✗ {exc}")

@@ -81,15 +81,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           tag="${{ steps.tag.outputs.name }}"
-          notes="$(python3 - "$tag" <<'PY'
-import pathlib, re, sys
-tag = sys.argv[1].lstrip('v')
-text = pathlib.Path('CHANGELOG.md').read_text()
-# The section from this version's heading to the next one.
-m = re.search(r'^##\s*\[%s\].*?(?=^##\s*\[|\Z)' % re.escape(tag), text, re.M | re.S)
-print(m.group(0).strip() if m else 'See CHANGELOG.md')
-PY
-)"
+          # Extracting this inline as a heredoc made the whole workflow file
+          # invalid YAML (the heredoc body sits at column 0, which closes the
+          # `run: |` block scalar). release.py owns CHANGELOG parsing and is
+          # unit-tested; ask it.
+          notes="$(python3 runtime/tools/release.py --notes "$tag")"
           gh release create "$tag" \
             dist/sage-*.tar.gz dist/checksums.txt \
             --title "Sage $tag" \
