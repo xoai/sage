@@ -1,0 +1,56 @@
+# Context budgets — a ratchet, not an aspiration.
+#
+# Read by runtime/tools/context_budget.py --check, which CI runs on every PR
+# (.github/workflows/context-budget.yml). Numbers are LINES of the generated
+# output — what a model actually reads — not lines of the source templates.
+#
+# ── Why these numbers are not the numbers in the spec ────────────────────────
+#
+# 13-spec-phase4-evidence.md §31 proposed eager ≤ 250 and build/fix/architect
+# ≤ 400 each. Nothing had ever measured them. When P4-T6 finally did, all four
+# were already breached:
+#
+#     eager CLAUDE.md   398   (spec wanted ≤ 250)
+#     /build            535   (spec wanted ≤ 400)
+#     /fix              465   (spec wanted ≤ 400)
+#     /architect        409   (spec wanted ≤ 400)
+#
+# The README, meanwhile, advertised "~200 lines" of eager context. It is 398.
+# That claim was off by a factor of two and had been for a long time, because
+# context growth is the definitive slow leak: every addition is individually
+# justified, no single commit looks careless, and the total is nobody's job.
+#
+# R76's instruction is "budgets set from post-Phase-3 measurements + headroom",
+# and that is what these are. Setting them at the aspiration instead would have
+# shipped a CI job that is red on arrival — and a permanently-red gate is not a
+# gate, it is a notification people learn to close. A ratchet that holds the
+# line today is worth more than a target that is ignored from the first commit.
+#
+# So: these budgets freeze the current cost. Growth now requires editing this
+# file in the same PR, where a reviewer can see the number change. That is the
+# whole mechanism.
+#
+# ── The target still stands ──────────────────────────────────────────────────
+#
+# The spec's numbers remain the goal, and the gap is real work, not a rounding
+# error: the eager layer is 1.6× its target and is paid on EVERY turn of every
+# session. Trimming it is its own task with its own risk (the eager body is
+# where the non-negotiable rules live), and Phase 4's job was to make the cost
+# visible, not to pay it down. It is visible now.
+#
+# Headroom is ~8%: enough that a genuine one-paragraph clarification does not
+# fail CI, too little for a section to slip in unnoticed.
+
+eager:
+  CLAUDE.md: 430          # measured 398 · target 250 · paid every turn
+
+commands:
+  build: 580              # measured 535 · target 400 · the heaviest workflow
+  fix: 505                # measured 465 · target 400
+  architect: 445          # measured 409 · target 400
+  autoresearch: 190       # measured 174
+  learn: 220              # measured 203
+  reflect: 205            # measured 186
+  continue: 150           # measured 137
+  review: 140             # measured 126
+  sage: 70                # measured  54 · the router; deliberately tiny

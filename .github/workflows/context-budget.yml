@@ -1,0 +1,40 @@
+name: context-budget
+
+# The eager layer is loaded on every turn of every session, so every line in it
+# is paid thousands of times. Nothing counted it: the README advertised "~200
+# lines" while the real figure was 398 — wrong by a factor of two, and wrong for
+# a long time, because context growth is the definitive slow leak. Every addition
+# is individually justified, no single commit looks careless, and the total is
+# nobody's job.
+#
+# This makes it someone's job. Budgets live in develop/validators/budgets.yaml;
+# exceeding one fails the PR. Growth is still allowed — it just has to be
+# deliberate, by editing the budget in the same change, where a reviewer sees the
+# number move. See docs/context-budget.md for the current baseline.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  context-budget:
+    name: generated context is within budget
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.8'
+
+      - name: Budget tool self-tests
+        run: python3 develop/validators/tools/test_context_budget.py
+
+      - name: Measure the generated project against its budgets
+        run: python3 runtime/tools/context_budget.py --check
+
+      - name: Show the numbers (so a failure explains itself)
+        if: always()
+        run: python3 runtime/tools/context_budget.py --report
