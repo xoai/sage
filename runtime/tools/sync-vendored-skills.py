@@ -4,10 +4,13 @@ sync-vendored-skills.py — refresh sage's vendored fallback skills from
 the sage-memory wheel.
 
 Run this when sage-memory ships a new release. The vendored fallback at
-`skills/sage-{memory,ontology,self-learning}/` and the plugin mirror
-at `tools/sage-claude-plugin/skills/sage-{memory,ontology,self-learning}/`
-serves users without the sage-memory MCP package installed — and needs
-manual refresh whenever the canonical wheel content changes.
+`skills/sage-{memory,ontology,self-learning}/` serves users without the
+sage-memory MCP package installed — and needs manual refresh whenever the
+canonical wheel content changes.
+
+There is one copy to refresh: the plugin used to carry a hand-synced second
+copy, but it is generated from skills/ now (build_plugin.py, P3-T2b), so
+syncing skills/ is enough — the next plugin build picks the change up.
 
 Usage:
     runtime/tools/sync-vendored-skills.py [--from PATH]
@@ -16,8 +19,7 @@ Default source: sibling repo at ../sage-memory/. Override with --from
 or the SAGE_MEMORY_SRC environment variable.
 
 What it does:
-    1. Copies SKILL.md + references/ + scripts/ from the wheel to both
-       canonical (skills/) and plugin-mirror locations.
+    1. Copies SKILL.md + references/ + scripts/ from the wheel to skills/.
     2. Re-injects sage's fallback comment header after each SKILL.md's
        frontmatter.
     3. Patches upstream prose stragglers where the wheel still has
@@ -207,14 +209,7 @@ def grep_stale_prose(sage_root: Path) -> list[str]:
         r"(?<!sage-)ontology skill's\b|"
         r"(?<!sage-)self-learning skill's\b"
     )
-    paths = [
-        sage_root / "skills" / "sage-memory",
-        sage_root / "skills" / "sage-ontology",
-        sage_root / "skills" / "sage-self-learning",
-        sage_root / "tools" / "sage-claude-plugin" / "skills" / "sage-memory",
-        sage_root / "tools" / "sage-claude-plugin" / "skills" / "sage-ontology",
-        sage_root / "tools" / "sage-claude-plugin" / "skills" / "sage-self-learning",
-    ]
+    paths = [sage_root / "skills" / s for s in SKILLS]
     cmd = ["grep", "-rPn", pattern] + [str(p) for p in paths if p.exists()]
     r = subprocess.run(cmd, capture_output=True, text=True)
     return [ln for ln in r.stdout.splitlines() if ln.strip()]
@@ -223,10 +218,7 @@ def grep_stale_prose(sage_root: Path) -> list[str]:
 def verify_frontmatter(sage_root: Path) -> list[str]:
     """Check every vendored SKILL.md's `name:` field matches its
     directory name. Returns mismatches as 'path: name=X dir=Y' strings."""
-    paths = []
-    for s in SKILLS:
-        paths.append(sage_root / "skills" / s / "SKILL.md")
-        paths.append(sage_root / "tools" / "sage-claude-plugin" / "skills" / s / "SKILL.md")
+    paths = [sage_root / "skills" / s / "SKILL.md" for s in SKILLS]
 
     mismatches = []
     for f in paths:
@@ -246,10 +238,7 @@ def verify_frontmatter(sage_root: Path) -> list[str]:
 
 def verify_fallback_headers(sage_root: Path) -> list[str]:
     """Return list of SKILL.md paths missing the fallback comment header."""
-    paths = []
-    for s in SKILLS:
-        paths.append(sage_root / "skills" / s / "SKILL.md")
-        paths.append(sage_root / "tools" / "sage-claude-plugin" / "skills" / s / "SKILL.md")
+    paths = [sage_root / "skills" / s / "SKILL.md" for s in SKILLS]
     missing = []
     for f in paths:
         if not f.exists() or "Fallback copy" not in f.read_text():
@@ -280,11 +269,10 @@ def main() -> int:
     print()
     print(f"  Syncing vendored skills from sage-memory {version}")
     print(f"  Source: {sage_memory_src}")
-    print(f"  Target: {sage_root}/skills/  +  tools/sage-claude-plugin/skills/")
+    print(f"  Target: {sage_root}/skills/")
     print()
 
     canonical_dst = sage_root / "skills"
-    mirror_dst = sage_root / "tools" / "sage-claude-plugin" / "skills"
 
     print("  Canonical vendored fallback:")
     for skill in SKILLS:
@@ -292,17 +280,10 @@ def main() -> int:
         info(f"  {skill}  (SKILL.md + references/ + scripts/ if any, fallback header injected)")
     print()
 
-    print("  Plugin mirror:")
-    for skill in SKILLS:
-        sync_skill(wheel_root, skill, mirror_dst)
-        info(f"  {skill}")
-    print()
-
     print("  Applying upstream prose-rename fixes (sage-memory <= 0.10.0 stragglers):")
     total_patched = 0
     for skill in SKILLS:
         total_patched += apply_prose_fixes(canonical_dst, skill)
-        total_patched += apply_prose_fixes(mirror_dst, skill)
     info(f"  patched {total_patched} file(s)")
     print()
 
@@ -336,9 +317,9 @@ def main() -> int:
     print(f"  Done. Synced from sage-memory {version}.")
     print()
     print("  Next steps:")
-    print(f"    1. Review the diff:  git diff skills/sage-* tools/sage-claude-plugin/skills/sage-*")
+    print(f"    1. Review the diff:  git diff skills/sage-*")
     print(f"    2. CHANGELOG.md:     add 'vendored fallback refreshed from sage-memory {version}' under [Unreleased]")
-    print(f"    3. Commit:           git add -A skills/sage-* tools/sage-claude-plugin/skills/sage-* CHANGELOG.md")
+    print(f"    3. Commit:           git add -A skills/sage-* CHANGELOG.md")
     print(f"                         git commit -m 'sync vendored fallback from sage-memory {version}'")
     print()
     return 0

@@ -2,30 +2,36 @@
 """
 build_plugin.py — generate the Claude Code plugin from single sources.
 
-The plugin under tools/sage-claude-plugin/ has been a hand-synced second copy of
-every skill, gate script, and template (ADR-5). Drift is structural — the Gate 4
-bug shipped twice because of it. This generator reproduces the plugin from its
-real sources so there is one copy of each file, not two.
+The plugin used to live at tools/sage-claude-plugin/ as a hand-synced second
+copy of every skill, gate script, and template (ADR-5). Drift was structural —
+the Gate 4 bug shipped twice because of it. That mirror is gone (P3-T2b). This
+generator is now the only way the plugin comes into existence: `main` holds one
+copy of each file, and the release workflow builds the tree and publishes it to
+the `plugin-dist` branch, which the marketplace `source` pins via `ref`.
 
 Composition (three layers, applied in order — later layers win):
 
   1. Framework skills — copy skills/<name>/ → plugin skills/<name>/ for every
-     skill dir that the plugin ships. These are byte-identical today.
-  2. File map — a handful of files the plugin pulls from core/ and runtime/
-     (gate scripts, the spec-gate hook, templates, references) copied to their
-     plugin locations.
+     skill in PLUGIN_SKILLS that has a skills/ source.
+  2. File map — the files the plugin pulls from core/ and runtime/ (gate
+     scripts, the spec-gate hook, templates, references).
   3. Overlay — runtime/plugin-overlay/ holds the plugin-ONLY files (manifests,
      sage-navigator, the workflow→skill wrappers, agents, plugin README) laid
      over the tree, overriding where present. The two .claude-plugin JSONs carry
      a {{VERSION}} placeholder filled from the root VERSION file.
 
+Because no built tree is committed any more, PLUGIN_SKILLS below is the
+reviewable statement of what the plugin ships — adding a skill to skills/
+without listing it here (or in SKILLS_NOT_IN_PLUGIN) is a build error, so the
+decision cannot be made by accident.
+
 Usage:
   build_plugin.py                 build into dist/sage-claude-plugin/
   build_plugin.py --out DIR       build into DIR
-  build_plugin.py --check         build to a temp dir and diff against the
-                                  committed mirror; exit nonzero on any drift
+  build_plugin.py --check         build and verify the artifact is well-formed,
+                                  reproducible, and faithful to its sources
 
-Exit: 0 = built / no drift | 1 = drift (with file list) | 2 = bad invocation
+Exit: 0 = built / check passed | 1 = build error or failed check | 2 = bad invocation
 
 Python 3.8+, stdlib only.
 """
@@ -33,20 +39,38 @@ from __future__ import annotations
 
 import argparse
 import filecmp
+import json
 import pathlib
+import re
 import shutil
+import subprocess
 import sys
 import tempfile
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
-MIRROR = REPO_ROOT / "tools" / "sage-claude-plugin"
 OVERLAY = REPO_ROOT / "runtime" / "plugin-overlay"
 SKILLS = REPO_ROOT / "skills"
 
 VERSION_PLACEHOLDER = "{{VERSION}}"
 
-# Skill dirs the plugin does NOT ship (present in skills/ but not in the plugin).
-SKILLS_NOT_IN_PLUGIN = {"autoresearch"}
+# The branch the release workflow publishes the built tree to. The marketplace
+# entry must pin this as its `ref` — without it, `source` resolves to the default
+# branch, which no longer carries a plugin tree, and the plugin is uninstallable.
+DIST_REF = "plugin-dist"
+
+# Every skill the plugin ships. Sources: skills/<name>/ (framework skills) and/or
+# runtime/plugin-overlay/skills/<name>/ (plugin-only skills and overrides).
+PLUGIN_SKILLS = frozenset({
+    # workflow→skill wrappers + the router (overlay-only)
+    "architect", "build", "configure", "continue", "fix", "learn", "reflect",
+    "review", "sage", "sage-navigator",
+    # framework skills (skills/)
+    "api", "baas", "flutter", "mobile", "nextjs", "react", "react-native",
+    "sage-memory", "sage-ontology", "sage-self-learning", "web",
+})
+
+# Skill dirs that exist in skills/ but are deliberately NOT shipped in the plugin.
+SKILLS_NOT_IN_PLUGIN = frozenset({"autoresearch"})
 
 # Per framework skill, the plugin ships only the runtime-facing content — the
 # authoring extras (README.md, tests.md, patterns/, constitution/, gates/,
@@ -68,6 +92,9 @@ FILE_MAP = {
     "references/lightpanda-setup.md": "core/references/lightpanda-setup.md",
     "references/skill-authoring-guide.md": "develop/guides/skill-authoring-guide.md",
 }
+
+# ${CLAUDE_PLUGIN_ROOT}/hooks/scripts/foo.sh → hooks/scripts/foo.sh
+HOOK_COMMAND = re.compile(r"\$\{CLAUDE_PLUGIN_ROOT\}/(\S+)")
 
 
 class BuildError(Exception):
@@ -93,14 +120,19 @@ def build(out: pathlib.Path) -> None:
     out.mkdir(parents=True)
 
     # ── 1. Framework skills ──
-    plugin_skill_names = {p.name for p in (MIRROR / "skills").iterdir() if p.is_dir()}
-    for skill in sorted(SKILLS.iterdir()):
-        if not skill.is_dir():
-            continue
-        if skill.name in SKILLS_NOT_IN_PLUGIN:
-            continue
-        if skill.name not in plugin_skill_names:
-            continue
+    # A skill in skills/ that is neither shipped nor explicitly excluded is an
+    # unmade decision — fail rather than silently pick one.
+    on_disk = {p.name for p in SKILLS.iterdir() if p.is_dir()}
+    undeclared = on_disk - PLUGIN_SKILLS - SKILLS_NOT_IN_PLUGIN
+    if undeclared:
+        raise BuildError(
+            "skills/ holds dirs the plugin manifest does not mention: "
+            + ", ".join(sorted(undeclared))
+            + " — add each to PLUGIN_SKILLS or SKILLS_NOT_IN_PLUGIN in build_plugin.py"
+        )
+
+    for name in sorted(PLUGIN_SKILLS & on_disk):
+        skill = SKILLS / name
         for f in skill.rglob("*"):
             if not f.is_file():
                 continue
@@ -108,7 +140,7 @@ def build(out: pathlib.Path) -> None:
             top = rel.parts[0]
             if not (str(rel) in SKILL_INCLUDE_FILES or top in SKILL_INCLUDE_DIRS):
                 continue
-            copy_file(f, out / "skills" / skill.name / rel)
+            copy_file(f, out / "skills" / name / rel)
 
     # ── 2. File map ──
     for plugin_rel, src_rel in FILE_MAP.items():
@@ -131,6 +163,57 @@ def build(out: pathlib.Path) -> None:
         dst.parent.mkdir(parents=True, exist_ok=True)
         dst.write_text(text, encoding="utf-8")
 
+    # Every declared skill must have materialized from one layer or the other.
+    for name in sorted(PLUGIN_SKILLS):
+        if not (out / "skills" / name / "SKILL.md").is_file():
+            raise BuildError(
+                f"PLUGIN_SKILLS names {name!r} but no layer produced "
+                f"skills/{name}/SKILL.md"
+            )
+
+
+def build_inputs() -> list:
+    """Every repo file the build reads. The artifact is exactly a function of these."""
+    inputs = [REPO_ROOT / "VERSION"]
+    inputs += [REPO_ROOT / src for src in FILE_MAP.values()]
+    inputs += [f for f in OVERLAY.rglob("*") if f.is_file()]
+    for name in sorted(PLUGIN_SKILLS):
+        skill = SKILLS / name
+        if not skill.is_dir():
+            continue
+        for f in skill.rglob("*"):
+            if not f.is_file():
+                continue
+            rel = f.relative_to(skill)
+            if str(rel) in SKILL_INCLUDE_FILES or rel.parts[0] in SKILL_INCLUDE_DIRS:
+                inputs.append(f)
+    return inputs
+
+
+def untracked_inputs() -> list:
+    """Build inputs that git does not track — files that exist for you and nobody else.
+
+    .gitignore's unanchored `sage/` rule silently swallowed the plugin's /sage
+    router for the whole Phase-3 program: it sat on every developer's disk, was
+    absent from every clean checkout, and would have shipped a plugin with no
+    entry point once the committed mirror stopped covering for it. An input the
+    release runner cannot see is not an input — it is a local accident.
+
+    Returns [] when this is not a git checkout (a release tarball, say), where
+    the question does not apply.
+    """
+    proc = subprocess.run(
+        ["git", "-C", str(REPO_ROOT), "ls-files", "--cached", "-z"],
+        capture_output=True,
+    )
+    if proc.returncode != 0:
+        return []
+    tracked = {
+        REPO_ROOT / p.decode()
+        for p in proc.stdout.split(b"\0") if p
+    }
+    return [f for f in build_inputs() if f not in tracked]
+
 
 def _diff(a: pathlib.Path, b: pathlib.Path, rel: str, out: list):
     """Recursively compare two trees; append drift descriptions to `out`."""
@@ -147,32 +230,142 @@ def _diff(a: pathlib.Path, b: pathlib.Path, rel: str, out: list):
         _diff(a / name, b / name, f"{rel}{name}/", out)
 
 
-def check() -> int:
-    tmp = pathlib.Path(tempfile.mkdtemp(prefix="sage-plugin-build-"))
-    try:
-        build(tmp)
-        drift = []
-        _diff(tmp, MIRROR, "", drift)
-    finally:
-        shutil.rmtree(tmp, ignore_errors=True)
+def audit(tree: pathlib.Path) -> list:
+    """Verify a built tree is well-formed and faithful to its sources.
 
-    if drift:
-        print("✗ plugin drift — the generator does not reproduce the committed mirror:")
-        for line in drift:
-            print(line)
+    No committed mirror exists to diff against any more, so these are the
+    properties that used to be enforced by eyeballing the mirror's diff:
+    the manifests are stamped and pin the dist branch, the gate scripts are
+    byte-identical to the ones the repo tests, and every hook the plugin
+    registers actually ships.
+    """
+    version = read_version()
+    problems: list = []
+
+    # 1. No placeholder survives into the artifact.
+    for f in sorted(tree.rglob("*")):
+        if not f.is_file():
+            continue
+        try:
+            text = f.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue
+        if VERSION_PLACEHOLDER in text:
+            problems.append(f"unsubstituted {VERSION_PLACEHOLDER} in {f.relative_to(tree)}")
+
+    # 2. plugin.json is the version authority and agrees with VERSION.
+    plugin_json = tree / ".claude-plugin" / "plugin.json"
+    if not plugin_json.is_file():
+        problems.append("missing .claude-plugin/plugin.json")
+    else:
+        try:
+            found = json.loads(plugin_json.read_text()).get("version")
+        except json.JSONDecodeError as exc:
+            problems.append(f".claude-plugin/plugin.json is not valid JSON: {exc}")
+            found = None
+        if found is not None and found != version:
+            problems.append(
+                f".claude-plugin/plugin.json version {found} != VERSION {version}"
+            )
+
+    # 3. The marketplace entry pins the dist branch and defers the version to
+    #    plugin.json. Without `ref` the source resolves to the default branch,
+    #    which carries no plugin tree — the plugin would be uninstallable.
+    market = tree / ".claude-plugin" / "marketplace.json"
+    if not market.is_file():
+        problems.append("missing .claude-plugin/marketplace.json")
+    else:
+        try:
+            entries = json.loads(market.read_text()).get("plugins", [])
+        except json.JSONDecodeError as exc:
+            problems.append(f".claude-plugin/marketplace.json is not valid JSON: {exc}")
+            entries = []
+        for entry in entries:
+            name = entry.get("name", "?")
+            source = entry.get("source", {})
+            if source.get("source") == "git-subdir" and source.get("ref") != DIST_REF:
+                problems.append(
+                    f"marketplace entry {name!r}: source.ref is {source.get('ref')!r}, "
+                    f"expected {DIST_REF!r} — the default branch carries no plugin tree"
+                )
+            if "version" in entry:
+                problems.append(
+                    f"marketplace entry {name!r} pins a version — remove it; "
+                    f"plugin.json is the single authority"
+                )
+
+    # 4. Gate scripts and templates are byte-identical to the sources the repo
+    #    tests. A mis-wired FILE_MAP would ship a stale gate.
+    for plugin_rel, src_rel in FILE_MAP.items():
+        src, dst = REPO_ROOT / src_rel, tree / plugin_rel
+        if not dst.is_file():
+            problems.append(f"file-map target missing from artifact: {plugin_rel}")
+        elif not filecmp.cmp(src, dst, shallow=False):
+            problems.append(f"{plugin_rel} differs from its source {src_rel}")
+
+    # 5. Every hook the plugin registers resolves to a file that ships.
+    hooks_json = tree / "hooks" / "hooks.json"
+    if not hooks_json.is_file():
+        problems.append("missing hooks/hooks.json")
+    else:
+        try:
+            hooks = json.loads(hooks_json.read_text())
+        except json.JSONDecodeError as exc:
+            problems.append(f"hooks/hooks.json is not valid JSON: {exc}")
+            hooks = {}
+        for matchers in hooks.get("hooks", {}).values():
+            for matcher in matchers:
+                for hook in matcher.get("hooks", []):
+                    for rel in HOOK_COMMAND.findall(hook.get("command", "")):
+                        if not (tree / rel).is_file():
+                            problems.append(f"hooks.json registers {rel}, which does not ship")
+
+    # 6. Every input the build reads is tracked by git. Otherwise this build and
+    #    the one the release runner does are builds of two different trees.
+    for f in untracked_inputs():
+        problems.append(
+            f"build input is not tracked by git: {f.relative_to(REPO_ROOT)} "
+            f"— it exists here and in no clean checkout (check .gitignore)"
+        )
+
+    return problems
+
+
+def check() -> int:
+    a = pathlib.Path(tempfile.mkdtemp(prefix="sage-plugin-a-"))
+    b = pathlib.Path(tempfile.mkdtemp(prefix="sage-plugin-b-"))
+    try:
+        build(a)
+        build(b)
+        problems = audit(a)
+        # A build that is not reproducible cannot be reviewed by its inputs.
+        drift: list = []
+        _diff(a, b, "", drift)
+        if drift:
+            problems.append("build is not reproducible — two runs differ:")
+            problems.extend(drift)
+        skills = sorted(p.name for p in (a / "skills").iterdir() if p.is_dir())
+    finally:
+        shutil.rmtree(a, ignore_errors=True)
+        shutil.rmtree(b, ignore_errors=True)
+
+    if problems:
+        print("✗ the generated plugin does not satisfy its contract:")
+        for line in problems:
+            print(f"  {line}")
         print()
-        print("FAIL — correct the source side (skills/, core/, runtime/plugin-overlay/)")
-        print("  until the generator reproduces tools/sage-claude-plugin/ exactly.")
+        print("FAIL — correct the source side (skills/, core/, runtime/plugin-overlay/).")
         return 1
-    print("OK — generator reproduces tools/sage-claude-plugin/ exactly.")
+
+    print(f"OK — plugin builds clean: {len(skills)} skills, "
+          f"{len(FILE_MAP)} mapped files, version {read_version()}.")
     return 0
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Generate the Claude Code plugin.")
-    group = parser.add_mutually_exclusive_group()
-    group.add_argument("--check", action="store_true",
-                       help="build to a temp dir and diff against the committed mirror")
+    parser.add_argument("--check", action="store_true",
+                        help="build and verify the artifact against its contract")
     parser.add_argument("--out", type=pathlib.Path, default=None,
                         help="output directory (default: dist/sage-claude-plugin)")
     args = parser.parse_args()

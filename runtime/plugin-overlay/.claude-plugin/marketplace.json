@@ -9,11 +9,11 @@
     {
       "name": "sage",
       "description": "AI skills framework: UNDERSTAND → ENVISION → DELIVER. Mechanical process enforcement, 9 workflows, 12 core skills (+ installable packs), 5 agent personas.",
-      "version": "{{VERSION}}",
       "source": {
         "source": "git-subdir",
         "url": "https://github.com/xoai/sage.git",
-        "path": "tools/sage-claude-plugin"
+        "path": "tools/sage-claude-plugin",
+        "ref": "plugin-dist"
       },
       "author": {
         "name": "xoai",

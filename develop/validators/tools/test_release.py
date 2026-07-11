@@ -31,7 +31,25 @@ PLUGIN_JSON = """{
 }
 """
 
+# The marketplace entry carries no version: plugin.json is the single authority
+# (P3-T2b). A version here is drift with no reader — check/sync must reject it.
 MARKETPLACE_JSON = """{
+  "name": "sage",
+  "plugins": [
+    {
+      "name": "sage",
+      "source": {
+        "source": "git-subdir",
+        "url": "https://example.invalid/sage.git",
+        "path": "tools/sage-claude-plugin",
+        "ref": "plugin-dist"
+      }
+    }
+  ]
+}
+"""
+
+MARKETPLACE_JSON_PINNING_VERSION = """{
   "name": "sage",
   "plugins": [
     {
@@ -57,11 +75,10 @@ def build_tree(root: pathlib.Path, version="1.2.3", plugin_version=None,
 
     (root / "VERSION").write_text(version + "\n")
     (root / "CHANGELOG.md").write_text(CHANGELOG % changelog_version)
-    for rel in (".claude-plugin", "tools/sage-claude-plugin/.claude-plugin"):
-        d = root / rel
-        d.mkdir(parents=True, exist_ok=True)
-        (d / "plugin.json").write_text(PLUGIN_JSON % plugin_version)
-        (d / "marketplace.json").write_text(MARKETPLACE_JSON % plugin_version)
+    d = root / ".claude-plugin"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "plugin.json").write_text(PLUGIN_JSON % plugin_version)
+    (d / "marketplace.json").write_text(MARKETPLACE_JSON)
     if extra:
         for rel, text in extra.items():
             p = root / rel
@@ -96,14 +113,6 @@ class ReleaseToolTest(unittest.TestCase):
         rc, out = run(self.dir, "--check")
         self.assertEqual(rc, 1, out)
         self.assertIn(".claude-plugin/plugin.json", out)
-
-    def test_check_detects_mutated_mirror_version(self):
-        build_tree(self.dir)
-        target = self.dir / "tools/sage-claude-plugin/.claude-plugin/plugin.json"
-        target.write_text(target.read_text().replace("1.2.3", "0.0.1"))
-        rc, out = run(self.dir, "--check")
-        self.assertEqual(rc, 1, out)
-        self.assertIn("tools/sage-claude-plugin", out)
 
     def test_check_detects_changelog_mismatch(self):
         build_tree(self.dir, changelog_version="1.0.0")
@@ -143,14 +152,6 @@ class ReleaseToolTest(unittest.TestCase):
         self.assertEqual(rc, 1, out)
         self.assertIn("semver", out)
 
-    def test_check_detects_mutated_marketplace_version(self):
-        build_tree(self.dir)
-        target = self.dir / ".claude-plugin" / "marketplace.json"
-        target.write_text(target.read_text().replace("1.2.3", "9.9.9"))
-        rc, out = run(self.dir, "--check")
-        self.assertEqual(rc, 1, out)
-        self.assertIn("marketplace.json", out)
-
     # ── --notes ──
     # This logic used to be a heredoc inside release.yml's publish step, which
     # made the workflow file invalid YAML and could never have run. It is a
@@ -181,18 +182,33 @@ class ReleaseToolTest(unittest.TestCase):
         self.assertEqual(rc, 1, out)
         self.assertIn("9.9.9", out)
 
+    def test_check_rejects_a_version_pinned_in_the_marketplace(self):
+        """plugin.json is the single authority — a second number is drift with
+        no reader, because Claude Code silently prefers plugin.json."""
+        build_tree(self.dir)
+        target = self.dir / ".claude-plugin" / "marketplace.json"
+        target.write_text(MARKETPLACE_JSON_PINNING_VERSION % "1.2.3")
+        rc, out = run(self.dir, "--check")
+        self.assertEqual(rc, 1, out)
+        self.assertIn("single authority", out)
+
     # ── --sync ──
-    def test_sync_propagates_to_every_manifest(self):
+    def test_sync_propagates_to_plugin_json(self):
         build_tree(self.dir, version="2.0.0", plugin_version="1.0.0",
                    changelog_version="2.0.0")
         rc, out = run(self.dir, "--sync")
         self.assertEqual(rc, 0, out)
-        for rel in (".claude-plugin/plugin.json",
-                    ".claude-plugin/marketplace.json",
-                    "tools/sage-claude-plugin/.claude-plugin/plugin.json",
-                    "tools/sage-claude-plugin/.claude-plugin/marketplace.json"):
-            self.assertIn('"version": "2.0.0"', (self.dir / rel).read_text())
+        self.assertIn('"version": "2.0.0"',
+                      (self.dir / ".claude-plugin/plugin.json").read_text())
         self.assertEqual(run(self.dir, "--check")[0], 0)
+
+    def test_sync_refuses_a_version_pinned_in_the_marketplace(self):
+        build_tree(self.dir)
+        target = self.dir / ".claude-plugin" / "marketplace.json"
+        target.write_text(MARKETPLACE_JSON_PINNING_VERSION % "1.2.3")
+        rc, out = run(self.dir, "--sync")
+        self.assertEqual(rc, 1, out)
+        self.assertIn("single authority", out)
 
     # ── --bump ──
     def test_bump_patch_round_trip(self):
@@ -201,9 +217,8 @@ class ReleaseToolTest(unittest.TestCase):
         rc, out = run(self.dir, "--bump", "patch")
         self.assertEqual(rc, 0, out)
         self.assertEqual((self.dir / "VERSION").read_text().strip(), "1.2.4")
-        for rel in (".claude-plugin/plugin.json",
-                    "tools/sage-claude-plugin/.claude-plugin/plugin.json"):
-            self.assertIn('"version": "1.2.4"', (self.dir / rel).read_text())
+        self.assertIn('"version": "1.2.4"',
+                      (self.dir / ".claude-plugin/plugin.json").read_text())
         self.assertEqual(run(self.dir, "--check")[0], 0)
 
     def test_bump_minor_and_major_reset_lower_components(self):

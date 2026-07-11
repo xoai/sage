@@ -37,11 +37,10 @@ jobs:
       - name: Flag/quality-locked tool tests
         run: python3 develop/validators/tools/test_sage_flags.py
 
-      - name: Gate scripts and their plugin mirrors are identical
-        run: |
-          diff -r core/gates/scripts \
-                  tools/sage-claude-plugin/hooks/scripts \
-                  --exclude sage-session-init.sh
+      # The plugin's copies of these scripts used to be a committed mirror this
+      # job diffed against. The mirror is gone (P3-T2b) — build_plugin.py's audit
+      # now asserts the generated tree's gate scripts are byte-identical to the
+      # ones tested above, and plugin-build.yml runs it.
 
       - name: Installer integrity tests
         # Drives the real install.sh against a fake release served over file://.

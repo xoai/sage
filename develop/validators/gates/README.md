@@ -8,9 +8,11 @@ bash develop/validators/gates/run-gate-tests.sh --only G1  # one case
 bash develop/validators/gates/run-gate-tests.sh --verbose  # show gate output
 ```
 
-Point the harness at the plugin's mirrored copies with
-`SAGE_GATES_DIR=tools/sage-claude-plugin/hooks/scripts bash …` — until the
-mirror becomes a build artifact, both copies must behave identically.
+`SAGE_GATES_DIR=<dir>` points the harness at a different copy of the scripts.
+It used to be aimed at the plugin's committed mirror, which had to behave
+identically; that mirror is gone (P3-T2b) and the plugin's copies are generated
+from the scripts tested here — `build_plugin.py --check` asserts they land
+byte-identical, so there is no second implementation left to test.
 
 ## The exit contract these tests pin
 

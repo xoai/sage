@@ -1,0 +1,36 @@
+name: plugin-build
+
+# The Claude Code plugin is generated, never committed (ADR-5, P3-T2b). It used
+# to be a hand-synced second copy of every skill, gate script, and template under
+# tools/sage-claude-plugin/ — the drift generator that shipped the Gate 4 bug
+# twice. That mirror is gone: runtime/tools/build_plugin.py is now the only way
+# the plugin comes into existence, and release.yml publishes what it builds to
+# the plugin-dist branch, which the marketplace `source` pins via `ref`.
+#
+# No mirror means no diff to check, so this job proves the artifact instead: it
+# builds, it is reproducible, its manifests are stamped and pin the dist branch,
+# its gate scripts are byte-identical to the ones the repo tests, and every hook
+# it registers actually ships. See build_plugin.py's audit().
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  plugin-build:
+    name: the plugin builds and satisfies its contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.8'
+
+      - name: Build and audit the generated plugin
+        run: python3 runtime/tools/build_plugin.py --check
+
+      - name: Generator self-tests
+        run: python3 develop/validators/tools/test_build_plugin.py

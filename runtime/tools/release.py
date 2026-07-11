@@ -4,15 +4,18 @@ release.py — keep every version artifact derived from the root VERSION file.
 
 VERSION is the single source of truth (ADR-2). Everything else is a copy:
 
-  .claude-plugin/plugin.json                            "version"
-  .claude-plugin/marketplace.json                      "version"
-  tools/sage-claude-plugin/.claude-plugin/plugin.json  "version"
-  tools/sage-claude-plugin/.claude-plugin/marketplace.json  "version"
+  .claude-plugin/plugin.json                     "version"
   CHANGELOG.md                                   top `## [X.Y.Z]` entry
   .sage/config.yaml in user projects             stamped by `sage init`
 
 Before this existed the four disagreed — 1.1.11 / 1.1.8 / 1.0.9 / 1.0.0 — and
 nobody could tell which Sage they were running.
+
+The plugin's own manifests are no longer copies to keep in step: the mirror
+under tools/sage-claude-plugin/ is gone (P3-T2b) and build_plugin.py stamps the
+generated tree from VERSION at build time. The marketplace *entry* must not pin
+a version at all — when both are set Claude Code silently prefers plugin.json,
+so a second number there is drift with no reader. `--check` enforces that.
 
 Usage:
   release.py --check              verify every artifact agrees (writes nothing)
@@ -39,6 +42,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import pathlib
 import re
 import subprocess
@@ -54,9 +58,13 @@ HARDCODED = re.compile(r'sage-version:\s*["\']?(\d+\.\d+\.\d+)')
 
 PLUGIN_MANIFESTS = (
     ".claude-plugin/plugin.json",
+)
+
+# The marketplace entry defers its version to plugin.json (see the module
+# docstring). These carry no version and must not grow one back.
+MARKETPLACES = (
     ".claude-plugin/marketplace.json",
-    "tools/sage-claude-plugin/.claude-plugin/plugin.json",
-    "tools/sage-claude-plugin/.claude-plugin/marketplace.json",
+    "runtime/plugin-overlay/.claude-plugin/marketplace.json",
 )
 
 SCAN_SUFFIXES = (".md", ".sh", ".yaml", ".yml")
@@ -126,6 +134,18 @@ def notes(root: pathlib.Path, version: str) -> str:
     return m.group(0).strip()
 
 
+def marketplace_version_pins(root: pathlib.Path, rel: str) -> list[str]:
+    """Names of marketplace entries that pin a version they should not."""
+    path = root / rel
+    if not path.is_file():
+        return []
+    try:
+        entries = json.loads(path.read_text()).get("plugins", [])
+    except json.JSONDecodeError as exc:
+        raise Problem(f"{rel} is not valid JSON: {exc}")
+    return [e.get("name", "?") for e in entries if "version" in e]
+
+
 def hardcoded_literals(root: pathlib.Path) -> list[tuple[str, int, str]]:
     hits: list[tuple[str, int, str]] = []
     for path in sorted(root.rglob("*")):
@@ -158,6 +178,16 @@ def check(root: pathlib.Path) -> int:
             continue
         if found != version:
             problems.append(f"{rel}: version {found} != VERSION {version}")
+
+    for rel in MARKETPLACES:
+        try:
+            for name in marketplace_version_pins(root, rel):
+                problems.append(
+                    f'{rel}: entry "{name}" pins a version — remove it; '
+                    f"plugin.json is the single authority"
+                )
+        except Problem as exc:
+            problems.append(str(exc))
 
     try:
         top = changelog_top(root)
@@ -205,6 +235,16 @@ def sync(root: pathlib.Path) -> int:
             print(f"  updated {rel} → {version}")
     else:
         print("  plugin manifests already in sync")
+
+    pins = [(rel, name) for rel in MARKETPLACES
+            for name in marketplace_version_pins(root, rel)]
+    if pins:
+        print()
+        print("✗ marketplace entries pin a version (sync cannot fix these):")
+        for rel, name in pins:
+            print(f'    {rel}: entry "{name}"')
+        print("  Remove the field — plugin.json is the single authority.")
+        return 1
 
     literals = hardcoded_literals(root)
     if literals:

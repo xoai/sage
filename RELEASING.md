@@ -4,17 +4,19 @@ Maintainer-facing checklist. End users don't read this.
 
 ## Cutting a release
 
-The root `VERSION` file is the single source of truth. The plugin and
-marketplace manifests, the CHANGELOG's top entry, and the `sage-version`
-stamped into every project's `.sage/config.yaml` are all derived from it, and
-CI fails on drift.
+The root `VERSION` file is the single source of truth. `.claude-plugin/plugin.json`,
+the CHANGELOG's top entry, and the `sage-version` stamped into every project's
+`.sage/config.yaml` are all derived from it, and CI fails on drift. The
+marketplace entry deliberately carries **no** version: Claude Code silently
+prefers `plugin.json` when both are set, so a second number there is drift with
+no reader, and `release.py --check` rejects it.
 
 ```bash
 # 1. Rename the ## [Unreleased] heading to ## [X.Y.Z] — <title>.
 #    `--bump` refuses to write until that entry exists: a release without a
 #    changelog entry is a release nobody can read.
 
-# 2. Raise the version and propagate it into all four manifests.
+# 2. Raise the version and propagate it into the derived files.
 python3 runtime/tools/release.py --bump patch    # or minor / major
 
 # 3. Full CI green.
@@ -47,6 +49,40 @@ curl -fsSL https://raw.githubusercontent.com/xoai/sage/main/install.sh | bash
 sage version && sage new smoke-test
 ```
 
+## How the Claude Code plugin is distributed
+
+`main` carries **no plugin tree**. It used to: `tools/sage-claude-plugin/` was a
+hand-synced second copy of every skill, gate script, and template, and that
+duplication is how the Gate 4 bug shipped twice. The plugin is generated now
+(`runtime/tools/build_plugin.py`), and the only committed statement of what it
+contains is `PLUGIN_SKILLS` + `FILE_MAP` in that generator.
+
+The release workflow's `publish-plugin` job builds the tree and force-pushes it
+to the **`plugin-dist`** branch, at the path `tools/sage-claude-plugin/`. The
+marketplace entry pins that branch:
+
+```json
+"source": { "source": "git-subdir", "url": "https://github.com/xoai/sage.git",
+            "path": "tools/sage-claude-plugin", "ref": "plugin-dist" }
+```
+
+The `ref` is load-bearing. Without it the source resolves to the default branch,
+which has no plugin tree, and the plugin silently becomes uninstallable —
+`build_plugin.py --check` fails if it ever goes missing.
+
+`plugin-dist` is a build output, not history: each release replaces it wholesale.
+The tag and the tarball are the archive. Never hand-edit it — the next release
+overwrites whatever you put there.
+
+After a release, smoke the plugin path too:
+
+```bash
+# in a throwaway Claude Code project
+/plugin marketplace add xoai/sage
+/plugin install sage
+# then confirm a workflow routes:  /build
+```
+
 ## When `sage-memory` ships a new release
 
 `sage-memory` is a sibling Python package (`/mnt/e/Codes/sage-memory/`,
@@ -55,10 +91,13 @@ provides the MCP server and three canonical skills (`sage-memory`,
 `sage-ontology`, `sage-self-learning`).
 
 Sage **vendors a fallback copy** of those three skills under
-[skills/sage-*/](skills/) and [tools/sage-claude-plugin/skills/sage-*/](tools/sage-claude-plugin/skills/)
-so users **without** the MCP installed still get the prose. The
-vendored fallback is *not* auto-synced at runtime — it's committed to
+[skills/sage-*/](skills/) so users **without** the MCP installed still get the
+prose. The vendored fallback is *not* auto-synced at runtime — it's committed to
 the sage repo and needs maintainer refresh when sage-memory updates.
+
+There is one copy to refresh. The plugin ships these skills too, but its tree is
+generated from `skills/` by `build_plugin.py` — sync `skills/` and the next
+plugin build carries the change.
 
 End users with sage-memory installed are unaffected (their `sage update`
 calls `sage-memory install-skills` which deploys the wheel-canonical
@@ -79,15 +118,14 @@ The script does:
 
 1. Copies `SKILL.md` + `references/` + `scripts/` from sage-memory's
    wheel into `skills/sage-{memory,ontology,self-learning}/`.
-2. Same copy into `tools/sage-claude-plugin/skills/sage-*/`.
-3. Re-injects sage's fallback comment header at the top of each
+2. Re-injects sage's fallback comment header at the top of each
    SKILL.md (lost when wheel content overwrites it).
-4. Patches upstream prose stragglers — sage-memory ≤ 0.10.0 still has
+3. Patches upstream prose stragglers — sage-memory ≤ 0.10.0 still has
    `the memory skill` / `the ontology skill` / `the self-learning skill`
    references in a few `sage-self-learning/references/*.md` files
    without the `sage-` prefix. Until upstream cleans up, the script
    re-applies those renames every sync.
-5. Verifies:
+4. Verifies:
    - No stale unprefixed skill-name prose
    - Every SKILL.md `name:` frontmatter matches its directory name
    - Every vendored SKILL.md has the fallback comment header
@@ -99,14 +137,14 @@ Exits non-zero if any verification fails. The script is **idempotent**
 
 ```bash
 # 1. Review what changed
-git diff skills/sage-* tools/sage-claude-plugin/skills/sage-*
+git diff skills/sage-*
 
 # 2. Add a line to CHANGELOG.md under the upcoming release section:
 #    "vendored fallback refreshed from sage-memory X.Y.Z"
 $EDITOR CHANGELOG.md
 
 # 3. Commit and push
-git add -A skills/sage-* tools/sage-claude-plugin/skills/sage-* CHANGELOG.md
+git add -A skills/sage-* CHANGELOG.md
 git commit -m "sync vendored fallback from sage-memory X.Y.Z"
 git push origin main
 ```
