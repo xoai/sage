@@ -1,6 +1,7 @@
 ---
 name: task-reviewer-prompt
 type: template
+variant: subagent
 version: "1.0.0"
 description: >
   The prompt for a fresh task-reviewer subagent — two verdicts (spec compliance,

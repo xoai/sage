@@ -1,6 +1,7 @@
 ---
 name: branch-reviewer-prompt
 type: template
+variant: subagent
 version: "1.0.0"
 description: >
   The prompt for the whole-branch reviewer — one fresh context over the complete

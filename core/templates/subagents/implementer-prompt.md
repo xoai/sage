@@ -1,6 +1,7 @@
 ---
 name: implementer-prompt
 type: template
+variant: subagent
 version: "1.0.0"
 description: >
   The prompt for a fresh implementer subagent — one plan task, one commit range,

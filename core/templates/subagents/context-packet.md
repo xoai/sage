@@ -1,6 +1,7 @@
 ---
 name: context-packet
 type: template
+variant: subagent
 version: "1.0.0"
 description: >
   The context an implementer subagent gets, and the ONLY context it gets.
