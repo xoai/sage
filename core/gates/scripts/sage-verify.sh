@@ -156,7 +156,12 @@ if os.path.isfile(pkg_json):
         emit('BUILD', 'build')
 
 elif any(os.path.isfile(os.path.join(root, f))
-         for f in ('pyproject.toml', 'setup.py', 'setup.cfg')):
+         for f in ('pyproject.toml', 'setup.py', 'setup.cfg',
+                   # pytest's own config files. A project configured the way
+                   # pytest documents — pytest.ini and a tests/ dir, no packaging
+                   # metadata — was reported "no test runner detected" and went
+                   # unverified, though `pytest` ran fine in it.
+                   'pytest.ini', 'tox.ini')):
     venv_python = os.path.join(root, '.venv', 'bin', 'python')
     # `python` is absent on systems that ship only `python3`; the old script
     # hard-coded it and reported a green suite as a failure.

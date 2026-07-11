@@ -229,6 +229,14 @@ run_case G8 "failing pytest suite fails, with captured evidence" \
   --requires pytest \
   -- "$FIX/verify/failing-pytest"
 
+# pytest.ini + tests/ is how pytest documents its own setup. The gate only looked
+# for packaging metadata, so such a project was "no test runner detected" — the
+# suite ran fine, and Sage declined to look at it.
+run_case G9b "a pytest.ini project is detected, not UNVERIFIABLE" \
+  --script "$V" --exit 0 --contains "PASS" \
+  --requires pytest \
+  -- "$FIX/verify/pytest-ini-only"
+
 run_case G9 "'vitest' in package.json metadata is not a runner" \
   --script "$V" --exit 2 --contains "UNVERIFIABLE" \
   --not-contains "npx vitest" \
