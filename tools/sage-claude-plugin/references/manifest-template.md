@@ -16,6 +16,8 @@ cycle_id: "YYYYMMDD-slug"
 workflow: build | architect | fix | research | design | analyze | reflect
 phase: framing | brief | spec | plan | implement | quality-gates | review | complete
 status: in-progress | paused | blocked | complete
+tier: standard          # tier1 | standard | large — scope of the cycle
+gate_state: pre-spec    # pre-spec | spec-approved | plan-approved | building | gates-passed | complete
 created: YYYY-MM-DD
 updated: YYYY-MM-DD HH:MM
 ---

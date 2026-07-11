@@ -17,6 +17,8 @@ cycle_id: "YYYYMMDD-slug"
 workflow: build | architect | fix | research | design | analyze | reflect
 phase: framing | brief | spec | plan | implement | quality-gates | review | complete
 status: in-progress | paused | blocked | complete
+tier: standard          # tier1 | standard | large — scope of the cycle
+gate_state: pre-spec    # pre-spec | spec-approved | plan-approved | building | gates-passed | complete
 created: YYYY-MM-DD
 updated: YYYY-MM-DD HH:MM
 flags:
@@ -136,6 +138,47 @@ Max 150 words.}
 ```
 
 # Rules
+
+## Machine state contract (tier, gate_state)
+
+WHEN: The manifest is created or updated at any checkpoint.
+CHECK: `tier` and `gate_state` are set to values a tool can read without
+       parsing prose. They are maintained alongside `phase`/`status`, not
+       instead of them — `phase` is for humans and `/continue`; `gate_state`
+       is the single machine-readable answer to "may implementation proceed?"
+
+       `gate_state` advances monotonically through the cycle:
+
+       | Transition (checkpoint)                | gate_state      |
+       |----------------------------------------|-----------------|
+       | manifest created (framing / brief)     | `pre-spec`      |
+       | spec approved `[A]`                     | `spec-approved` |
+       | plan approved `[A]`                     | `plan-approved` |
+       | build-loop entered                      | `building`      |
+       | all quality gates passed                | `gates-passed`  |
+       | completion checkpoint (Step 8 / final)  | `complete`      |
+
+       `tier` records scope: `tier1` (trivial — no manifest is created at all,
+       see below), `standard`, or `large`.
+
+BECAUSE: The Claude Code spec-gate hook
+         (`runtime/platforms/claude-code/hooks/sage-spec-gate.sh`) blocks
+         source-file edits while a cycle is `pre-spec`, enforcing Rule 3
+         (spec-before-code) mechanically rather than by prose alone. It reads
+         `gate_state` from this frontmatter. A manifest that never advances
+         past `pre-spec` will keep blocking edits — so the field must be moved
+         forward at each checkpoint, exactly as `status` already is.
+
+         Tier-1 work never creates a manifest; "no manifest" is the hook's
+         signal that no cycle is active and edits are unrestricted. That is the
+         Tier-1 escape hatch, unchanged by this contract.
+
+BLOCKED RATIONALIZATIONS:
+- "I updated status, that's enough" — the hook reads `gate_state`, not
+  `status`. Both move at every checkpoint.
+- "The spec is written, gate_state can stay pre-spec until I get to it" —
+  gate_state gates the *next* edit. Advance it when the spec is approved, not
+  later.
 
 ## Provenance contract
 

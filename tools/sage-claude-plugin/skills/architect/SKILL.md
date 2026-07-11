@@ -38,12 +38,26 @@ the most recent artifact if present.
 
 ### Manifest Lifecycle (architect workflow)
 
-**Create** manifest.md when brief.md is saved (after elicitation).
+**Create** manifest.md when brief.md is saved (after elicitation), `gate_state: pre-spec`.
 **Update** at every checkpoint: elicitation gate, design checkpoint,
-plan checkpoint, each milestone completion.
+plan checkpoint, each milestone completion — advance `gate_state` with each.
 **Session end ([N]):** Manifest update is MANDATORY — architect cycles
 span sessions, so handoff guidance is critical.
-**Completion:** Set `status: complete` after final milestone.
+**Completion:** Set `status: complete` and `gate_state: complete` after final
+milestone — the completion guard requires `gate_state` to have reached
+`gates-passed` first.
+
+**gate_state at each checkpoint (machine field — the spec-gate hook reads it):**
+- Manifest created (brief saved) → `pre-spec`
+- Design / ADRs approved `[A]` (spec.md `status: completed`) → `spec-approved`
+- Plan approved `[A]` → `plan-approved`
+- Implementing a milestone via build-loop → `building`
+- A milestone's quality gates pass → `gates-passed`
+- Final milestone complete → `complete`
+
+Until `gate_state` reaches `spec-approved`, edits to source files are blocked —
+this is Rule 3 (design before implementation) made mechanical.
+
 **Anti-lazy-manifest:** Same contract as build workflow — summary must
 contain judgment, not spec titles.
 

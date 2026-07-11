@@ -56,9 +56,21 @@ Using as build input."
 Use the template from `develop/templates/manifest-template.md`.
 
 **Update** manifest.md at EVERY checkpoint:
-- Every [A]/[R]/[N] gate: update phase, status, updated timestamp
+- Every [A]/[R]/[N] gate: update phase, status, `gate_state`, updated timestamp
 - Phase transitions: update context summary if new information emerged
 - New decisions: append to the manifest's decisions list
+
+**gate_state at each checkpoint (machine field — the spec-gate hook reads it):**
+- Spec approved `[A]` → `gate_state: spec-approved`
+- Plan approved `[A]` → `gate_state: plan-approved`
+- Entering the build-loop (Step 6) → `gate_state: building`
+- All quality gates pass → `gate_state: gates-passed`
+- Step 8 completion → `gate_state: complete`
+
+Until `gate_state` reaches `spec-approved`, the Claude Code hook blocks edits to
+source files — that is Rule 3 made mechanical. Advance it the moment the spec is
+approved, not "later"; a stale `pre-spec` keeps blocking the very work you just
+approved.
 
 **Context budget pressure:** If the conversation is very long (many
 tool calls, approaching context limits), write a manifest update BEFORE
@@ -68,7 +80,9 @@ judgment that's about to be lost.
 **Session end ([N]):** Manifest update is MANDATORY. Write handoff
 guidance and context summary before ending.
 
-**Completion:** Set `status: complete` at Step 8.
+**Completion:** Set `status: complete` and `gate_state: complete` at Step 8.
+The completion guard blocks this transition unless `gate_state` was already
+`gates-passed` — so run the quality gates before closing (Rule 5).
 
 **Anti-lazy-manifest contract:**
 Context summary MUST NOT be:

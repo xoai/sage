@@ -32,10 +32,23 @@ and fix patterns may be relevant.
 ### Manifest Lifecycle (fix workflow)
 
 **Surgical fixes:** No manifest. Too fast — completes in one session.
-**Moderate fixes:** Create manifest when fix plan is written (Step 3).
-**Systemic fixes:** Create manifest at escalation point.
+This is the Tier-1 escape hatch: with no manifest, the Claude Code spec-gate
+hook treats the cycle as inactive and never blocks edits.
+**Moderate fixes:** Create manifest when fix plan is written (Step 3), `tier: standard`.
+**Systemic fixes:** Create manifest at escalation point, `tier: large`.
 **Update** at fix scope gate and close checkpoint.
 **Session end ([N]):** Mandatory update for Moderate+ fixes.
+
+**gate_state (Moderate/Systemic fixes — the spec-gate hook reads it):**
+- Manifest created (fix plan drafted) → `pre-spec`
+- Fix plan approved `[A]` → `plan-approved`
+- Implementing the fix → `building`
+- Fix verified / gates pass → `gates-passed`
+- Close checkpoint → `complete`
+
+While `gate_state` is `pre-spec`, edits to source files are blocked — write and
+get `[A]` approval on the fix plan first (Rule 3). Surgical fixes skip this
+entirely by having no manifest.
 
 ## Step 1: Understand the Problem
 
