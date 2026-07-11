@@ -1,19 +1,25 @@
 ---
 name: generic
 description: >
-  Tier 2 adapter that works with any AI coding tool via CLAUDE.md / system prompt
-  injection. No subagents — workflows run sequentially. Covers Cursor, Copilot,
-  Windsurf, Gemini CLI, and any other tool with file-based configuration.
-version: "1.0.0"
-tier: 2
+  Any tool that reads a project instructions file and nothing more — Cursor,
+  Copilot, Windsurf, and the rest. Sage runs here, and it is honest about what
+  that means: nothing blocks an edit, and no review is independent.
+contract-version: 2
+maintainer: "sage-core"
+
 capabilities:
-  subagents: false
-  parallel-execution: false
-  worktrees: false
-  hooks: false
-  slash-commands: false
-  skill-auto-activation: true
-  file-system-access: true
+  context-injection: true         # it reads CLAUDE.md. That is the whole platform.
+  command-delivery: false         # no slash commands; workflows are read as files
+  native-skill-discovery: false   # no discovery → the generator INLINES the skills
+  pre-tool-veto: false            # nothing can block an edit. Rules 3 and 5 are prose here.
+  post-tool-events: false         # no audit trail can be written mechanically
+  subagent-dispatch: false        # reviews run in the context that wrote the code
+  session-events: false
+
+supported-os: [linux, macos, windows]
+# Genuinely true here, and cheap to be true: there is nothing to run. The only
+# artifact is a markdown file, and every OS can read a markdown file.
+
 command-prefix: "sage"
 install-method: manual-copy
 ---

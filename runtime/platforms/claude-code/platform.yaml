@@ -1,19 +1,50 @@
 ---
 name: claude-code
 description: >
-  Tier 1 adapter for Claude Code with full subagent support, parallel execution,
-  git worktrees, hooks, and slash commands.
-version: "1.0.0"
-tier: 1
+  Claude Code — the reference platform. Everything Sage can enforce mechanically,
+  it enforces here: PreToolUse hooks that veto an edit, PostToolUse hooks that
+  write the audit trail, subagent dispatch for independent review, and native
+  description-triggered skill discovery.
+contract-version: 2
+maintainer: "sage-core"
+
 capabilities:
-  subagents: true
-  parallel-execution: true
-  worktrees: true
-  hooks: true
-  slash-commands: true
-  skill-auto-activation: true
-  file-system-access: true
+  context-injection: true         # CLAUDE.md at session start
+  command-delivery: true          # .claude/commands/ → the / menu
+  native-skill-discovery: attested   # project-level .claude/skills/, description-triggered
+  pre-tool-veto: attested         # PreToolUse exit 2 blocks the call — including inside subagents
+  post-tool-events: true          # PostToolUse (sage-degradation-log writes decisions.md)
+  subagent-dispatch: true         # the Agent/Task tool
+  session-events: true            # SessionStart (sage-session-init)
+
+attestations:
+  - capability: native-skill-discovery
+    evidence: docs/attestations/claude-code-native-skill-discovery-2026-07-12.md
+    verified: 2026-07-12
+    expires-release: "1.4"
+    note: >
+      A canary token in a project-level skill came back in an answer that never
+      named the skill. Auto-activation by description is real, and Sage's whole
+      ADR-9 delivery model depends on it.
+
+  - capability: pre-tool-veto
+    evidence: docs/attestations/claude-code-hooks-in-subagents-2026-07-12.md
+    verified: 2026-07-12
+    expires-release: "1.4"
+    note: >
+      Attested rather than `true` because the load-bearing half is not that hooks
+      veto — that is documented — but that they veto INSIDE subagents, which is
+      not. ADR-10's entire quality argument rests on it. A tdd-gate blocked an
+      implementer subagent's untested source edit; the subagent read the reason,
+      wrote the test, and its retry was allowed. Undocumented platform behavior
+      that can regress silently, so it expires and is re-probed.
+
+supported-os: [linux, macos]
+# NOT windows. It was declared for releases and never tested once. Sage's hooks
+# and gates are POSIX shell; claiming Windows because nobody had checked is the
+# exact class of unverified claim this contract exists to stop. 02-brief §3 puts
+# Windows out of scope, so the contract says so instead of pretending.
+
 command-prefix: "/sage"
 install-method: plugin-marketplace
-supported-os: [linux, macos, windows]
 ---
