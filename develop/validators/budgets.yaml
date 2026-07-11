@@ -59,10 +59,12 @@
 # ratchets down). It does not get to drift back up because a batch was hard.
 
 eager:
-  CLAUDE.md: 275          # measured 256 · target ≤180 by P2-T8 · paid every turn
+  CLAUDE.md: 190          # measured 177 · TARGET MET (≤180) · paid every turn
                           # ratchet: 430 → 380 (P2-T5, four redundant blocks deleted)
                           #          380 → 345 (P2-T6, memory + tiers → skills)
                           #          345 → 275 (P2-T7, routing depth + checkpoints)
+                          #          275 → 190 (P2-T8, gates + constitution + decisions)
+                          # 398 → 177 lines · ~4,433 → ~2,144 tokens · every turn
 
 commands:
   build: 580              # measured 535 · target 400 · the heaviest workflow
@@ -106,5 +108,6 @@ skills:
 # real file was 398.
 
 generic:
-  CLAUDE.md: 840          # measured 814 · falls with the eager diet
+  CLAUDE.md: 770          # measured 735 · falls with the eager diet
                           # ratchet: 1010 → 950 (P2-T5) → 910 (P2-T6) → 840 (P2-T7)
+                          #          → 770 (P2-T8)

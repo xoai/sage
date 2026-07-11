@@ -244,12 +244,16 @@ surfaces:
   eager-workflow-gates:
     path: runtime/platforms/_shared/instructions-body.sh
     kind: eager-block
-    anchor: "### Workflow Gates (enforced for both slash commands and free input)"
+    anchor: "### Workflow Gates"
     covered-by: [E1, E7]
     notes: >
-      The build file-checks are graded via E7 (spec) and E1 (TDD order). The
-      fix and architect gate blocks in this same section are not — see
-      workflow-fix and workflow-architect.
+      Batch 3 cut this from 60 lines to 17: every remaining bullet NAMES the hook
+      that enforces it. This is the sharpest test of ADR-9's central claim. The
+      60 lines described checks that sage-spec-gate and sage-tdd-gate perform
+      whether or not the model reads the paragraph — so if E1 and E7 still pass
+      with the prose gone, the prose was decoration and the hooks are the product.
+      If they regress, the hooks are not as sufficient as v1.2.0 claimed, and that
+      is a far more valuable thing to learn than a smaller context window.
 
   eager-rule-1-state-first:
     path: runtime/platforms/_shared/instructions-body.sh

@@ -96,65 +96,22 @@ Before writing a spec, plan, or ADR — or starting an investigation — search
 sage-memory. Two searches: the domain, then the same query tagged
 `self-learning`. Skip only for Tier 1. → **sage-using-memory** skill.
 
-### Workflow Gates (enforced for both slash commands and free input)
+### Workflow Gates
 
-After announcing a workflow, read and follow the command file at
-`.claude/commands/[workflow].md` for detailed steps and capability
-references. If you cannot load it, these gates are the minimum:
+Each of these is enforced by a script, not by your memory of this paragraph:
 
-**Build (Standard+ scope) — FILE CHECKS:**
-BEFORE implementing, verify BOTH files exist on disk:
-  .sage/work/[initiative]/spec.md — with status: completed
-  .sage/work/[initiative]/plan.md — with status: completed
-If EITHER file is missing → create it first. No exceptions.
+- **Build (Standard+):** `spec.md` AND `plan.md` must exist under
+  `.sage/work/<initiative>/` before you implement.
+  [sage-spec-gate blocks the edit while a cycle is `pre-spec`]
+- **Tests before code.** [sage-tdd-gate blocks the edit]
+- **Branch:** implementation does not start on the default branch. Merging is
+  always a user-gated `[M]` — no workflow path merges on its own.
+- **Fix:** confirm the root cause BEFORE scoping the fix. 1–2 files → do it;
+  3–5 → write a fix plan first; 5+ or interface changes → escalate to /build.
+- **Architect:** `brief.md` exists before design. All three elicitation rounds.
 
-**Branch gate (Standard+ scope, git projects):**
-BEFORE implementation commits begin, verify HEAD is not the default
-branch — unless a branching decline is recorded in the initiative's
-decision log. If HEAD is on the default branch with no recorded
-decline: propose the initiative branch (`feat/`, `fix/`, or
-`arch/` per workflow),
-confirm with the user, create it. The full protocol lives in
-`sage/core/capabilities/execution/git-discipline/SKILL.md`; this
-gate carries only the observable check. Merging is ALWAYS a
-user-gated [M] menu action — no workflow path merges on its own.
-Under `isolation: worktree` in `.sage/config.yaml`, a Standard+
-workflow in the main checkout offers the worktree bounce
-(`sage worktree <slug>`) before branching in place; `isolation: branch`
-(default) branches in place. Not a git repository → this gate does
-not exist.
-
-Do NOT rationalize skipping:
-- "The design is clear from previous discussion" → NOT a spec file
-- "The user described what they want" → NOT a spec file
-- "This is straightforward" → if Standard scope, spec required
-- "Just build it" → write a minimal 5-line spec, get [A]/[R]
-
-Gate sequence:
-1. Spec file to .sage/work/ → present [A]/[R] → wait for approval
-2. Plan file to .sage/work/ → present [A]/[R] → wait for approval
-3. Implement (tests before code, via build-loop)
-4. Verify with PASTED test output → present [A]/[R]
-
-**Fix — SCOPE AFTER ROOT CAUSE:**
-1. Investigate root cause with evidence → present [A]/[R]/[S] → wait
-2. SCOPE THE FIX after root cause is confirmed:
-   Surgical (1-2 files) → proceed to fix
-   Moderate (3-5 files) → write fix plan first → [A]/[R]
-   Systemic (5+ files, interface changes) → ESCALATE to /build or /architect
-3. Implement fix → verify with PASTED test output → [A]/[R]
-DO NOT fix before root cause is confirmed.
-DO NOT skip fix scoping — a "quick fix" that touches 8 files is a rebuild.
-
-**Architect — FILE CHECKS:**
-1. Complete elicitation (vision, constraints, gaps) — all 3 rounds.
-   Each round produces visible output. brief.md MUST EXIST before design.
-   Do NOT compress rounds. Do NOT skip because "I understand the system."
-2. Design with ADRs to .sage/docs/ → spec.md to .sage/work/ → [A]/[R]
-3. Milestone plan → [A]/[R] → phased build
-   Each milestone follows build workflow gates independently.
-DO NOT design before brief.md exists.
-DO NOT batch-implement milestones without per-milestone checkpoints.
+Gate sequences, the rationalizations they exist to stop, and what to do when a
+gate exits 2 (unverifiable, which is never a pass): → **sage-gates** skill.
 
 ### Rule 1: State First
 
@@ -172,12 +129,9 @@ one every other rule depends on.
 
 ### Rule 3: Document Decisions
 
-Decisions that affect the project must be recorded — for agents AND for
-human collaborators. Specs, plans, ADRs, and briefs go to `.sage/work/`
-or `.sage/docs/`. Even for Tier 2 tasks, produce a brief record of what
-was decided and why.
-
-**Compliance:** No Standard+ task completes without an artifact in `.sage/`.
+Specs, plans, ADRs, briefs → `.sage/work/` or `.sage/docs/`. No Standard+ task
+completes without an artifact. [sage-spec-gate enforces the spec half: it blocks
+source edits while a cycle is `pre-spec`]
 
 ### Rule 4: Checkpoints Are Sacred
 
@@ -188,23 +142,11 @@ remains and let the user decide. → **sage-checkpoints** skill.
 
 ### Rule 5: Verify Before Claiming Done
 
-Before presenting any completion checkpoint:
-- Tests exist for new or changed functionality
-- Tests pass — paste actual output, don't summarize
-- Implementation matches the spec or plan
-- If tests don't exist or don't pass, the task is NOT done
-
-**Self-check before every checkpoint (FILE CHECKS, not self-assessment):**
-- Build: does `.sage/work/*/spec.md` exist? If no → go back and write it.
-- Build: does `.sage/work/*/plan.md` exist? If no → go back and write it.
-- Fix: was root cause presented and approved by user? If no → go back.
-- All: is test output PASTED (not summarized) in this response? If no → run tests.
-- Spec compliance is adversarial — do not trust your own report that
-  implementation matches the spec. Verify independently.
-If any check fails, complete it before presenting the checkpoint.
-
-**Compliance:** Every completion checkpoint passes all file checks
-and includes pasted test output.
+Tests exist, tests pass, output **pasted** — not summarized. If tests do not
+exist or do not pass, the task is not done. Spec compliance is adversarial: do
+not trust your own report that the implementation matches the spec.
+[sage-spec-gate's completion guard blocks `complete` before `gates-passed`]
+→ **sage-gates** skill.
 
 ### Rule 6: Capture Corrections
 
@@ -214,33 +156,12 @@ the storage format: → **sage-using-memory** skill.
 
 ### Rule 7: Record Decisions at Checkpoints
 
-At each checkpoint, **prepend** significant decisions to the
-**initiative's decision log** —
-`.sage/work/[initiative]/decisions.md` (insert after the
-`# Decisions` header, before existing entries) — newest first.
-Record what was decided, why, and what alternatives were
-considered. Writers switch immediately, including for initiatives
-already in flight; readers check the initiative log first and fall
-back to the global file, so the switch is safe.
-
-The **global** `.sage/decisions.md` remains for cross-initiative
-decisions only (constitution choices, conventions, project-wide
-calls). Two parallel initiative branches prepending to one global
-file is a guaranteed merge conflict — the per-initiative split is
-what makes parallel sessions safe.
-
-**Archive rotation:** When the global decisions.md exceeds ~200
-lines, at the next workflow close: keep the 20 most recent entries,
-move the rest to `decisions-{YYYY-MM-DD}.md`. Archives are
-read-only reference. (Initiative logs live with their work dir —
-no rotation.)
-
-The file system — what artifacts exist in `.sage/work/` and their
-frontmatter — is the source of truth for state. Decision logs are
-the source of truth for reasoning and context.
-
-**Compliance:** the active initiative's decisions.md has a new
-entry (prepended) after each checkpoint that involved a decision.
+At each checkpoint that involved a decision, **prepend** an entry to the
+initiative's log — `.sage/work/<initiative>/decisions.md`. The global
+`.sage/decisions.md` is for cross-initiative calls only: two parallel
+initiatives prepending to one global file is a guaranteed merge conflict.
+What to record, and why the alternatives are the part worth keeping:
+→ **sage-decisions** skill.
 
 __CONSTITUTION_PLACEHOLDER__
 
