@@ -1,0 +1,27 @@
+name: reference-integrity
+
+# Verifies that every framework path named in the prose (core/, skills/,
+# runtime/ markdown) resolves to a real file or directory. Phase 3 moves and
+# removes a lot of content; this is the guard against a workflow or skill left
+# pointing at a path that no longer exists. See
+# develop/validators/check-references.py.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  reference-integrity:
+    name: framework references resolve
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.8'
+
+      - name: Check framework references
+        run: python3 develop/validators/check-references.py

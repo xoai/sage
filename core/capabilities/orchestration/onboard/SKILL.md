@@ -232,14 +232,20 @@ Update this file as conventions evolve.
 - Error handling: <detected or TBD>
 ```
 
-### Generate CLAUDE.md
+### Generate the platform instructions file
 
-Use the template at `core/context-loader/CLAUDE.md.template`:
-- Replace `{{CONSTITUTION_PRINCIPLES}}` with the loaded constitution
-- Replace `{{LOADED_PACKS}}` with summaries from enabled packs
-- Replace `{{CONVENTIONS}}` with `.sage/conventions.md` content
+Normally `sage init` / `sage update` generate the platform's instructions file
+(CLAUDE.md / AGENTS.md / GEMINI.md) from the shared body in
+`runtime/platforms/_shared/instructions-body.sh` with the merged constitution
+spliced in — you do not hand-assemble it during onboarding.
 
-Save to project root as `CLAUDE.md`.
+If you must produce one directly, the template is
+`core/capabilities/context/context-loader/templates/main-instructions.template.md`:
+- Replace `{{CONSTITUTION}}` with the loaded constitution principles
+- Replace `{{NAVIGATOR_PATH}}` with the sage-navigator skill path
+- Replace `{{AVAILABLE_SKILLS}}` and `{{COMMANDS_TABLE}}` from the enabled skills
+
+Save to project root as the platform's instructions file (e.g. `CLAUDE.md`).
 
 ### Discover MCP Tools (if configured)
 
