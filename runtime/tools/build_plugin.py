@@ -50,6 +50,7 @@ import tempfile
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 OVERLAY = REPO_ROOT / "runtime" / "plugin-overlay"
 SKILLS = REPO_ROOT / "skills"
+SYSTEM_SKILLS = REPO_ROOT / "core" / "system-skills"
 
 VERSION_PLACEHOLDER = "{{VERSION}}"
 
@@ -71,6 +72,17 @@ PLUGIN_SKILLS = frozenset({
 
 # Skill dirs that exist in skills/ but are deliberately NOT shipped in the plugin.
 SKILLS_NOT_IN_PLUGIN = frozenset({"autoresearch"})
+
+# System skills (core/system-skills/) — Sage-about-Sage content that ADR-9 moved
+# OUT of the eager layer. They ship in the plugin because the plugin install has
+# no vendored sage/ tree to point a loader stub at: if they are not here, the
+# content the eager layer no longer carries does not exist at all for plugin
+# users. Discovered from disk rather than enumerated, because the whole point of
+# the diet is that this list grows as the eager layer shrinks — and a hand-kept
+# copy of a directory listing is a drift bug waiting for a quiet release.
+SYSTEM_SKILL_NAMES = frozenset(
+    p.name for p in sorted(SYSTEM_SKILLS.iterdir()) if (p / "SKILL.md").is_file()
+) if SYSTEM_SKILLS.is_dir() else frozenset()
 
 # Per framework skill, the plugin ships only the runtime-facing content — the
 # authoring extras (README.md, tests.md, patterns/, constitution/, gates/,
@@ -151,6 +163,11 @@ def build(out: pathlib.Path) -> None:
                 continue
             copy_file(f, out / "skills" / name / rel)
 
+    # ── 1b. System skills (ADR-9 delivery class 2) ──
+    for name in sorted(SYSTEM_SKILL_NAMES):
+        copy_file(SYSTEM_SKILLS / name / "SKILL.md",
+                  out / "skills" / name / "SKILL.md")
+
     # ── 2. File map ──
     for plugin_rel, src_rel in FILE_MAP.items():
         src = REPO_ROOT / src_rel
@@ -173,7 +190,7 @@ def build(out: pathlib.Path) -> None:
         dst.write_text(text, encoding="utf-8")
 
     # Every declared skill must have materialized from one layer or the other.
-    for name in sorted(PLUGIN_SKILLS):
+    for name in sorted(PLUGIN_SKILLS | SYSTEM_SKILL_NAMES):
         if not (out / "skills" / name / "SKILL.md").is_file():
             raise BuildError(
                 f"PLUGIN_SKILLS names {name!r} but no layer produced "

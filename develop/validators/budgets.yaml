@@ -41,8 +41,25 @@
 # Headroom is ~8%: enough that a genuine one-paragraph clarification does not
 # fail CI, too little for a section to slip in unnoticed.
 
+# ── What changed in v1.3.0 (program 2, ADR-9) ────────────────────────────────
+#
+# Two new sections, and they exist to stop this file from being gamed.
+#
+# The diet moves content out of the eager layer and into description-triggered
+# skills. That is a real win — the eager layer is paid on EVERY turn, a skill is
+# paid only when it is fetched. But "we cut the eager layer by 70%" is a sentence
+# that stays true even if the content merely moved somewhere nobody counts, and a
+# ratchet with an unmeasured escape hatch next to it is not a ratchet.
+#
+# So `skills:` counts the on-demand layer, and `generic:` counts the platforms
+# that cannot fetch on demand and must inline everything. Neither number is paid
+# every turn. Both are paid, and both are now visible.
+#
+# The eager cap ratchets DOWN with each move batch (C11 — this program only
+# ratchets down). It does not get to drift back up because a batch was hard.
+
 eager:
-  CLAUDE.md: 430          # measured 398 · target 250 · paid every turn
+  CLAUDE.md: 430          # measured 398 · target ≤180 by P2-T8 · paid every turn
 
 commands:
   build: 580              # measured 535 · target 400 · the heaviest workflow
@@ -54,3 +71,36 @@ commands:
   continue: 150           # measured 137
   review: 140             # measured 126
   sage: 70                # measured  54 · the router; deliberately tiny
+
+# ── On-demand layer (ADR-9 delivery class 2) ─────────────────────────────────
+#
+# Fetched only when the platform's description-triggered discovery matches. The
+# sum (568 lines) is NOT a per-turn cost: a session that never asks about tiers
+# never pays for sage-tiers. Caps are ~15% over measured — enough for a genuine
+# clarification, too little for a section to slip in.
+#
+# A skill that grows without limit is a skill that has become a second eager
+# layer with extra steps, which is why these have numbers at all.
+
+skills:
+  sage-gates: 140         # measured 119 · the hook/gate explainer; the biggest, and earns it
+  sage-routing: 105       # measured  90
+  sage-checkpoints: 92    # measured  79
+  sage-using-memory: 90   # measured  77
+  sage-constitution: 87   # measured  75
+  sage-decisions: 80      # measured  69
+  sage-tiers: 70          # measured  59
+
+# ── Generic platform ─────────────────────────────────────────────────────────
+#
+# No skill discovery, so nothing can be fetched on demand and everything is
+# inlined. 939 lines today = the 398-line eager body + 541 lines of inlined
+# skills. This number should FALL as the eager body shrinks (batches 1-3), and
+# it is the honest cost of a platform that cannot fetch.
+#
+# It gets its own row precisely so it cannot hide inside claude-code's number,
+# which is the mistake that let the README advertise "~200 lines" while the
+# real file was 398.
+
+generic:
+  CLAUDE.md: 1010         # measured 939 · falls with the eager diet

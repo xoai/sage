@@ -634,3 +634,77 @@ surfaces:
     path: core/capabilities/verification/testing-skills/SKILL.md
     kind: capability
     uncovered: "Test-authoring guidance. E1 grades that a test exists, not that it is good."
+
+# ── System skills (ADR-9 delivery class 2) ───────────────────────────────────
+#
+# The content the diet moved out of the eager layer. Every one of these is
+# covered by E11, and E11 is the ONLY thing standing between this content and
+# silence: if a description stops triggering, the answer stops arriving, and
+# nothing else in the suite would notice.
+#
+# The `description:` field of each of these files is load-bearing in a way no
+# other prose in Sage is. It is not documentation — it is the trigger. Edit it
+# and you are editing behavior, which is exactly why these rows exist.
+
+  system-skill-sage-routing:
+    path: core/system-skills/sage-routing/SKILL.md
+    kind: system-skill
+    covered-by: [E6, E11]
+    notes: >
+      E6 grades that routing still happens after the depth moved out of eager;
+      E11 grades that the skill is reachable. The riskiest of the seven — routing
+      is the one piece of eager content that cannot fully move, because a skill
+      that teaches routing cannot fire on a turn where routing already failed.
+      The keyword map stays eager for exactly that reason.
+
+  system-skill-sage-tiers:
+    path: core/system-skills/sage-tiers/SKILL.md
+    kind: system-skill
+    covered-by: [E11]
+    notes: "E11 prompt 3 asks which tier a cross-service change is."
+
+  system-skill-sage-using-memory:
+    path: core/system-skills/sage-using-memory/SKILL.md
+    kind: system-skill
+    covered-by: [E11]
+    notes: >
+      E11 prompt 2 grades the trigger. Recall — whether a stored constraint
+      actually changes a later session — remains unmeasured until L2 (Phase 5).
+
+  system-skill-sage-checkpoints:
+    path: core/system-skills/sage-checkpoints/SKILL.md
+    kind: system-skill
+    uncovered: >
+      No scenario grades zone-footer formatting or approval-gate presentation.
+      The eval driver is headless: it cannot answer an [A]/[R] prompt, so the
+      half of this skill that matters most to a human user is the half a headless
+      harness structurally cannot see. Honest gap, not an oversight.
+
+  system-skill-sage-gates:
+    path: core/system-skills/sage-gates/SKILL.md
+    kind: system-skill
+    covered-by: [E1, E7]
+    notes: >
+      E7 grades recovery from a spec-gate block and E1 the TDD order — both of
+      which this skill explains. The hooks enforce regardless of whether the skill
+      is read, which is the point: if E1/E7 hold after this content leaves the
+      eager layer, ADR-9's central claim is confirmed on the strongest case.
+
+  system-skill-sage-constitution:
+    path: core/system-skills/sage-constitution/SKILL.md
+    kind: system-skill
+    covered-by: [E2]
+    notes: >
+      E2 grades "secrets never in code" under direct pressure from the user. The
+      four judgment-enforced principles have no scenario — see the skill's own
+      note that a principle with no mechanism is a gap in the mechanism.
+
+  system-skill-sage-decisions:
+    path: core/system-skills/sage-decisions/SKILL.md
+    kind: system-skill
+    covered-by: [E8]
+    notes: >
+      E8 asserts a decisions.md line exists — but a HOOK writes that line, not
+      this skill. So the skill's actual claims (initiative log vs global, prepend
+      order, alternatives recorded) are unmeasured. Cover is nominal; do not read
+      this row as evidence the decision protocol works.

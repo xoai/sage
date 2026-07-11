@@ -91,24 +91,31 @@ def read_budgets(path: pathlib.Path) -> dict:
     return budgets
 
 
-def generate_project(dest: pathlib.Path) -> pathlib.Path:
-    """`sage init` into a throwaway project. What we measure is what a user gets."""
+def make_home(dest: pathlib.Path) -> pathlib.Path:
+    """Vendor the framework once, then init as many platforms as we like from it."""
     home = dest / "home"
     home.mkdir(parents=True)
     shutil.copytree(REPO_ROOT, home / "framework",
                     ignore=shutil.ignore_patterns(".git", "node_modules",
                                                   "__pycache__", "dist", ".sage"))
-    proj = dest / "proj"
-    proj.mkdir()
+    return home
+
+
+def generate_project(home: pathlib.Path, dest: pathlib.Path,
+                     platform: str = "claude-code") -> pathlib.Path:
+    """`sage init` into a throwaway project. What we measure is what a user gets."""
+    proj = dest / f"proj-{platform}"
+    proj.mkdir(parents=True)
     subprocess.run(["git", "init", "-q"], cwd=proj, check=True)
 
     proc = subprocess.run(
-        ["bash", str(SAGE_BIN), "init", "--preset", "base"],
+        ["bash", str(SAGE_BIN), "init", "--preset", "base", "--platform", platform],
         cwd=proj, capture_output=True, text=True, stdin=subprocess.DEVNULL,
         env={**os.environ, "SAGE_HOME": str(home)},
     )
     if proc.returncode != 0:
-        raise BudgetError(f"sage init failed:\n{proc.stdout[-1500:]}\n{proc.stderr[-1500:]}")
+        raise BudgetError(f"sage init --platform {platform} failed:\n"
+                          f"{proc.stdout[-1500:]}\n{proc.stderr[-1500:]}")
     return proj
 
 
@@ -122,8 +129,8 @@ def measure(path: pathlib.Path) -> dict:
 
 
 def collect(proj: pathlib.Path) -> dict:
-    """{'eager': {name: measurement}, 'commands': {name: measurement}}"""
-    out = {"eager": {}, "commands": {}}
+    """{'eager': {...}, 'commands': {...}, 'skills': {...}}"""
+    out = {"eager": {}, "commands": {}, "skills": {}}
 
     for name in ("CLAUDE.md", "AGENTS.md"):
         f = proj / name
@@ -134,6 +141,21 @@ def collect(proj: pathlib.Path) -> dict:
     if cmd_dir.is_dir():
         for f in sorted(cmd_dir.glob("*.md")):
             out["commands"][f.stem] = measure(f)
+
+    # System skills — the content ADR-9 moved OUT of the eager layer.
+    #
+    # These are measured for one reason: so the diet cannot be won by cheating.
+    # Moving 250 lines from a file that is paid every turn into a file that is
+    # paid on demand is a real improvement, but ONLY if someone is counting both
+    # numbers. Otherwise "we cut the eager layer by 70%" is a sentence that stays
+    # true while the total cost quietly goes up, and nobody notices because the
+    # only instrument was pointed at the half that improved.
+    skills_dir = proj / ".claude" / "skills"
+    if skills_dir.is_dir():
+        for f in sorted(skills_dir.glob("*/SKILL.md")):
+            head = f.read_text(errors="replace")[:400]
+            if "type: system" in head:
+                out["skills"][f.parent.name] = measure(f)
 
     if not out["eager"]:
         raise BudgetError("no instructions file was generated — nothing to measure")
@@ -181,15 +203,75 @@ def report(data: dict, budgets: dict) -> str:
         lines.append(f"| `/{name}` | {m['lines']} | {m['tokens']:,} | "
                      f"{cap if cap is not None else '—'} | {mark} |")
 
+    if data.get("skills"):
+        lines += [
+            "",
+            "## On-demand layer (system skills)",
+            "",
+            "Content ADR-9 moved out of the eager layer. Fetched only when the",
+            "platform's description-triggered discovery matches — so the TOTAL below is",
+            "not a per-turn cost, and a session that never asks about tiers never pays",
+            "for `sage-tiers`.",
+            "",
+            "It is measured anyway, because the diet is only real if someone counts both",
+            "halves. Relocating cost from a file paid every turn to a file paid on demand",
+            "is a genuine win; relocating it into a file nobody measures is an accounting",
+            "trick that reads exactly the same in a release note.",
+            "",
+            "| Skill | Lines | ~Tokens | Budget | |",
+            "|---|---:|---:|---:|---|",
+        ]
+        for name, m in sorted(data["skills"].items(), key=lambda kv: -kv[1]["lines"]):
+            cap = budgets.get("skills", {}).get(name)
+            mark = "" if cap is None else ("✅" if m["lines"] <= cap else "❌ OVER")
+            lines.append(f"| `{name}` | {m['lines']} | {m['tokens']:,} | "
+                         f"{cap if cap is not None else '—'} | {mark} |")
+
+    if data.get("generic"):
+        lines += [
+            "",
+            "## Generic platform",
+            "",
+            "Platforms with no skill discovery (Cursor, Copilot, Windsurf, …) cannot",
+            "fetch on demand, so the same content is INLINED into their instructions",
+            "file. Their eager layer is therefore larger — necessarily, not accidentally.",
+            "",
+            "This row exists so that number is visible instead of hiding inside",
+            "claude-code's. Delivery is capability-gated (ADR-11); the cost of a platform",
+            "that cannot fetch on demand is that it carries everything.",
+            "",
+            "| File | Lines | ~Tokens | Budget | |",
+            "|---|---:|---:|---:|---|",
+        ]
+        for name, m in sorted(data["generic"].items()):
+            cap = budgets.get("generic", {}).get(name)
+            mark = "" if cap is None else ("✅" if m["lines"] <= cap else "❌ OVER")
+            lines.append(f"| `{name}` | {m['lines']} | {m['tokens']:,} | "
+                         f"{cap if cap is not None else '—'} | {mark} |")
+
     eager_lines = sum(m["lines"] for m in data["eager"].values())
+    eager_tokens = sum(m["tokens"] for m in data["eager"].values())
     worst = max(data["commands"].items(), key=lambda kv: kv[1]["lines"], default=None)
     lines += [
         "",
         "## Totals",
         "",
-        f"- Eager: **{eager_lines} lines** "
-        f"(~{sum(m['tokens'] for m in data['eager'].values()):,} tokens) on every turn.",
+        f"- Eager: **{eager_lines} lines** (~{eager_tokens:,} tokens) on every turn.",
     ]
+    if data.get("skills"):
+        sk_lines = sum(m["lines"] for m in data["skills"].values())
+        sk_tokens = sum(m["tokens"] for m in data["skills"].values())
+        lines.append(
+            f"- On-demand: **{sk_lines} lines** (~{sk_tokens:,} tokens) across "
+            f"{len(data['skills'])} system skills — paid per skill, per use, "
+            f"never all at once."
+        )
+    if data.get("generic"):
+        g_lines = sum(m["lines"] for m in data["generic"].values())
+        lines.append(
+            f"- Generic platform eager: **{g_lines} lines** — everything inlined, "
+            f"because nothing there can fetch."
+        )
     if worst:
         lines.append(
             f"- Heaviest command: **/{worst[0]} at {worst[1]['lines']} lines** "
@@ -202,9 +284,9 @@ def report(data: dict, budgets: dict) -> str:
 def check(data: dict, budgets: dict) -> int:
     over = []
     unbudgeted = []
-    for section in ("eager", "commands"):
+    for section in ("eager", "commands", "skills", "generic"):
         caps = budgets.get(section, {})
-        for name, m in data[section].items():
+        for name, m in data.get(section, {}).items():
             if name not in caps:
                 unbudgeted.append(f"{section}/{name}")
                 continue
@@ -232,7 +314,8 @@ def check(data: dict, budgets: dict) -> int:
         print(f"FAIL — add each to {BUDGETS.relative_to(REPO_ROOT)}.")
         return 1
 
-    total = len(data["eager"]) + len(data["commands"])
+    total = sum(len(data.get(s, {}))
+                for s in ("eager", "commands", "skills", "generic"))
     eager_lines = sum(m["lines"] for m in data["eager"].values())
     print(f"OK — {total} generated file(s) within budget "
           f"(eager: {eager_lines} lines on every turn).")
@@ -254,7 +337,19 @@ def main() -> int:
 
     tmp = pathlib.Path(tempfile.mkdtemp(prefix="sage-budget-"))
     try:
-        data = collect(generate_project(tmp))
+        home = make_home(tmp)
+        data = collect(generate_project(home, tmp, "claude-code"))
+
+        # The generic platform delivers the same content by inlining it. Measured
+        # separately so its (larger) eager layer is a visible number rather than an
+        # unexamined consequence.
+        gproj = generate_project(home, tmp, "generic")
+        data["generic"] = {}
+        for name in ("CLAUDE.md", "AGENTS.md"):
+            f = gproj / name
+            if f.is_file():
+                data["generic"][name] = measure(f)
+
         budgets = read_budgets(args.budgets)
     except BudgetError as exc:
         print(f"✗ {exc}", file=sys.stderr)

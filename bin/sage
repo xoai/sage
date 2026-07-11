@@ -327,7 +327,7 @@ select_platform() {
     # `--platform ","`) yields an empty FLAG_LIST; bash 3.2 aborts.
     for p in ${FLAG_LIST[@]+"${FLAG_LIST[@]}"}; do
       case "$p" in
-        claude-code|antigravity|codex|opencode|gemini-cli)
+        claude-code|generic|antigravity|codex|opencode|gemini-cli)
           PLATFORMS+=("$p")
           ;;
         both)
@@ -645,6 +645,7 @@ run_generators() {
     case "$PLATFORM" in
       both)        platforms_to_run=("claude-code" "antigravity") ;;
       claude-code) platforms_to_run=("claude-code") ;;
+      generic)     platforms_to_run=("generic") ;;
       antigravity) platforms_to_run=("antigravity") ;;
       codex)       platforms_to_run=("codex") ;;
       opencode)    platforms_to_run=("opencode") ;;
@@ -913,7 +914,7 @@ sage_update() {
     # Empty-safe expansion (see select_platform — same bash 3.2 guard).
     for p in ${FLAG_LIST[@]+"${FLAG_LIST[@]}"}; do
       case "$p" in
-        claude-code|antigravity|codex|opencode|gemini-cli)
+        claude-code|generic|antigravity|codex|opencode|gemini-cli)
           PLATFORMS+=("$p") ;;
         all)
           PLATFORMS=("claude-code" "antigravity" "codex" "opencode" "gemini-cli")
