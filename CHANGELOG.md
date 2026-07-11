@@ -2,6 +2,47 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [1.2.2] — Installing the plugin is step 1 of 2
+
+Found by smoking the marketplace install — the one path the release checklist calls
+for, and the one nothing had ever actually walked.
+
+The distribution chain itself is sound: the marketplace entry resolves, `git-subdir`
+clones `plugin-dist` at the pinned ref, and the tree is a valid plugin — 21 skills
+with the `/sage` router present, five hooks registered, every hook script shipping,
+version stamped, and Gate 5 firing through PostToolUse to report **UNVERIFIABLE** on
+a project with no test runner rather than claiming success.
+
+What did not work was installing the plugin and stopping.
+
+**The plugin is a front end, not the framework.** It ships the commands, the skills
+and the hooks — but six of its skills (`/sage`, `/build`, `/fix`, `/architect`,
+`/review`, and the personas) read Sage's capabilities from a `sage/` tree *inside
+your project*: `build-loop`, `tdd`, `specify`, `deep-elicit`, the navigator. That
+tree is created by `sage init`, and installing the plugin does not create it.
+
+So a user who installed from the marketplace and typed `/sage` got an agent that
+went looking for the navigator, could not find it, and said so mid-answer.
+
+The session hook was making it worse by being polite: with no `.sage/` it exited
+silently. The one hook that runs on every session, in the one state where the user
+most needs to be told something, said nothing.
+
+- `sage-session-init.sh` now emits context when the project is not initialized,
+  naming the problem and the fix. It is context for the *model*, not a banner — it
+  surfaces only if the user reaches for a Sage workflow. A half-installed project
+  (`.sage/` present, `sage/` gone) is told to run `sage update`.
+- The plugin README leads with the prerequisite instead of burying `sage init` in a
+  CLI table forty lines down.
+
+Regression tests H32–H34 (37 hook tests): an uninitialized project is told to init, a
+properly initialized one is **not** nagged, and a half-installed one is told to
+update.
+
+Second time a smoke of the real install path has found what no validator could — the
+first was the `.gitignore` rule that hid the `/sage` router. Paths that are never
+walked are never tested.
+
 ## [1.2.1] — The prose didn't hold; the hooks do
 
 v1.2.0 shipped an eval that measured Sage's own claims and falsified two of them.
