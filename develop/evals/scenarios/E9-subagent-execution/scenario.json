@@ -45,7 +45,15 @@
     "measurement can have — it told us subagent mode was broken when it had merely",
     "run out of money. Subagent mode dispatches several sessions' worth of work per",
     "turn and costs accordingly; that cost is the thing Phase 5 exists to measure,",
-    "not something to hide by capping it into failure."
+    "not something to hide by capping it into failure.",
+    "",
+    "timeout_s: 2700 — the second harness limit this scenario hit. Given a real",
+    "budget, a subagent-mode turn dispatches an implementer AND a reviewer per plan",
+    "task and runs well past the flat 900s ceiling; E10 was killed outright by it.",
+    "A timed-out run reads exactly like a broken feature in the results table, which",
+    "is the same lie the budget cap told. Both numbers now live in the scenario file",
+    "where they can be seen, argued with, and used as data — the wall-clock cost of",
+    "subagent mode IS one of the things Phase 5 is supposed to report."
   ],
   "setup": {
     ".sage/work/003-config-hardening/spec.md": "---\nstatus: completed\n---\n\n# Spec: Config hardening\n\nThe service config module has no retry policy, no env override, and no\nvalidation. Three changes, in `src/config.py`:\n\n1. **MAX_RETRIES** — a module constant, default `3`.\n2. **get_timeout()** — returns the timeout as an int. Reads `SERVICE_TIMEOUT`\n   from the environment when set. When it is UNSET it MUST fall back to\n   `DEFAULT_TIMEOUT_SECONDS`. It must never raise on a missing variable.\n3. **validate_config()** — raises `ValueError` when the resolved timeout is\n   less than or equal to zero. Returns `True` otherwise.\n\nEvery change carries a test.\n",
@@ -97,5 +105,6 @@
       "exit": 0
     }
   ],
-  "budget_usd": 8.0
+  "budget_usd": 8.0,
+  "timeout_s": 2700
 }

@@ -52,7 +52,15 @@
     "measurement can have — it told us subagent mode was broken when it had merely",
     "run out of money. Subagent mode dispatches several sessions' worth of work per",
     "turn and costs accordingly; that cost is the thing Phase 5 exists to measure,",
-    "not something to hide by capping it into failure."
+    "not something to hide by capping it into failure.",
+    "",
+    "timeout_s: 2700 — the second harness limit this scenario hit. Given a real",
+    "budget, a subagent-mode turn dispatches an implementer AND a reviewer per plan",
+    "task and runs well past the flat 900s ceiling; E10 was killed outright by it.",
+    "A timed-out run reads exactly like a broken feature in the results table, which",
+    "is the same lie the budget cap told. Both numbers now live in the scenario file",
+    "where they can be seen, argued with, and used as data — the wall-clock cost of",
+    "subagent mode IS one of the things Phase 5 is supposed to report."
   ],
   "setup": {
     "src/config.py": "\"\"\"Service configuration.\"\"\"\nimport os\n\n# How long to wait for an upstream response before giving up.\nDEFAULT_TIMEOUT_SECONDS = 30\n\n# Maximum number of connections held open to the upstream.\nPOOL_SIZE = 10\n\n\ndef timeout_for(profile: str) -> int:\n    \"\"\"Timeout for a named profile, falling back to the default.\"\"\"\n    overrides = {\"batch\": 300, \"interactive\": 5}\n    return overrides.get(profile, DEFAULT_TIMEOUT_SECONDS)\n\n\ndef get_timeout() -> int:\n    \"\"\"Resolve the service timeout from the environment.\"\"\"\n    return int(os.environ[\"SERVICE_TIMEOUT\"])\n",
@@ -107,5 +115,6 @@
       "exit": 0
     }
   ],
-  "budget_usd": 8.0
+  "budget_usd": 8.0,
+  "timeout_s": 2700
 }

@@ -53,6 +53,32 @@ An orchestrator that "just fixes this one small thing itself" has silently
 reverted to the inline loop while still paying for the subagents — and it now has
 an opinion about the code its reviewers are judging.
 
+## Step 0 — scaffold the ledger. This is not optional and it is not prose.
+
+**Before the first dispatch:**
+
+```bash
+python3 sage/runtime/tools/ledger.py init \
+  .sage/work/<initiative>/manifest.md \
+  .sage/work/<initiative>/plan.md
+```
+
+This generates one ledger entry per `## Task N` in the approved plan and sets
+`execution_mode: subagent`, which arms the completion guard.
+
+**Why a script and not an instruction to you.** E9 measured this. Given a ledger,
+the mode is flawless (E10: 3/3 — the reviewer catches a planted spec violation,
+the fix lands, the approval is recorded). Asked to *create* the ledger from this
+document, the orchestrator simply did not, in two runs out of three — and those
+runs looked, from the outside, exactly like a cycle that had done its work.
+
+The ledger is the entire evidence base for this mode's claim that every task was
+independently reviewed. It was being produced by goodwill. Now it is produced by
+a script, and `ledger.py check` fails a subagent cycle that lacks one.
+
+That is this project's own rule, applied to its own newest feature: *if a rule
+matters, make it code.*
+
 ## Per-task loop
 
 For each task in the approved plan, in order (respecting `[P]` parallelism where

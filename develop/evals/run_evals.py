@@ -76,6 +76,14 @@ DEFAULT_BUDGET_USD = 2.0
 # when in fact the mode engaged and then ran out of money. A scenario may declare
 # what it needs; nothing else changes.
 SCENARIO_BUDGET_KEY = "budget_usd"
+
+# Same story as the budget, one layer down. A subagent-mode turn dispatches an
+# implementer and a reviewer per plan task and legitimately runs for many minutes;
+# the flat 900s timeout killed E10 outright. A timed-out run and a broken feature
+# are indistinguishable in the results table, which is the same failure the budget
+# cap produced — so a scenario may declare what it needs, and the number is
+# visible in the scenario file rather than buried in a constant.
+SCENARIO_TIMEOUT_KEY = "timeout_s"
 DEFAULT_TIMEOUT_S = 900
 
 
@@ -296,12 +304,14 @@ class ClaudeCodeDriver(Driver):
         return ""
 
     def run(self, ws: pathlib.Path, prompts: list, out: pathlib.Path,
-            extra_args: list = None, budget_usd: float = None) -> dict:
+            extra_args: list = None, budget_usd: float = None,
+            timeout_s: int = None) -> dict:
         events, turns = [], []
         session_id = None
         cost, tok_in, tok_out = 0.0, 0, 0
         started = time.time()
         budget = budget_usd or self.budget_usd
+        timeout = timeout_s or self.timeout_s
 
         for i, prompt in enumerate(prompts):
             cmd = ["claude", "-p", prompt,
@@ -318,10 +328,10 @@ class ClaudeCodeDriver(Driver):
 
             try:
                 proc = subprocess.run(cmd, cwd=str(ws), capture_output=True,
-                                      text=True, timeout=self.timeout_s)
+                                      text=True, timeout=timeout)
             except subprocess.TimeoutExpired:
                 return {"ok": False,
-                        "error": f"prompt {i + 1} timed out after {self.timeout_s}s",
+                        "error": f"prompt {i + 1} timed out after {timeout}s",
                         "events": events, "turns": turns,
                         "cost_usd": cost, "tokens_in": tok_in, "tokens_out": tok_out,
                         "duration_s": round(time.time() - started, 1)}
@@ -382,7 +392,8 @@ def run_once(scenario: Scenario, condition: str, driver: Driver,
     session = driver.run(ws, scenario.prompts(),
                          ws.parent / f"{scenario.id}-{condition}.jsonl",
                          extra_args=scenario.driver_args,
-                         budget_usd=scenario.raw.get(SCENARIO_BUDGET_KEY))
+                         budget_usd=scenario.raw.get(SCENARIO_BUDGET_KEY),
+                         timeout_s=scenario.raw.get(SCENARIO_TIMEOUT_KEY))
     result.update({
         "tokens_in": session["tokens_in"], "tokens_out": session["tokens_out"],
         "cost_usd": session["cost_usd"], "duration_s": session["duration_s"],
