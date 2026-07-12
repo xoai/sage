@@ -123,10 +123,13 @@ class MeasureTest(unittest.TestCase):
 class RealProjectTest(unittest.TestCase):
     """The numbers in budgets.yaml describe the tree as it is right now."""
 
+    def _generate(self, tmp, platform="claude-code"):
+        return cb.collect(cb.generate_project(cb.make_home(tmp), tmp, platform))
+
     def test_the_repo_is_within_its_own_budgets(self):
         tmp = pathlib.Path(tempfile.mkdtemp(prefix="cb-real-"))
         self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
-        data = cb.collect(cb.generate_project(tmp))
+        data = self._generate(tmp)
         budgets = cb.read_budgets(cb.BUDGETS)
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
@@ -136,9 +139,47 @@ class RealProjectTest(unittest.TestCase):
     def test_the_eager_layer_is_actually_generated(self):
         tmp = pathlib.Path(tempfile.mkdtemp(prefix="cb-real-"))
         self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
-        data = cb.collect(cb.generate_project(tmp))
+        data = self._generate(tmp)
         self.assertIn("CLAUDE.md", data["eager"])
         self.assertGreater(data["eager"]["CLAUDE.md"]["lines"], 0)
+
+    def test_system_skills_are_measured_not_just_shipped(self):
+        """The diet must not be winnable by moving cost somewhere nobody counts.
+
+        If ADR-9's content leaves the eager layer and lands in a skill that no
+        instrument points at, "we cut the eager layer by 70%" stays true while the
+        total goes up. This test is the reason the `skills:` section exists.
+        """
+        tmp = pathlib.Path(tempfile.mkdtemp(prefix="cb-skills-"))
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        data = self._generate(tmp)
+        self.assertTrue(data["skills"], "no system skills were measured")
+        self.assertIn("sage-routing", data["skills"])
+        self.assertGreater(data["skills"]["sage-routing"]["lines"], 0)
+
+    def test_generic_inlines_what_claude_code_fetches(self):
+        """Capability-gated delivery, asserted rather than assumed (ADR-11).
+
+        Generic has no skill discovery, so the same content must be INLINED — and
+        its instructions file must therefore be substantially larger. If this ever
+        fails, generic is silently shipping an instructions file that references
+        skills it cannot load.
+        """
+        tmp = pathlib.Path(tempfile.mkdtemp(prefix="cb-generic-"))
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        home = cb.make_home(tmp)
+
+        cc = cb.collect(cb.generate_project(home, tmp, "claude-code"))
+        gp = cb.generate_project(home, tmp, "generic")
+        generic_md = gp / "CLAUDE.md"
+
+        self.assertTrue(generic_md.is_file(), "generic generated no instructions file")
+        self.assertFalse((gp / ".claude" / "skills").is_dir(),
+                         "generic emitted skills it has no mechanism to discover")
+
+        generic_lines = len(generic_md.read_text().splitlines())
+        self.assertGreater(generic_lines, cc["eager"]["CLAUDE.md"]["lines"],
+                           "generic must inline what claude-code fetches on demand")
 
 
 if __name__ == "__main__":

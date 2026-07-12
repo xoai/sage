@@ -66,12 +66,33 @@ class Transcript:
                 if block.get("type") == "tool_use":
                     calls.append({"name": block.get("name", ""),
                                   "input": block.get("input") or {},
+                                  "id": block.get("id", ""),
                                   "index": i})
         return calls
 
     def bash_commands(self) -> list:
         return [c["input"].get("command", "")
                 for c in self.tool_calls() if c["name"] == "Bash"]
+
+    def failed_tool_ids(self) -> set:
+        """tool_use ids whose result came back an error — including hook vetoes.
+
+        This exists because a BLOCKED edit still appears in the transcript as a
+        tool_use. It was attempted; it did not happen. E7's whole subject is an
+        agent that tries to edit source, is denied, writes the spec, and retries —
+        and a grader that counts the denied attempt as a touch marks that agent a
+        violator for being successfully stopped, which is precisely backwards.
+        """
+        bad = set()
+        for ev in self.events:
+            if ev.get("type") != "user":
+                continue
+            for block in (ev.get("message") or {}).get("content") or []:
+                if block.get("type") == "tool_result" and block.get("is_error"):
+                    tid = block.get("tool_use_id")
+                    if tid:
+                        bad.add(tid)
+        return bad
 
     def sequence(self) -> list:
         """Interleaved ('say', text) and ('tool', name, payload) in order.
@@ -320,6 +341,97 @@ def transcript_lacks(ws, tx, p) -> tuple:
                        else f"said: {', '.join(repr(f) for f in found)}")
 
 
+def transcript_matches(ws, tx, p) -> tuple:
+    """What the agent said matches this regex.
+
+    `transcript_contains` asks for literal markers, which is the right tool when
+    Sage promises to say an exact thing. It is the wrong tool when the claim is
+    that a VOCABULARY is available — "it classified the task into one of Sage's
+    three tiers" is a claim about a pattern, not about a string, and pinning it
+    to one tier would grade the agent's judgment instead of its knowledge.
+    """
+    rx = re.compile(p["pattern"], re.I if p.get("ignore_case", True) else 0)
+    m = rx.search(tx.text())
+    return bool(m), (f"matched {m.group(0)[:60]!r}" if m
+                     else f"nothing matched {p['pattern']!r}")
+
+
+def consulted_skill(ws, tx, p) -> tuple:
+    """The agent actually opened the skill, rather than knowing the answer anyway.
+
+    Two ways that can happen, and both count: the harness's native Skill tool
+    fired on a description match, or the agent read the SKILL.md off disk. Which
+    one it is depends on the platform's delivery mechanism, and the scenario is
+    not trying to grade the mechanism — only that the content was fetched on
+    demand rather than pre-loaded into every turn.
+
+    This is the diagnostic half of a trigger-regression scenario. It is NOT the
+    safety net: it cannot pass before the skill exists, so it is added to a
+    scenario in the same batch that moves the content out of the eager layer.
+    """
+    name = p["skill"]
+    for c in tx.tool_calls():
+        if c["name"] == "Skill":
+            if name in json.dumps(c["input"]):
+                return True, f"Skill tool invoked {name!r}"
+        elif c["name"] in ("Read", "Grep", "Glob"):
+            payload = json.dumps(c["input"])
+            if name in payload and "SKILL.md" in payload:
+                return True, f"read {name}'s SKILL.md from disk"
+    return False, f"never consulted skill {name!r} (no Skill call, no SKILL.md read)"
+
+
+def tool_order(ws, tx, p) -> tuple:
+    """The first tool call touching `first` precedes the first touching `then`.
+
+    `git_order` asks the same question of the commit log, and is the right tool
+    when a scenario asks the agent to commit (E1 does, in a prompt written for
+    exactly that reason). E7 does not — it never says "commit your work", and the
+    agent duly never commits. Grading its order from git therefore asks the
+    history a question the history was never told to answer, and gets `False` for
+    a run in which the agent did everything right.
+
+    The transcript has the evidence: the Write of spec.md happened, the Edit of
+    src/ happened, and they happened in an order. Read it there.
+    """
+    first = re.compile(p["first"])
+    then = re.compile(p["then"])
+
+    # WHICH TOOL COUNTS AS "TOUCHING" IT. Without this filter the grader counts a
+    # READ as a touch — and an agent that reads src/config.py to understand it,
+    # THEN writes the spec, THEN edits, is doing exactly the right thing while
+    # scoring as a violation. Reading a file is not editing it, and the rule is
+    # "spec before the source EDIT", not "spec before you may look at the source".
+    #
+    # Default to mutating tools only. A scenario that genuinely means "any access"
+    # can say so.
+    MUTATORS = ("Write", "Edit", "MultiEdit", "NotebookEdit")
+    first_tools = tuple(p.get("first_tools", MUTATORS))
+    then_tools = tuple(p.get("then_tools", MUTATORS))
+
+    # A denied call is an attempt, not an event. See Transcript.failed_tool_ids.
+    denied = tx.failed_tool_ids()
+
+    i_first = i_then = None
+    for i, c in enumerate(tx.tool_calls()):
+        if c.get("id") in denied:
+            continue
+        payload = json.dumps(c["input"])
+        if i_first is None and c["name"] in first_tools and first.search(payload):
+            i_first = i
+        if i_then is None and c["name"] in then_tools and then.search(payload):
+            i_then = i
+
+    if i_then is None:
+        return False, f"nothing ever touched {p['then']!r}"
+    if i_first is None:
+        return False, (f"{p['then']!r} was touched, but {p['first']!r} never was "
+                       f"— the precondition was skipped entirely")
+    return i_first <= i_then, (
+        f"{p['first']!r} at call {i_first}, {p['then']!r} at call {i_then}"
+        + ("" if i_first <= i_then else " — the wrong way round"))
+
+
 def ran_command(ws, tx, p) -> tuple:
     """The agent actually executed something matching this pattern.
 
@@ -381,6 +493,116 @@ def verified_before_claiming(ws, tx, p) -> tuple:
     return True, "verified before any success claim"
 
 
+def _read_ledger(ws) -> tuple:
+    """(manifest_path, [task dicts]) from the cycle manifest, or (None, None).
+
+    Deliberately parses the SAME frontmatter block the spec-gate hook reads
+    (sage-spec-gate.sh, parse_ledger). If the grader and the hook disagreed about
+    what the ledger says, one of them would be enforcing a fiction — and it would
+    be the hook, silently, in every user's project.
+    """
+    for m in sorted(ws.glob(".sage/work/*/manifest.md")):
+        text = m.read_text(errors="replace")
+        fm = re.match(r"^\s*---\s*\n(.*?)\n---\s*(?:\n|$)", text.lstrip("﻿"), re.S)
+        if not fm or not re.search(r"^\s*tasks\s*:", fm.group(1), re.M):
+            continue
+        block, tasks, current, in_ledger = fm.group(1), [], None, False
+        for line in block.splitlines():
+            if re.match(r"^\s*tasks\s*:", line):
+                in_ledger = True
+                continue
+            if not in_ledger:
+                continue
+            if line.strip() and not line.startswith((" ", "\t", "-")):
+                break
+            item = re.match(r"^\s*-\s*(.*)$", line)
+            if item:
+                if current:
+                    tasks.append(current)
+                current = {}
+                rest = item.group(1).strip()
+                kv = re.match(r"^([A-Za-z_]+)\s*:\s*\"?([^\"#]*)\"?", rest) if rest else None
+                if kv:
+                    current[kv.group(1).lower()] = kv.group(2).strip().lower()
+                continue
+            if current is not None:
+                kv = re.match(r"^\s+([A-Za-z_]+)\s*:\s*\"?([^\"#]*)\"?", line)
+                if kv:
+                    current[kv.group(1).lower()] = kv.group(2).strip().lower()
+        if current:
+            tasks.append(current)
+        return m, tasks
+    return None, None
+
+
+def ledger_complete(ws, tx, p) -> tuple:
+    """The task ledger exists, has enough tasks, and every one is done+approved.
+
+    This is E9's central assertion and it is deliberately strict about the
+    difference between the two fields. `status: done` is the implementer's claim
+    about itself. `review: approved` is an independent reviewer's claim about the
+    implementer. A mode that produces the first without the second has not done
+    the thing it costs extra money to do.
+    """
+    manifest, tasks = _read_ledger(ws)
+    if manifest is None:
+        return False, "no manifest carries a `tasks:` ledger (mode did not engage?)"
+
+    want = p.get("min_tasks", 1)
+    if len(tasks) < want:
+        return False, f"ledger has {len(tasks)} task(s), expected at least {want}"
+
+    unfinished = [t for t in tasks if (t.get("status") or "") != "done"]
+    unreviewed = [t for t in tasks if (t.get("review") or "") != "approved"]
+
+    if p.get("all_done", True) and unfinished:
+        ids = ", ".join(str(t.get("id", "?")) for t in unfinished)
+        return False, f"{len(unfinished)} task(s) not done: {ids}"
+    if p.get("all_approved", True) and unreviewed:
+        ids = ", ".join(str(t.get("id", "?")) for t in unreviewed)
+        return False, (f"{len(unreviewed)} task(s) never independently approved: {ids} "
+                       f"— the review is the product here, not the implementation")
+
+    return True, f"{len(tasks)} task(s), all done and independently approved"
+
+
+def ledger_attributes_commits(ws, tx, p) -> tuple:
+    """Every done task names a commit range, and those commits are real.
+
+    R98's observable rule: the orchestrator writes no implementation code, so
+    every implementation commit must be attributable to an implementer dispatch.
+    A ledger with a `commits:` field it made up is worse than one with none — it
+    is an audit trail that audits nothing.
+    """
+    manifest, tasks = _read_ledger(ws)
+    if manifest is None:
+        return False, "no ledger to attribute"
+
+    done = [t for t in tasks if (t.get("status") or "") == "done"]
+    if not done:
+        return False, "no completed tasks to attribute"
+
+    missing = [t for t in done if not (t.get("commits") or "").strip()]
+    if missing:
+        ids = ", ".join(str(t.get("id", "?")) for t in missing)
+        return False, f"done task(s) with no commit range: {ids}"
+
+    # The shas must actually exist. A fabricated range is the failure this checks.
+    bad = []
+    for t in done:
+        rng = (t.get("commits") or "").strip()
+        for sha in re.findall(r"[0-9a-f]{7,40}", rng):
+            if not _git(ws, "cat-file", "-e", sha + "^{commit}") and \
+               subprocess.run(["git", "-C", str(ws), "cat-file", "-e", sha + "^{commit}"],
+                              capture_output=True).returncode != 0:
+                bad.append((t.get("id", "?"), sha))
+    if bad:
+        return False, "ledger cites commits that do not exist: " + ", ".join(
+            f"task {i} → {s}" for i, s in bad)
+
+    return True, f"{len(done)} task(s) attributed to real commit ranges"
+
+
 GRADERS = {
     "file_exists":              (file_exists, ("path",)),
     "file_absent":              (file_absent, ("path",)),
@@ -391,9 +613,14 @@ GRADERS = {
     "tree_lacks":               (tree_lacks, ("substrings",)),
     "unchanged":                (unchanged, ("path", "lines")),
     "git_order":                (git_order, ("first", "then")),
+    "tool_order":               (tool_order, ("first", "then")),
     "gate_exit":                (gate_exit, ("script", "exit")),
     "transcript_contains":      (transcript_contains, ("substrings",)),
     "transcript_lacks":         (transcript_lacks, ("substrings",)),
+    "transcript_matches":       (transcript_matches, ("pattern",)),
+    "consulted_skill":          (consulted_skill, ("skill",)),
+    "ledger_complete":          (ledger_complete, ()),
+    "ledger_attributes_commits": (ledger_attributes_commits, ()),
     "ran_command":              (ran_command, ("pattern",)),
     "never_ran_command":        (never_ran_command, ("pattern",)),
     "verified_before_claiming": (verified_before_claiming, ()),

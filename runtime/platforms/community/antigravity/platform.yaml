@@ -1,63 +1,43 @@
 ---
 name: antigravity
 description: >
-  Platform adapter for Google Antigravity — agent-first IDE with parallel
-  agent execution, browser integration, and multi-model support.
-  Maps Sage's capabilities to Antigravity's rules/workflows/skills system.
-version: "1.0.0"
-tier: 1
+  Google Antigravity — agent-first IDE. Community-maintained. Sage generates
+  rules, workflows and skills into its workspace layout, and enforces nothing:
+  there is no hook surface, so every Sage rule here is prose.
+contract-version: 2
+maintainer: "unclaimed"     # R113: nobody answers when this goes red.
+
 capabilities:
-  subagents: true
-  parallel-execution: true
-  worktrees: false
-  hooks: false
-  slash-commands: true
-  skill-auto-activation: true
-  file-system-access: true
-  browser-access: true
-  multi-model: true
-  manager-view: true
-supported-models: [gemini-3-pro, claude-sonnet-4.6, claude-opus-4.6, gpt-oss]
+  context-injection: true         # GEMINI.md + .agent/rules/
+  command-delivery: true          # workflows invocable with /
+  native-skill-discovery: false   # claimed by the platform; NEVER verified by Sage
+  pre-tool-veto: false            # no hook surface. Nothing can block an edit.
+  post-tool-events: false         # no mechanical audit trail
+  subagent-dispatch: false        # parallel agents exist; Sage has never dispatched one
+  session-events: false
+
+artifacts:
+  instructions: GEMINI.md
+  commands-dir: .agent/workflows
+  skills-dir: .agent/skills
+
+supported-os: [linux, macos, windows]
 command-prefix: "/"
 install-method: workspace-setup
-supported-os: [linux, macos, windows]
-
-# ── Path mappings ──
-# Where Antigravity expects files vs where Sage stores them
-paths:
-  # Always-on rules (Sage constitution + project conventions)
-  rules-global: "~/.gemini/GEMINI.md"
-  rules-workspace: ".agent/rules/"
-  
-  # Skills (on-demand, agent-triggered)
-  skills-global: "~/.gemini/antigravity/skills/"
-  skills-workspace: ".agent/skills/"
-  
-  # Workflows (user-triggered with /)
-  workflows-global: "~/.gemini/antigravity/global_workflows/"
-  workflows-workspace: ".agent/workflows/"
-  
-  # Sage project state (platform-agnostic, unchanged)
-  sage-state: ".sage/"
-
-# ── Antigravity-specific settings ──
-antigravity:
-  # Recommended terminal execution policy for Sage workflows
-  terminal-policy: "auto"
-  # Agent development mode
-  agent-mode: "agent-assisted"
-  # Sage workflows as slash commands
-  workflows:
-    - name: fix
-      file: fix.md
-      description: "Quick bug fix with Sage workflow"
-    - name: build
-      file: build.md
-      description: "Build a feature with Sage's full pipeline"
-    - name: architect
-      file: architect.md
-      description: "Full system design with Sage"
-    - name: status
-      file: status.md
-      description: "Check Sage project status"
 ---
+
+# Why so many `false`s
+
+Because nobody has checked, and an unchecked capability is worth exactly `false`.
+
+Antigravity's own documentation claims a skills system and parallel agents. Both
+may well work. Neither has ever been verified by Sage against a real session, and
+ADR-11's rule is that a capability nothing checks is a capability we do not have.
+The fix is not to argue — it is to run the conformance suite and attach a
+transcript.
+
+# How to fix it
+
+Run `develop/conformance/run-conformance.sh antigravity`, make the checks pass,
+attest what cannot be checked for free, and put your name in `maintainer:`.
+Porting Sage means making conformance pass, not petitioning core.

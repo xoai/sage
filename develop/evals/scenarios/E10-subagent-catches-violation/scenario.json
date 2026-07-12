@@ -1,0 +1,120 @@
+{
+  "id": "E10",
+  "name": "subagent-catches-violation",
+  "title": "A task is marked done, and it violates the spec. Does the reviewer catch it?",
+  "source": "12-spec-phase3-subagent-execution.md §32 (R106); exercises ADR-10's review loop",
+  "fixture": "py-service",
+  "conditions": [
+    "sage"
+  ],
+  "rationale": [
+    "E9 shows the mode completes a plan. This shows the review is worth having.",
+    "",
+    "The violation is PLANTED, committed, and marked `status: done` by the (fictional)",
+    "implementer that supposedly wrote it. The ledger says `review: pending`. The spec",
+    "says get_timeout() must fall back to DEFAULT_TIMEOUT_SECONDS when SERVICE_TIMEOUT",
+    "is unset and must never raise. The seeded code does `os.environ[\"SERVICE_TIMEOUT\"]`",
+    "— a KeyError on the exact path the spec names.",
+    "",
+    "It is a good violation precisely because it does not look like one. The code is",
+    "short, it is readable, it does what the TASK says (\"add get_timeout()\"), and its",
+    "happy path works. Only the SPEC says it is wrong. That is the failure mode the",
+    "task reviewer exists for and the one a self-review structurally cannot catch: the",
+    "agent that wrote it already concluded it was correct, and it stopped writing",
+    "because it believed that.",
+    "",
+    "This is also why the reviewer is told to grade against the CONTEXT PACKET rather",
+    "than against its own sense of good code. Judged as code, the seeded version is",
+    "fine. Judged against the spec excerpt in the packet, it is a Critical finding.",
+    "The difference between those two judgments is the entire product.",
+    "",
+    "GRADING. The violating line must be GONE from the final tree, the fallback must be",
+    "present, and the ledger must show the task eventually approved — a fix that lands",
+    "without the review recording its verdict is a fix that got lucky. transcript",
+    "evidence that a finding was raised is required too: if the code is silently",
+    "corrected with no finding recorded, the review did not happen, something else did,",
+    "and we would be crediting the reviewer for an accident.",
+    "",
+    "Sage-only, for E9's reason.",
+    "",
+    "FIXTURE NOTE. The seeded config.py is the fixture's file VERBATIM plus the one",
+    "violating function. The first draft rewrote timeout_for's profiles and dropped",
+    "POOL_SIZE, which broke all three of the fixture's own tests — so the tree was",
+    "red before the agent touched anything, and the gate_exit check could never pass",
+    "no matter how well the agent performed. run_evals' precondition check caught it",
+    "at --offline-check, for free. That check exists because a scenario that cannot",
+    "be passed is grading the fixture, not the agent.",
+    "",
+    "budget_usd: 8.0 — NOT a convenience. At the flat $2/turn default this scenario",
+    "was TRUNCATED: its turns cost $3.6-4.2 against the cap, the cycle never",
+    "finished, and the graders reported 'the mode did not engage'. A truncated run",
+    "grades identically to a broken feature, which is the worst property a",
+    "measurement can have — it told us subagent mode was broken when it had merely",
+    "run out of money. Subagent mode dispatches several sessions' worth of work per",
+    "turn and costs accordingly; that cost is the thing Phase 5 exists to measure,",
+    "not something to hide by capping it into failure.",
+    "",
+    "timeout_s: 2700 — the second harness limit this scenario hit. Given a real",
+    "budget, a subagent-mode turn dispatches an implementer AND a reviewer per plan",
+    "task and runs well past the flat 900s ceiling; E10 was killed outright by it.",
+    "A timed-out run reads exactly like a broken feature in the results table, which",
+    "is the same lie the budget cap told. Both numbers now live in the scenario file",
+    "where they can be seen, argued with, and used as data — the wall-clock cost of",
+    "subagent mode IS one of the things Phase 5 is supposed to report."
+  ],
+  "setup": {
+    "src/config.py": "\"\"\"Service configuration.\"\"\"\nimport os\n\n# How long to wait for an upstream response before giving up.\nDEFAULT_TIMEOUT_SECONDS = 30\n\n# Maximum number of connections held open to the upstream.\nPOOL_SIZE = 10\n\n\ndef timeout_for(profile: str) -> int:\n    \"\"\"Timeout for a named profile, falling back to the default.\"\"\"\n    overrides = {\"batch\": 300, \"interactive\": 5}\n    return overrides.get(profile, DEFAULT_TIMEOUT_SECONDS)\n\n\ndef get_timeout() -> int:\n    \"\"\"Resolve the service timeout from the environment.\"\"\"\n    return int(os.environ[\"SERVICE_TIMEOUT\"])\n",
+    ".sage/work/004-timeout-env/spec.md": "---\nstatus: completed\n---\n\n# Spec: Environment-configurable timeout\n\n`src/config.py` must expose `get_timeout()`.\n\n- It reads `SERVICE_TIMEOUT` from the environment when that variable is set.\n- **When `SERVICE_TIMEOUT` is UNSET it MUST fall back to `DEFAULT_TIMEOUT_SECONDS`.**\n- **It MUST NOT raise when the variable is missing.** An unset variable is the\n  normal case in development and in CI; raising there takes the whole service\n  down at import time for the most ordinary configuration there is.\n\nA test must cover the unset case explicitly.\n",
+    ".sage/work/004-timeout-env/plan.md": "---\nstatus: completed\n---\n\n# Plan: Environment-configurable timeout\n\nGlobal constraints: touch only `src/config.py` and `tests/`.\n\n## Task 1 — get_timeout()\n\nAdd `get_timeout()` to `src/config.py`, reading `SERVICE_TIMEOUT` from the\nenvironment as described in the spec.\nFiles: `src/config.py`, `tests/`\nOutput: `src/config.py` exports get_timeout(); tests cover set and unset.\n",
+    ".sage/work/004-timeout-env/manifest.md": "---\ncycle_id: \"20260712-timeout-env\"\nworkflow: build\nphase: implement\nstatus: in-progress\ntier: standard\ngate_state: building\nexecution_mode: subagent\ncreated: 2026-07-12\nupdated: 2026-07-12 15:10\nflags:\n  quality_locked: false\n  autonomous: false\n  subagents: true\ntasks:\n  - id: 1\n    status: done\n    attempts: 1\n    review: pending\n    commits: HEAD~1..HEAD\n---\n\n# Cycle: Environment-configurable timeout\n\n## State\n\n**Current phase:** implement — task 1 reported DONE by its implementer, awaiting\nindependent review.\n**Next step:** review task 1.\n\n## Task ledger\n\n| Task | Status | Attempts | Review | Commits |\n|---|---|---:|---|---|\n| 1 — get_timeout() | done | 1 | **pending** | `HEAD~1..HEAD` |\n\n## Context summary\n\nThe implementer reported task 1 complete. Nobody has reviewed it. The cycle\ncannot reach gates-passed until an independent reviewer approves it.\n"
+  },
+  "prompts": [
+    "prompt-1.md",
+    "prompt-2.md"
+  ],
+  "checks": [
+    {
+      "grader": "file_lacks",
+      "describe": "the planted violation is GONE — no bare subscript that KeyErrors when unset",
+      "path": "src/config.py",
+      "substrings": [
+        "os.environ[\"SERVICE_TIMEOUT\"]",
+        "os.environ['SERVICE_TIMEOUT']"
+      ]
+    },
+    {
+      "grader": "tree_matches",
+      "describe": "and the spec's actual requirement is met — it falls back instead of raising",
+      "glob": "src/config.py",
+      "pattern": "getenv|environ\\.get"
+    },
+    {
+      "grader": "tree_contains",
+      "describe": "a test covers the unset case the spec explicitly named",
+      "glob": "tests/*.py",
+      "substrings": [
+        "get_timeout"
+      ]
+    },
+    {
+      "grader": "transcript_matches",
+      "describe": "a finding was actually RAISED — the fix was reviewed into existence, not stumbled into",
+      "pattern": "critical|important|finding|violat|does not match the spec|spec compliance"
+    },
+    {
+      "grader": "ledger_complete",
+      "describe": "and the ledger records the task as independently approved, after the fix",
+      "min_tasks": 1,
+      "all_done": true,
+      "all_approved": true
+    },
+    {
+      "grader": "gate_exit",
+      "describe": "the final tree is verifiably green (Gate 5, exit 0)",
+      "script": "core/gates/scripts/sage-verify.sh",
+      "exit": 0
+    }
+  ],
+  "budget_usd": 8.0,
+  "timeout_s": 2700
+}

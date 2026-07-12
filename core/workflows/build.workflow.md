@@ -364,7 +364,29 @@ Pick A/S/R/N, or tell me what to change.
 
 ## Step 6: Implement
 
-Execute the plan task by task using the build loop.
+Execute the plan task by task.
+
+**First, resolve the execution mode.** Do NOT read the `subagents` flag
+directly — it is the one flag the platform is allowed to refuse:
+
+```bash
+python3 sage/runtime/tools/sage_flags.py parse "$ARGUMENTS" --config-path .sage/config.yaml
+```
+
+Then reconcile the request against what the platform can actually do
+(`resolve_execution_mode()` in `sage_flags.py`, R97):
+
+| Result | What runs |
+|---|---|
+| `mode: subagent` | **Read and follow `sage/core/workflows/sub-workflows/subagent-execution.workflow.md`.** A fresh implementer per task, a fresh reviewer per task, a branch review at the end. Record `execution_mode: subagent` in the manifest. |
+| `mode: inline`, `degraded: false` | The inline build loop below. This is the default (C13). |
+| `mode: inline`, `degraded: true` | The inline build loop — **and announce the degradation**, write the `decisions.md` line, and record `execution_mode: inline (subagents-unavailable)`. The user asked for independent per-task review and is not getting it; they are told so, in the session and in the log. |
+
+A silent fallback here would mean a user who asked for per-task independent
+review got one context reviewing its own work, with no indication. That is the
+exact failure v1.2.x was spent eliminating.
+
+### The inline build loop (default)
 
 Read and follow `sage/core/capabilities/orchestration/build-loop/SKILL.md`.
 It provides:

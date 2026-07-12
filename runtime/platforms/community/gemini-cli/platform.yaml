@@ -1,0 +1,35 @@
+---
+name: gemini-cli
+description: >
+  Google Gemini CLI — community-maintained. Sage generates an instructions file and commands.
+  It enforces nothing: no hook surface, so every Sage rule here is prose, and the
+  v1.2.1 eval measured what prose alone is worth.
+contract-version: 2
+maintainer: "unclaimed"     # R113: nobody answers when this goes red.
+
+capabilities:
+  context-injection: true         # an instructions file is generated
+  command-delivery: true          # commands are generated
+  native-skill-discovery: false   # the generator emits skills; nothing has verified they are ever triggered
+  pre-tool-veto: false            # no hook surface. Nothing blocks an edit.
+  post-tool-events: false
+  subagent-dispatch: false        # no evidence Sage has ever dispatched one here
+  session-events: false
+
+supported-os: [linux, macos]
+
+command-prefix: "/"
+install-method: manual-copy
+artifacts:
+  instructions: GEMINI.md
+  commands-dir: .gemini/commands
+---
+
+# Tier C, and honestly so
+
+Every `false` above means nobody has checked. That is what an unchecked
+capability is worth under ADR-11 — not a benefit of the doubt.
+
+To improve this: run `develop/conformance/run-conformance.sh gemini-cli`, make the
+checks pass, attach transcripts for what cannot be checked for free, and claim
+`maintainer:`. That is the whole contribution surface.

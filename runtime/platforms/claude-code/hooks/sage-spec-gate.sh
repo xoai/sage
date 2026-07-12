@@ -143,6 +143,76 @@ def manifest_field(path, name):
     return fm.group(1).lower() if fm else None
 
 
+def parse_ledger(text):
+    """The subagent task ledger from a manifest's frontmatter (R101).
+
+    Returns a list of {id, status, review} dicts, or None when the manifest has
+    no ledger at all. None and [] mean different things and are not
+    interchangeable: None is "this cycle does not use a task ledger" (every
+    manifest written before v1.3.0, and every inline-mode cycle), while [] is "it
+    has one and it is empty". Only None disables the guard.
+
+    The frontmatter shape:
+
+        tasks:
+          - id: 1
+            status: done
+            review: approved
+            commits: abc1234..def5678
+
+    The other hook parsers read flat scalars only, which is why this is separate
+    rather than an extra regex bolted onto manifest_field().
+    """
+    m = re.match(r"^\s*---\s*\n(.*?)\n---\s*(?:\n|$)", text.lstrip("﻿"), re.S)
+    if not m:
+        return None
+    block = m.group(1)
+    if not re.search(r"^\s*tasks\s*:", block, re.M):
+        return None
+
+    tasks = []
+    in_ledger = False
+    current = None
+    for line in block.splitlines():
+        if re.match(r"^\s*tasks\s*:", line):
+            in_ledger = True
+            continue
+        if not in_ledger:
+            continue
+        # A new top-level key (no indent, not a list item) ends the ledger.
+        if line.strip() and not line.startswith((" ", "\t", "-")):
+            break
+        item = re.match(r"^\s*-\s*(.*)$", line)
+        if item:
+            if current:
+                tasks.append(current)
+            current = {}
+            rest = item.group(1).strip()
+            if rest:
+                kv = re.match(r"^([A-Za-z_]+)\s*:\s*\"?([^\"#]*)\"?", rest)
+                if kv:
+                    current[kv.group(1).lower()] = kv.group(2).strip().lower()
+            continue
+        if current is not None:
+            kv = re.match(r"^\s+([A-Za-z_]+)\s*:\s*\"?([^\"#]*)\"?", line)
+            if kv:
+                current[kv.group(1).lower()] = kv.group(2).strip().lower()
+    if current:
+        tasks.append(current)
+    return tasks
+
+
+def ledger_incomplete(tasks):
+    """The tasks that are not (done AND approved). These block gates-passed."""
+    bad = []
+    for t in tasks:
+        status = (t.get("status") or "").strip()
+        review = (t.get("review") or "").strip()
+        if status != "done" or review != "approved":
+            bad.append((t.get("id", "?"), status or "?", review or "?"))
+    return bad
+
+
 def manifest_gate_state(path):
     """Return ('ok', state) | ('absent', None) | ('corrupt', None) | ('unreadable', None)."""
     try:
@@ -201,6 +271,92 @@ if is_manifest and under_work:
     for e in (tool_input.get("edits") or []):
         if isinstance(e, dict) and isinstance(e.get("new_string"), str):
             new_text += "\n" + e["new_string"]
+
+    # ── Ledger guard (R101, subagent execution) ──
+    #
+    # A cycle running under subagent execution carries a task ledger. It may not
+    # reach `gates-passed` while any task in that ledger is not done AND approved.
+    #
+    # This fires on gates-passed rather than on complete, deliberately and one step
+    # earlier than the two guards below: gates-passed is the state that ASSERTS the
+    # quality chain ran. A cycle that reaches it with an unreviewed task has made a
+    # false claim already, and blocking only at `complete` would let that claim sit
+    # in the manifest — where /continue, the branch reviewer, and the next session
+    # all read it as true.
+    #
+    # Backward compatible by construction: parse_ledger() returns None for every
+    # manifest that has no `tasks:` block, which is every manifest written before
+    # v1.3.0 and every inline-mode cycle. None disables the guard entirely. A
+    # project that was mid-flight when Sage upgraded is never surprise-blocked.
+    wants_gates_passed = bool(
+        re.search(r"gate_state\s*:\s*\"?gates-passed\b", new_text, re.I)
+    )
+    if wants_gates_passed:
+        # A Write carries the whole new manifest, so the ledger it declares is in
+        # new_text. An Edit may touch only gate_state, leaving the ledger on disk.
+        # Prefer the incoming text when it actually declares one.
+        ledger = parse_ledger(new_text)
+        if ledger is None:
+            try:
+                with open(abspath, encoding="utf-8", errors="replace") as fh:
+                    ledger = parse_ledger(fh.read())
+            except OSError:
+                ledger = None
+
+        # A cycle running in SUBAGENT mode with no ledger at all is not a
+        # backward-compatible cycle — it is a subagent cycle that never wrote its
+        # ledger, and the guard below would wave it straight through.
+        #
+        # E9 found this. The agent ran in subagent mode, never produced a `tasks:`
+        # block, and reached for gates-passed; parse_ledger() returned None, the
+        # guard disabled itself, and nothing complained. The check that was
+        # supposed to prove every task got an independent review was opt-in by the
+        # very agent it polices.
+        #
+        # `execution_mode: subagent` is the discriminator: pre-1.3.0 manifests and
+        # inline cycles never carry it, so they stay exempt exactly as before.
+        mode = manifest_field(abspath, "execution_mode")
+        if mode is None:
+            m = re.search(r"^\s*execution_mode\s*:\s*\"?([A-Za-z0-9_-]+)",
+                          new_text, re.M)
+            mode = m.group(1).lower() if m else None
+
+        if mode == "subagent" and ledger is None:
+            slug = os.path.basename(os.path.dirname(abspath))
+            emit(
+                "BLOCK",
+                (
+                    'Sage spec-gate: cannot set gate_state: gates-passed on "%s" —\n'
+                    "the cycle is in subagent execution and has NO task ledger.\n\n"
+                    "R101: subagent mode's entire claim is that every task was\n"
+                    "implemented by a fresh context and independently reviewed by\n"
+                    "another. The ledger is the only record of that. A cycle with no\n"
+                    "ledger is not a cycle that passed review — it is a cycle with no\n"
+                    "evidence it was reviewed at all.\n\n"
+                    "Write the `tasks:` block, or set execution_mode: inline and stop\n"
+                    "claiming the subagent chain ran."
+                ) % slug,
+            )
+
+        if ledger is not None:
+            incomplete = ledger_incomplete(ledger)
+            if incomplete:
+                slug = os.path.basename(os.path.dirname(abspath))
+                rows = "\n".join(
+                    "  task %s — status: %s, review: %s" % row for row in incomplete[:8]
+                )
+                emit(
+                    "BLOCK",
+                    (
+                        'Sage spec-gate: cannot set gate_state: gates-passed on "%s" —\n'
+                        "%d ledger task(s) are not done+approved:\n\n%s\n\n"
+                        "R101: in subagent execution, a task is finished when an INDEPENDENT\n"
+                        "reviewer approved it, not when the implementer said it was done.\n"
+                        "gates-passed asserts the quality chain ran. Finish or fix the tasks\n"
+                        "above, or record why they are abandoned — but do not claim the chain\n"
+                        "ran on tasks it never saw."
+                    ) % (slug, len(incomplete), rows),
+                )
 
     wants_complete = bool(
         re.search(r"(?:gate_state|status)\s*:\s*\"?complete\b", new_text, re.I)

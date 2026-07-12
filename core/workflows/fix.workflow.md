@@ -301,6 +301,21 @@ code. Verify the test passes.
 you change it. Do NOT change files not in the plan — if you discover
 additional changes are needed, update the plan first.
 
+**Subagent execution (Moderate+ only).** Resolve the mode as `/build` Step 6 does
+— parse flags, then `resolve_execution_mode()`; never read the `subagents` flag
+directly. Where it resolves to `subagent`, follow
+`sage/core/workflows/sub-workflows/subagent-execution.workflow.md`: each planned
+file-group becomes a ledger task with a fresh implementer and a fresh reviewer.
+Where the platform cannot dispatch, announce the degradation, log it, record
+`execution_mode: inline (subagents-unavailable)`, and continue inline.
+
+**Surgical fixes (1-2 files) stay inline regardless of the flag.** Dispatching a
+fresh context to change two lines, then a second fresh context to review those
+two lines, costs more than it can possibly return — and the root cause was
+already established and approved by a human in Step 2, which is where a fix's
+real risk lives. The mode exists to isolate accumulating context across many
+tasks. A surgical fix has no accumulation to isolate.
+
 **Scope guard during fix:** If the fix starts growing beyond the
 plan, STOP:
 

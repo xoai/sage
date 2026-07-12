@@ -35,21 +35,29 @@ from pathlib import Path
 # Flag parsing
 # ═══════════════════════════════════════════════════════════════════════
 
-POSITIVE_FLAGS = {"--quality-locked", "--autonomous"}
-NEGATIVE_FLAGS = {"--no-quality-locked", "--no-autonomous"}
-FLAG_TO_KEY = {
-    "--quality-locked": "quality_locked",
-    "--no-quality-locked": "quality_locked",
-    "--autonomous": "autonomous",
-    "--no-autonomous": "autonomous",
-}
+# The flag vocabulary, in ONE place.
+#
+# It used to be enumerated by hand in five: two frozensets, a lookup table, a
+# regex alternation, an initial-state dict, and the result dict. Adding
+# `--subagents` meant finding all five, and missing one would have failed
+# silently — the flag would parse and then simply not take effect. Derive them.
+FLAG_KEYS = ("quality_locked", "autonomous", "subagents")
+
+POSITIVE_FLAGS = {"--" + k.replace("_", "-") for k in FLAG_KEYS}
+NEGATIVE_FLAGS = {"--no-" + k.replace("_", "-") for k in FLAG_KEYS}
+FLAG_TO_KEY = {}
+for _k in FLAG_KEYS:
+    _dash = _k.replace("_", "-")
+    FLAG_TO_KEY["--" + _dash] = _k
+    FLAG_TO_KEY["--no-" + _dash] = _k
 ALL_FLAGS = POSITIVE_FLAGS | NEGATIVE_FLAGS
 
 # Config default: only the canonical `<key>: true` (one space, lowercase, no
 # trailing content) is honored, so Bash and Python agree byte-for-byte. This
 # rejects True/TRUE, "true", yes, no-space, extra-space, trailing comments, and
 # indented keys — all treated as no default.
-_TRUE_LINE_RE = re.compile(r"^(quality_locked|autonomous): true$", re.MULTILINE)
+_TRUE_LINE_RE = re.compile(
+    r"^(%s): true$" % "|".join(FLAG_KEYS), re.MULTILINE)
 
 
 def load_defaults(config_path):
@@ -79,13 +87,13 @@ def parse_flags(arguments, defaults=None):
     defaults = defaults or {}
 
     def err(message):
-        return {
-            "quality_locked": False, "autonomous": False, "goal": "",
-            "error": message,
-            "quality_locked_source": None, "autonomous_source": None,
-        }
+        out = {"goal": "", "error": message}
+        for k in FLAG_KEYS:
+            out[k] = False
+            out[k + "_source"] = None
+        return out
 
-    flag_state = {"quality_locked": None, "autonomous": None}
+    flag_state = {k: None for k in FLAG_KEYS}
     remaining = arguments.strip()
     while remaining.startswith("--"):
         parts = remaining.split(None, 1)
@@ -113,13 +121,12 @@ def parse_flags(arguments, defaults=None):
             return True, "config"
         return False, None
 
-    ql_value, ql_source = resolve("quality_locked")
-    auto_value, auto_source = resolve("autonomous")
-    return {
-        "quality_locked": ql_value, "autonomous": auto_value,
-        "goal": remaining, "error": None,
-        "quality_locked_source": ql_source, "autonomous_source": auto_source,
-    }
+    out = {"goal": remaining, "error": None}
+    for k in FLAG_KEYS:
+        value, source = resolve(k)
+        out[k] = value
+        out[k + "_source"] = source
+    return out
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -297,3 +304,82 @@ def main(argv=None):
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Subagent execution: availability (ADR-10 R97, ADR-11)
+# ═══════════════════════════════════════════════════════════════════════
+#
+# Subagent mode is the one flag whose request can be REFUSED by the platform.
+# --quality-locked and --autonomous are policies: if you ask for them, you get
+# them. --subagents is a capability: asking for it on a platform with no
+# subagent dispatch is asking for something that does not exist.
+#
+# The rule from ADR-10 is that unavailability is LOUD. It is announced, it is
+# written to decisions.md by the existing degradation machinery, and the manifest
+# records `execution_mode: inline (subagents-unavailable)`. What it must never do
+# is silently fall back — a user who asked for per-task review and got a single
+# inline context, with no indication, has been told a lie by omission, and the
+# whole point of the v1.2.x work was that degradation is legible or it is nothing.
+
+SUBAGENT_CAPABILITY = "subagent-dispatch"
+
+
+def platform_supports_subagents(contract):
+    """True iff the platform's capability contract grants subagent dispatch.
+
+    `contract` is the parsed platform.yaml (schema v2, ADR-11). An `attested`
+    value counts as true — the attestation carries its own evidence and expiry,
+    which is Phase 4's problem, not this function's.
+
+    A platform with NO contract at all is treated as NOT supporting subagents.
+    That is deliberate: the safe default for an unknown platform is the degraded
+    path, which is loud, rather than the enhanced path, which would dispatch into
+    a void and fail in a way nobody planned for.
+    """
+    if not contract:
+        return False
+    caps = contract.get("capabilities") or {}
+    value = caps.get(SUBAGENT_CAPABILITY)
+    return value is True or value == "attested"
+
+
+def resolve_execution_mode(requested_subagents, contract):
+    """Reconcile what was asked for with what the platform can actually do.
+
+    Returns {mode, degraded, manifest_value, announcement}:
+
+      mode           "subagent" | "inline"
+      degraded       True only when subagents were REQUESTED and REFUSED
+      manifest_value the string the cycle manifest records for execution_mode
+      announcement   what to say out loud, or None when there is nothing to say
+    """
+    if not requested_subagents:
+        return {
+            "mode": "inline",
+            "degraded": False,
+            "manifest_value": "inline",
+            "announcement": None,        # the default. Not news.
+        }
+
+    if platform_supports_subagents(contract):
+        return {
+            "mode": "subagent",
+            "degraded": False,
+            "manifest_value": "subagent",
+            "announcement": None,
+        }
+
+    name = (contract or {}).get("name", "this platform")
+    return {
+        "mode": "inline",
+        "degraded": True,
+        "manifest_value": "inline (subagents-unavailable)",
+        "announcement": (
+            "Subagent execution is unavailable: %s does not provide "
+            "`%s`. Falling back to the inline build loop — implementation and "
+            "review will share one context, so per-task review is NOT "
+            "independent. Recorded in decisions.md."
+            % (name, SUBAGENT_CAPABILITY)
+        ),
+    }

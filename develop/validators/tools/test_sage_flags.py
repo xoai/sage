@@ -174,3 +174,76 @@ class DecideTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class SubagentModeTest(unittest.TestCase):
+    """--subagents (ADR-10, C13) — the one flag the platform can refuse."""
+
+    CC = {"name": "claude-code", "capabilities": {"subagent-dispatch": True}}
+    GENERIC = {"name": "generic", "capabilities": {"subagent-dispatch": False}}
+
+    def test_default_is_off(self):
+        """C13: opt-in in v1.3.0. Flipping the default is a v1.4 decision, and it
+        is one that Phase 5's cost data gets to make, not this release."""
+        r = sf.parse_flags("build a thing")
+        self.assertFalse(r["subagents"])
+        self.assertIsNone(r["subagents_source"])
+
+    def test_flag_turns_it_on(self):
+        r = sf.parse_flags("--subagents build a thing")
+        self.assertTrue(r["subagents"])
+        self.assertEqual(r["subagents_source"], "flag")
+        self.assertEqual(r["goal"], "build a thing")
+
+    def test_config_default(self):
+        r = sf.parse_flags("build", defaults={"subagents": True})
+        self.assertTrue(r["subagents"])
+        self.assertEqual(r["subagents_source"], "config")
+
+    def test_flag_beats_config(self):
+        r = sf.parse_flags("--no-subagents build", defaults={"subagents": True})
+        self.assertFalse(r["subagents"])
+        self.assertEqual(r["subagents_source"], "flag")
+
+    def test_conflict_errors(self):
+        r = sf.parse_flags("--subagents --no-subagents build")
+        self.assertIn("Conflicting flags for subagents", r["error"])
+
+    def test_config_regex_accepts_subagents_key(self):
+        """The config-default regex was a hand-written alternation. A new key that
+        parses as a flag but is not in that regex would silently ignore
+        `subagents: true` in config — working flag, dead config."""
+        self.assertTrue(sf._TRUE_LINE_RE.search("subagents: true"))
+
+    # ── Availability (R97) ──
+
+    def test_available_where_the_contract_grants_it(self):
+        self.assertTrue(sf.platform_supports_subagents(self.CC))
+        self.assertEqual(sf.resolve_execution_mode(True, self.CC)["mode"], "subagent")
+
+    def test_attested_counts_as_available(self):
+        c = {"name": "x", "capabilities": {"subagent-dispatch": "attested"}}
+        self.assertTrue(sf.platform_supports_subagents(c))
+
+    def test_unavailable_degrades_loudly_not_silently(self):
+        """The whole v1.2.x lesson in one assertion: a user who asked for per-task
+        review and silently got a single shared context has been lied to by
+        omission."""
+        r = sf.resolve_execution_mode(True, self.GENERIC)
+        self.assertEqual(r["mode"], "inline")
+        self.assertTrue(r["degraded"])
+        self.assertEqual(r["manifest_value"], "inline (subagents-unavailable)")
+        self.assertIn("unavailable", r["announcement"])
+        self.assertIn("NOT independent", r["announcement"])
+
+    def test_unknown_platform_degrades_rather_than_dispatching_into_a_void(self):
+        r = sf.resolve_execution_mode(True, None)
+        self.assertEqual(r["mode"], "inline")
+        self.assertTrue(r["degraded"])
+
+    def test_not_requesting_it_is_not_a_degradation(self):
+        """Silence when nothing was asked for. The default is not news, and a
+        framework that announces its own defaults trains people to ignore it."""
+        r = sf.resolve_execution_mode(False, self.GENERIC)
+        self.assertFalse(r["degraded"])
+        self.assertIsNone(r["announcement"])

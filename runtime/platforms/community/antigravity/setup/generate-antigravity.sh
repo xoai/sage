@@ -407,6 +407,16 @@ with open('$SAGE_ROOT/GEMINI.md', 'w') as f:
   sed -i.bak "s|__CONSTITUTION_PLACEHOLDER__|## Engineering Principles\n\nBase (all projects):\n1. Tests before code\n2. No silent failures\n3. Secrets never in code\n4. Dependencies explicit\n5. Changes reversible|" "$SAGE_ROOT/GEMINI.md" 2>/dev/null && rm -f "$SAGE_ROOT/GEMINI.md.bak"
 }
 
+
+# ── Inline the system skills (ADR-9: no discovery verified on this platform) ──
+# See _shared/system-skills.sh. The contract declares native-skill-discovery:
+# false — not because the platform lacks a skills system, but because Sage has
+# never verified that one triggers. Until someone attests it, the content is
+# inlined, which is the option that cannot silently lose it.
+if [ -f "$SAGE_ROOT/GEMINI.md" ]; then
+  source "$(dirname "$0")/../../../_shared/system-skills.sh"
+  emit_system_skills_inline "$SAGE_DIR/core" >> "$SAGE_ROOT/GEMINI.md"
+fi
 echo "  ✓ GEMINI.md"
 
 # ═══════════════════════════════════════════════════════════════

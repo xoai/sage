@@ -46,58 +46,9 @@ source "$(dirname "$0")/../../_shared/instructions-body.sh"
 emit_instructions_body > "$SAGE_ROOT/CLAUDE.md"
 
 # ── Dynamic constitution merging ──
-CONST_SECTION="## Engineering Principles
-
-Base (all projects):
-1. Tests before code — every behavior has a test before implementation
-2. No silent failures — errors handled, logged, or propagated
-3. Secrets never in code — use env vars or secret managers
-4. Dependencies explicit — declared with pinned versions
-5. Changes reversible — migrations reversible, deployments rollbackable"
-
-PRINCIPLE_NUM=5
-
-# Read preset if .sage/constitution.md exists
-CONST_FILE="$PROJECT_SAGE/constitution.md"
-if [ -f "$CONST_FILE" ]; then
-  PRESET=$(sed -n '/^---$/,/^---$/{ /^extends:/s/^extends: *//p; }' "$CONST_FILE" 2>/dev/null)
-  if [ -n "$PRESET" ] && [ "$PRESET" != "base" ] && [ "$PRESET" != "none" ]; then
-    PRESET_FILE="$CORE/constitution/presets/${PRESET}.constitution.md"
-    if [ -f "$PRESET_FILE" ]; then
-      # Extract principles (lines starting with numbers after ## Additions)
-      PRESET_PRINCIPLES=$(sed -n '/^## Additions/,$ { /^[0-9]/p; }' "$PRESET_FILE")
-      if [ -n "$PRESET_PRINCIPLES" ]; then
-        CONST_SECTION="$CONST_SECTION
-
-${PRESET} preset:"
-        while IFS= read -r line; do
-          if [ -n "$line" ]; then
-            PRINCIPLE_NUM=$((PRINCIPLE_NUM + 1))
-            # Replace the original number with sequential numbering
-            CLEAN=$(echo "$line" | sed 's/^[0-9]*\. *//')
-            CONST_SECTION="$CONST_SECTION
-${PRINCIPLE_NUM}. ${CLEAN}"
-          fi
-        done <<< "$PRESET_PRINCIPLES"
-      fi
-    fi
-  fi
-
-  # Extract project additions (content after frontmatter and ## Project Additions)
-  PROJECT_ADDITIONS=$(sed -n '/^## Project Additions/,$ { /^## Project/d; /^$/d; /^(/d; p; }' "$CONST_FILE" 2>/dev/null)
-  if [ -n "$PROJECT_ADDITIONS" ]; then
-    CONST_SECTION="$CONST_SECTION
-
-Project additions:"
-    while IFS= read -r line; do
-      if [ -n "$line" ]; then
-        PRINCIPLE_NUM=$((PRINCIPLE_NUM + 1))
-        CONST_SECTION="$CONST_SECTION
-${PRINCIPLE_NUM}. ${line}"
-      fi
-    done <<< "$PROJECT_ADDITIONS"
-  fi
-fi
+# Shared with the generic generator — see _shared/constitution.sh for why.
+source "$(dirname "$0")/../../_shared/constitution.sh"
+CONST_SECTION="$(build_constitution_section "$CORE" "$PROJECT_SAGE")"
 
 # Replace placeholder in CLAUDE.md
 # Use a temp file since sed with multi-line replacement is tricky
@@ -465,6 +416,40 @@ LOADEREOF
 done
 
 echo "  ✓ $SKILL_COUNT skills deployed to .claude/skills/"
+
+# ── System skills (ADR-9 delivery class 2) ──
+#
+# Sage-about-Sage content that used to live in the eager layer and be paid for
+# on every turn. It is delivered here instead, where the platform's native
+# description-triggered discovery fetches it only when it is relevant.
+# (Confirmed on Claude Code 2.1.207 — docs/attestations/.)
+#
+# Two deliberate differences from the loop above:
+#
+#   Copied WHOLE, not stubbed. A loader stub costs an extra Read hop, and these
+#   are small. More importantly, the stub loop truncates the description to 120
+#   characters — which for a system skill would amputate the trigger. The
+#   description IS the product here: it is the only thing standing between the
+#   model and content it no longer has in front of it.
+#
+#   Never prefixed. The `sage:` command prefix disambiguates Sage's commands
+#   from a project's own; these are already namespaced `sage-*`. Prefixing would
+#   make the directory (`sage:sage-routing`) disagree with the frontmatter
+#   `name:` (`sage-routing`), and it is not worth finding out which one wins.
+SYS_SKILL_COUNT=0
+if [ -d "$CORE/system-skills" ]; then
+  for sys_dir in "$CORE/system-skills"/*/; do
+    [ -d "$sys_dir" ] || continue
+    sys_name=$(basename "$sys_dir")
+    [ -f "$sys_dir/SKILL.md" ] || continue
+
+    mkdir -p "$CLAUDE_DIR/skills/$sys_name"
+    cp "$sys_dir/SKILL.md" "$CLAUDE_DIR/skills/$sys_name/SKILL.md"
+    SYS_SKILL_COUNT=$((SYS_SKILL_COUNT + 1))
+  done
+fi
+
+echo "  ✓ $SYS_SKILL_COUNT system skills deployed (on-demand, not every-turn)"
 
 # ═══════════════════════════════════════════════════════════════
 # Session hook — auto-inject Sage context on session start
