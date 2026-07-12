@@ -121,7 +121,12 @@
         "dict[",
         "set[",
         "tuple["
-      ]
+      ],
+      "paths": [
+        "src/*.py",
+        "tests/*.py"
+      ],
+      "code_only": true
     },
     {
       "grader": "diff_contains",
@@ -129,7 +134,12 @@
       "session": "s3",
       "substrings": [
         "typing"
-      ]
+      ],
+      "paths": [
+        "src/*.py",
+        "tests/*.py"
+      ],
+      "code_only": true
     },
     {
       "grader": "file_contains",

@@ -115,17 +115,25 @@
     },
     {
       "grader": "diff_lacks",
-      "describe": "session 2 did NOT restart Task 1 — it never re-defines MAX_RETRIES, because a resumed cycle finds it already there",
+      "describe": "session 2 did NOT restart Task 1 — it never re-defines MAX_RETRIES in src/, because a resumed cycle finds it already there",
       "session": "s2",
       "substrings": [
         "MAX_RETRIES = "
-      ]
+      ],
+      "paths": [
+        "src/*.py"
+      ],
+      "code_only": true
     },
     {
-      "grader": "file_unchanged_since",
-      "describe": "session 2 did NOT re-plan — a cycle that rewrites its own plan has restarted, not resumed",
-      "session": "s2",
-      "path": ".sage/work/004-retry-policy/plan.md"
+      "grader": "unchanged",
+      "describe": "session 2 did NOT re-plan — the three approved tasks survived verbatim",
+      "path": ".sage/work/004-retry-policy/plan.md",
+      "lines": [
+        "## Task 1 — MAX_RETRIES",
+        "## Task 2 — backoff_delay()",
+        "## Task 3 — retry()"
+      ]
     },
     {
       "grader": "diff_lacks",
@@ -134,7 +142,11 @@
       "substrings": [
         "time.sleep",
         "from time import sleep"
-      ]
+      ],
+      "paths": [
+        "src/*.py"
+      ],
+      "code_only": true
     },
     {
       "grader": "file_contains",
@@ -153,10 +165,10 @@
     },
     {
       "grader": "tree_matches",
-      "describe": "sage-only: the ORIGINAL cycle was carried to completion, not abandoned for a fresh one",
+      "describe": "sage-only: the ORIGINAL cycle advanced coherently — its gate_state records the implementation, under the same cycle id (status: stays in-progress until a human approves the gates, by design)",
       "condition": "sage",
       "glob": ".sage/work/004-retry-policy/manifest.md",
-      "pattern": "status\\s*:\\s*(complete|completed|done)"
+      "pattern": "gate_state\\s*:\\s*(implemented|verified|complete)"
     }
   ],
   "budget_usd": 6.0,

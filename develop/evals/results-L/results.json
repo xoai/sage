@@ -1,0 +1,307 @@
+{
+  "runs": 1,
+  "driver": "claude-code",
+  "model": null,
+  "results": [
+    {
+      "scenario": "L1",
+      "name": "resume-fidelity",
+      "condition": "sage",
+      "mode": "n/a",
+      "pass": false,
+      "checks": [
+        {
+          "grader": "diff_contains",
+          "describe": "PRECONDITION \u2014 session 1 actually completed Task 1 (without this, session 2's 'no restart' check is uninterpretable)",
+          "pass": true,
+          "detail": "all 1 string(s) introduced"
+        },
+        {
+          "grader": "diff_lacks",
+          "describe": "session 2 did NOT restart Task 1 \u2014 it never re-defines MAX_RETRIES in src/, because a resumed cycle finds it already there",
+          "pass": true,
+          "detail": "none of 1 forbidden string(s) introduced"
+        },
+        {
+          "grader": "unchanged",
+          "describe": "session 2 did NOT re-plan \u2014 the three approved tasks survived verbatim",
+          "pass": true,
+          "detail": "intact"
+        },
+        {
+          "grader": "diff_lacks",
+          "describe": "decision D-002 survived the context boundary \u2014 no blocking sleep reached src/, though it is the natural way to write Task 3",
+          "pass": true,
+          "detail": "none of 2 forbidden string(s) introduced"
+        },
+        {
+          "grader": "file_contains",
+          "describe": "the remaining work actually landed (Tasks 2 and 3)",
+          "pass": true,
+          "detail": "all present"
+        },
+        {
+          "grader": "gate_exit",
+          "describe": "the final tree is verifiably green (Gate 5, exit 0)",
+          "pass": true,
+          "detail": "exit 0 (expected 0) \u2014 \u2705 PASS \u2014 All verifications passed"
+        },
+        {
+          "grader": "tree_matches",
+          "describe": "sage-only: the ORIGINAL cycle was carried to completion, not abandoned for a fresh one",
+          "pass": false,
+          "detail": "1 file(s) matched .sage/work/004-retry-policy/manifest.md, none matched /status\\s*:\\s*(complete|completed|done)/"
+        }
+      ],
+      "error": null,
+      "sessions": [
+        {
+          "name": "s1",
+          "interrupted": true,
+          "turns_sent": 1,
+          "tokens_in": 1069086,
+          "tokens_out": 12739,
+          "cost_usd": 1.4012,
+          "duration_s": 186.6,
+          "error": null
+        },
+        {
+          "name": "s2",
+          "interrupted": false,
+          "turns_sent": 1,
+          "tokens_in": 2353170,
+          "tokens_out": 28120,
+          "cost_usd": 2.6313,
+          "duration_s": 383.5,
+          "error": null
+        }
+      ],
+      "tokens_in": 3422256,
+      "tokens_out": 40859,
+      "cost_usd": 4.0325,
+      "duration_s": 570.1,
+      "run": 1
+    },
+    {
+      "scenario": "L1",
+      "name": "resume-fidelity",
+      "condition": "bare",
+      "mode": "n/a",
+      "pass": false,
+      "checks": [
+        {
+          "grader": "diff_contains",
+          "describe": "PRECONDITION \u2014 session 1 actually completed Task 1 (without this, session 2's 'no restart' check is uninterpretable)",
+          "pass": true,
+          "detail": "all 1 string(s) introduced"
+        },
+        {
+          "grader": "diff_lacks",
+          "describe": "session 2 did NOT restart Task 1 \u2014 it never re-defines MAX_RETRIES in src/, because a resumed cycle finds it already there",
+          "pass": true,
+          "detail": "none of 1 forbidden string(s) introduced"
+        },
+        {
+          "grader": "unchanged",
+          "describe": "session 2 did NOT re-plan \u2014 the three approved tasks survived verbatim",
+          "pass": true,
+          "detail": "intact"
+        },
+        {
+          "grader": "diff_lacks",
+          "describe": "decision D-002 survived the context boundary \u2014 no blocking sleep reached src/, though it is the natural way to write Task 3",
+          "pass": false,
+          "detail": "session 's2' introduced: time.sleep"
+        },
+        {
+          "grader": "file_contains",
+          "describe": "the remaining work actually landed (Tasks 2 and 3)",
+          "pass": true,
+          "detail": "all present"
+        },
+        {
+          "grader": "gate_exit",
+          "describe": "the final tree is verifiably green (Gate 5, exit 0)",
+          "pass": true,
+          "detail": "exit 0 (expected 0) \u2014 \u2705 PASS \u2014 All verifications passed"
+        }
+      ],
+      "error": null,
+      "sessions": [
+        {
+          "name": "s1",
+          "interrupted": true,
+          "turns_sent": 1,
+          "tokens_in": 583737,
+          "tokens_out": 6514,
+          "cost_usd": 0.7198,
+          "duration_s": 95.3,
+          "error": null
+        },
+        {
+          "name": "s2",
+          "interrupted": false,
+          "turns_sent": 1,
+          "tokens_in": 883631,
+          "tokens_out": 10180,
+          "cost_usd": 1.0073,
+          "duration_s": 141.7,
+          "error": null
+        }
+      ],
+      "tokens_in": 1467368,
+      "tokens_out": 16694,
+      "cost_usd": 1.7271,
+      "duration_s": 237.0,
+      "run": 1
+    },
+    {
+      "scenario": "L2",
+      "name": "memory-recall",
+      "condition": "sage",
+      "mode": "n/a",
+      "pass": true,
+      "checks": [
+        {
+          "grader": "used_tool",
+          "describe": "sage-only MECHANISM CHECK \u2014 session 1 actually wrote to the memory system (without this, a later pass could just be a reread, and memory would take credit for a file)",
+          "pass": true,
+          "detail": "called 1\u00d7 \u2014 mcp__sage-memory__sage_memory_store"
+        },
+        {
+          "grader": "diff_lacks",
+          "describe": "session 3 honoured the constraint \u2014 no 3.9+ builtin generics reached the code, though they are the idiom every agent reaches for first",
+          "pass": true,
+          "detail": "none of 4 forbidden string(s) introduced"
+        },
+        {
+          "grader": "diff_contains",
+          "describe": "session 3 used the 3.8-compatible spelling it was told to use, two contexts ago",
+          "pass": true,
+          "detail": "all 1 string(s) introduced"
+        },
+        {
+          "grader": "file_contains",
+          "describe": "the actual work landed",
+          "pass": true,
+          "detail": "all present"
+        },
+        {
+          "grader": "gate_exit",
+          "describe": "the final tree is verifiably green (Gate 5, exit 0)",
+          "pass": true,
+          "detail": "exit 0 (expected 0) \u2014 \u2705 PASS \u2014 All verifications passed"
+        }
+      ],
+      "error": null,
+      "sessions": [
+        {
+          "name": "s1",
+          "interrupted": false,
+          "turns_sent": 1,
+          "tokens_in": 252340,
+          "tokens_out": 7873,
+          "cost_usd": 0.5284,
+          "duration_s": 103.5,
+          "error": null
+        },
+        {
+          "name": "s2",
+          "interrupted": false,
+          "turns_sent": 1,
+          "tokens_in": 117300,
+          "tokens_out": 2660,
+          "cost_usd": 0.2884,
+          "duration_s": 42.5,
+          "error": null
+        },
+        {
+          "name": "s3",
+          "interrupted": false,
+          "turns_sent": 1,
+          "tokens_in": 1121888,
+          "tokens_out": 16506,
+          "cost_usd": 1.4871,
+          "duration_s": 232.5,
+          "error": null
+        }
+      ],
+      "tokens_in": 1491528,
+      "tokens_out": 27039,
+      "cost_usd": 2.3039,
+      "duration_s": 378.5,
+      "run": 1
+    },
+    {
+      "scenario": "L2",
+      "name": "memory-recall",
+      "condition": "bare",
+      "mode": "n/a",
+      "pass": true,
+      "checks": [
+        {
+          "grader": "diff_lacks",
+          "describe": "session 3 honoured the constraint \u2014 no 3.9+ builtin generics reached the code, though they are the idiom every agent reaches for first",
+          "pass": true,
+          "detail": "none of 4 forbidden string(s) introduced"
+        },
+        {
+          "grader": "diff_contains",
+          "describe": "session 3 used the 3.8-compatible spelling it was told to use, two contexts ago",
+          "pass": true,
+          "detail": "all 1 string(s) introduced"
+        },
+        {
+          "grader": "file_contains",
+          "describe": "the actual work landed",
+          "pass": true,
+          "detail": "all present"
+        },
+        {
+          "grader": "gate_exit",
+          "describe": "the final tree is verifiably green (Gate 5, exit 0)",
+          "pass": true,
+          "detail": "exit 0 (expected 0) \u2014 \u2705 PASS \u2014 All verifications passed"
+        }
+      ],
+      "error": null,
+      "sessions": [
+        {
+          "name": "s1",
+          "interrupted": false,
+          "turns_sent": 1,
+          "tokens_in": 91169,
+          "tokens_out": 3420,
+          "cost_usd": 0.2226,
+          "duration_s": 49.0,
+          "error": null
+        },
+        {
+          "name": "s2",
+          "interrupted": false,
+          "turns_sent": 1,
+          "tokens_in": 118154,
+          "tokens_out": 1354,
+          "cost_usd": 0.1889,
+          "duration_s": 24.7,
+          "error": null
+        },
+        {
+          "name": "s3",
+          "interrupted": false,
+          "turns_sent": 1,
+          "tokens_in": 237589,
+          "tokens_out": 2651,
+          "cost_usd": 0.284,
+          "duration_s": 44.9,
+          "error": null
+        }
+      ],
+      "tokens_in": 446912,
+      "tokens_out": 7425,
+      "cost_usd": 0.6955,
+      "duration_s": 118.6,
+      "run": 1
+    }
+  ]
+}

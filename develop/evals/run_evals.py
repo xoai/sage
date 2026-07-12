@@ -433,16 +433,19 @@ def make_workspace(scenario: Scenario, condition: str, root: pathlib.Path,
     return ws
 
 
-def head_sha(ws: pathlib.Path) -> str:
-    """The commit a session starts from — the anchor for its diff.
+def session_anchor(ws: pathlib.Path) -> dict:
+    """The workspace as a session finds it — the anchor for its diff.
 
-    Recorded at every session boundary so a grader can ask "what did SESSION 2
-    change", which is a different and much sharper question than "what does the
-    tree look like now". L1's decision-respected check is exactly that question:
-    session 1 legitimately wrote the plan, so grading the whole-run diff for the
-    foreclosed path would indict session 1's planning for session 2's sins.
+    A SNAPSHOT, not a commit. The first real L-series run proved a commit cannot
+    anchor a session, and it proved it by failing two scenarios for things the agents
+    had not done: untracked files carry no timestamp (so a CLAUDE.md written in
+    session 1 kept landing in session 3's diff), and `git diff <sha>` charges a
+    session's UNCOMMITTED work to whoever comes next (so session 2 was accused of
+    restarting a task session 1 had done but not committed).
+
+    See graders.snapshot_tree() for the full account.
     """
-    return (git(ws, "rev-parse", "HEAD").stdout or "").strip()
+    return graders.snapshot_tree(ws)
 
 
 def sage_init(ws: pathlib.Path) -> None:
@@ -655,9 +658,10 @@ def run_once(scenario: Scenario, condition: str, driver: Driver,
     # able to say WHICH session it means.
     by_session = {}
     all_events, all_turns = [], []
+    run_start = session_anchor(ws)          # the whole-run baseline
 
     for sess in scenario.sessions:
-        anchor = head_sha(ws)
+        anchor = session_anchor(ws)
         out = ws.parent / f"{scenario.id}-{condition}-{sess.name}.jsonl"
         prompts = sess.prompts()
         run = driver.run(ws, prompts, out,
@@ -696,7 +700,7 @@ def run_once(scenario: Scenario, condition: str, driver: Driver,
         })
 
         by_session[sess.name] = graders.Transcript(
-            run["events"], run["turns"], since=anchor, session=sess.name)
+            run["events"], run["turns"], before=anchor, session=sess.name)
         all_events += run["events"]
         all_turns += run["turns"]
 
@@ -707,7 +711,7 @@ def run_once(scenario: Scenario, condition: str, driver: Driver,
             return result
 
     whole = graders.Transcript(all_events, all_turns,
-                               since=None, session=None)
+                               before=run_start, session=None)
 
     checks = []
     for check in scenario.checks:
