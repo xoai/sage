@@ -33,3 +33,25 @@ capability is worth under ADR-11 — not a benefit of the doubt.
 To improve this: run `develop/conformance/run-conformance.sh opencode`, make the
 checks pass, attach transcripts for what cannot be checked for free, and claim
 `maintainer:`. That is the whole contribution surface.
+
+# Why `pre-tool-veto: false` — the chain is proven except its last link
+
+Investigated 2026-07-12 (docs/platform-veto-investigation-2026-07-12.md).
+
+**OpenCode's veto is documented and the mechanism demonstrably works:**
+
+1. The plugin LOADS (`.opencode/plugin/` and `.opencode/plugins/` are both scanned).
+2. `tool.execute.before` FIRES — an instrumented pass captured every tool.
+3. Sage's gate RAN, spawned from inside the hook.
+4. And it correctly ALLOWED — because opencode's edit tool is **`apply_patch`,
+   whose only argument is `patchText`. There is no `filePath`.** The adapter handed
+   the gate an empty path, and a gate with no file to gate allows. That is the
+   ADAPTER failing, not the veto.
+
+**What was never observed: opencode honouring the `throw` by blocking an edit.**
+Without that transcript the capability cannot be `attested` (C15), so it is `false`.
+
+**To finish:** parse the paths out of `patchText` (`*** Update File: <path>`), run
+one probe against a `pre-spec` cycle, and check BOTH that the edit did not land AND
+that the hook log shows the gate returning 2. Checking only the file is how you
+record a crashed run as a successful veto.

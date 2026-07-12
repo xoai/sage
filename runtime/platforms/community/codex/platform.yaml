@@ -33,3 +33,26 @@ capability is worth under ADR-11 — not a benefit of the doubt.
 To improve this: run `develop/conformance/run-conformance.sh codex`, make the
 checks pass, attach transcripts for what cannot be checked for free, and claim
 `maintainer:`. That is the whole contribution surface.
+
+# Why `pre-tool-veto: false` — and why that may be wrong soon
+
+Investigated 2026-07-12 (docs/platform-veto-investigation-2026-07-12.md).
+
+**Codex HAS a hook system.** Its native binary carries 30x `PreToolUse`, 25x
+`PostToolUse`, `SubagentStart`/`SubagentStop`, and this string:
+
+    PreToolUse hook exited with code 2 but did not write a blocking reason to stderr
+
+That is Sage's contract exactly — exit 2, reason on stderr. Sage's UNMODIFIED
+`sage-spec-gate.sh` was verified to exit 2 on a codex-shaped payload. No adapter
+needed.
+
+**But seven configurations failed to make it fire** ([hooks] TOML, hooks.json in
+three locations, five feature-flag spellings, a real [features] table in both user
+and project config with the project trusted). Present in the binary, unreachable
+in practice — and unreachable is worth `false`.
+
+**Most promising lead:** the binary references `hooks/hooks.json`,
+`CLAUDE_PLUGIN_ROOT`, `CLAUDE_PLUGIN_DATA`, and `anthropics/claude-plugins-official`.
+Codex appears to consume Claude-Code-style plugins — and Sage already ships one
+with `hooks/hooks.json` in exactly that layout. That may be the entire port.
