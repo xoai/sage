@@ -107,6 +107,11 @@ FILE_MAP = {
     "hooks/scripts/sage-visual-gate.sh": "core/gates/scripts/sage-visual-gate.sh",
     "hooks/scripts/sage-spec-gate.sh": "runtime/platforms/claude-code/hooks/sage-spec-gate.sh",
     "hooks/scripts/sage-degradation-log.sh": "runtime/platforms/claude-code/hooks/sage-degradation-log.sh",
+    "hooks/scripts/sage-manifest-sync.sh": "runtime/platforms/claude-code/hooks/sage-manifest-sync.sh",
+    # The manifest hook delegates here rather than inlining a second copy of the
+    # state machine. A plugin-only project may have no vendored sage/, so the tool
+    # ships with the plugin too.
+    "tools/manifest.py": "runtime/tools/manifest.py",
     "hooks/scripts/sage-tdd-gate.sh": "runtime/platforms/claude-code/hooks/sage-tdd-gate.sh",
     "references/decision-template.md": "core/templates/architecture/decision-template.md",
     "references/full-spec-template.md": "core/templates/spec/full.spec-template.md",

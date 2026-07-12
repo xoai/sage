@@ -182,6 +182,26 @@ surfaces:
       E8 is the scenario that proved the thesis: the decisions.md line appears
       because a script writes it, not because the model remembered to.
 
+  hook-manifest-sync:
+    path: runtime/platforms/claude-code/hooks/sage-manifest-sync.sh
+    kind: hook
+    covered-by: [L1]
+    notes: >
+      The third instance of the same bug, and the third fix of the same shape. L1
+      caught the manifest claiming `gate_state: plan-approved` — "no tasks started" —
+      with all three tasks implemented and committed; a resumed session would have
+      redone the work. cycle-protocol.md had asked the model, in prose, to advance
+      the field at every checkpoint, and three runs produced three different answers.
+
+      It advances now because the agent wrote source code, and the hook firing IS the
+      evidence. L1 is its regression test: it should hold at 3/3, and it is the only
+      scenario that can see this at all, because it is the only one that crosses a
+      context boundary.
+
+      What the hook deliberately does NOT do is award `gates-passed` or `complete` —
+      those are approval states, and a script that granted them because the files
+      looked finished would forge the signature the gate exists to collect.
+
   hook-session-init:
     path: runtime/platforms/claude-code/hooks/sage-session-init.sh
     kind: hook
