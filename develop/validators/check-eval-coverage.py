@@ -47,6 +47,12 @@ DISCOVERY = [
     ("capability",   "core/capabilities/*/*/SKILL.md"),
     ("skill",        "skills/*/SKILL.md"),
     ("system-skill", "core/system-skills/*/SKILL.md"),
+    # The plugin overlay is what PLUGIN users actually receive, and until now the
+    # coverage contract could not see any of it — 11 skills, ~2,500 lines, in the
+    # blind spot. That is exactly how sage-navigator drifted for two releases while
+    # shipping a routing table a release out of date: nothing was watching the
+    # thing users were being given.
+    ("overlay-skill", "runtime/plugin-overlay/skills/*/SKILL.md"),
     ("hook",         "runtime/platforms/claude-code/hooks/*.sh"),
     ("gate",         "core/gates/scripts/*.sh"),
 ]

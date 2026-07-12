@@ -722,3 +722,86 @@ surfaces:
       this skill. So the skill's actual claims (initiative log vs global, prepend
       order, alternatives recorded) are unmeasured. Cover is nominal; do not read
       this row as evidence the decision protocol works.
+
+# ── Plugin overlay (what PLUGIN users actually receive) ──────────────────────
+#
+# This whole directory was invisible to the coverage contract until v1.3.0 — 10
+# skills, ~2,000 lines, shipped to every plugin user and mapped by nothing.
+#
+# That blind spot has a body count. `sage-navigator` was a 441-line hand-written
+# duplicate of the eager layer, it drifted for two releases, and it shipped a
+# routing table that still sent users to /analyze, /qa and /design-review — all
+# folded into other commands back in v1.2.0. Nothing compared the two copies,
+# because nothing was watching this directory at all.
+#
+# The navigator is GENERATED now (build_plugin.py, from instructions-body.sh) and
+# is not in this list, because it is no longer a hand-maintained surface — it is
+# the eager layer, and the eager layer's rows are above.
+#
+# The rest of these are workflow→skill wrappers: the plugin's way of exposing
+# /build, /fix and friends, since a plugin ships skills rather than commands.
+# They are UNCOVERED, and honestly so: the eval harness drives `bin/sage init`,
+# never a plugin install, so NOTHING in the suite has ever exercised the path a
+# plugin user actually takes. That is the largest structural gap left in the
+# coverage map and it is bigger than any single row below.
+
+  overlay-skill-architect:
+    path: runtime/plugin-overlay/skills/architect/SKILL.md
+    kind: overlay-skill
+    uncovered: "Plugin wrapper for /architect. The eval harness never installs the plugin."
+
+  overlay-skill-build:
+    path: runtime/plugin-overlay/skills/build/SKILL.md
+    kind: overlay-skill
+    uncovered: >
+      Plugin wrapper for /build — the heaviest workflow, and the one E1/E4/E7/E9/E10
+      all grade through `sage init` rather than through this file. If the wrapper
+      and the workflow ever disagree, no scenario would notice.
+
+  overlay-skill-configure:
+    path: runtime/plugin-overlay/skills/configure/SKILL.md
+    kind: overlay-skill
+    uncovered: "Plugin-only configuration skill; no scenario installs the plugin."
+
+  overlay-skill-continue:
+    path: runtime/plugin-overlay/skills/continue/SKILL.md
+    kind: overlay-skill
+    uncovered: >
+      Plugin wrapper for /continue — doubly uncovered: the plugin path is untested
+      AND resume fidelity itself has no scenario (see workflow-continue). The
+      headline long-horizon claim, unmeasured on the install path most users take.
+
+  overlay-skill-fix:
+    path: runtime/plugin-overlay/skills/fix/SKILL.md
+    kind: overlay-skill
+    uncovered: "Plugin wrapper for /fix, which has no end-to-end scenario in either path."
+
+  overlay-skill-learn:
+    path: runtime/plugin-overlay/skills/learn/SKILL.md
+    kind: overlay-skill
+    uncovered: "Plugin wrapper for /learn. See workflow-learn."
+
+  overlay-skill-reflect:
+    path: runtime/plugin-overlay/skills/reflect/SKILL.md
+    kind: overlay-skill
+    uncovered: "Plugin wrapper for /reflect. See workflow-reflect."
+
+  overlay-skill-review:
+    path: runtime/plugin-overlay/skills/review/SKILL.md
+    kind: overlay-skill
+    uncovered: "Plugin wrapper for /review. See workflow-review."
+
+  overlay-skill-sage:
+    path: runtime/plugin-overlay/skills/sage/SKILL.md
+    kind: overlay-skill
+    uncovered: >
+      The plugin's /sage router. E6 grades routing via `sage init`; this is the
+      file that would do it for a plugin user, and no scenario reaches it.
+
+  overlay-skill-sage-memory:
+    path: runtime/plugin-overlay/skills/sage-memory/SKILL.md
+    kind: overlay-skill
+    uncovered: >
+      An OVERRIDE of skills/sage-memory/ — a second copy of the memory skill,
+      shipped only to plugin users. Two copies of a skill is the pattern that
+      produced the navigator drift; this one is now at least visible.

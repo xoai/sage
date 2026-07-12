@@ -170,3 +170,61 @@ class BuildPluginTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class NavigatorIsGeneratedTest(unittest.TestCase):
+    """The navigator drifted for two releases. It cannot again.
+
+    A plugin cannot install a CLAUDE.md, so sage-navigator IS the eager layer for
+    plugin users. It used to be a 441-line file maintained by hand next to the real
+    eager body, and it shipped a routing table a release out of date — /analyze,
+    /qa, /design-review, /status, all folded into other commands in v1.2.0.
+
+    Nothing compared the two copies. These tests are what compares them.
+    """
+
+    def test_navigator_is_generated_from_the_eager_body(self):
+        import subprocess as sp
+        with tempfile.TemporaryDirectory() as d:
+            out = pathlib.Path(d) / "p"
+            build_plugin.build(out)
+            nav = (out / "skills" / "sage-navigator" / "SKILL.md").read_text()
+
+        body = sp.run(
+            ["bash", "-c",
+             'source "%s"; emit_instructions_body' % build_plugin.INSTRUCTIONS_BODY],
+            capture_output=True, text=True).stdout
+
+        # A distinctive line from the eager body must appear verbatim in the
+        # navigator. If someone reintroduces a hand-written copy, this breaks.
+        marker = "## Skill check — before ANY response"
+        self.assertIn(marker, body)
+        self.assertIn(marker, nav)
+
+    def test_the_navigator_carries_no_stale_routes(self):
+        """The exact bug that shipped: routes folded in v1.2.0, still being served."""
+        with tempfile.TemporaryDirectory() as d:
+            out = pathlib.Path(d) / "p"
+            build_plugin.build(out)
+            nav = (out / "skills" / "sage-navigator" / "SKILL.md").read_text()
+
+        # These may appear as KEYWORDS ("audit/evaluate/assess/analyze/...") and in
+        # the documented one-cycle deprecation line. They must never appear as a
+        # ROUTE TARGET — `→ /analyze`.
+        for dead in ("/analyze", "/qa", "/design-review", "/status", "/map"):
+            self.assertNotIn("→ %s\n" % dead, nav,
+                             "%s is folded; the navigator must not route to it" % dead)
+
+    def test_no_unsubstituted_placeholder_ships(self):
+        with tempfile.TemporaryDirectory() as d:
+            out = pathlib.Path(d) / "p"
+            build_plugin.build(out)
+            nav = (out / "skills" / "sage-navigator" / "SKILL.md").read_text()
+        self.assertNotIn("__CONSTITUTION_PLACEHOLDER__", nav)
+        self.assertIn("Engineering Principles", nav)
+
+    def test_there_is_no_hand_written_navigator_left(self):
+        """The overlay copy is the bug. It must stay deleted."""
+        self.assertFalse(
+            (build_plugin.OVERLAY / "skills" / "sage-navigator" / "SKILL.md").exists(),
+            "a hand-maintained navigator is back in the overlay — it will drift")
