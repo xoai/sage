@@ -1636,6 +1636,7 @@ sage_help() {
   echo "Skill management (powered by skills.sh):"
   echo "  sage find <query>                Search skills.sh catalog"
   echo "  sage add <source>                Install skills from owner/repo, URL, or path"
+  echo "  sage add <owner>/<repo>@<tag>    Install a pack pinned to a release tag"
   echo "  sage add <source> --skill <n>    Install a specific skill from a repo"
   echo "  sage add <source> --all          Install all skills from a repo"
   echo "  sage remove <skill>              Remove a skill from project"
@@ -1657,6 +1658,7 @@ sage_help() {
   echo "  sage find react                  # Search skills.sh for React skills"
   echo "  sage add vercel-labs/agent-skills               # Browse + pick skills"
   echo "  sage add vercel-labs/agent-skills --skill react  # Install specific skill"
+  echo "  sage add xoai/sage-product@v1.3.1 --all         # A pack, pinned + verified"
   echo "  sage add ./my-local-skills                      # Install from local path"
   echo ""
 }

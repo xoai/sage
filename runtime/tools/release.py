@@ -42,12 +42,20 @@ Python 3.8+, stdlib only.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import pathlib
 import re
 import subprocess
 import sys
+
+# The tarball/checksum/changelog mechanics are shared with the three pack repos
+# (ADR-15). They live in release_lib so there is ONE implementation of them rather
+# than four copies drifting apart — which is not a hypothetical here: v1.3.1 was cut
+# because the navigator was a second copy of the eager layer and had drifted.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from release_lib import (                                            # noqa: E402
+    Problem, build_tarball, changelog_top, notes, sha256_file, write_checksums,
+)
 
 SEMVER = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
 PLUGIN_VERSION = re.compile(r'("version"\s*:\s*)"(\d+\.\d+\.\d+)"')
@@ -83,11 +91,13 @@ SCAN_EXCLUDE_PATHS = (
 )
 
 
-class Problem(Exception):
-    pass
-
-
 def read_version(root: pathlib.Path) -> str:
+    """The root VERSION, validated.
+
+    Not release_lib's: this one's error message names the repo root, because in the
+    main repo a missing VERSION is a broken checkout, while in a pack repo it is a
+    pack that has not been staged yet. Same check, different thing gone wrong.
+    """
     path = root / "VERSION"
     if not path.is_file():
         raise Problem("VERSION file not found at repo root")
@@ -95,16 +105,6 @@ def read_version(root: pathlib.Path) -> str:
     if not SEMVER.match(version):
         raise Problem(f"VERSION is not semver: {version!r}")
     return version
-
-
-def changelog_top(root: pathlib.Path) -> str:
-    path = root / "CHANGELOG.md"
-    if not path.is_file():
-        raise Problem("CHANGELOG.md not found")
-    m = CHANGELOG_ENTRY.search(path.read_text())
-    if not m:
-        raise Problem("CHANGELOG.md has no `## [X.Y.Z]` entry")
-    return m.group(1)
 
 
 def plugin_version(root: pathlib.Path, rel: str) -> str:
@@ -115,28 +115,6 @@ def plugin_version(root: pathlib.Path, rel: str) -> str:
     if not m:
         raise Problem(f'{rel} has no "version" field')
     return m.group(2)
-
-
-def notes(root: pathlib.Path, version: str) -> str:
-    """The CHANGELOG section for one version — the text of the release notes.
-
-    This lived as a Python heredoc inside release.yml's publish step, where it
-    was both untestable and, because the heredoc body sat at column 0, enough to
-    make the whole workflow file invalid YAML. It belongs here: the CHANGELOG is
-    already this module's business.
-    """
-    version = version.lstrip("v")
-    path = root / "CHANGELOG.md"
-    if not path.is_file():
-        raise Problem("CHANGELOG.md not found")
-    # This version's heading, up to the next one (or end of file).
-    m = re.search(
-        r"^##\s*\[%s\].*?(?=^##\s*\[|\Z)" % re.escape(version),
-        path.read_text(), re.M | re.S,
-    )
-    if not m:
-        raise Problem(f"CHANGELOG.md has no `## [{version}]` entry")
-    return m.group(0).strip()
 
 
 def marketplace_version_pins(root: pathlib.Path, rel: str) -> list[str]:
@@ -328,12 +306,91 @@ def with_evals(root: pathlib.Path, runs: int) -> int:
     return 0
 
 
-def sha256_file(path: pathlib.Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as fh:
-        for chunk in iter(lambda: fh.read(1 << 20), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+PACK_REPOS = ("sage-product", "sage-pack-authoring", "sage-autoresearch")
+
+
+def dist_status(root: pathlib.Path) -> int:
+    """What is distributable, what is staged, and what is still a promise (R132).
+
+    Drift is a WARNING here and an ERROR at release time. The distinction matters
+    because for most of this program's life the honest answer to "where do the packs
+    live" has been "nowhere" — and a check that hard-failed on that would have been
+    disabled within a week, which is how checks die.
+
+    What it will not do is stay quiet. `sage update` has been telling users to run
+    `sage add xoai/sage-product` since v1.2 — a command for a repository that does
+    not exist. Nothing in CI noticed, because nothing was looking. This looks.
+    """
+    version = read_version(root)
+    print(f"Distribution status for {version}\n")
+
+    problems, warnings = [], []
+
+    # ── The plugin ──────────────────────────────────────────────────────────
+    for rel in PLUGIN_MANIFESTS:
+        try:
+            pv = plugin_version(root, rel)
+            mark = "✓" if pv == version else "✗"
+            print(f"  {mark} plugin  {rel} → {pv}")
+            if pv != version:
+                problems.append(f"{rel} pins {pv}, not {version}")
+        except Problem as exc:
+            problems.append(str(exc))
+
+    # ── The marketplace ─────────────────────────────────────────────────────
+    # The entry defers its version to plugin.json on purpose. A version here is a
+    # second place to forget to bump.
+    for rel in MARKETPLACES:
+        pins = marketplace_version_pins(root, rel)
+        if pins:
+            problems.append(f"{rel} pins a version for: {', '.join(pins)} "
+                            f"— the marketplace must defer to plugin.json")
+            print(f"  ✗ market  {rel} → pins a version it should not")
+        elif (root / rel).is_file():
+            print(f"  ✓ market  {rel} → defers to plugin.json")
+
+    marketplace_repo = root / "dist" / "repos" / "sage-marketplace"
+    if not marketplace_repo.is_dir():
+        warnings.append(
+            "no marketplace repo staged — `/plugin marketplace add xoai/sage-marketplace` "
+            "is not yet a real command (P6-T4)")
+
+    # ── The packs ───────────────────────────────────────────────────────────
+    staged = root / "dist" / "repos"
+    for name in PACK_REPOS:
+        tree = staged / name
+        if not tree.is_dir():
+            warnings.append(f"pack {name} is not staged — run stage_packs.py")
+            print(f"  · pack    {name} → not staged")
+            continue
+        pv = (tree / "VERSION").read_text().strip() if (tree / "VERSION").is_file() else "?"
+        mark = "✓" if pv == version else "✗"
+        print(f"  {mark} pack    {name} → staged at {pv}")
+        if pv != version:
+            problems.append(f"staged pack {name} is at {pv}, not {version} "
+                            f"— re-run stage_packs.py")
+
+    # ── The promise nobody has kept ─────────────────────────────────────────
+    # A staged repo is not a published one. Until the maintainer pushes these and
+    # cuts a tag, `sage add xoai/sage-product` resolves to nothing — and bin/sage
+    # has been recommending it for two minor versions.
+    warnings.append(
+        "staged ≠ published. Until the three pack repos exist on GitHub with a "
+        "tagged release, `sage add xoai/<pack>` cannot resolve — and `sage update` "
+        "has been printing that command since v1.2 (bin/sage, the R54 block).")
+
+    print()
+    for w in warnings:
+        print(f"  ⚠ {w}")
+    for p in problems:
+        print(f"  ✗ {p}")
+
+    print()
+    if problems:
+        print(f"✗ {len(problems)} drift problem(s). Fix before releasing.")
+        return 1
+    print(f"OK — no drift. {len(warnings)} thing(s) staged but not published (C17).")
+    return 0
 
 
 def artifacts(root: pathlib.Path, ref: str, outdir: pathlib.Path) -> int:
@@ -348,21 +405,9 @@ def artifacts(root: pathlib.Path, ref: str, outdir: pathlib.Path) -> int:
         raise Problem(f"ref {ref} does not match VERSION {version}")
 
     outdir.mkdir(parents=True, exist_ok=True)
-    tarball = outdir / f"sage-{version}.tar.gz"
-
-    # git archive honors .gitattributes export-ignore and never includes .git,
-    # so the tarball is exactly the tracked tree at that ref.
-    proc = subprocess.run(
-        ["git", "-C", str(root), "archive", "--format=tar.gz",
-         f"--prefix=sage-{version}/", "-o", str(tarball), ref],
-        capture_output=True, text=True,
-    )
-    if proc.returncode != 0:
-        raise Problem(f"git archive {ref} failed: {proc.stderr.strip()}")
-
+    tarball = build_tarball(root, ref, outdir, "sage", version)
+    write_checksums(outdir, [tarball])
     digest = sha256_file(tarball)
-    # Two spaces: the format both `sha256sum -c` and `shasum -a 256 -c` read.
-    (outdir / "checksums.txt").write_text(f"{digest}  {tarball.name}\n")
 
     print(f"  built {tarball.relative_to(root) if root in tarball.parents else tarball}")
     print(f"  sha256 {digest}")
@@ -388,6 +433,9 @@ def main() -> int:
     group.add_argument("--with-evals", action="store_true",
                        help="run the eval suite and write results/summary.md "
                             "(makes real model calls; costs money)")
+    group.add_argument("--dist-status", action="store_true",
+                       help="report the distribution surface: staged pack repos, "
+                            "marketplace pin, and what is not yet published")
     parser.add_argument("--eval-runs", type=int, default=3,
                         help="runs per scenario per condition for --with-evals (default 3)")
     parser.add_argument("--ref", default=None,
@@ -403,6 +451,8 @@ def main() -> int:
     try:
         if args.check:
             return check(root)
+        if args.dist_status:
+            return dist_status(root)
         if args.sync:
             return sync(root)
         if args.artifacts:
