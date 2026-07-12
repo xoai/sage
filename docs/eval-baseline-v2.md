@@ -138,15 +138,44 @@ them is pointing it at reality and being suspicious of the answer.
 ## What is still not measured
 
 - **Long-horizon work.** `/continue`, memory recall across sessions, the decision
-  log outliving a context window — the differentiated 60% of the product. The
-  L-series (Phase 5) does not exist. Every scenario here is single-session.
+  log outliving a context window — the differentiated 60% of the product. **Every
+  number in this document comes from a single-session scenario.**
+
+  The instrument now exists: **L1** (resume fidelity) and **L2** (memory recall) are
+  authored, offline-green, and multi-session — a fresh model context per session
+  against one persistent workspace. `run_evals.py` grew the machinery to cross a
+  context boundary at all, which it could not previously do; that is why this row
+  was empty rather than merely disappointing.
+
+  **They have not been run.** A model-in-loop run is budget-gated (C16) and needs
+  maintainer approval. So the claim remains *unmeasured* — not *supported*, and not
+  *refuted*. An instrument that exists and has not been read is worth exactly as much
+  as no instrument, right up until someone reads it.
 - **Whether subagent mode produces *better* code** than the inline loop. E9/E10
-  prove the mode does what it says. They do not compare quality. That needs both
-  modes on the same scenarios (P5-T3).
+  prove the mode does what it says. They do not compare quality. `--mode both` now
+  exists to run that comparison (P5-T3); it has not been run either.
 - **The four judgment-enforced constitution principles.** No mechanism, no
   scenario.
 - **Windows.** Never tested. The contract now says `[linux, macos]`.
 
-The full inventory of unmeasured surfaces is `develop/evals/coverage.yaml` —
-44 of 84 behavioural surfaces carry an honest `uncovered:` reason. That is the
-debt, written down where a reviewer trips over it.
+## Appendix — the coverage debt (R124)
+
+The full inventory of unmeasured surfaces is `develop/evals/coverage.yaml`:
+**52 of 94** behavioural surfaces carry an honest `uncovered:` reason. (It was 54;
+L1 and L2 closed `workflow-continue` and `capability-session-bridge`, which were the
+two rows that said, in their own words, that the headline claim was unmeasured.)
+
+Reproduce the list — it is generated, so it cannot rot the way a hand-typed table
+would:
+
+```bash
+python3 develop/validators/check-eval-coverage.py --list-uncovered
+```
+
+The worst single hole is unchanged: **`/fix` has no end-to-end scenario at all.**
+Second worst: the plugin overlay is now a mapped surface and every row of it is
+`uncovered:` — which means the install path most users actually take is still
+structurally untested, and that is precisely how `sage-navigator` shipped a routing
+table a release out of date, in public, for two releases.
+
+That is the debt, written down where a reviewer trips over it.
