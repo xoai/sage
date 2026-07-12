@@ -2,6 +2,86 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [Unreleased] — Instruments, not conclusions
+
+Three phases of upgrade program 2 (Pi spike, Evidence II, Distribution). Every
+number Sage publishes is still a number it earned; **nothing here adds a claim.**
+What it adds is the ability to test three claims that were, until now, structurally
+untestable — and one supply chain that was a promise.
+
+### The long-horizon claim gets an instrument (Phase 5)
+
+Sage's README leads with a claim about surviving a context window. Eleven scenarios
+in, nothing had ever tested it, **because nothing could**: every scenario finished in
+the session that started it, so the agent that completed the work was the agent that
+planned it, and it simply remembered.
+
+- `run_evals.py` can now cross a context boundary. A scenario may declare `sessions`
+  — an ordered list, each a **fresh model context**, run against one persistent
+  workspace. Session 2 knows only what session 1 left on disk.
+- **L1 (resume fidelity)** — session 1 is cut off mid-plan; session 2 must recover
+  from the artifacts alone. Grades the three ways a resume can be fake: restarting,
+  re-planning, and forgetting a decision recorded in a session that no longer exists.
+- **L2 (memory recall)** — a constraint stated in session 1, unrelated work in
+  session 2, and in session 3 a task whose correct implementation depends on it. The
+  bare arm gets the session logs as committed files and can reread them: this
+  measures **retrieval versus reread**, not memory versus amnesia.
+- `--mode inline|subagents|both` — the mode comparison E9/E10 could not make.
+- New graders: `diff_lacks`, `diff_contains`, `diff_files_within`,
+  `file_unchanged_since`, `used_tool`.
+- `docs/authoring-skills.md` — write the scenario **before** the skill.
+
+**These have not been run.** A model-in-loop run is budget-gated and needs maintainer
+approval. The long-horizon claim is therefore still *unmeasured* — not supported, not
+refuted. An instrument that exists and has not been read is worth exactly as much as
+no instrument.
+
+### The Pi verdict (Phase 1)
+
+**A Pi extension can veto a tool call.** `{block: true, reason}` on `tool_call`,
+consumed at `agent-loop.ts:621-645`; the tool function is never invoked and the model
+receives the denial. Tier **B**, port estimated at **2–3 person-weeks** — low, because
+the gates do not need rewriting: Sage's gates already exit 2 with a reason, and Pi
+wants exactly that. `docs/pi-spike-verdict.md`.
+
+**And Pi's contract row stays `false`.** The proof was written but not executed
+(running it means `npm install` in a third-party checkout). Sage nearly shipped
+`pre-tool-veto: true` for codex on documentation that matched its contract almost
+perfectly and that no real session ever honoured. A capability claim does not get to
+outlive its evidence, and it does not get to precede it either.
+
+### Packs stop being a promise (Phase 6)
+
+`packs/` was wired to **nothing** — not to `bin/sage`, not to CI, not to `release.py`.
+Meanwhile `sage update` has been printing `sage add xoai/sage-product` since v1.2: a
+command for a repository that does not exist. **Sage has been shipping a dead link as
+migration guidance for two minor versions.**
+
+- `sage add <owner>/<repo>[@vX.Y.Z]` — resolves a release tag, **verifies the tarball
+  against the published `checksums.txt`**, and **fails closed** on a mismatch. No
+  checksums published → it still installs, but loudly, and records
+  `sha256: unverified` rather than a comfortable blank.
+- `.sage/packs.lock` — source, resolved tag, verified digest, skills installed.
+  `skills.json` could never answer *"is your sage-product the same as mine"*; this can.
+- `release_lib.py` — one implementation of the tarball/checksum mechanics, shared by
+  Sage and all three pack repos. `stage_packs.py` **generates** the pack repo trees, so
+  they cannot drift. (v1.3.1 was cut because the navigator was a second copy.)
+- `release.py --dist-status`, `docs/install.md` (four install paths, each with its
+  integrity story stated plainly — including where the answer is "nothing").
+- Tar members that escape the extraction directory are refused, as are symlinks.
+
+**Nothing is published.** The repos are staged, not pushed; `sage add xoai/sage-product`
+still cannot resolve until a maintainer creates them. `--dist-status` says so on every
+run rather than letting it be forgotten.
+
+### Two spec claims were false, and are recorded as such
+
+`sage-product` carries **no** eval or pressure assets (the spec said it did; they all
+live in `develop/evals/`). `sage-autoresearch` has **five** test files, not a
+"15-module test suite" — and no `SKILL.md` at all, so `sage add` cannot install it. It
+is a Python package, and today it prints *"No SKILL.md files found"* and exits
+**successfully**, having installed nothing.
+
 ## [1.3.1] — The navigator was a second copy, and it had drifted
 
 A plugin cannot install a `CLAUDE.md`, so **`sage-navigator` IS the eager layer for
