@@ -135,25 +135,110 @@ results before the true one): **test the instrument before you trust the
 measurement.** A grader is code. It has bugs like code. The only thing that finds
 them is pointing it at reality and being suspicious of the answer.
 
+## The L-series — the long-horizon claim, measured at last
+
+*Run 2026-07-12/13. N=3, both conditions. Total spend across shakedown + fixes +
+final: **$68.30**.*
+
+Sage's README led with a claim about surviving a context window. Eleven scenarios in,
+nothing had ever tested it — not from neglect, but because a single-session harness
+*cannot*: the agent that finished the work was the agent that started it, and it
+simply remembered. The harness can now cross a context boundary. Here is what it
+found on the other side.
+
+| | sage | bare | delta |
+|---|---|---|---|
+| **L1** — resume an interrupted cycle | 2/3 · $25.23 | **3/3** · $7.04 | **−Sage** |
+| **L2** — honour a constraint stated 2 contexts ago | 3/3 · $4.85 | **3/3** · $2.17 | same |
+
+**Sage loses L1 and ties L2, at 2–4× the cost. The long-horizon claim is not
+supported by this evidence.**
+
+### L1 — resume fidelity
+
+Session 1 completes task 1 of an approved 3-task plan and is cut off. Session 2 is a
+fresh context that has never seen it, and must recover from the artifacts alone.
+
+Given **one turn** to resume, Sage finished the work in **1 of 3** runs. The bare
+agent finished in **3 of 3**. Given **two turns** (both conditions, so the change
+cannot flatter either), Sage reached 2/3 — and cost **3.6×** what bare cost.
+
+**The defect, and it is the load-bearing one.** In one run of three, Sage's manifest
+still read `gate_state: plan-approved` — *"plan approved, no tasks started"* — with
+all three tasks implemented, tested and committed. A session resuming from that
+manifest would read "no tasks started" and redo everything. **The artifact whose
+entire job is to carry work across a context boundary had drifted from the tree it
+describes.**
+
+Three runs of the identical cycle produced three different vocabularies for the same
+state:
+
+| run | `phase` | `gate_state` | work done |
+|---|---|---|---|
+| 1 | quality-gates | `gates-passed` | ✓ |
+| 2 | quality-gates | **`plan-approved`** | ✓ |
+| 3 | complete | `complete` | ✓ |
+
+There is no enum and no state machine. `gate_state` is written by the model, from
+judgment, in prose — **exactly the bug v1.3.0 found in the task ledger** ("the entire
+evidence base for *every task was independently reviewed* was being produced by the
+model's goodwill; in two runs of three it simply was not written"). That was fixed by
+generating it. This needs the same fix, and it is written up in
+`docs/plans/manifest-state-is-prose.md`.
+
+### L2 — memory recall, and the null result
+
+A constraint is stated in session 1 (the deploy image is pinned to Python 3.8 — use
+`typing.List`, never `list[str]`). Session 2 does unrelated work. Session 3 is asked
+to fully annotate a new function, where the default idiom is *wrong*.
+
+Both conditions got it right, 3/3.
+
+**And the mechanism check says Sage's memory genuinely worked** — session 1 provably
+called the memory tool, in every run, and the bare arm provably had no MCP server at
+all. Memory engaged. It just did not **matter**: the bare agent reread its own session
+log off the disk and reached the same answer for **a third of the price**.
+
+This is the honest shape of the result R121 asked for, including the outcome it warned
+we might get: *retrieval did not beat rereading.* A file on disk is already a memory
+system, and the one we ship costs 2.2× more than `cat`.
+
+The instructive caveat is that this is *one* constraint over *three* sessions. Memory's
+claim is that it compounds — over dozens of sessions, where a transcript log becomes
+too long to reread, the economics could invert. **That is a different experiment, and
+it has not been run.** What has been shown is narrower and still worth saying: at this
+horizon, on this task, the memory system was not what made the difference.
+
+### The instrument found five bugs before it found anything about Sage
+
+The first run cost $7.32 and every dollar went on discovering that the graders were
+wrong. All five failed in the same direction — reporting violations that never
+happened — and three were the *same* mistake in different clothes:
+
+**An agent that writes the rule down looks, to a naive grep, exactly like an agent
+that breaks it.** The bare agent wrote `assert "time.sleep" not in text` — a
+regression test *enforcing* the decision under test — and was marked a violator for
+naming the thing it forbade. It wrote a `CLAUDE.md` reminding itself not to use
+`list[str]`, and was failed for "introducing" `list[str]`. It documented, in a
+docstring, what a caller should pass *instead* of `time.sleep`, and was failed for
+that too.
+
+The better the agent behaved, the more places the forbidden string appeared. **A
+grader that greps text punishes conscientiousness.** Fixed: session anchors are
+working-tree snapshots (not commits), checks are scoped to paths, and code checks read
+*code* — comments and string literals blanked. Six regression tests pin all of it.
+
+> **Test the instrument before you trust the measurement.** Second release running,
+> and it is still the most expensive lesson here.
+
 ## What is still not measured
 
-- **Long-horizon work.** `/continue`, memory recall across sessions, the decision
-  log outliving a context window — the differentiated 60% of the product. **Every
-  number in this document comes from a single-session scenario.**
-
-  The instrument now exists: **L1** (resume fidelity) and **L2** (memory recall) are
-  authored, offline-green, and multi-session — a fresh model context per session
-  against one persistent workspace. `run_evals.py` grew the machinery to cross a
-  context boundary at all, which it could not previously do; that is why this row
-  was empty rather than merely disappointing.
-
-  **They have not been run.** A model-in-loop run is budget-gated (C16) and needs
-  maintainer approval. So the claim remains *unmeasured* — not *supported*, and not
-  *refuted*. An instrument that exists and has not been read is worth exactly as much
-  as no instrument, right up until someone reads it.
 - **Whether subagent mode produces *better* code** than the inline loop. E9/E10
   prove the mode does what it says. They do not compare quality. `--mode both` now
-  exists to run that comparison (P5-T3); it has not been run either.
+  exists to run that comparison (P5-T3); it has not been run.
+- **Memory over a long horizon**, where rereading stops being free. See L2 above.
+- **L3 (scope-hold across a 6-task plan).** Authored? No. Budget went on the
+  L1 instrument bugs, which was the right place for it to go.
 - **The four judgment-enforced constitution principles.** No mechanism, no
   scenario.
 - **Windows.** Never tested. The contract now says `[linux, macos]`.

@@ -1,0 +1,61 @@
+# The manifest's state is model-authored prose, and it drifts from the tree
+
+**Status:** open. Drafted as a GitHub issue; not filed — publishing is the
+maintainer's call.
+**Found by:** L1 (resume fidelity), first real run, N=3. See `docs/eval-baseline-v2.md`.
+
+## What happened
+
+Three runs of the *identical* cycle. All three completed all three tasks and
+committed them. The manifest recorded three **different** states:
+
+| run | `phase` | `gate_state` | work actually done? |
+|---|---|---|---|
+| 1 | quality-gates | `gates-passed` | ✓ all 3 tasks |
+| 2 | quality-gates | **`plan-approved`** | ✓ all 3 tasks |
+| 3 | complete | `complete` | ✓ all 3 tasks |
+
+**Run 2 is the bug.** `gate_state: plan-approved` means *"plan approved, no tasks
+started."* All three tasks were implemented, tested, and committed. A session
+resuming from that manifest would read "no tasks started" and redo the work.
+
+The artifact that exists to carry work across a context boundary had drifted from
+the tree it describes — which is the one thing it must never do.
+
+## Why
+
+There is no enum and no state machine. `gate_state` is written by the model, in
+prose, from judgment. Three runs produced three vocabularies, and nothing checks
+any of them against reality.
+
+**This is the same bug v1.3.0 found in the task ledger** — *"the entire evidence
+base for 'every task was independently reviewed' was being produced by the model's
+goodwill; in two runs of three it simply was not written."* The fix there was
+`ledger.py`: generate it. E9 went 1/3 → 3/3.
+
+Same bug. Same place. Same fix.
+
+## The fix
+
+1. **An enum.** `gate_state` and `phase` get defined, legal values. A manifest
+   carrying anything else is invalid.
+2. **Generate it, don't ask for it.** A `manifest.py` that derives state from what
+   is *true* — tasks in the plan vs. deliverables in the tree vs. gates that have
+   actually run — rather than from what the model believes.
+3. **A coherence check.** A manifest claiming `plan-approved` while the plan's
+   deliverables exist in the tree is a contradiction. Something should fail loudly
+   rather than let the next session inherit a lie.
+4. **L1 is already the regression test.** It catches this today. It should go
+   2/3 → 3/3.
+
+## Until then
+
+The README's session-continuity claim cites the measurement instead of asserting the
+capability. House rule: *"if a rule matters, make it code. If you can't, don't claim
+it."*
+
+## Also worth knowing
+
+A bare agent with the same files resumed correctly **3/3** at **$7.04**. Sage managed
+**2/3** at **$25.23**, and needed an extra turn to get there. The ceremony is not
+currently buying what it costs.

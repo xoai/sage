@@ -53,16 +53,27 @@ Every one of those is **code**. Every claim that rested on prose — including, 
 v1.2.0, test-first and loud degradation — was measured and found false, and then
 either made mechanical or withdrawn.
 
-**What this does not measure**, and it's the part Sage is probably actually for:
-long multi-session work — carried context, spec-then-plan-then-build, a decisions
-log that outlives the context window. Nothing here exercises that.
+**And the part Sage is probably actually for — long multi-session work — is measured
+now too, for the first time.** It did not go the way we wanted. Across two
+multi-session scenarios (N=3, both conditions), a bare agent given the same files and
+the same prompts matched or beat Sage on both, at a third of the cost:
 
-So, precisely: on these short, single-file tasks Sage's benefit is **whatever it has
-made mechanical, and nothing else.** Where a rule is a hook, it holds (test-first,
-3/3 vs 0/3; the spec gate; the degradation record). Where a rule is a paragraph, a
-frontier model was going to do the right thing anyway — or wasn't, and the paragraph
-didn't change that. Five scenarios is a small sample and the benefit on long-horizon
-work is untested. The cost is known: ~2× context.
+| | sage | bare |
+|---|---|---|
+| **L1** — resume an interrupted cycle | 2/3 · $25.23 | **3/3** · $7.04 |
+| **L2** — honour a constraint stated 2 contexts ago | 3/3 · $4.85 | **3/3** · $2.17 |
+
+L2 is the more instructive of the two. Sage's memory system *worked* — the run is
+instrumented, and session 1 provably wrote the constraint to it. It just didn't
+**matter**: the bare agent reread its own session log off the disk and got the same
+answer for a third of the price. Retrieval did not beat rereading.
+
+So, precisely: Sage's benefit is **whatever it has made mechanical, and nothing
+else.** Where a rule is a hook, it holds (test-first, 3/3 vs 0/3; the spec gate; the
+degradation record). Where a rule is a paragraph — including, now, the long-horizon
+story — a frontier model was going to do the right thing anyway, or wasn't, and the
+paragraph didn't change that. The cost is known: ~1.6× context, and 2–4× the dollars
+on multi-session work.
 
 The lesson we'd offer, having measured our own framework and not much liked the
 first answer: **if a rule matters, make it code. If you can't, don't claim it.**
@@ -166,12 +177,34 @@ reviewer sees the number change.
 
 ### Session Resilience
 
-Close your IDE, hit a context limit, come back tomorrow — Sage picks up
-exactly where you left off. A cycle manifest captures state, context
-summary, decisions, open questions, and handoff guidance at every
-checkpoint. Type `/continue` and Sage reads the manifest, routes to the
-correct workflow, and preserves the judgment context that would otherwise
-be lost.
+A cycle manifest captures state, context summary, decisions, open questions
+and handoff guidance at every checkpoint. Type `/continue` and Sage reads the
+manifest, routes to the correct workflow, and picks the work back up.
+
+**We finally measured this, and the result does not support the claim we used to
+make here.** L1 (resume fidelity, N=3, both conditions): a fresh context resumes a
+cycle that was interrupted mid-plan.
+
+| | resumed correctly | cost |
+|---|---|---|
+| **bare agent**, same files, same prompt | **3/3** | $7.04 |
+| **Sage** | 2/3 — and only when given a second turn | $25.23 |
+
+Given one turn, Sage finished the work in **1 of 3** runs; the bare agent finished in
+3 of 3. And in one run Sage's manifest still read `gate_state: plan-approved` — *"no
+tasks started"* — with all three tasks implemented and committed. **The artifact that
+is supposed to carry the work across the boundary had drifted from the tree it
+describes.**
+
+The cause is the one this project keeps rediscovering: **the manifest's state is
+written by the model's goodwill, not by a mechanism.** Three runs of the identical
+cycle produced three different vocabularies for it (`gates-passed`, `plan-approved`,
+`complete`). That is exactly the bug v1.3.0 found in the task ledger — and it needs
+exactly the same fix, which is to generate it rather than ask for it.
+
+Until it is generated, this is a claim we do not get to make. The fix is written up
+in [docs/plans/manifest-state-is-prose.md](docs/plans/manifest-state-is-prose.md);
+the numbers are in [docs/eval-baseline-v2.md](docs/eval-baseline-v2.md).
 
 ### Memory That Compounds
 

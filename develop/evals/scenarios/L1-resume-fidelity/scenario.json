@@ -94,7 +94,8 @@
     {
       "name": "s2",
       "prompts": [
-        "prompt-s2.md"
+        "prompt-s2.md",
+        "prompt-s2b.md"
       ]
     }
   ],
@@ -164,11 +165,13 @@
       "exit": 0
     },
     {
-      "grader": "tree_matches",
-      "describe": "sage-only: the ORIGINAL cycle advanced coherently — its gate_state records the implementation, under the same cycle id (status: stays in-progress until a human approves the gates, by design)",
+      "grader": "file_lacks",
+      "describe": "sage-only: the manifest ADVANCED — it no longer claims the cycle is pre-implementation. Vocabulary-agnostic on purpose: three runs of the identical cycle produced three different gate_state spellings, so any check that enumerates them is testing my guess, not Sage",
       "condition": "sage",
-      "glob": ".sage/work/004-retry-policy/manifest.md",
-      "pattern": "gate_state\\s*:\\s*(implemented|verified|complete)"
+      "path": ".sage/work/004-retry-policy/manifest.md",
+      "substrings": [
+        "gate_state: plan-approved"
+      ]
     }
   ],
   "budget_usd": 6.0,
