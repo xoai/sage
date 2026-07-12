@@ -179,12 +179,36 @@ state:
 | 2 | quality-gates | **`plan-approved`** | ✓ |
 | 3 | complete | `complete` | ✓ |
 
-There is no enum and no state machine. `gate_state` is written by the model, from
+There was no enum and no state machine. `gate_state` was written by the model, from
 judgment, in prose — **exactly the bug v1.3.0 found in the task ledger** ("the entire
 evidence base for *every task was independently reviewed* was being produced by the
 model's goodwill; in two runs of three it simply was not written"). That was fixed by
-generating it. This needs the same fix, and it is written up in
-`docs/plans/manifest-state-is-prose.md`.
+generating it.
+
+### Fixed in v1.3.2 — and L1 did not move
+
+`gate_state` is generated now: a PostToolUse hook advances the manifest the moment
+source is written, so it fires *because* the agent wrote code and the firing **is**
+the evidence (`runtime/tools/manifest.py`, `sage-manifest-sync.sh`).
+
+Re-run, L1/sage, N=3, with the hook:
+
+| | before | after |
+|---|---|---|
+| manifest coherent with the tree | 2/3 | **3/3** |
+| `gate_state` values seen | `gates-passed`, **`plan-approved`**, `complete` | `building`, `gates-passed`, `building` |
+| **L1 overall** | 2/3 | **2/3 — unchanged** |
+
+**The manifest has not lied since. L1 still did not improve**, and that distinction is
+the whole point of keeping the number honest: in one run of three Sage still failed to
+*finish the work*, which is a different failure — ceremony cost — and a hook cannot fix
+it. The bridge is sound now. The bill is not yet paid for.
+
+What the hook deliberately does **not** do is award `gates-passed` or `complete`. Those
+are approval states; a script that granted them because the files looked finished would
+forge the signature the gate exists to collect. **Fact is mechanical. Approval is not.**
+`manifest.py check` fails a manifest that contradicts its own tree, so this cannot
+silently regress.
 
 ### L2 — memory recall, and the null result
 

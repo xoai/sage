@@ -1,7 +1,8 @@
 # The manifest's state is model-authored prose, and it drifts from the tree
 
-**Status:** open. Drafted as a GitHub issue; not filed — publishing is the
-maintainer's call.
+**Status: FIXED in v1.3.2.** `runtime/tools/manifest.py` +
+`sage-manifest-sync.sh` (PostToolUse). Kept as the record of what was found and
+what was deliberately *not* automated.
 **Found by:** L1 (resume fidelity), first real run, N=3. See `docs/eval-baseline-v2.md`.
 
 ## What happened
@@ -35,7 +36,35 @@ goodwill; in two runs of three it simply was not written."* The fix there was
 
 Same bug. Same place. Same fix.
 
-## The fix
+## The fix — shipped
+
+`gate_state` is generated now. A PostToolUse hook advances the manifest the moment
+source is written under an active `plan-approved` cycle: it fires **because** the
+agent wrote code, and the firing **is** the evidence. No goodwill required, and none
+accepted.
+
+**What it refuses to do, and this matters as much as what it does:** it will not award
+`gates-passed` or `complete`. Those are *approval* states — a human grants them, or the
+quality-locked loop does after the gates actually run. A hook that advanced a cycle to
+`gates-passed` because the files looked finished would forge the signature the gate
+exists to collect, which is a worse bug than the one being fixed.
+
+**Fact is mechanical. Approval is not.**
+
+Result (L1, sage, N=3, re-run with the hook):
+
+| | before | after |
+|---|---|---|
+| manifest coherent with the tree | 2/3 | **3/3** |
+| `gate_state` values seen | `gates-passed`, **`plan-approved`**, `complete` | `building`, `gates-passed`, `building` |
+| **L1 overall** | 2/3 | **2/3 — unchanged** |
+
+**L1 did not improve, and that is worth stating plainly.** The manifest has not lied
+since. But in one run of three Sage still failed to *finish the work* — a different
+failure, which ceremony cost causes and a hook cannot fix. `manifest.py check` now
+fails a manifest that contradicts its own tree, so this cannot silently regress.
+
+## The original plan, for the record
 
 1. **An enum.** `gate_state` and `phase` get defined, legal values. A manifest
    carrying anything else is invalid.

@@ -191,20 +191,26 @@ cycle that was interrupted mid-plan.
 | **Sage** | 2/3 — and only when given a second turn | $25.23 |
 
 Given one turn, Sage finished the work in **1 of 3** runs; the bare agent finished in
-3 of 3. And in one run Sage's manifest still read `gate_state: plan-approved` — *"no
-tasks started"* — with all three tasks implemented and committed. **The artifact that
-is supposed to carry the work across the boundary had drifted from the tree it
-describes.**
+3 of 3.
 
-The cause is the one this project keeps rediscovering: **the manifest's state is
-written by the model's goodwill, not by a mechanism.** Three runs of the identical
-cycle produced three different vocabularies for it (`gates-passed`, `plan-approved`,
-`complete`). That is exactly the bug v1.3.0 found in the task ledger — and it needs
-exactly the same fix, which is to generate it rather than ask for it.
+**The worst of it is fixed.** In one run, Sage's manifest read `gate_state:
+plan-approved` — *"no tasks started"* — with all three tasks implemented and
+committed. A session resuming from that manifest would have redone the work. The
+cause was the one this project keeps rediscovering: `cycle-protocol.md` **asked** the
+model to advance the field, in prose, and three runs produced three different answers.
 
-Until it is generated, this is a claim we do not get to make. The fix is written up
-in [docs/plans/manifest-state-is-prose.md](docs/plans/manifest-state-is-prose.md);
-the numbers are in [docs/eval-baseline-v2.md](docs/eval-baseline-v2.md).
+It is generated now (v1.3.2). A PostToolUse hook advances the manifest the moment
+source is written — it fires *because* the agent wrote code, and the firing **is** the
+evidence. Manifest coherence went **2/3 → 3/3**; the manifest has not lied since.
+
+**And Sage still loses this scenario.** L1 stays at **2/3**, because in one run it
+simply did not finish the work — ceremony is not free, and a hook cannot fix that. A
+bare agent with the same files still resumes correctly 3/3, for a quarter of the
+money. That is the honest state of the long-horizon claim: the *bridge* is sound now;
+the *cost* is not yet paid for.
+
+Numbers: [docs/eval-baseline-v2.md](docs/eval-baseline-v2.md). The fix:
+[docs/plans/manifest-state-is-prose.md](docs/plans/manifest-state-is-prose.md).
 
 ### Memory That Compounds
 
