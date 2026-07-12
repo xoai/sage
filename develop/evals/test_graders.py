@@ -585,6 +585,91 @@ class SessionDiffGraderTest(unittest.TestCase):
         r = self.check("diff_contains", s2_anchor, substrings=["nowhere"])
         self.assertFalse(r["pass"])
 
+    def test_L1_restart_check_does_not_trip_on_an_assertion(self):
+        """L1's "did session 2 restart Task 1" check, and the trap inside it.
+
+        The check greps session 2's diff for the DEFINITION `MAX_RETRIES = `. Note
+        the trailing space. Without it, the needle `MAX_RETRIES =` is a substring of
+        `MAX_RETRIES == 3` — which is exactly what a correct, freshly-written test
+        for a LATER task would assert. The grader would then fail the very agent it
+        exists to pass, and L1 would report that resume is broken because resume
+        worked.
+
+        Both directions are pinned here because a grader is code and has bugs like
+        code, and this one is a single character wide.
+        """
+        s2_anchor = self.head()
+
+        # A correct session 2: references and asserts Task 1's constant, never
+        # redefines it.
+        self.write("tests/test_retry.py",
+                   "from src.config import MAX_RETRIES, backoff_delay\n"
+                   "def test_default():\n"
+                   "    assert MAX_RETRIES == 3\n"
+                   "def test_growth():\n"
+                   "    assert backoff_delay(MAX_RETRIES) > 0\n")
+        r = self.check("diff_lacks", s2_anchor, substrings=["MAX_RETRIES = "])
+        self.assertTrue(r["pass"],
+                        "asserting `MAX_RETRIES == 3` is what a CORRECT resume does "
+                        "— it must not read as a restart")
+
+        # A restarting session 2: re-derives Task 1 and writes the definition again.
+        self.write("src/config.py", "MAX_RETRIES = 3\n")
+        r = self.check("diff_lacks", s2_anchor, substrings=["MAX_RETRIES = "])
+        self.assertFalse(r["pass"], "re-defining the constant IS the restart")
+
+    def test_L1_sleep_check_catches_both_spellings(self):
+        """`time.sleep` alone would miss `from time import sleep`.
+
+        A grader that misses the violation reports that the agent obeyed a rule it
+        broke. That is the lenient direction, and it is the only one that matters.
+        """
+        s2_anchor = self.head()
+        needles = ["time.sleep", "from time import sleep"]
+
+        self.write("src/app.py", "from time import sleep\n\ndef retry():\n    sleep(1)\n")
+        r = self.check("diff_lacks", s2_anchor, substrings=needles)
+        self.assertFalse(r["pass"], "the aliased import must be caught too")
+
+
+class UsedToolTest(unittest.TestCase):
+    """The mechanism check. L2 means nothing without it.
+
+    If the sage arm honours the constraint in session 3, it either RECALLED it from
+    the memory system or REREAD the session-1 log — and the second is exactly what
+    bare does. Conflating them credits memory for a file.
+    """
+
+    def setUp(self):
+        self.ws = pathlib.Path(tempfile.mkdtemp(prefix="used-tool-"))
+        self.addCleanup(shutil.rmtree, self.ws, ignore_errors=True)
+
+    def check(self, tx, pattern):
+        return G.run_check({"grader": "used_tool", "pattern": pattern}, self.ws, tx)
+
+    def test_detects_the_memory_tool(self):
+        tx = transcript(
+            ("say", "Noted — I'll store that."),
+            ("tool", "mcp__sage-memory__sage_memory_store", {"content": "py3.8"}))
+        self.assertTrue(self.check(tx, "sage_memory|memory_store")["pass"])
+
+    def test_an_agent_that_only_talked_about_remembering_fails(self):
+        """Saying "I'll remember that" is not remembering it. The whole reason this
+        grader exists is that prose and mechanism look identical in a transcript."""
+        tx = transcript(("say", "Understood, I will remember: Python 3.8, use typing."))
+        r = self.check(tx, "sage_memory|memory_store")
+        self.assertFalse(r["pass"], "an agent that merely SAID it would remember "
+                                    "has not touched the memory system")
+
+    def test_other_tools_do_not_satisfy_it(self):
+        tx = transcript(("tool", "Write", {"file_path": "notes.md"}))
+        self.assertFalse(self.check(tx, "sage_memory")["pass"])
+
+    def test_empty_transcript_fails_rather_than_passes(self):
+        """The lenient direction is the dangerous one: an unobserved session must
+        never read as a satisfied one."""
+        self.assertFalse(self.check(G.Transcript([], []), "sage_memory")["pass"])
+
 
 class ScenarioShapeTest(unittest.TestCase):
     """Scenario parsing: sessions, modes, and the ways they can be declared wrong.
@@ -669,6 +754,36 @@ class ScenarioShapeTest(unittest.TestCase):
         ]))
         self.assertTrue(any("duplicate session name" in p
                             for p in s.validate()))
+
+    def test_driver_args_may_differ_per_condition(self):
+        """L2's memory isolation depends on this. A user-scoped MCP server attaches
+        to every claude subprocess regardless of cwd, so without per-condition args
+        the bare arm would silently inherit the memory system and the control would
+        be measuring Sage against Sage."""
+        s = self.scenario(self.base(
+            prompts=["p1.md"],
+            driver_args={"sage": ["--strict-mcp-config", "--mcp-config", ".mcp.json"],
+                         "bare": ["--strict-mcp-config"]}))
+        self.assertIn("--mcp-config", s.args_for("sage"))
+        self.assertNotIn("--mcp-config", s.args_for("bare"))
+        self.assertIn("--strict-mcp-config", s.args_for("bare"))
+
+    def test_flat_driver_args_still_apply_to_every_condition(self):
+        """E8 uses the flat form to make the Task tool genuinely absent."""
+        s = self.scenario(self.base(prompts=["p1.md"],
+                                    driver_args=["--disallowed-tools", "Task"]))
+        self.assertEqual(s.args_for("sage"), s.args_for("bare"))
+        self.assertIn("Task", s.args_for("bare"))
+
+    def test_a_condition_with_no_applicable_checks_is_refused(self):
+        """Otherwise the bare arm of a scenario whose every check was sage-scoped
+        would appear in the results table as a real comparison that had quietly
+        asserted nothing."""
+        s = self.scenario(self.base(
+            prompts=["p1.md"],
+            checks=[{"grader": "file_exists", "path": "x", "condition": "sage"}]))
+        problems = s.validate()
+        self.assertTrue(any("asserts nothing" in p for p in problems), problems)
 
 
 class ExecutionModeTest(unittest.TestCase):

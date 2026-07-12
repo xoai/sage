@@ -107,10 +107,21 @@ surfaces:
   workflow-continue:
     path: core/workflows/continue.workflow.md
     kind: workflow
-    uncovered: >
-      Nothing measures resume fidelity. This is the headline long-horizon
-      claim — pick up an interrupted cycle without re-planning — and it is
-      unmeasured. Phase 5's L1 scenario exists to close exactly this row.
+    covered-by: [L1]
+    notes: >
+      L1 is the first scenario in Sage's history to cross a context boundary.
+      Session 1 completes task 1 of a 3-task plan and is cut off mid-task-2;
+      session 2 is a FRESH model context that has never seen it, and must resume
+      from the artifacts alone. It grades the three ways a resume can be fake:
+      restarting task 1, rewriting the plan, and forgetting a decision recorded
+      in a session that no longer exists.
+
+      Caveat, stated plainly: L1 does not name /continue in its prompt. Both
+      conditions get the same plain-English "pick up where it left off", because
+      handing the bare arm a slash command it cannot parse would be sabotage, not
+      a control. So this row is covered THROUGH routing — if the dispatcher fails
+      to route a resume request, L1 fails, and it fails for a reason that is worth
+      knowing.
 
   workflow-sage:
     path: core/workflows/sage.workflow.md
@@ -433,12 +444,19 @@ surfaces:
   skill-sage-memory:
     path: skills/sage-memory/SKILL.md
     kind: skill
-    covered-by: [E11]
+    covered-by: [E11, L2]
     notes: >
-      E11 covers the trigger — the agent reaches for this skill when asked to
-      remember. It does not cover RECALL, which is the skill's entire value
-      proposition: does a constraint stored in session 1 change behavior in
-      session 3? Single-session scenarios cannot answer that. L2 (Phase 5) can.
+      E11 covers the TRIGGER — the agent reaches for this skill when asked to
+      remember. L2 now covers RECALL, which is the skill's entire value
+      proposition: a constraint stated in session 1, unrelated work in session 2,
+      and in session 3 a task whose correct implementation depends on the
+      constraint. Three fresh contexts, one workspace.
+
+      L2 also instruments the mechanism rather than trusting the outcome. A pass
+      could mean the memory system recalled the fact — or that the agent reread the
+      session log sitting in the repo, which is exactly what the bare arm does and
+      would mean this skill contributed nothing while taking the credit. The
+      used_tool check on session 1 keeps those two stories apart.
 
   skill-sage-ontology:
     path: skills/sage-ontology/SKILL.md
@@ -580,9 +598,12 @@ surfaces:
   capability-session-bridge:
     path: core/capabilities/context/session-bridge/SKILL.md
     kind: capability
-    uncovered: >
-      Writes the manifest that /continue reads — the literal mechanism of the
-      long-horizon claim, and untested. L1 (Phase 5) targets it.
+    covered-by: [L1]
+    notes: >
+      The literal mechanism of the long-horizon claim: it writes the manifest that
+      the next context reads. L1 is now the thing that tests it, and tests it the
+      only way it can be tested — by throwing the first context away. The manifest
+      either carried the work across or it did not.
 
   capability-context-loader:
     path: core/capabilities/context/context-loader/SKILL.md

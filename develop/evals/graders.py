@@ -723,6 +723,30 @@ def diff_files_within(ws, tx, p) -> tuple:
     return True, f"all {len(files)} touched file(s) within the plan's scope"
 
 
+def used_tool(ws, tx, p) -> tuple:
+    """The agent actually called a tool whose name matches this pattern.
+
+    This is the mechanism check, and L2 does not mean anything without it. If the
+    sage arm honours a constraint in session 3, there are two completely different
+    stories: it RECALLED the constraint from the memory system, or it REREAD the
+    session-1 log sitting in the repo — which is precisely what the bare arm does,
+    and which would mean the memory system contributed nothing while taking the
+    credit. Asserting that a memory tool was actually called in session 1 is what
+    keeps those two stories apart.
+
+    The same confusion has already cost this project once: codex's read-only sandbox
+    blocked an edit, and a naive check would have recorded a successful veto. Nothing
+    -happened and it-worked are indistinguishable unless you instrument the mechanism.
+    """
+    pattern = re.compile(p["pattern"])
+    names = [c["name"] for c in tx.tool_calls()]
+    hits = [n for n in names if pattern.search(n)]
+    if not hits:
+        return False, (f"no tool call matching {p['pattern']!r} "
+                       f"(called: {', '.join(sorted(set(names))[:8]) or 'nothing'})")
+    return True, f"called {len(hits)}× — {', '.join(sorted(set(hits))[:3])}"
+
+
 def file_unchanged_since(ws, tx, p) -> tuple:
     """This file was NOT modified during this session.
 
@@ -744,6 +768,7 @@ GRADERS = {
     "diff_contains":            (diff_contains, ("substrings",)),
     "diff_files_within":        (diff_files_within, ("allowed",)),
     "file_unchanged_since":     (file_unchanged_since, ("path",)),
+    "used_tool":                (used_tool, ("pattern",)),
     "file_absent":              (file_absent, ("path",)),
     "file_contains":            (file_contains, ("path", "substrings")),
     "file_lacks":               (file_lacks, ("path", "substrings")),

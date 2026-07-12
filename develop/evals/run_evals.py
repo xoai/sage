@@ -148,6 +148,13 @@ class Session:
         # runner must NOT record this as a harness error — an expected kill and a
         # crash look identical in a results table unless one of them is declared.
         self.interrupt_after_s = spec.get("interrupt_after_s")
+        # Write this session's prompts + replies to a file in the workspace when it
+        # ends. This is what keeps L2's bare arm from being a strawman: the control
+        # for "Sage remembered it" is not "the bare agent was never told" — it is
+        # "the bare agent was told, the record is right there on disk, and it can
+        # reread it." Retrieval versus reread. Both conditions get the same file; if
+        # the bare agent simply rereads and wins, that publishes.
+        self.transcript_to = spec.get("transcript_to")
 
     @property
     def interrupted(self) -> bool:
@@ -214,7 +221,21 @@ class Scenario:
         self.setup = spec.get("setup", {})
         # Extra driver flags. E8 has to make the Task tool genuinely absent;
         # asking the agent to pretend it is absent tests nothing.
+        #
+        # May be a flat list (all conditions) or an object keyed by condition. L2
+        # needs the latter: the sage arm runs with --strict-mcp-config pointed at the
+        # workspace's own .mcp.json, so its memory is fixture-local and cannot leak
+        # between runs; the bare arm runs with --strict-mcp-config and NO config, so
+        # it genuinely has no memory system. Without that, a user-scoped sage-memory
+        # server would silently attach to BOTH arms — every claude subprocess
+        # inherits it regardless of cwd — and the control would be measuring Sage
+        # against Sage.
         self.driver_args = spec.get("driver_args", [])
+
+    def args_for(self, condition: str) -> list:
+        if isinstance(self.driver_args, dict):
+            return list(self.driver_args.get(condition, []))
+        return list(self.driver_args or [])
 
     @property
     def session_names(self) -> list:
@@ -278,6 +299,23 @@ class Scenario:
                 problems.append(
                     f"checks[{i}]: scoped to session {scope!r}, which this scenario "
                     f"does not declare (has: {', '.join(self.session_names)})")
+
+            cond = check.get("condition")
+            if cond is not None and cond not in CONDITIONS:
+                problems.append(
+                    f"checks[{i}]: unknown condition {cond!r}")
+
+        # A condition with no applicable checks cannot fail, and a scenario that
+        # cannot fail is measuring nothing. Worse, it would be REPORTED — the bare
+        # arm of a scenario whose every check was sage-scoped would show up in the
+        # results table as a real comparison that had quietly asserted nothing.
+        for cond in self.conditions:
+            applicable = [c for c in self.checks
+                          if not c.get("condition") or c.get("condition") == cond]
+            if not applicable:
+                problems.append(
+                    f"condition {cond!r} has no applicable checks — every check is "
+                    f"scoped to another condition, so this arm asserts nothing")
 
         return problems
 
@@ -621,11 +659,28 @@ def run_once(scenario: Scenario, condition: str, driver: Driver,
     for sess in scenario.sessions:
         anchor = head_sha(ws)
         out = ws.parent / f"{scenario.id}-{condition}-{sess.name}.jsonl"
-        run = driver.run(ws, sess.prompts(), out,
-                         extra_args=scenario.driver_args,
+        prompts = sess.prompts()
+        run = driver.run(ws, prompts, out,
+                         extra_args=scenario.args_for(condition),
                          budget_usd=scenario.raw.get(SCENARIO_BUDGET_KEY),
                          timeout_s=scenario.raw.get(SCENARIO_TIMEOUT_KEY),
                          kill_after_s=sess.interrupt_after_s)
+
+        # The reread control (R121). Written for EVERY condition, identically, and
+        # committed — so the next session finds it as an ordinary tracked file that
+        # any agent could open, exactly like a developer's own notes.
+        if sess.transcript_to:
+            tx = graders.Transcript(run["events"], run["turns"])
+            record = [f"# Session: {sess.name}", ""]
+            for i, prompt in enumerate(prompts, 1):
+                record += [f"## Prompt {i}", "", prompt, ""]
+            record += ["## What the agent said", "", tx.text(), ""]
+            dest = ws / sess.transcript_to
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_text("\n".join(record), encoding="utf-8")
+            git(ws, "add", "-A", str(dest))
+            git(ws, "-c", "user.email=evals@sage.test", "-c", "user.name=sage-evals",
+                "commit", "-q", "-m", f"session log: {sess.name}")
 
         result["tokens_in"] += run["tokens_in"]
         result["tokens_out"] += run["tokens_out"]
@@ -656,6 +711,14 @@ def run_once(scenario: Scenario, condition: str, driver: Driver,
 
     checks = []
     for check in scenario.checks:
+        # A check may be scoped to one condition. L1's "the ledger advanced
+        # coherently" is a fact about Sage's machinery; bare has no ledger, and
+        # asserting it there would score the ABSENCE of a feature as a behavioural
+        # loss — the exact dishonesty the per-condition denominators in the report
+        # exist to prevent, and the reason E7/E8/E9 are sage-only. A skipped check
+        # is not a passed check: it is dropped from the denominator entirely.
+        if check.get("condition") and check["condition"] != condition:
+            continue
         scope = check.get("session")
         tx = by_session.get(scope) if scope else whole
         if scope and tx is None:                # validate() rejects this; belt and braces
@@ -952,16 +1015,20 @@ def null_agent_check(scenario: Scenario, root: pathlib.Path) -> list:
     empty = graders.Transcript([], [])
     for condition in scenario.conditions:
         ws = make_workspace(scenario, condition, root)
-        results = [graders.run_check(c, ws, empty) for c in scenario.checks]
+        # Same scoping the real run applies. Grading a sage-only check against a
+        # bare workspace here would invent a problem that the actual run never has.
+        applicable = [c for c in scenario.checks
+                      if not c.get("condition") or c.get("condition") == condition]
+        results = [graders.run_check(c, ws, empty) for c in applicable]
 
-        if all(r["pass"] for r in results):
+        if results and all(r["pass"] for r in results):
             problems.append(
                 f"[{condition}] every check passes on the untouched fixture — "
                 f"this scenario cannot fail, so it measures nothing")
 
         # A check that the fixture itself fails is not measuring the agent. It is
         # measuring the fixture, and it will fail no matter how well the agent does.
-        for c, r in zip(scenario.checks, results):
+        for c, r in zip(applicable, results):
             if r["pass"]:
                 continue
             if c["grader"] in PRECONDITION_GRADERS:

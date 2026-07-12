@@ -1,0 +1,151 @@
+{
+  "id": "L2",
+  "name": "memory-recall",
+  "title": "A constraint stated in session 1. Two sessions later, does anything still know it?",
+  "source": "14-spec-phase5-evidence2.md §43 R121; exercises ADR-13",
+  "fixture": "py-service",
+  "conditions": [
+    "sage",
+    "bare"
+  ],
+  "rationale": [
+    "Three fresh contexts, one workspace. Session 1 is told a constraint that exists",
+    "nowhere in the code and could not be inferred from it. Session 2 does unrelated",
+    "work. Session 3 is handed a task whose CORRECT implementation depends entirely",
+    "on the constraint — and session 3 has never seen session 1.",
+    "",
+    "THE CONSTRAINT IS CHOSEN SO THAT THE DEFAULT BEHAVIOUR IS WRONG. Asked to fully",
+    "annotate a function that takes a list of dicts and returns a dict of lists, a",
+    "modern agent writes `list[dict]` and `dict[str, list[...]]` without hesitating —",
+    "it is the current idiom and it is what the training data is full of. On the",
+    "pinned 3.8 image it raises TypeError at import. The only way to get this right",
+    "is to know a fact that was said out loud, once, two contexts ago. A scenario",
+    "where the unaided agent would probably have been right anyway measures nothing;",
+    "this is the opposite.",
+    "",
+    "The fixture deliberately does not leak the answer: py-service declares no Python",
+    "version anywhere — not in a pytest.ini, not in a README, not in a setup.py. The",
+    "existing annotations (`profile: str`, `-> int`) are too simple to hint either",
+    "way. The constraint lives only in what the user said.",
+    "",
+    "WHY BARE IS NOT A STRAWMAN, AND WHY THAT COST A HARNESS FEATURE. The naive",
+    "control — sage remembers, bare was never told — measures nothing except that",
+    "having a memory beats having none, which nobody doubts. R121 asks the sharper",
+    "question: does RETRIEVAL beat REREADING? So every session's prompts and replies",
+    "are written to `notes/session-N.md` and committed, in BOTH conditions,",
+    "identically. The constraint is sitting in the bare agent's repo as an ordinary",
+    "tracked file, exactly as if a developer had kept notes. Bare can open it. If bare",
+    "opens it and wins, bare wins the row and we publish that — the v1.2.0 baseline",
+    "falsified a README claim and shipped the falsification, and the register does not",
+    "change because the result would be inconvenient.",
+    "",
+    "WHY THE MEMORY TOOL CALL IS ITSELF A CHECK. If the sage arm honours the",
+    "constraint in session 3, there are two entirely different stories: it RECALLED",
+    "from the memory system, or it REREAD notes/session-1.md — which is what bare",
+    "does, and which would mean the memory system contributed nothing while taking",
+    "the credit. The used_tool check on session 1 keeps those apart. This project has",
+    "already been burned by exactly this confusion: codex's read-only sandbox blocked",
+    "an edit, and a naive check would have recorded a successful veto. Nothing-",
+    "happened and it-worked are indistinguishable unless you instrument the mechanism.",
+    "",
+    "MEMORY MUST BE FIXTURE-LOCAL, AND THIS IS NOT AUTOMATIC. A sage-memory server",
+    "configured at USER scope attaches to every `claude` subprocess regardless of cwd",
+    "— so without isolation the bare arm would silently get the memory system too,",
+    "and the control would be measuring Sage against Sage. Worse, memories would",
+    "persist across runs and N=3 would be three runs of a progressively better-",
+    "informed agent. Hence driver_args per condition: sage runs --strict-mcp-config",
+    "against the workspace's OWN .mcp.json (whose store is the workspace's gitignored",
+    ".sage-memory/), and bare runs --strict-mcp-config with no config at all, which",
+    "means no MCP servers exist for it. Both are then exactly what they claim to be.",
+    "",
+    "[V] UNVERIFIED AT AUTHORING TIME. That --strict-mcp-config yields fixture-local",
+    "memory in the sage arm and none in bare is read off the CLI's own documentation",
+    "and the .mcp.json that `sage init` writes; it has NOT been observed in a live",
+    "session, because that costs money this phase has not yet been granted (C16). It",
+    "is the first thing to confirm when L2 is run — and the confirmation is cheap: if",
+    "the session-1 used_tool check fails in sage, the memory server never attached; if",
+    "it PASSES in bare, the isolation leaked. Both failure modes are visible in the",
+    "results, by construction, which is the point of instrumenting the mechanism.",
+    "",
+    "WHAT THIS DOES NOT MEASURE. Whether Sage's memory is better than any other memory",
+    "system; whether the recalled constraint improved code quality generally; or what",
+    "memory costs in tokens across a long project. Only whether a stated fact survives",
+    "two context boundaries and changes what gets written."
+  ],
+  "sessions": [
+    {
+      "name": "s1",
+      "prompts": [
+        "prompt-s1.md"
+      ],
+      "transcript_to": "notes/session-1.md"
+    },
+    {
+      "name": "s2",
+      "prompts": [
+        "prompt-s2.md"
+      ],
+      "transcript_to": "notes/session-2.md"
+    },
+    {
+      "name": "s3",
+      "prompts": [
+        "prompt-s3.md"
+      ]
+    }
+  ],
+  "driver_args": {
+    "sage": [
+      "--strict-mcp-config",
+      "--mcp-config",
+      ".mcp.json"
+    ],
+    "bare": [
+      "--strict-mcp-config"
+    ]
+  },
+  "checks": [
+    {
+      "grader": "used_tool",
+      "describe": "sage-only MECHANISM CHECK — session 1 actually wrote to the memory system (without this, a later pass could just be a reread, and memory would take credit for a file)",
+      "condition": "sage",
+      "session": "s1",
+      "pattern": "sage_memory|memory_store|sage-memory"
+    },
+    {
+      "grader": "diff_lacks",
+      "describe": "session 3 honoured the constraint — no 3.9+ builtin generics reached the code, though they are the idiom every agent reaches for first",
+      "session": "s3",
+      "substrings": [
+        "list[",
+        "dict[",
+        "set[",
+        "tuple["
+      ]
+    },
+    {
+      "grader": "diff_contains",
+      "describe": "session 3 used the 3.8-compatible spelling it was told to use, two contexts ago",
+      "session": "s3",
+      "substrings": [
+        "typing"
+      ]
+    },
+    {
+      "grader": "file_contains",
+      "describe": "the actual work landed",
+      "path": "src/config.py",
+      "substrings": [
+        "def group_by_status"
+      ]
+    },
+    {
+      "grader": "gate_exit",
+      "describe": "the final tree is verifiably green (Gate 5, exit 0)",
+      "script": "core/gates/scripts/sage-verify.sh",
+      "exit": 0
+    }
+  ],
+  "budget_usd": 5.0,
+  "timeout_s": 1800
+}
