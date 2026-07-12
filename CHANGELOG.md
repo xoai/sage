@@ -36,19 +36,32 @@ approval. The long-horizon claim is therefore still *unmeasured* — not support
 refuted. An instrument that exists and has not been read is worth exactly as much as
 no instrument.
 
-### The Pi verdict (Phase 1)
+### The Pi verdict (Phase 1) — **proven, not inferred**
 
 **A Pi extension can veto a tool call.** `{block: true, reason}` on `tool_call`,
 consumed at `agent-loop.ts:621-645`; the tool function is never invoked and the model
-receives the denial. Tier **B**, port estimated at **2–3 person-weeks** — low, because
-the gates do not need rewriting: Sage's gates already exit 2 with a reason, and Pi
-wants exactly that. `docs/pi-spike-verdict.md`.
+receives the denial. Tier **B**, port **2–3 person-weeks** — low, because the gates do
+not need rewriting: Sage's gates already exit 2 with a reason, and Pi wants exactly
+that. `docs/pi-spike-verdict.md`.
 
-**And Pi's contract row stays `false`.** The proof was written but not executed
-(running it means `npm install` in a third-party checkout). Sage nearly shipped
-`pre-tool-veto: true` for codex on documentation that matched its contract almost
-perfectly and that no real session ever honoured. A capability claim does not get to
-outlive its evidence, and it does not get to precede it either.
+**The proof was executed. 4/4, offline, $0** — Pi ships a faux model provider, so the
+whole thing runs in two seconds with no API key. Transcript committed
+(`docs/spike-artifacts/pi-veto-transcript.txt`). It carries a **negative control** (a
+broken tool also leaves the file uncreated, and would look exactly like a veto — this
+project has twice come within a commit of recording one that never happened) and a
+**mutation check** (flip `block: true` → `false` and the tool executes and writes the
+file; the test can go red, so its green means something).
+
+**The trap it caught, which is the finding a port most needs:** `session_start` does
+not fire until `bindExtensions()` is called. The Q2 proof failed on its first run and
+appeared to say *"Pi cannot inject context."* It said nothing of the sort — nothing had
+ever asked it to. **A Sage-on-Pi port that forgets this injects nothing, reports no
+error, and looks exactly like a correctly-installed Sage** until an agent skips a test
+and nobody can explain why the constitution did not stop it.
+
+Pi's contract row still does not exist — because **Sage has no Pi platform**, and
+building one is a port, which ADR-12 forbids in this program. The capability is proven;
+the platform is not built. The row lands in program 3, with the regression test.
 
 ### Packs stop being a promise (Phase 6)
 

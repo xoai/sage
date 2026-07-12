@@ -1,0 +1,36 @@
+Pi spike — Q1/Q2/Q3 proof transcript
+======================================================================
+pi:      earendil-works/pi @ 8479bd8
+package: @earendil-works/pi-coding-agent 0.80.6
+node:    v24.14.1
+date:    2026-07-12T14:46:07Z
+cmd:     node ./node_modules/vitest/dist/cli.js --run spike/pi-veto-proof.test.ts
+network: none — Pi's faux model provider. No API key. $0.
+======================================================================
+
+
+ RUN  v4.1.9 /home/xoai/.claude/jobs/399cd0e9/tmp/pi-spike/packages/coding-agent
+
+ ✓ spike/pi-veto-proof.test.ts > Sage spike — can a Pi extension enforce? > CONTROL: an allowed path is written (so an unwritten file MEANS something) 13ms
+ ✓ spike/pi-veto-proof.test.ts > Sage spike — can a Pi extension enforce? > Q1: BLOCKS a write to *.blocked.* and tells the model why 3ms
+ ✓ spike/pi-veto-proof.test.ts > Sage spike — can a Pi extension enforce? > Q2: the eager core reaches the model's context at session start 2ms
+ ✓ spike/pi-veto-proof.test.ts > Sage spike — can a Pi extension enforce? > Q3: completed tool calls are observable, with name + input + status 2ms
+
+ Test Files  1 passed (1)
+      Tests  4 passed (4)
+   Start at  21:46:07
+   Duration  2.38s (transform 1.65s, setup 0ms, import 2.27s, tests 20ms, environment 0ms)
+
+
+======================================================================
+MUTATION CHECK — proving the test can fail
+======================================================================
+Changing the extension's veto from {block:true} to {block:false} and re-running:
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  spike/pi-veto-proof.test.ts > Sage spike — can a Pi extension enforce? > Q1: BLOCKS a write to *.blocked.* and tells the model why
+AssertionError: expected true to be false // Object.is equality
+      Tests  1 failed | 3 passed (4)
+
+-> With the veto disabled, the tool EXECUTES and writes the file.
+   The veto is what stops it. The test is not vacuous.

@@ -1,69 +1,84 @@
 # Running the Pi spike proof
 
-Two files here, both throwaway (10-spec §21 R84 — nothing from the spike merges
-into `runtime/` or `core/`):
+**This has been run. It passes 4/4.** The transcript is `pi-veto-transcript.txt`.
+These are the commands that produced it, so anyone can reproduce it.
 
 | File | What it is |
 |---|---|
 | `pi-sage-spike.ts` | The PoC extension: eager-core injection (Q2), veto (Q1), audit log (Q3) |
-| `pi-veto-proof.test.ts` | The Q1 proof, driven by Pi's faux provider — no network, no API key, no spend |
+| `pi-veto-proof.test.ts` | The proof — a negative control plus Q1/Q2/Q3 |
+| `pi-veto-transcript.txt` | The committed evidence (§22), including the mutation check |
+
+Throwaway, per 10-spec §21 R84 — nothing here merges into `runtime/` or `core/`.
 
 ## Why this is free
 
 Pi ships a **faux model provider** (`packages/ai/src/providers/faux.ts`, publicly
-re-exported from `packages/ai/src/index.ts`) that lets you script the model's turns
-directly. Its `DEFAULT_BASE_URL` is `http://localhost:0` and is never dialed. So the
-decisive question of this spike — can an extension actually stop a tool call —
-is answerable **offline, deterministically, and for $0**.
+re-exported) that lets you script the model's turns. Its `DEFAULT_BASE_URL` is
+`http://localhost:0` and is never dialed. So the decisive question — can an extension
+actually stop a tool call — is answerable **offline, deterministically, in ~2 seconds,
+for $0**.
 
-That is unusual and worth saying out loud. It means Sage could keep a Pi-veto
-regression test in CI that runs in seconds with no key, and catch a breaking API
-change at upgrade time rather than in production. Pi bumps breaking changes in
-*minor* releases (see the verdict's risk section), so that test is not optional.
+That means a Sage-on-Pi veto regression test can live in CI, needing no key, and catch
+a breaking change the morning it lands. Given that Pi bumps **breaking changes in minor
+releases** (see the verdict's risk section), that test is not optional.
 
-## Steps
+## Reproduce
 
 ```bash
 git clone https://github.com/earendil-works/pi
 cd pi
-npm install                                    # installs the monorepo's deps
+npm install                     # lifecycle scripts stay blocked; that is fine
 
-# Drop the two spike files into the coding-agent package
 mkdir -p packages/coding-agent/spike
 cp /path/to/sage/docs/spike-artifacts/pi-sage-spike.ts      packages/coding-agent/spike/
 cp /path/to/sage/docs/spike-artifacts/pi-veto-proof.test.ts packages/coding-agent/spike/
 
 cd packages/coding-agent
-node ../../node_modules/vitest/dist/cli.js --run spike/pi-veto-proof.test.ts
+node ./node_modules/vitest/dist/cli.js --run spike/pi-veto-proof.test.ts
 ```
 
-**Do not run the full vitest suite.** Pi's `AGENTS.md` warns that it activates e2e
-tests which hit real endpoints when auth env vars are present. Name the file.
+Expected:
 
-## What a pass proves
+```
+✓ CONTROL: an allowed path is written (so an unwritten file MEANS something)
+✓ Q1: BLOCKS a write to *.blocked.* and tells the model why
+✓ Q2: the eager core reaches the model's context at session start
+✓ Q3: completed tool calls are observable, with name + input + status
 
-The test is hostile by construction: the `write` tool's `execute()` **throws**. If
-the veto does not fire, the tool runs, the throw escapes, and the test fails. There
-is no way for it to pass while the block quietly does nothing.
+Tests  4 passed (4)
+```
 
-That property is the whole point, and it is not paranoia — it is scar tissue.
-Twice, a naive check would have reported success when *nothing had happened at
-all*: codex's read-only sandbox blocked an edit (which would have been recorded as
-a veto), and opencode's crashed runs left the file unchanged (same). An unchanged
-file is not evidence of a veto. An unexecuted tool is.
+**Do not run the full vitest suite.** Pi's `AGENTS.md` warns it activates e2e tests
+that hit real endpoints when auth env vars are present. Name the file.
 
-## The one thing not yet done
+## The two things that make this a proof rather than a green tick
 
-At the time the verdict was written, this test had **not been executed** — running
-it requires `npm install` inside a third-party checkout, which executes that repo's
-lifecycle scripts, and the spike had no authorization to do that. The verdict says
-so plainly and does not launder the gap.
+**1. A negative control.** The `write` tool really writes. The CONTROL test sends it
+to an *allowed* path and asserts the file appears — because a tool that is broken, or
+never wired up, also leaves the file uncreated, and would look exactly like a
+successful veto. Only once the tool is proven capable of writing does its failure to
+write mean anything.
 
-Everything Q1 claims is traced to source and to Pi's *own* passing test
-(`packages/coding-agent/test/suite/agent-session-model-extension.test.ts:117-160`,
-"allows extension tool_call handlers to block tool execution" — whose tool also
-throws if executed). That is a stronger foundation than documentation, which is
-what misled us on codex. It is still not the same as having run it ourselves.
+Not paranoia. Scar tissue. Twice this project came within a commit of recording a veto
+that never happened: codex's read-only sandbox blocked an edit, and opencode's crashed
+runs left the file unchanged.
 
-Run the command above and paste the output into the verdict. It takes a minute and
-it converts the last inference into an observation.
+**2. A mutation check.** Flip the extension's `{block: true}` to `{block: false}` and
+Q1 fails — `expected true to be false`, because the tool then *executes and writes the
+file*. The veto is what stops it. A test that cannot go red is not evidence.
+
+## The trap that cost an hour
+
+**`session_start` does not fire until `bindExtensions()` is called** — it is emitted
+inside it, at `agent-session.ts:2197`, and Pi's test harness does not call it. The Q2
+proof failed on its first run and appeared to say *"Pi cannot inject context at session
+start."*
+
+It says nothing of the sort. Nothing had ever asked it to.
+
+`print-mode.ts:73` calls `session.bindExtensions({mode})` before driving a turn; the
+proof now does the same, and Q2 passes. **A Sage-on-Pi port that forgets this will
+inject nothing, report no error, and look exactly like a correctly-installed Sage** —
+until an agent skips a test and nobody can explain why the constitution did not stop
+it.
