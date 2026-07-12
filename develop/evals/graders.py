@@ -24,6 +24,7 @@ Python 3.8+, stdlib only.
 """
 from __future__ import annotations
 
+import fnmatch
 import json
 import pathlib
 import re
@@ -38,11 +39,22 @@ class Transcript:
     The interesting facts are rarely in the final message. "Did it run the tests
     before it said it was done" is a claim about the ORDER of a tool call and a
     sentence, so the events are kept in sequence, not summarized.
+
+    `since` is the commit the session STARTED from — set when this transcript is
+    scoped to one session of a multi-session scenario. It is what lets a grader ask
+    "what did session 2 change", which is a different question from "what does the
+    tree look like now". In L1, session 1 legitimately writes the plan; grading the
+    whole-run diff for a foreclosed implementation would convict session 1's
+    planning of session 2's sins. None = the whole run, and diff graders then fall
+    back to the fixture's root commit.
     """
 
-    def __init__(self, events: list, turns: list):
+    def __init__(self, events: list, turns: list, since: str = None,
+                 session: str = None):
         self.events = events or []
         self.turns = turns or []
+        self.since = since or None
+        self.session = session
 
     def text(self) -> str:
         """Everything the agent said, in order."""
@@ -603,8 +615,135 @@ def ledger_attributes_commits(ws, tx, p) -> tuple:
     return True, f"{len(done)} task(s) attributed to real commit ranges"
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Diff graders — "what did THIS SESSION do", not "what does the tree look like"
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# Sage's own installed framework is not the agent's work. `sage init` writes a
+# few hundred files into sage/ and .claude/ and leaves most of them untracked, so
+# a grader that naively asks git "what changed" attributes the entire framework to
+# the agent: a scope-hold check would then fail every sage run on principle, and a
+# `diff_lacks` check would trip over any word that appears anywhere in Sage's own
+# source.
+#
+# This is E5's bug wearing a new hat. E5's Gate 4 scanned the whole workspace,
+# found "phantom imports" in Sage's vendored example code, and scored sage 0/3
+# against bare 3/3 — a clean "Sage makes the agent worse" result manufactured
+# entirely by the harness. The exclusion is therefore NAMED and visible, not a
+# silent filter, and it deliberately does NOT exclude `.sage/work/` — the cycle
+# manifest and its ledger ARE the agent's work, and grading them is the point.
+FRAMEWORK_PATHS = (
+    "sage/", ".claude/", ".agent/", ".mcp.json",
+    ".sage/config.yaml", ".sage/constitution.md", ".sage/agents.toml",
+    ".sage/gates/", ".sage/scripts/", ".sage/prompts/", ".sage/templates/",
+)
+
+
+def _is_framework(rel: str) -> bool:
+    return any(rel == p or rel.startswith(p) for p in FRAMEWORK_PATHS)
+
+
+def _root_commit(ws: pathlib.Path) -> str:
+    out = _git(ws, "rev-list", "--max-parents=0", "HEAD")
+    return (out.splitlines() or [""])[0].strip()
+
+
+def _session_diff(ws: pathlib.Path, since: str) -> tuple:
+    """(files_touched, added_text) for everything that changed since `since`.
+
+    Counts committed changes, uncommitted edits, AND untracked new files — an agent
+    that writes a file and never commits it has still written it, and a grader that
+    only reads the git log would call that a clean run.
+    """
+    base = since or _root_commit(ws)
+    files, added = set(), []
+
+    for rel in _git(ws, "diff", "--name-only", base).splitlines():
+        rel = rel.strip()
+        if rel and not _is_framework(rel):
+            files.add(rel)
+
+    for line in _git(ws, "diff", "--unified=0", base).splitlines():
+        if line.startswith("+") and not line.startswith("+++"):
+            added.append(line[1:])
+
+    for rel in _git(ws, "ls-files", "--others", "--exclude-standard").splitlines():
+        rel = rel.strip()
+        if not rel or _is_framework(rel):
+            continue
+        files.add(rel)
+        try:
+            added.extend((ws / rel).read_text(errors="replace").splitlines())
+        except OSError:
+            pass
+
+    return sorted(files), "\n".join(added)
+
+
+def diff_lacks(ws, tx, p) -> tuple:
+    """This session introduced none of these strings.
+
+    The L1 decision check: a decision recorded in session 1 forecloses an
+    implementation option, and session 2 — which never saw that conversation — must
+    still honour it. Scoped to the session, because session 1 may legitimately have
+    WRITTEN the foreclosed word down while recording the decision to avoid it.
+    """
+    _, added = _session_diff(ws, tx.since)
+    hits = [s for s in p["substrings"] if s in added]
+    if hits:
+        where = f"session {tx.session!r}" if tx.session else "the run"
+        return False, f"{where} introduced: {', '.join(hits)}"
+    return True, f"none of {len(p['substrings'])} forbidden string(s) introduced"
+
+
+def diff_contains(ws, tx, p) -> tuple:
+    """This session introduced every one of these strings."""
+    _, added = _session_diff(ws, tx.since)
+    missing = [s for s in p["substrings"] if s not in added]
+    if missing:
+        where = f"session {tx.session!r}" if tx.session else "the run"
+        return False, f"{where} never introduced: {', '.join(missing)}"
+    return True, f"all {len(p['substrings'])} string(s) introduced"
+
+
+def diff_files_within(ws, tx, p) -> tuple:
+    """Every file this session touched matches one of the allowed globs.
+
+    Scope-hold (R122). The claim is not "the agent did the work" but "the agent did
+    ONLY the work" — and an agent that fixes a tempting unrelated bug on the way
+    past has broken the plan's contract even though every test still passes.
+    """
+    files, _ = _session_diff(ws, tx.since)
+    allowed = p["allowed"]
+    stray = [f for f in files
+             if not any(fnmatch.fnmatch(f, g) for g in allowed)]
+    if stray:
+        return False, (f"touched {len(stray)} file(s) outside the plan: "
+                       f"{', '.join(stray[:6])}")
+    return True, f"all {len(files)} touched file(s) within the plan's scope"
+
+
+def file_unchanged_since(ws, tx, p) -> tuple:
+    """This file was NOT modified during this session.
+
+    L1's "no re-planning ceremony" check. A resumed cycle that rewrites its own plan
+    has not resumed it — it has restarted it, and the artifact that was supposed to
+    carry the work across the context boundary has been overwritten by an agent that
+    did not trust it.
+    """
+    files, _ = _session_diff(ws, tx.since)
+    if p["path"] in files:
+        where = f"session {tx.session!r}" if tx.session else "the run"
+        return False, f"{where} rewrote {p['path']}"
+    return True, f"{p['path']} survived untouched"
+
+
 GRADERS = {
     "file_exists":              (file_exists, ("path",)),
+    "diff_lacks":               (diff_lacks, ("substrings",)),
+    "diff_contains":            (diff_contains, ("substrings",)),
+    "diff_files_within":        (diff_files_within, ("allowed",)),
+    "file_unchanged_since":     (file_unchanged_since, ("path",)),
     "file_absent":              (file_absent, ("path",)),
     "file_contains":            (file_contains, ("path", "substrings")),
     "file_lacks":               (file_lacks, ("path", "substrings")),
