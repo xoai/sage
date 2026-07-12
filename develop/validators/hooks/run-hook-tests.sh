@@ -572,6 +572,28 @@ assert H39 "a Write declaring gates-passed with an unreviewed ledger in the SAME
   '{"tool_name":"Write","tool_input":{"file_path":".sage/work/led-d/manifest.md","content":"---\ncycle_id: \"led-d\"\ngate_state: gates-passed\nexecution_mode: subagent\ntasks:\n  - id: 1\n    status: done\n    review: pending\n---\n"}}' \
   --exit 2 --stderr "R101"
 
+# H41 — the hole E9 found. A cycle in subagent mode that never wrote a ledger
+# would sail through the guard: parse_ledger() returns None, the guard disables
+# itself for backward compatibility, and the cycle claims gates-passed with no
+# evidence any task was ever reviewed. The check was opt-in by the agent it polices.
+P="$(new_project)"; set_config "$P" "hard_enforcement: true"
+mkdir -p "$P/.sage/work/no-led"
+printf -- '---\ncycle_id: "no-led"\nworkflow: build\nphase: implement\nstatus: in-progress\ntier: standard\ngate_state: building\nexecution_mode: subagent\n---\n\n# Cycle\n' \
+  > "$P/.sage/work/no-led/manifest.md"
+assert H41 "subagent mode with NO ledger cannot reach gates-passed" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/no-led/manifest.md","new_string":"gate_state: gates-passed"}}' \
+  --exit 2 --stderr "NO task ledger"
+
+# H42 — and the backward-compatibility promise still holds: an INLINE cycle with
+# no ledger is untouched. Only `execution_mode: subagent` arms the requirement.
+P="$(new_project)"; set_config "$P" "hard_enforcement: true"
+mkdir -p "$P/.sage/work/inline-c"
+printf -- '---\ncycle_id: "inline-c"\nworkflow: build\nphase: implement\nstatus: in-progress\ntier: standard\ngate_state: building\nexecution_mode: inline\n---\n\n# Cycle\n' \
+  > "$P/.sage/work/inline-c/manifest.md"
+assert H42 "inline mode with no ledger is unaffected" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/inline-c/manifest.md","new_string":"gate_state: gates-passed"}}' \
+  --exit 0 --no-stderr "ledger"
+
 # The guard must not fire on ordinary ledger updates mid-cycle — only on the
 # claim that the chain has run. A hook that blocks every manifest write is a hook
 # people disable.

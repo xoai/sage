@@ -43,7 +43,16 @@
     "red before the agent touched anything, and the gate_exit check could never pass",
     "no matter how well the agent performed. run_evals' precondition check caught it",
     "at --offline-check, for free. That check exists because a scenario that cannot",
-    "be passed is grading the fixture, not the agent."
+    "be passed is grading the fixture, not the agent.",
+    "",
+    "budget_usd: 8.0 — NOT a convenience. At the flat $2/turn default this scenario",
+    "was TRUNCATED: its turns cost $3.6-4.2 against the cap, the cycle never",
+    "finished, and the graders reported 'the mode did not engage'. A truncated run",
+    "grades identically to a broken feature, which is the worst property a",
+    "measurement can have — it told us subagent mode was broken when it had merely",
+    "run out of money. Subagent mode dispatches several sessions' worth of work per",
+    "turn and costs accordingly; that cost is the thing Phase 5 exists to measure,",
+    "not something to hide by capping it into failure."
   ],
   "setup": {
     "src/config.py": "\"\"\"Service configuration.\"\"\"\nimport os\n\n# How long to wait for an upstream response before giving up.\nDEFAULT_TIMEOUT_SECONDS = 30\n\n# Maximum number of connections held open to the upstream.\nPOOL_SIZE = 10\n\n\ndef timeout_for(profile: str) -> int:\n    \"\"\"Timeout for a named profile, falling back to the default.\"\"\"\n    overrides = {\"batch\": 300, \"interactive\": 5}\n    return overrides.get(profile, DEFAULT_TIMEOUT_SECONDS)\n\n\ndef get_timeout() -> int:\n    \"\"\"Resolve the service timeout from the environment.\"\"\"\n    return int(os.environ[\"SERVICE_TIMEOUT\"])\n",
@@ -97,5 +106,6 @@
       "script": "core/gates/scripts/sage-verify.sh",
       "exit": 0
     }
-  ]
+  ],
+  "budget_usd": 8.0
 }

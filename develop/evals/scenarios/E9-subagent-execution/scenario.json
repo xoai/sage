@@ -4,7 +4,9 @@
   "title": "A three-task plan, in subagent mode. Does every task actually get reviewed?",
   "source": "12-spec-phase3-subagent-execution.md §32; exercises ADR-10",
   "fixture": "py-service",
-  "conditions": ["sage"],
+  "conditions": [
+    "sage"
+  ],
   "rationale": [
     "ADR-10's claim is not 'subagents are used'. It is that every task in a plan is",
     "implemented by a fresh context and then judged by a DIFFERENT fresh context,",
@@ -34,14 +36,26 @@
     "modes on the same scenarios, and it is Phase 5's mode-comparison run (P5-T3).",
     "This scenario only establishes that the mode does what it says on the tin. A",
     "mechanism that works and is not worth its price is still a mechanism that works,",
-    "and the two questions are answered by different experiments."
+    "and the two questions are answered by different experiments.",
+    "",
+    "budget_usd: 8.0 — NOT a convenience. At the flat $2/turn default this scenario",
+    "was TRUNCATED: its turns cost $3.6-4.2 against the cap, the cycle never",
+    "finished, and the graders reported 'the mode did not engage'. A truncated run",
+    "grades identically to a broken feature, which is the worst property a",
+    "measurement can have — it told us subagent mode was broken when it had merely",
+    "run out of money. Subagent mode dispatches several sessions' worth of work per",
+    "turn and costs accordingly; that cost is the thing Phase 5 exists to measure,",
+    "not something to hide by capping it into failure."
   ],
   "setup": {
     ".sage/work/003-config-hardening/spec.md": "---\nstatus: completed\n---\n\n# Spec: Config hardening\n\nThe service config module has no retry policy, no env override, and no\nvalidation. Three changes, in `src/config.py`:\n\n1. **MAX_RETRIES** — a module constant, default `3`.\n2. **get_timeout()** — returns the timeout as an int. Reads `SERVICE_TIMEOUT`\n   from the environment when set. When it is UNSET it MUST fall back to\n   `DEFAULT_TIMEOUT_SECONDS`. It must never raise on a missing variable.\n3. **validate_config()** — raises `ValueError` when the resolved timeout is\n   less than or equal to zero. Returns `True` otherwise.\n\nEvery change carries a test.\n",
     ".sage/work/003-config-hardening/plan.md": "---\nstatus: completed\n---\n\n# Plan: Config hardening\n\nGlobal constraints: touch only `src/config.py` and `tests/`. Do not reformat\nexisting code.\n\n## Task 1 — MAX_RETRIES\n\nAdd a `MAX_RETRIES = 3` module constant to `src/config.py`.\nFiles: `src/config.py`, `tests/`\nOutput: `src/config.py` exports MAX_RETRIES; a test asserts its default.\n\n## Task 2 — get_timeout()\n\nAdd `get_timeout()` per spec §2. It reads `SERVICE_TIMEOUT` from the\nenvironment, and falls back to `DEFAULT_TIMEOUT_SECONDS` when unset.\nFiles: `src/config.py`, `tests/`\nOutput: `src/config.py` exports get_timeout(); tests cover both the set and the\nunset case.\n\n## Task 3 — validate_config()\n\nAdd `validate_config()` per spec §3.\nFiles: `src/config.py`, `tests/`\nOutput: `src/config.py` exports validate_config(); a test asserts it raises on a\nnon-positive timeout.\n",
     ".sage/work/003-config-hardening/manifest.md": "---\ncycle_id: \"20260712-config-hardening\"\nworkflow: build\nphase: implement\nstatus: in-progress\ntier: standard\ngate_state: plan-approved\ncreated: 2026-07-12\nupdated: 2026-07-12 14:00\nflags:\n  quality_locked: false\n  autonomous: false\n  subagents: true\n---\n\n# Cycle: Config hardening\n\n## State\n\n**Current phase:** implement — plan approved, no tasks started\n**Next step:** Task 1 — MAX_RETRIES\n\n## Context summary\n\nThe spec and plan are approved. Three mechanical tasks in one file. The user\nasked for subagent execution.\n"
   },
-  "prompts": ["prompt-1.md", "prompt-2.md"],
+  "prompts": [
+    "prompt-1.md",
+    "prompt-2.md"
+  ],
   "checks": [
     {
       "grader": "tree_matches",
@@ -64,7 +78,11 @@
       "grader": "file_contains",
       "describe": "the work actually landed (all three deliverables)",
       "path": "src/config.py",
-      "substrings": ["MAX_RETRIES", "def get_timeout", "def validate_config"]
+      "substrings": [
+        "MAX_RETRIES",
+        "def get_timeout",
+        "def validate_config"
+      ]
     },
     {
       "grader": "tree_matches",
@@ -78,5 +96,6 @@
       "script": "core/gates/scripts/sage-verify.sh",
       "exit": 0
     }
-  ]
+  ],
+  "budget_usd": 8.0
 }

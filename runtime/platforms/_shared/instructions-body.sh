@@ -150,9 +150,9 @@ not trust your own report that the implementation matches the spec.
 
 ### Rule 6: Capture Corrections
 
-A user correction is stored via `sage_memory_store()` — Sage's memory, not the
-platform's — **before you proceed**. Not optional. The other five triggers and
-the storage format: → **sage-using-memory** skill.
+When the user corrects you, store the correction **before you proceed**. Not
+optional. → **sage-using-memory** skill — where it goes, in what format, and the
+other five triggers that require it.
 
 ### Rule 7: Record Decisions at Checkpoints
 

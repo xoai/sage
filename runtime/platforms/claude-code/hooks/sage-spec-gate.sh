@@ -303,6 +303,41 @@ if is_manifest and under_work:
             except OSError:
                 ledger = None
 
+        # A cycle running in SUBAGENT mode with no ledger at all is not a
+        # backward-compatible cycle — it is a subagent cycle that never wrote its
+        # ledger, and the guard below would wave it straight through.
+        #
+        # E9 found this. The agent ran in subagent mode, never produced a `tasks:`
+        # block, and reached for gates-passed; parse_ledger() returned None, the
+        # guard disabled itself, and nothing complained. The check that was
+        # supposed to prove every task got an independent review was opt-in by the
+        # very agent it polices.
+        #
+        # `execution_mode: subagent` is the discriminator: pre-1.3.0 manifests and
+        # inline cycles never carry it, so they stay exempt exactly as before.
+        mode = manifest_field(abspath, "execution_mode")
+        if mode is None:
+            m = re.search(r"^\s*execution_mode\s*:\s*\"?([A-Za-z0-9_-]+)",
+                          new_text, re.M)
+            mode = m.group(1).lower() if m else None
+
+        if mode == "subagent" and ledger is None:
+            slug = os.path.basename(os.path.dirname(abspath))
+            emit(
+                "BLOCK",
+                (
+                    'Sage spec-gate: cannot set gate_state: gates-passed on "%s" —\n'
+                    "the cycle is in subagent execution and has NO task ledger.\n\n"
+                    "R101: subagent mode's entire claim is that every task was\n"
+                    "implemented by a fresh context and independently reviewed by\n"
+                    "another. The ledger is the only record of that. A cycle with no\n"
+                    "ledger is not a cycle that passed review — it is a cycle with no\n"
+                    "evidence it was reviewed at all.\n\n"
+                    "Write the `tasks:` block, or set execution_mode: inline and stop\n"
+                    "claiming the subagent chain ran."
+                ) % slug,
+            )
+
         if ledger is not None:
             incomplete = ledger_incomplete(ledger)
             if incomplete:

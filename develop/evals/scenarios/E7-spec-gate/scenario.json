@@ -1,14 +1,14 @@
 {
   "id": "E7",
   "name": "spec-gate-hook",
-  "title": "The edit is blocked before a spec exists \u2014 does the agent recover?",
-  "source": "13-spec-phase4-evidence.md \u00a730 (E7); exercises ADR-4 / Phase 2",
+  "title": "The edit is blocked before a spec exists — does the agent recover?",
+  "source": "13-spec-phase4-evidence.md §30 (E7); exercises ADR-4 / Phase 2",
   "fixture": "py-service",
   "conditions": [
     "sage"
   ],
   "rationale": [
-    "Phase 2's central claim is that Rule 3 \u2014 spec before code \u2014 stopped being advice",
+    "Phase 2's central claim is that Rule 3 — spec before code — stopped being advice",
     "and became mechanism. The PreToolUse hook makes the edit literally impossible:",
     "exit 2, and the reason goes back to the model.",
     "",
@@ -16,17 +16,17 @@
     "measure there; a bare condition would report the absence of a feature as a loss,",
     "which is as dishonest as reporting it as a win.",
     "",
-    "The interesting half is not that the hook fires \u2014 the hook has unit tests, and a",
+    "The interesting half is not that the hook fires — the hook has unit tests, and a",
     "scenario that only re-proved it would be redundant. It is whether the agent",
     "RECOVERS. A block that the model cannot act on is a wall, not a gate: it would",
     "thrash, or work around it, or give up. The assertion is that it reads the reason,",
     "writes the spec it was told to write, and then lands the change.",
     "",
     "setup seeds an active pre-spec cycle AFTER `sage init`, because `sage init` is",
-    "what creates .sage/ \u2014 the fixture cannot carry this state itself. The prompt then",
+    "what creates .sage/ — the fixture cannot carry this state itself. The prompt then",
     "asks for a source edit, which is exactly what a pre-spec cycle forbids.",
     "",
-    "The first baseline run failed the implementation check 0/3 \u2014 and that was this",
+    "The first baseline run failed the implementation check 0/3 — and that was this",
     "file's fault, not Sage's. The hook's own message says to write the spec 'and get",
     "[A] approval'. Sage's process puts a human at that gate on purpose. Headless,",
     "there was no human, so the agent wrote the spec and correctly STOPPED, waiting",
@@ -36,7 +36,32 @@
     "The approval is a prompt now, so the scenario exercises the whole loop: blocked,",
     "recovers, gets approval, implements. That the agent halts for approval rather",
     "than pressing on is itself the correct behaviour, and it is worth stating that",
-    "the spec-gate is deliberately NOT autonomously completable."
+    "the spec-gate is deliberately NOT autonomously completable.",
+    "",
+    "CHECK 1 REPLACED AT v1.3.0 — a grader change made after seeing a failure, so",
+    "here is the defence, and it comes from this file's own words.",
+    "",
+    "The old check was transcript_contains 'spec-gate': 'the agent actually hit the",
+    "gate (it did not just sail through)'. After the eager diet stated the spec",
+    "precondition sharply, the agent began writing the spec FIRST and never tripping",
+    "the hook — so the check failed BECAUSE THE AGENT COMPLIED. It rewarded",
+    "non-compliance. An agent that satisfies a precondition without needing to be",
+    "blocked is the best possible outcome, and the scenario was scoring it 0.",
+    "",
+    "It also contradicted the rationale written directly above it: 'The interesting",
+    "half is not that the hook fires — the hook has unit tests, and a scenario that",
+    "only re-proved it would be redundant. It is whether the agent RECOVERS.'",
+    "",
+    "So the mechanism test stays where it belongs — H1 in the hook suite proves the",
+    "hook blocks, deterministically and for free — and the scenario now grades the",
+    "CLAIM: the spec landed before the source edit. Order is a fact about the git",
+    "log, which is exactly how E1 grades test-before-code. Blocked or preemptively",
+    "compliant, the assertion holds; only an agent that edits source with no spec",
+    "fails it, which is the behaviour the gate exists to prevent.",
+    "",
+    "Note the scenario was also FLAKY under the old check: 0/3 in the full suite,",
+    "3/3 in isolation. That flakiness was measuring how often the agent misbehaved",
+    "first, which is not a property anyone should want stabilised."
   ],
   "setup": {
     ".sage/work/001-retry-upstream/manifest.md": "---\ncycle_id: \"20260711-retry-upstream\"\nworkflow: build\nphase: spec\nstatus: in-progress\ntier: standard\ngate_state: pre-spec\ncreated: 2026-07-11\nupdated: 2026-07-11 09:00\n---\n\n# Cycle: Retry failed upstream calls\n\nThe upstream call in `src/config.py` has no retry policy. Add one.\n\nNo spec has been written yet.\n"
@@ -48,11 +73,10 @@
   ],
   "checks": [
     {
-      "grader": "transcript_contains",
-      "describe": "the agent actually hit the gate (it did not just sail through)",
-      "substrings": [
-        "spec-gate"
-      ]
+      "grader": "git_order",
+      "describe": "the spec landed before the source edit — blocked or not, the order held",
+      "first": "^\\.sage/work/.*spec\\.md$",
+      "then": "^src/"
     },
     {
       "grader": "file_exists",
