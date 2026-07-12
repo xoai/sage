@@ -61,7 +61,23 @@
     "",
     "Note the scenario was also FLAKY under the old check: 0/3 in the full suite,",
     "3/3 in isolation. That flakiness was measuring how often the agent misbehaved",
-    "first, which is not a property anyone should want stabilised."
+    "first, which is not a property anyone should want stabilised.",
+    "",
+    "AND THE FIRST REPLACEMENT WAS ALSO WRONG. git_order grades the COMMIT LOG —",
+    "and E7 never asks the agent to commit. (E1 does, in a prompt written for",
+    "exactly that reason: 'commit your work'.) The agent duly never commits, so",
+    "git_order asked the history a question the history had never been told to",
+    "answer, and returned False for runs in which the agent did everything right.",
+    "",
+    "Third time: tool_order, over the transcript, where the evidence actually is.",
+    "The Write of spec.md happened, the Edit of src/ happened, and they happened in",
+    "an order. That order is the claim.",
+    "",
+    "Three iterations on one check is worth recording rather than tidying away. Each",
+    "was an instrument defect and each was caught by running the thing: the original",
+    "rewarded non-compliance, the second interrogated a commit log that does not",
+    "exist. A grader is code, it has bugs like code, and the only thing that finds",
+    "them is pointing it at reality and being suspicious of the answer."
   ],
   "setup": {
     ".sage/work/001-retry-upstream/manifest.md": "---\ncycle_id: \"20260711-retry-upstream\"\nworkflow: build\nphase: spec\nstatus: in-progress\ntier: standard\ngate_state: pre-spec\ncreated: 2026-07-11\nupdated: 2026-07-11 09:00\n---\n\n# Cycle: Retry failed upstream calls\n\nThe upstream call in `src/config.py` has no retry policy. Add one.\n\nNo spec has been written yet.\n"
@@ -73,10 +89,10 @@
   ],
   "checks": [
     {
-      "grader": "git_order",
-      "describe": "the spec landed before the source edit — blocked or not, the order held",
-      "first": "^\\.sage/work/.*spec\\.md$",
-      "then": "^src/"
+      "grader": "tool_order",
+      "describe": "the spec was written before the source was touched — blocked or not, the order held",
+      "first": "spec\\.md",
+      "then": "src/config\\.py"
     },
     {
       "grader": "file_exists",

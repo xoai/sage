@@ -66,12 +66,33 @@ class Transcript:
                 if block.get("type") == "tool_use":
                     calls.append({"name": block.get("name", ""),
                                   "input": block.get("input") or {},
+                                  "id": block.get("id", ""),
                                   "index": i})
         return calls
 
     def bash_commands(self) -> list:
         return [c["input"].get("command", "")
                 for c in self.tool_calls() if c["name"] == "Bash"]
+
+    def failed_tool_ids(self) -> set:
+        """tool_use ids whose result came back an error — including hook vetoes.
+
+        This exists because a BLOCKED edit still appears in the transcript as a
+        tool_use. It was attempted; it did not happen. E7's whole subject is an
+        agent that tries to edit source, is denied, writes the spec, and retries —
+        and a grader that counts the denied attempt as a touch marks that agent a
+        violator for being successfully stopped, which is precisely backwards.
+        """
+        bad = set()
+        for ev in self.events:
+            if ev.get("type") != "user":
+                continue
+            for block in (ev.get("message") or {}).get("content") or []:
+                if block.get("type") == "tool_result" and block.get("is_error"):
+                    tid = block.get("tool_use_id")
+                    if tid:
+                        bad.add(tid)
+        return bad
 
     def sequence(self) -> list:
         """Interleaved ('say', text) and ('tool', name, payload) in order.
@@ -360,6 +381,57 @@ def consulted_skill(ws, tx, p) -> tuple:
     return False, f"never consulted skill {name!r} (no Skill call, no SKILL.md read)"
 
 
+def tool_order(ws, tx, p) -> tuple:
+    """The first tool call touching `first` precedes the first touching `then`.
+
+    `git_order` asks the same question of the commit log, and is the right tool
+    when a scenario asks the agent to commit (E1 does, in a prompt written for
+    exactly that reason). E7 does not — it never says "commit your work", and the
+    agent duly never commits. Grading its order from git therefore asks the
+    history a question the history was never told to answer, and gets `False` for
+    a run in which the agent did everything right.
+
+    The transcript has the evidence: the Write of spec.md happened, the Edit of
+    src/ happened, and they happened in an order. Read it there.
+    """
+    first = re.compile(p["first"])
+    then = re.compile(p["then"])
+
+    # WHICH TOOL COUNTS AS "TOUCHING" IT. Without this filter the grader counts a
+    # READ as a touch — and an agent that reads src/config.py to understand it,
+    # THEN writes the spec, THEN edits, is doing exactly the right thing while
+    # scoring as a violation. Reading a file is not editing it, and the rule is
+    # "spec before the source EDIT", not "spec before you may look at the source".
+    #
+    # Default to mutating tools only. A scenario that genuinely means "any access"
+    # can say so.
+    MUTATORS = ("Write", "Edit", "MultiEdit", "NotebookEdit")
+    first_tools = tuple(p.get("first_tools", MUTATORS))
+    then_tools = tuple(p.get("then_tools", MUTATORS))
+
+    # A denied call is an attempt, not an event. See Transcript.failed_tool_ids.
+    denied = tx.failed_tool_ids()
+
+    i_first = i_then = None
+    for i, c in enumerate(tx.tool_calls()):
+        if c.get("id") in denied:
+            continue
+        payload = json.dumps(c["input"])
+        if i_first is None and c["name"] in first_tools and first.search(payload):
+            i_first = i
+        if i_then is None and c["name"] in then_tools and then.search(payload):
+            i_then = i
+
+    if i_then is None:
+        return False, f"nothing ever touched {p['then']!r}"
+    if i_first is None:
+        return False, (f"{p['then']!r} was touched, but {p['first']!r} never was "
+                       f"— the precondition was skipped entirely")
+    return i_first <= i_then, (
+        f"{p['first']!r} at call {i_first}, {p['then']!r} at call {i_then}"
+        + ("" if i_first <= i_then else " — the wrong way round"))
+
+
 def ran_command(ws, tx, p) -> tuple:
     """The agent actually executed something matching this pattern.
 
@@ -541,6 +613,7 @@ GRADERS = {
     "tree_lacks":               (tree_lacks, ("substrings",)),
     "unchanged":                (unchanged, ("path", "lines")),
     "git_order":                (git_order, ("first", "then")),
+    "tool_order":               (tool_order, ("first", "then")),
     "gate_exit":                (gate_exit, ("script", "exit")),
     "transcript_contains":      (transcript_contains, ("substrings",)),
     "transcript_lacks":         (transcript_lacks, ("substrings",)),

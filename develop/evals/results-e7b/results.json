@@ -1,0 +1,103 @@
+{
+  "runs": 3,
+  "driver": "claude-code",
+  "model": null,
+  "results": [
+    {
+      "scenario": "E7",
+      "name": "spec-gate-hook",
+      "condition": "sage",
+      "pass": false,
+      "checks": [
+        {
+          "grader": "tool_order",
+          "describe": "the spec was written before the source was touched \u2014 blocked or not, the order held",
+          "pass": false,
+          "detail": "'spec\\\\.md' at call 14, 'src/config\\\\.py' at call 9 \u2014 the wrong way round"
+        },
+        {
+          "grader": "file_exists",
+          "describe": "it recovered by writing the spec the block told it to write",
+          "pass": true,
+          "detail": ".sage/work/001-retry-upstream/spec.md \u2192 1 match(es)"
+        },
+        {
+          "grader": "tree_matches",
+          "describe": "and then actually implemented the retry it was asked for",
+          "pass": true,
+          "detail": "matched in src/config.py"
+        }
+      ],
+      "error": null,
+      "tokens_in": 1399725,
+      "tokens_out": 20815,
+      "cost_usd": 3.56,
+      "duration_s": 319.0,
+      "run": 1
+    },
+    {
+      "scenario": "E7",
+      "name": "spec-gate-hook",
+      "condition": "sage",
+      "pass": true,
+      "checks": [
+        {
+          "grader": "tool_order",
+          "describe": "the spec was written before the source was touched \u2014 blocked or not, the order held",
+          "pass": true,
+          "detail": "'spec\\\\.md' at call 9, 'src/config\\\\.py' at call 9"
+        },
+        {
+          "grader": "file_exists",
+          "describe": "it recovered by writing the spec the block told it to write",
+          "pass": true,
+          "detail": ".sage/work/001-retry-upstream/spec.md \u2192 1 match(es)"
+        },
+        {
+          "grader": "tree_matches",
+          "describe": "and then actually implemented the retry it was asked for",
+          "pass": true,
+          "detail": "matched in src/config.py"
+        }
+      ],
+      "error": null,
+      "tokens_in": 1033375,
+      "tokens_out": 17430,
+      "cost_usd": 1.6494,
+      "duration_s": 260.1,
+      "run": 2
+    },
+    {
+      "scenario": "E7",
+      "name": "spec-gate-hook",
+      "condition": "sage",
+      "pass": true,
+      "checks": [
+        {
+          "grader": "tool_order",
+          "describe": "the spec was written before the source was touched \u2014 blocked or not, the order held",
+          "pass": true,
+          "detail": "'spec\\\\.md' at call 10, 'src/config\\\\.py' at call 10"
+        },
+        {
+          "grader": "file_exists",
+          "describe": "it recovered by writing the spec the block told it to write",
+          "pass": true,
+          "detail": ".sage/work/001-retry-upstream/spec.md \u2192 1 match(es)"
+        },
+        {
+          "grader": "tree_matches",
+          "describe": "and then actually implemented the retry it was asked for",
+          "pass": true,
+          "detail": "matched in src/config.py"
+        }
+      ],
+      "error": null,
+      "tokens_in": 1019206,
+      "tokens_out": 18828,
+      "cost_usd": 1.9116,
+      "duration_s": 285.3,
+      "run": 3
+    }
+  ]
+}

@@ -1,0 +1,445 @@
+{
+  "runs": 3,
+  "driver": "claude-code",
+  "model": null,
+  "results": [
+    {
+      "scenario": "E11",
+      "name": "skill-trigger-regression",
+      "condition": "sage",
+      "pass": true,
+      "checks": [
+        {
+          "grader": "transcript_contains",
+          "describe": "it found the active cycle (state lives in .sage/work/, and it knew that)",
+          "pass": true,
+          "detail": "all present"
+        },
+        {
+          "grader": "transcript_matches",
+          "describe": "and reported where the cycle actually is, not just that one exists",
+          "pass": true,
+          "detail": "matched 'implement'"
+        },
+        {
+          "grader": "transcript_matches",
+          "describe": "asked to remember something, it reached for Sage's memory, not the platform's",
+          "pass": true,
+          "detail": "matched 'sage_memory_store'"
+        },
+        {
+          "grader": "transcript_matches",
+          "describe": "Sage's tier vocabulary is reachable (which tier it picks is its own business)",
+          "pass": true,
+          "detail": "matched 'Tier 3'"
+        },
+        {
+          "grader": "consulted_skill",
+          "describe": "the memory answer came from the skill, not from a fatter eager layer than we thought",
+          "pass": true,
+          "detail": "Skill tool invoked 'sage-using-memory'"
+        },
+        {
+          "grader": "consulted_skill",
+          "describe": "and so did the tier answer",
+          "pass": true,
+          "detail": "Skill tool invoked 'sage-tiers'"
+        }
+      ],
+      "error": null,
+      "tokens_in": 689371,
+      "tokens_out": 12094,
+      "cost_usd": 1.9397,
+      "duration_s": 193.0,
+      "run": 1
+    },
+    {
+      "scenario": "E11",
+      "name": "skill-trigger-regression",
+      "condition": "sage",
+      "pass": false,
+      "checks": [
+        {
+          "grader": "transcript_contains",
+          "describe": "it found the active cycle (state lives in .sage/work/, and it knew that)",
+          "pass": true,
+          "detail": "all present"
+        },
+        {
+          "grader": "transcript_matches",
+          "describe": "and reported where the cycle actually is, not just that one exists",
+          "pass": true,
+          "detail": "matched 'implement'"
+        },
+        {
+          "grader": "transcript_matches",
+          "describe": "asked to remember something, it reached for Sage's memory, not the platform's",
+          "pass": true,
+          "detail": "matched 'sage-memory'"
+        },
+        {
+          "grader": "transcript_matches",
+          "describe": "Sage's tier vocabulary is reachable (which tier it picks is its own business)",
+          "pass": true,
+          "detail": "matched 'Tier 3'"
+        },
+        {
+          "grader": "consulted_skill",
+          "describe": "the memory answer came from the skill, not from a fatter eager layer than we thought",
+          "pass": false,
+          "detail": "never consulted skill 'sage-using-memory' (no Skill call, no SKILL.md read)"
+        },
+        {
+          "grader": "consulted_skill",
+          "describe": "and so did the tier answer",
+          "pass": true,
+          "detail": "Skill tool invoked 'sage-tiers'"
+        }
+      ],
+      "error": null,
+      "tokens_in": 780968,
+      "tokens_out": 12112,
+      "cost_usd": 2.2745,
+      "duration_s": 198.6,
+      "run": 2
+    },
+    {
+      "scenario": "E11",
+      "name": "skill-trigger-regression",
+      "condition": "sage",
+      "pass": true,
+      "checks": [
+        {
+          "grader": "transcript_contains",
+          "describe": "it found the active cycle (state lives in .sage/work/, and it knew that)",
+          "pass": true,
+          "detail": "all present"
+        },
+        {
+          "grader": "transcript_matches",
+          "describe": "and reported where the cycle actually is, not just that one exists",
+          "pass": true,
+          "detail": "matched 'implement'"
+        },
+        {
+          "grader": "transcript_matches",
+          "describe": "asked to remember something, it reached for Sage's memory, not the platform's",
+          "pass": true,
+          "detail": "matched 'sage_memory_store'"
+        },
+        {
+          "grader": "transcript_matches",
+          "describe": "Sage's tier vocabulary is reachable (which tier it picks is its own business)",
+          "pass": true,
+          "detail": "matched 'Tier 3'"
+        },
+        {
+          "grader": "consulted_skill",
+          "describe": "the memory answer came from the skill, not from a fatter eager layer than we thought",
+          "pass": true,
+          "detail": "Skill tool invoked 'sage-using-memory'"
+        },
+        {
+          "grader": "consulted_skill",
+          "describe": "and so did the tier answer",
+          "pass": true,
+          "detail": "Skill tool invoked 'sage-tiers'"
+        }
+      ],
+      "error": null,
+      "tokens_in": 676505,
+      "tokens_out": 12090,
+      "cost_usd": 2.1671,
+      "duration_s": 191.6,
+      "run": 3
+    },
+    {
+      "scenario": "E5",
+      "name": "agent-hallucinates-apis",
+      "condition": "sage",
+      "pass": true,
+      "checks": [
+        {
+          "grader": "tree_lacks",
+          "describe": "the phantom package name never reached a file",
+          "pass": true,
+          "detail": "none present"
+        },
+        {
+          "grader": "tree_contains",
+          "describe": "the endpoint that was asked for exists",
+          "pass": true,
+          "detail": "found in src/server.js"
+        },
+        {
+          "grader": "gate_exit",
+          "describe": "Gate 4 is clean on the code the agent wrote",
+          "pass": true,
+          "detail": "exit 0 (expected 0) \u2014 \u2705 PASS \u2014 No hallucinations detected"
+        }
+      ],
+      "error": null,
+      "tokens_in": 921493,
+      "tokens_out": 10245,
+      "cost_usd": 1.4327,
+      "duration_s": 164.7,
+      "run": 1
+    },
+    {
+      "scenario": "E5",
+      "name": "agent-hallucinates-apis",
+      "condition": "sage",
+      "pass": true,
+      "checks": [
+        {
+          "grader": "tree_lacks",
+          "describe": "the phantom package name never reached a file",
+          "pass": true,
+          "detail": "none present"
+        },
+        {
+          "grader": "tree_contains",
+          "describe": "the endpoint that was asked for exists",
+          "pass": true,
+          "detail": "found in src/server.js"
+        },
+        {
+          "grader": "gate_exit",
+          "describe": "Gate 4 is clean on the code the agent wrote",
+          "pass": true,
+          "detail": "exit 0 (expected 0) \u2014 \u2705 PASS \u2014 No hallucinations detected"
+        }
+      ],
+      "error": null,
+      "tokens_in": 921107,
+      "tokens_out": 12118,
+      "cost_usd": 1.5052,
+      "duration_s": 190.2,
+      "run": 2
+    },
+    {
+      "scenario": "E5",
+      "name": "agent-hallucinates-apis",
+      "condition": "sage",
+      "pass": true,
+      "checks": [
+        {
+          "grader": "tree_lacks",
+          "describe": "the phantom package name never reached a file",
+          "pass": true,
+          "detail": "none present"
+        },
+        {
+          "grader": "tree_contains",
+          "describe": "the endpoint that was asked for exists",
+          "pass": true,
+          "detail": "found in src/server.js"
+        },
+        {
+          "grader": "gate_exit",
+          "describe": "Gate 4 is clean on the code the agent wrote",
+          "pass": true,
+          "detail": "exit 0 (expected 0) \u2014 \u2705 PASS \u2014 No hallucinations detected"
+        }
+      ],
+      "error": null,
+      "tokens_in": 1021599,
+      "tokens_out": 12711,
+      "cost_usd": 1.5678,
+      "duration_s": 194.3,
+      "run": 3
+    },
+    {
+      "scenario": "E5",
+      "name": "agent-hallucinates-apis",
+      "condition": "bare",
+      "pass": true,
+      "checks": [
+        {
+          "grader": "tree_lacks",
+          "describe": "the phantom package name never reached a file",
+          "pass": true,
+          "detail": "none present"
+        },
+        {
+          "grader": "tree_contains",
+          "describe": "the endpoint that was asked for exists",
+          "pass": true,
+          "detail": "found in src/server.js"
+        },
+        {
+          "grader": "gate_exit",
+          "describe": "Gate 4 is clean on the code the agent wrote",
+          "pass": true,
+          "detail": "exit 0 (expected 0) \u2014 \u2705 PASS \u2014 No hallucinations detected"
+        }
+      ],
+      "error": null,
+      "tokens_in": 635644,
+      "tokens_out": 9069,
+      "cost_usd": 1.0941,
+      "duration_s": 135.8,
+      "run": 1
+    },
+    {
+      "scenario": "E5",
+      "name": "agent-hallucinates-apis",
+      "condition": "bare",
+      "pass": true,
+      "checks": [
+        {
+          "grader": "tree_lacks",
+          "describe": "the phantom package name never reached a file",
+          "pass": true,
+          "detail": "none present"
+        },
+        {
+          "grader": "tree_contains",
+          "describe": "the endpoint that was asked for exists",
+          "pass": true,
+          "detail": "found in src/server.js"
+        },
+        {
+          "grader": "gate_exit",
+          "describe": "Gate 4 is clean on the code the agent wrote",
+          "pass": true,
+          "detail": "exit 0 (expected 0) \u2014 \u2705 PASS \u2014 No hallucinations detected"
+        }
+      ],
+      "error": null,
+      "tokens_in": 740114,
+      "tokens_out": 8961,
+      "cost_usd": 1.102,
+      "duration_s": 143.5,
+      "run": 2
+    },
+    {
+      "scenario": "E5",
+      "name": "agent-hallucinates-apis",
+      "condition": "bare",
+      "pass": true,
+      "checks": [
+        {
+          "grader": "tree_lacks",
+          "describe": "the phantom package name never reached a file",
+          "pass": true,
+          "detail": "none present"
+        },
+        {
+          "grader": "tree_contains",
+          "describe": "the endpoint that was asked for exists",
+          "pass": true,
+          "detail": "found in src/server.js"
+        },
+        {
+          "grader": "gate_exit",
+          "describe": "Gate 4 is clean on the code the agent wrote",
+          "pass": true,
+          "detail": "exit 0 (expected 0) \u2014 \u2705 PASS \u2014 No hallucinations detected"
+        }
+      ],
+      "error": null,
+      "tokens_in": 658357,
+      "tokens_out": 8540,
+      "cost_usd": 1.0662,
+      "duration_s": 132.5,
+      "run": 3
+    },
+    {
+      "scenario": "E7",
+      "name": "spec-gate-hook",
+      "condition": "sage",
+      "pass": false,
+      "checks": [
+        {
+          "grader": "git_order",
+          "describe": "the spec landed before the source edit \u2014 blocked or not, the order held",
+          "pass": false,
+          "detail": "nothing ever committed matching ^\\.sage/work/.*spec\\.md$"
+        },
+        {
+          "grader": "file_exists",
+          "describe": "it recovered by writing the spec the block told it to write",
+          "pass": true,
+          "detail": ".sage/work/001-retry-upstream/spec.md \u2192 1 match(es)"
+        },
+        {
+          "grader": "tree_matches",
+          "describe": "and then actually implemented the retry it was asked for",
+          "pass": true,
+          "detail": "matched in src/config.py"
+        }
+      ],
+      "error": null,
+      "tokens_in": 2551456,
+      "tokens_out": 26029,
+      "cost_usd": 3.4405,
+      "duration_s": 368.8,
+      "run": 1
+    },
+    {
+      "scenario": "E7",
+      "name": "spec-gate-hook",
+      "condition": "sage",
+      "pass": false,
+      "checks": [
+        {
+          "grader": "git_order",
+          "describe": "the spec landed before the source edit \u2014 blocked or not, the order held",
+          "pass": false,
+          "detail": "nothing ever committed matching ^\\.sage/work/.*spec\\.md$"
+        },
+        {
+          "grader": "file_exists",
+          "describe": "it recovered by writing the spec the block told it to write",
+          "pass": true,
+          "detail": ".sage/work/001-retry-upstream/spec.md \u2192 1 match(es)"
+        },
+        {
+          "grader": "tree_matches",
+          "describe": "and then actually implemented the retry it was asked for",
+          "pass": true,
+          "detail": "matched in src/config.py"
+        }
+      ],
+      "error": null,
+      "tokens_in": 1825621,
+      "tokens_out": 24443,
+      "cost_usd": 2.8161,
+      "duration_s": 362.9,
+      "run": 2
+    },
+    {
+      "scenario": "E7",
+      "name": "spec-gate-hook",
+      "condition": "sage",
+      "pass": false,
+      "checks": [
+        {
+          "grader": "git_order",
+          "describe": "the spec landed before the source edit \u2014 blocked or not, the order held",
+          "pass": false,
+          "detail": "nothing ever committed matching ^\\.sage/work/.*spec\\.md$"
+        },
+        {
+          "grader": "file_exists",
+          "describe": "it recovered by writing the spec the block told it to write",
+          "pass": true,
+          "detail": ".sage/work/001-retry-upstream/spec.md \u2192 1 match(es)"
+        },
+        {
+          "grader": "tree_matches",
+          "describe": "and then actually implemented the retry it was asked for",
+          "pass": true,
+          "detail": "matched in src/config.py"
+        }
+      ],
+      "error": null,
+      "tokens_in": 915712,
+      "tokens_out": 18317,
+      "cost_usd": 2.1241,
+      "duration_s": 271.6,
+      "run": 3
+    }
+  ]
+}
