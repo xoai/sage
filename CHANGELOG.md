@@ -2,6 +2,45 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [1.3.1] — The navigator was a second copy, and it had drifted
+
+A plugin cannot install a `CLAUDE.md`, so **`sage-navigator` IS the eager layer for
+plugin users** — its own description called it "the always-on layer". It was 441
+lines, maintained **by hand** next to the real eager body, and it had drifted for
+two releases: it still routed to `/analyze`, `/qa`, `/design-review` and
+`/status`, every one of them folded into another command back in v1.2.0.
+
+Plugin users were being handed a routing table a release out of date. And v1.3.0
+made it worse: we cut the eager layer to 177 lines and shipped a 441-line
+auto-loading skill carrying the old content — quietly eating the token win the
+release was cut on.
+
+Nothing noticed for two releases, because nothing compared the two copies.
+
+**It is generated now**, from the same `instructions-body.sh` that produces every
+platform's `CLAUDE.md`. **441 → 193 lines.** One eager layer. Proven by canary:
+edit the eager body and the navigator changes with it.
+
+### And the reason it rotted is the bigger fix
+
+The eval-coverage contract (ADR-14) globbed `core/`, `skills/`, hooks and gates —
+but **never `runtime/plugin-overlay/`**. Ten skills, ~2,000 lines, shipped to
+every plugin user, and the contract could not see one line of it. **The blind spot
+was exactly where users get their content.**
+
+The overlay is a mapped surface now: 84 → **94 surfaces**. All ten new rows are
+honest `uncovered:`, because the eval harness drives `bin/sage init` and **has
+never once installed the plugin** — nothing in the suite has ever exercised the
+path a plugin user actually takes. That is now written down where a reviewer trips
+over it, instead of being the thing that let a routing table rot in public.
+
+### Fixed
+
+- `sage-navigator` is generated from the eager body; the hand-maintained copy is
+  deleted. Four regression tests, falsified — reintroducing a hand-written copy
+  fails all four.
+- `runtime/plugin-overlay/` is now under the eval-coverage contract.
+
 ## [1.3.0] — The eager layer stops being the price of admission
 
 ### Phase 2 — Native skills and the context diet (ADR-9)
