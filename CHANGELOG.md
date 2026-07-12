@@ -2,7 +2,7 @@
 
 All notable changes to Sage will be documented in this file.
 
-## [Unreleased] — The eager layer stops being the price of admission
+## [1.3.0] — The eager layer stops being the price of admission
 
 ### Phase 2 — Native skills and the context diet (ADR-9)
 
