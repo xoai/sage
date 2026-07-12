@@ -175,7 +175,7 @@ now runs in CI.
 **Unresolved.** The spike did not run, so Pi has no contract row, no tier, and no
 port plan. Writing a plausible one from the API surface would have been easy and
 would have been a guess — which is precisely the class of claim this release
-spent its length deleting. See `docs/pi-spike-verdict.md`.
+spent its length deleting.
 
 
 ### Also in this phase

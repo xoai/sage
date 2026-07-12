@@ -36,7 +36,8 @@ checks pass, attach transcripts for what cannot be checked for free, and claim
 
 # Why `pre-tool-veto: false` — and why that may be wrong soon
 
-Investigated 2026-07-12 (docs/platform-veto-investigation-2026-07-12.md).
+Investigated 2026-07-12. Full transcript of the investigation is kept with
+the maintainers; the findings that matter are below.
 
 **Codex HAS a hook system.** Its native binary carries 30x `PreToolUse`, 25x
 `PostToolUse`, `SubagentStart`/`SubagentStop`, and this string:
