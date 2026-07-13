@@ -145,8 +145,14 @@ class SourceParsingTest(unittest.TestCase):
                                       "file is what makes that reproducible later")
 
     def test_a_local_path_is_untouched(self):
-        """R126: the local-path form is unchanged. Existing users must not break."""
-        src = SM.parse_source("./packs/sage-product")
+        """R126: the local-path form is unchanged. Existing users must not break.
+
+        Uses a path that does not exist on purpose — `packs/sage-product` was deleted
+        in v1.3.2 when the packs moved to their own repos, and a test that depended on
+        a real directory would have died with it. What is under test is the PARSER,
+        not the filesystem.
+        """
+        src = SM.parse_source("./some/local/pack")
         self.assertEqual(src.type, "local")
 
 

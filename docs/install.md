@@ -73,15 +73,23 @@ nobody updates is a vendored copy that quietly rots.
 Packs are optional skill bundles that version independently of the framework.
 
 ```bash
-sage add xoai/sage-product@v1.3.1 --all   # pinned to a tag
+sage add xoai/sage-product@v1.3.2 --all   # pinned to a tag — reproducible
 sage add xoai/sage-product --all          # whatever is latest today
-sage add ./packs/sage-product --all       # from a local checkout
+sage add ./some/local/checkout --all      # a local directory, unchanged
 ```
 
-> **Not yet live.** The three pack repos are staged but unpublished (C17). Until
-> they are pushed, use the local-checkout form. `sage update` has been recommending
-> `sage add xoai/sage-product` since v1.2 — that command does not resolve yet, and
-> making it true is what Phase 6 is for.
+The three packs are live: [sage-product](https://github.com/xoai/sage-product),
+[sage-pack-authoring](https://github.com/xoai/sage-pack-authoring),
+[sage-autoresearch](https://github.com/xoai/sage-autoresearch).
+
+> `sage add ./packs/sage-product` **no longer works.** The packs left this repo in
+> v1.3.2 and live in their own repositories now; `packs/` is a pointer README. Use
+> the repo form above.
+>
+> For two minor versions before that, `sage update` printed `sage add
+> xoai/sage-product` at users — for a repository that did not exist. It resolves now,
+> and `release.py --dist-status` asks GitHub whether it still does rather than
+> assuming.
 
 **Integrity: verified when the release publishes a `checksums.txt`, and loud when it
 does not.**

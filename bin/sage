@@ -978,6 +978,17 @@ except: pass
         cp -a "$target/sage/skills/$skill_name" "$backup_dir/"
       fi
     done
+    # Back up the RECORDS, not just the files. `sage update` replaces sage/ wholesale,
+    # which destroys skills.json — and the restore below used to invent a replacement:
+    # every surviving skill was re-registered as `source: community, added: today`.
+    #
+    # That is a fabricated record. A skill installed from a pack came from a pack, not
+    # from the community catalog, and it was added when it was added. `sage update`
+    # was overwriting a true provenance record with a false one, on every run, and the
+    # `added` date with today's. Nothing noticed because nothing read it back.
+    if [ -f "$target/sage/skills/skills.json" ]; then
+      cp -a "$target/sage/skills/skills.json" "$backup_dir/skills.json.orig"
+    fi
   fi
 
   # Update sage/ framework
@@ -996,23 +1007,49 @@ except: pass
         cp -a "$backup_dir/$skill_name" "$target/sage/skills/"
       fi
     done
-    rm -rf "$backup_dir"
 
-    # Re-register community skills in skills.json
+    # Re-register the restored skills — with their ORIGINAL records where we have
+    # them. Only a skill we have never seen before gets 'community', and that is a
+    # guess we are entitled to make; rewriting a known provenance is not.
     python3 -c "
-import json, sys
+import json
+target = '$target'
+orig_path = '$backup_dir/skills.json.orig'
+today = '$(date +%Y-%m-%d)'
+
 try:
-  with open('$target/sage/skills/skills.json') as f:
+  with open(target + '/sage/skills/skills.json') as f:
     d = json.load(f)
-  for s in '$community_skills'.split():
-    if s not in d.get('skills', {}):
-      d.setdefault('skills', {})[s] = {'source': 'community', 'added': '$(date +%Y-%m-%d)'}
-  with open('$target/sage/skills/skills.json', 'w') as f:
+except (OSError, ValueError):
+  d = {'skills': {}}
+
+try:
+  with open(orig_path) as f:
+    orig = (json.load(f) or {}).get('skills', {})
+except (OSError, ValueError):
+  orig = {}
+
+skills = d.setdefault('skills', {})
+for s in '$community_skills'.split():
+  if s in skills:
+    continue
+  # The record the user actually had, verbatim: source, version, added, the lot.
+  # Falling back to 'community' only when there is nothing to preserve.
+  skills[s] = orig.get(s) or {'source': 'community', 'added': today}
+
+try:
+  with open(target + '/sage/skills/skills.json', 'w') as f:
     json.dump(d, f, indent=2)
-except: pass
+except OSError:
+  pass
 " 2>/dev/null
 
-    echo -e "  ${GREEN}✓${RESET} Community skills preserved: $community_skills"
+    # Only now. The re-register step above reads skills.json.orig out of it, and an
+    # earlier `rm -rf` here is exactly the bug that would have restored the files and
+    # then thrown away the records that say where they came from.
+    rm -rf "$backup_dir"
+
+    echo -e "  ${GREEN}✓${RESET} Skills preserved (with their provenance): $community_skills"
   fi
 
   # Apply --prefix flag if provided
@@ -1103,7 +1140,28 @@ DECMD
   moved_hits=$(grep -rlE 'jtbd|ux-audit|ux-evaluate|ux-review|opportunity-map|prd-|user-interview' \
                  "$target/.sage/docs" "$target/.sage/work" 2>/dev/null | head -1 || true)
   if [ -n "$moved_hits" ]; then
-    migration_notes="${migration_notes}\n  ${YELLOW}↻${RESET} PM/UX skills moved to a pack. If you use them, install it:\n     sage add xoai/sage-product"
+    migration_notes="${migration_notes}\n  ${YELLOW}↻${RESET} PM/UX skills moved to a pack. If you use them, install it:\n     sage add xoai/sage-product@v${SAGE_FRAMEWORK_VERSION} --all"
+  fi
+
+  # ── Migration: packs installed from a local packs/ checkout (R127) ──
+  #
+  # Before v1.3.2 a pack installed from `sage add ./packs/<name>`, and skills.json
+  # recorded the ABSOLUTE PATH of the checkout it came from. Those skills are now
+  # orphaned: `packs/` in the Sage repo is a pointer README, so that path installs
+  # nothing and re-running the command fails. Worse, the recorded source is a path on
+  # ONE developer's machine — it cannot be reproduced by anyone else, and there is no
+  # version and no checksum in it.
+  #
+  # Detect it and say what to do. `.sage/packs.lock` (v1.3.2+) is what a reinstall
+  # writes instead: source, resolved tag, and the sha256 that was actually verified.
+  local skills_json="$target/sage/skills/skills.json"
+  if [ -f "$skills_json" ] && grep -q '"source": *"[^"]*/packs/' "$skills_json" 2>/dev/null; then
+    migration_notes="${migration_notes}\n  ${YELLOW}↻${RESET} Some skills were installed from a local ${DIM}packs/${RESET} checkout, which no longer exists."
+    migration_notes="${migration_notes}\n     The packs live in their own repos now. Reinstall to get a verified, pinned copy:"
+    migration_notes="${migration_notes}\n       sage add xoai/sage-product@v${SAGE_FRAMEWORK_VERSION} --all"
+    migration_notes="${migration_notes}\n       sage add xoai/sage-pack-authoring@v${SAGE_FRAMEWORK_VERSION} --all"
+    migration_notes="${migration_notes}\n     ${DIM}The reinstall records source + version + sha256 in .sage/packs.lock;${RESET}"
+    migration_notes="${migration_notes}\n     ${DIM}the old skills.json entry recorded a path on one machine.${RESET}"
   fi
 
   # ── Migration: relocate vendored templates develop/ → core/ (R42) ──

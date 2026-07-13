@@ -393,19 +393,9 @@ def dist_status(root: pathlib.Path) -> int:
             "is not yet a real command (P6-T4)")
 
     # ── The packs ───────────────────────────────────────────────────────────
-    staged = root / "dist" / "repos"
-    for name in PACK_REPOS:
-        tree = staged / name
-        if not tree.is_dir():
-            warnings.append(f"pack {name} is not staged — run stage_packs.py")
-            print(f"  · pack    {name} → not staged")
-            continue
-        pv = (tree / "VERSION").read_text().strip() if (tree / "VERSION").is_file() else "?"
-        mark = "✓" if pv == version else "✗"
-        print(f"  {mark} pack    {name} → staged at {pv}")
-        if pv != version:
-            problems.append(f"staged pack {name} is at {pv}, not {version} "
-                            f"— re-run stage_packs.py")
+    # There is no "staged" state any more. The packs left this repo in v1.3.2 and
+    # their own repositories are canonical; packs/ is a pointer README. What is left
+    # to check is the only thing that was ever load-bearing: are they actually THERE.
 
     # ── Staged is not published, and this must ASK rather than assume ───────
     #
