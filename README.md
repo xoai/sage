@@ -413,7 +413,7 @@ Use inside your IDE (Claude Code, Antigravity):
 The core command set is 9 (down from 16 in v1.2.0). `/analyze`, `/design-review`,
 `/qa`, `/map`, and `/status` folded into modes of `/review`, `/learn`, and
 `/continue`; the old names still route for one deprecation cycle. `/research` and
-`/design` ship with the [sage-product](packs/sage-product/) pack.
+`/design` ship with the [sage-product](https://github.com/xoai/sage-product) pack.
 
 ### Workflow Flags (`/build` and `/architect`)
 
