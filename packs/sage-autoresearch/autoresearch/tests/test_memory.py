@@ -1,11 +1,11 @@
 """Tests for memory integration."""
 
-from core.autoresearch.memory import (
+from autoresearch.memory import (
     format_priors,
     format_summary_for_storage,
     session_end_summary,
 )
-from core.autoresearch.types import (
+from autoresearch.types import (
     BriefConfig,
     BudgetConfig,
     Direction,

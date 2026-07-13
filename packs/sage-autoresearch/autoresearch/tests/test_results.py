@@ -5,14 +5,14 @@ import tempfile
 from pathlib import Path
 
 import pytest
-from core.autoresearch.results import (
+from autoresearch.results import (
     append_iteration,
     current_best,
     read_iterations,
     render_tsv,
 )
-from core.autoresearch.stuck import detect_stuck
-from core.autoresearch.types import Iteration, Status
+from autoresearch.stuck import detect_stuck
+from autoresearch.types import Iteration, Status
 
 
 def _make_iter(n: int, status: Status = Status.KEEP, value: float = 100.0) -> Iteration:

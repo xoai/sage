@@ -1,6 +1,6 @@
 """Tests for scope enforcement."""
 
-from core.autoresearch.scope import check_scope
+from autoresearch.scope import check_scope
 
 
 def test_all_writable():
