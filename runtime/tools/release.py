@@ -311,6 +311,47 @@ PACK_REPOS = ("sage-product", "sage-pack-authoring", "sage-autoresearch")
 PACK_OWNER = "xoai"
 
 
+MARKETPLACE_REPO = "sage-marketplace"
+
+
+def canonical_plugin_source(root: pathlib.Path) -> dict:
+    """The plugin `source` block this repo publishes — the thing that must not drift."""
+    path = root / ".claude-plugin" / "marketplace.json"
+    if not path.is_file():
+        return {}
+    try:
+        d = json.loads(path.read_text())
+        return (d.get("plugins") or [{}])[0].get("source") or {}
+    except (ValueError, OSError, IndexError):
+        return {}
+
+
+def marketplace_repo_state() -> tuple:
+    """('published'|'no-repo'|'unknown', source_block).
+
+    Reads the manifest out of the published marketplace repo. Fail-soft: an
+    unreachable network returns 'unknown' and no claim, because a check that guesses
+    reads exactly like a check that knows.
+    """
+    import base64
+    import urllib.error
+    import urllib.request
+
+    url = (f"https://api.github.com/repos/{PACK_OWNER}/{MARKETPLACE_REPO}"
+           f"/contents/.claude-plugin/marketplace.json")
+    req = urllib.request.Request(url, headers={"User-Agent": "sage-release"})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+        raw = base64.b64decode(payload.get("content", "")).decode("utf-8")
+        d = json.loads(raw)
+        return "published", (d.get("plugins") or [{}])[0].get("source") or {}
+    except urllib.error.HTTPError as exc:
+        return ("no-repo" if exc.code == 404 else "unknown"), {}
+    except (urllib.error.URLError, OSError, ValueError, IndexError):
+        return "unknown", {}
+
+
 def pack_release_state(name: str, version: str) -> str:
     """'published' | 'missing-release' | 'no-repo' | 'unknown'.
 
@@ -386,11 +427,31 @@ def dist_status(root: pathlib.Path) -> int:
         elif (root / rel).is_file():
             print(f"  ✓ market  {rel} → defers to plugin.json")
 
-    marketplace_repo = root / "dist" / "repos" / "sage-marketplace"
-    if not marketplace_repo.is_dir():
+    # The published marketplace repo carries a COPY of the plugin source block. A copy
+    # of a thing with a canonical source is exactly what shipped the navigator a
+    # release out of date, so the two are checked against each other rather than
+    # trusted to stay in step.
+    #
+    # The `name` field is deliberately NOT compared: it is the marketplace's ID, and it
+    # must be `sage-marketplace` there and `sage` here. Copying it verbatim is what made
+    # `/plugin install sage@sage-marketplace` fail with "not found in marketplace" —
+    # the documented command was a dead link until it was actually run.
+    state, remote_source = marketplace_repo_state()
+    local_source = canonical_plugin_source(root)
+    if state == "no-repo":
         warnings.append(
-            "no marketplace repo staged — `/plugin marketplace add xoai/sage-marketplace` "
-            "is not yet a real command (P6-T4)")
+            "xoai/sage-marketplace does not exist — "
+            "`/plugin marketplace add xoai/sage-marketplace` is a dead link (P6-T4)")
+    elif state == "unknown":
+        warnings.append("could not reach xoai/sage-marketplace — pin unverified")
+    elif remote_source != local_source:
+        problems.append(
+            f"xoai/sage-marketplace's plugin source has drifted from this repo's:\n"
+            f"      here:   {json.dumps(local_source, sort_keys=True)}\n"
+            f"      there:  {json.dumps(remote_source, sort_keys=True)}")
+        print("  ✗ market  xoai/sage-marketplace → source block DRIFTED")
+    else:
+        print("  ✓ market  xoai/sage-marketplace → published, source block agrees")
 
     # ── The packs ───────────────────────────────────────────────────────────
     # There is no "staged" state any more. The packs left this repo in v1.3.2 and
