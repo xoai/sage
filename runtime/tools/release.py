@@ -308,6 +308,43 @@ def with_evals(root: pathlib.Path, runs: int) -> int:
 
 PACK_REPOS = ("sage-product", "sage-pack-authoring", "sage-autoresearch")
 
+PACK_OWNER = "xoai"
+
+
+def pack_release_state(name: str, version: str) -> str:
+    """'published' | 'missing-release' | 'no-repo' | 'unknown'.
+
+    Asks GitHub instead of assuming. Fail-soft by design: an unreachable network
+    yields 'unknown', never a confident answer — a release check that guesses is
+    worse than one that says it does not know.
+    """
+    import urllib.error
+    import urllib.request
+
+    url = (f"https://api.github.com/repos/{PACK_OWNER}/{name}"
+           f"/releases/tags/v{version}")
+    req = urllib.request.Request(url, headers={"User-Agent": "sage-release"})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return "published" if resp.status == 200 else "unknown"
+    except urllib.error.HTTPError as exc:
+        if exc.code != 404:
+            return "unknown"
+    except (urllib.error.URLError, OSError):
+        return "unknown"
+
+    # A 404 on the release is ambiguous: no repo, or a repo with no such release.
+    repo = f"https://api.github.com/repos/{PACK_OWNER}/{name}"
+    try:
+        with urllib.request.urlopen(
+                urllib.request.Request(repo, headers={"User-Agent": "sage-release"}),
+                timeout=10):
+            return "missing-release"
+    except urllib.error.HTTPError as exc:
+        return "no-repo" if exc.code == 404 else "unknown"
+    except (urllib.error.URLError, OSError):
+        return "unknown"
+
 
 def dist_status(root: pathlib.Path) -> int:
     """What is distributable, what is staged, and what is still a promise (R132).
@@ -370,14 +407,27 @@ def dist_status(root: pathlib.Path) -> int:
             problems.append(f"staged pack {name} is at {pv}, not {version} "
                             f"— re-run stage_packs.py")
 
-    # ── The promise nobody has kept ─────────────────────────────────────────
-    # A staged repo is not a published one. Until the maintainer pushes these and
-    # cuts a tag, `sage add xoai/sage-product` resolves to nothing — and bin/sage
-    # has been recommending it for two minor versions.
-    warnings.append(
-        "staged ≠ published. Until the three pack repos exist on GitHub with a "
-        "tagged release, `sage add xoai/<pack>` cannot resolve — and `sage update` "
-        "has been printing that command since v1.2 (bin/sage, the R54 block).")
+    # ── Staged is not published, and this must ASK rather than assume ───────
+    #
+    # This block used to print "staged ≠ published" unconditionally. The moment the
+    # repos went live it became a lie — the tool asserting a fact it had not checked,
+    # which is the exact defect this release spent its whole budget chasing. It looks
+    # now. Fail-soft: no network, no claim.
+    for name in PACK_REPOS:
+        state = pack_release_state(name, version)
+        if state == "published":
+            print(f"  ✓ remote  {name} → v{version} published")
+        elif state == "missing-release":
+            warnings.append(
+                f"{name} exists on GitHub but has no v{version} release — "
+                f"`sage add xoai/{name}@v{version}` will not resolve")
+        elif state == "no-repo":
+            warnings.append(
+                f"xoai/{name} does not exist. `sage update` has been printing "
+                f"`sage add xoai/{name}` since v1.2 (bin/sage, the R54 block) — "
+                f"that is a dead link until the repo is published (C17).")
+        else:
+            warnings.append(f"{name}: could not reach GitHub — publication unverified")
 
     print()
     for w in warnings:
