@@ -61,21 +61,45 @@ DIST = REPO_ROOT / "dist" / "repos"
 PYTHON_PACKS = {"sage-autoresearch"}
 
 
+# The pack's own tests, run in its own repo, on every push and every PR.
+#
+# Not boilerplate. sage-autoresearch's 38 tests had been BROKEN since the pack was
+# extracted out of core/ — every one still imported `core.autoresearch.*`, a module
+# that no longer exists — and nobody noticed, because nothing ran them. They were
+# found on the morning the pack was about to be published, which is the last cheap
+# moment to find such a thing.
+#
+# A test suite nobody runs is a test suite that is already broken. It just has not
+# been told yet.
+TEST_JOB = """\
+  test:
+    name: the pack's own tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install pytest
+      - run: python3 -m pytest autoresearch/tests -q
+
+"""
+
 RELEASE_WORKFLOW = """\
 name: release
 
 on:
   push:
     tags: ['v*']
-
+@@TRIGGERS@@
 permissions:
   contents: write
 
 jobs:
-  release:
+@@TEST_JOB@@  release:
     name: build and publish the pack tarball
     runs-on: ubuntu-latest
-    steps:
+@@NEEDS@@    steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -164,9 +188,13 @@ def readme(name: str, version: str, is_python: bool) -> str:
     if is_python:
         install = (
             "```bash\n"
-            "pip install sage-autoresearch          # or: uv pip install sage-autoresearch\n"
-            "python -m autoresearch --help\n"
+            f"pip install git+https://github.com/xoai/{name}@v{version}\n"
+            "autoresearch --help          # or: python -m autoresearch --help\n"
             "```\n\n"
+            "**Not on PyPI.** That command installs straight from the tagged release —\n"
+            "a command that actually works, as opposed to `pip install sage-autoresearch`,\n"
+            "which would 404. (Sage shipped a dead `sage add xoai/sage-product` for two\n"
+            "minor versions. Once was enough.)\n\n"
             "**This pack is a Python package, not a skill bundle.** It ships no\n"
             "`SKILL.md`, so `sage add` cannot install it — `sage add` delivers skills.\n"
             "That is not a limitation to work around; it is what this pack is.\n"
@@ -243,7 +271,16 @@ def stage(name: str, version: str) -> pathlib.Path:
 
     wf = dest / ".github" / "workflows"
     wf.mkdir(parents=True)
-    (wf / "release.yml").write_text(RELEASE_WORKFLOW)
+    python_pack = name in PYTHON_PACKS
+    # .format() is unusable here: the workflow is full of ${...} and ${{...}}, which
+    # IS brace syntax. Plain placeholders. And the branches go INSIDE the existing
+    # `push:` block — a second `push:` key is a duplicate mapping key, invalid YAML.
+    (wf / "release.yml").write_text(
+        RELEASE_WORKFLOW
+        .replace("@@TRIGGERS@@",
+                 "    branches: [main]\n  pull_request:\n" if python_pack else "")
+        .replace("@@TEST_JOB@@", TEST_JOB if python_pack else "")
+        .replace("@@NEEDS@@", "    needs: test\n" if python_pack else ""))
 
     (dest / "README.md").write_text(readme(name, version, name in PYTHON_PACKS))
     (dest / "RELEASE_NOTES.md").write_text(

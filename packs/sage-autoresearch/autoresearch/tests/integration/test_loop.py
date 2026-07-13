@@ -9,11 +9,11 @@ from pathlib import Path
 
 import pytest
 
-from core.autoresearch.brief import parse_brief
-from core.autoresearch.loop import run_baseline
-from core.autoresearch.results import read_iterations
-from core.autoresearch.types import Status
-from core.autoresearch import git
+from autoresearch.brief import parse_brief
+from autoresearch.loop import run_baseline
+from autoresearch.results import read_iterations
+from autoresearch.types import Status
+from autoresearch import git
 
 FIXTURE_DIR = Path(__file__).parent.parent / "fixture"
 
@@ -94,7 +94,7 @@ def test_dirty_tree_refused(fixture_repo, tmp_path):
     # Make tree dirty
     (fixture_repo / "dirty.txt").write_text("uncommitted")
 
-    from core.autoresearch.loop import run_session
+    from autoresearch.loop import run_session
     # Should return without crashing (prints error, returns)
     run_session(brief, work_dir, fixture_repo)
 

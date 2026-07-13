@@ -1,7 +1,7 @@
 """Tests for METRIC line parser."""
 
 import pytest
-from core.autoresearch.harness import parse
+from autoresearch.harness import parse
 
 
 def test_single_metric():
