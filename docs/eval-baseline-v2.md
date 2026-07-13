@@ -135,18 +135,156 @@ results before the true one): **test the instrument before you trust the
 measurement.** A grader is code. It has bugs like code. The only thing that finds
 them is pointing it at reality and being suspicious of the answer.
 
+## The L-series — the long-horizon claim, measured at last
+
+*Run 2026-07-12/13. N=3, both conditions. Total spend across shakedown + fixes +
+final: **$68.30**.*
+
+Sage's README led with a claim about surviving a context window. Eleven scenarios in,
+nothing had ever tested it — not from neglect, but because a single-session harness
+*cannot*: the agent that finished the work was the agent that started it, and it
+simply remembered. The harness can now cross a context boundary. Here is what it
+found on the other side.
+
+| | sage | bare | delta |
+|---|---|---|---|
+| **L1** — resume an interrupted cycle | 2/3 · $25.23 | **3/3** · $7.04 | **−Sage** |
+| **L2** — honour a constraint stated 2 contexts ago | 3/3 · $4.85 | **3/3** · $2.17 | same |
+
+**Sage loses L1 and ties L2, at 2–4× the cost. The long-horizon claim is not
+supported by this evidence.**
+
+### L1 — resume fidelity
+
+Session 1 completes task 1 of an approved 3-task plan and is cut off. Session 2 is a
+fresh context that has never seen it, and must recover from the artifacts alone.
+
+Given **one turn** to resume, Sage finished the work in **1 of 3** runs. The bare
+agent finished in **3 of 3**. Given **two turns** (both conditions, so the change
+cannot flatter either), Sage reached 2/3 — and cost **3.6×** what bare cost.
+
+**The defect, and it is the load-bearing one.** In one run of three, Sage's manifest
+still read `gate_state: plan-approved` — *"plan approved, no tasks started"* — with
+all three tasks implemented, tested and committed. A session resuming from that
+manifest would read "no tasks started" and redo everything. **The artifact whose
+entire job is to carry work across a context boundary had drifted from the tree it
+describes.**
+
+Three runs of the identical cycle produced three different vocabularies for the same
+state:
+
+| run | `phase` | `gate_state` | work done |
+|---|---|---|---|
+| 1 | quality-gates | `gates-passed` | ✓ |
+| 2 | quality-gates | **`plan-approved`** | ✓ |
+| 3 | complete | `complete` | ✓ |
+
+There was no enum and no state machine. `gate_state` was written by the model, from
+judgment, in prose — **exactly the bug v1.3.0 found in the task ledger** ("the entire
+evidence base for *every task was independently reviewed* was being produced by the
+model's goodwill; in two runs of three it simply was not written"). That was fixed by
+generating it.
+
+### Fixed in v1.3.2 — and L1 did not move
+
+`gate_state` is generated now: a PostToolUse hook advances the manifest the moment
+source is written, so it fires *because* the agent wrote code and the firing **is**
+the evidence (`runtime/tools/manifest.py`, `sage-manifest-sync.sh`).
+
+Re-run, L1/sage, N=3, with the hook:
+
+| | before | after |
+|---|---|---|
+| manifest coherent with the tree | 2/3 | **3/3** |
+| `gate_state` values seen | `gates-passed`, **`plan-approved`**, `complete` | `building`, `gates-passed`, `building` |
+| **L1 overall** | 2/3 | **2/3 — unchanged** |
+
+**The manifest has not lied since. L1 still did not improve**, and that distinction is
+the whole point of keeping the number honest: in one run of three Sage still failed to
+*finish the work*, which is a different failure — ceremony cost — and a hook cannot fix
+it. The bridge is sound now. The bill is not yet paid for.
+
+What the hook deliberately does **not** do is award `gates-passed` or `complete`. Those
+are approval states; a script that granted them because the files looked finished would
+forge the signature the gate exists to collect. **Fact is mechanical. Approval is not.**
+`manifest.py check` fails a manifest that contradicts its own tree, so this cannot
+silently regress.
+
+### L2 — memory recall, and the null result
+
+A constraint is stated in session 1 (the deploy image is pinned to Python 3.8 — use
+`typing.List`, never `list[str]`). Session 2 does unrelated work. Session 3 is asked
+to fully annotate a new function, where the default idiom is *wrong*.
+
+Both conditions got it right, 3/3.
+
+**And the mechanism check says Sage's memory genuinely worked** — session 1 provably
+called the memory tool, in every run, and the bare arm provably had no MCP server at
+all. Memory engaged. It just did not **matter**: the bare agent reread its own session
+log off the disk and reached the same answer for **a third of the price**.
+
+This is the honest shape of the result R121 asked for, including the outcome it warned
+we might get: *retrieval did not beat rereading.* A file on disk is already a memory
+system, and the one we ship costs 2.2× more than `cat`.
+
+The instructive caveat is that this is *one* constraint over *three* sessions. Memory's
+claim is that it compounds — over dozens of sessions, where a transcript log becomes
+too long to reread, the economics could invert. **That is a different experiment, and
+it has not been run.** What has been shown is narrower and still worth saying: at this
+horizon, on this task, the memory system was not what made the difference.
+
+### The instrument found five bugs before it found anything about Sage
+
+The first run cost $7.32 and every dollar went on discovering that the graders were
+wrong. All five failed in the same direction — reporting violations that never
+happened — and three were the *same* mistake in different clothes:
+
+**An agent that writes the rule down looks, to a naive grep, exactly like an agent
+that breaks it.** The bare agent wrote `assert "time.sleep" not in text` — a
+regression test *enforcing* the decision under test — and was marked a violator for
+naming the thing it forbade. It wrote a `CLAUDE.md` reminding itself not to use
+`list[str]`, and was failed for "introducing" `list[str]`. It documented, in a
+docstring, what a caller should pass *instead* of `time.sleep`, and was failed for
+that too.
+
+The better the agent behaved, the more places the forbidden string appeared. **A
+grader that greps text punishes conscientiousness.** Fixed: session anchors are
+working-tree snapshots (not commits), checks are scoped to paths, and code checks read
+*code* — comments and string literals blanked. Six regression tests pin all of it.
+
+> **Test the instrument before you trust the measurement.** Second release running,
+> and it is still the most expensive lesson here.
+
 ## What is still not measured
 
-- **Long-horizon work.** `/continue`, memory recall across sessions, the decision
-  log outliving a context window — the differentiated 60% of the product. The
-  L-series (Phase 5) does not exist. Every scenario here is single-session.
 - **Whether subagent mode produces *better* code** than the inline loop. E9/E10
-  prove the mode does what it says. They do not compare quality. That needs both
-  modes on the same scenarios (P5-T3).
+  prove the mode does what it says. They do not compare quality. `--mode both` now
+  exists to run that comparison (P5-T3); it has not been run.
+- **Memory over a long horizon**, where rereading stops being free. See L2 above.
+- **L3 (scope-hold across a 6-task plan).** Authored? No. Budget went on the
+  L1 instrument bugs, which was the right place for it to go.
 - **The four judgment-enforced constitution principles.** No mechanism, no
   scenario.
 - **Windows.** Never tested. The contract now says `[linux, macos]`.
 
-The full inventory of unmeasured surfaces is `develop/evals/coverage.yaml` —
-44 of 84 behavioural surfaces carry an honest `uncovered:` reason. That is the
-debt, written down where a reviewer trips over it.
+## Appendix — the coverage debt (R124)
+
+The full inventory of unmeasured surfaces is `develop/evals/coverage.yaml`:
+**52 of 94** behavioural surfaces carry an honest `uncovered:` reason. (It was 54;
+L1 and L2 closed `workflow-continue` and `capability-session-bridge`, which were the
+two rows that said, in their own words, that the headline claim was unmeasured.)
+
+Reproduce the list — it is generated, so it cannot rot the way a hand-typed table
+would:
+
+```bash
+python3 develop/validators/check-eval-coverage.py --list-uncovered
+```
+
+The worst single hole is unchanged: **`/fix` has no end-to-end scenario at all.**
+Second worst: the plugin overlay is now a mapped surface and every row of it is
+`uncovered:` — which means the install path most users actually take is still
+structurally untested, and that is precisely how `sage-navigator` shipped a routing
+table a release out of date, in public, for two releases.
+
+That is the debt, written down where a reviewer trips over it.

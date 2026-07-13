@@ -2,6 +2,116 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [1.3.2] — The manifest was lying, and now it cannot
+
+Upgrade program 2, phases 1, 5 and 6. **The headline is a result, not a feature: we
+measured Sage's central claim for the first time, and it did not hold.**
+
+### The long-horizon claim, measured — and it does not hold
+
+Sage's README led with a claim about surviving a context window. Eleven scenarios in,
+nothing had ever tested it — not from neglect, but because a single-session harness
+*cannot*: the agent that finished the work was the agent that started it, and it simply
+remembered. `run_evals.py` can cross a context boundary now. Here is what was on the
+other side (N=3, both conditions, $92.71 of model time):
+
+| | sage | bare |
+|---|---|---|
+| **L1** — resume an interrupted cycle | 2/3 · $25.23 | **3/3** · $7.04 |
+| **L2** — honour a constraint stated 2 contexts ago | 3/3 · $4.85 | **3/3** · $2.17 |
+
+**A bare agent, given the same files and the same prompts, matched or beat Sage on
+both, at a third of the cost.** The README now says so.
+
+**L2 is the more interesting failure, because nothing failed.** Sage's memory *worked*
+— instrumented, and session 1 provably called the memory tool every run, while the bare
+arm provably had no MCP server at all. It just didn't **matter**: bare reread its own
+session log off the disk and got the same answer. Retrieval did not beat rereading.
+(Caveat kept as a caveat: one constraint, three sessions. Memory's claim is that it
+*compounds* — a different experiment, not yet run.)
+
+### The manifest was lying (and this is the fix)
+
+L1 caught it. Three runs of the identical cycle, all three completing and committing
+all three tasks:
+
+    run 1    gate_state: gates-passed
+    run 2    gate_state: plan-approved     ← "plan approved, no tasks started"
+    run 3    gate_state: complete
+
+**A session resuming from run 2's manifest reads "no tasks started" and does the work
+again.** The artifact whose entire purpose is to carry work across a context boundary
+had drifted from the tree beside it.
+
+`cycle-protocol.md` had *asked* the model to advance the field, in prose. **Third time
+this exact bug has been found here, and the third fix of the same shape:**
+
+| | promised in prose | measured | now |
+|---|---|---|---|
+| R29 degradation record | "logs one line, never silently" | 1 of 3 runs | a hook |
+| ADR-10 task ledger | "every task independently reviewed" | 2 of 3 runs | `ledger.py` |
+| **R120 manifest `gate_state`** | "advance it at every checkpoint" | **1 of 3 runs** | **`manifest.py` + hook** |
+
+It advances now **because the agent wrote source code, and the hook firing IS the
+evidence.** Manifest coherence **2/3 → 3/3**. It has not lied since.
+
+**What it refuses to do matters as much:** it will not award `gates-passed` or
+`complete`. Those are *approval* states; a hook that granted them because the files
+looked finished would forge the signature the gate exists to collect. **Fact is
+mechanical. Approval is not.** `manifest.py check` fails a manifest that contradicts
+its own tree.
+
+**And L1 stayed at 2/3.** The bridge is sound now; the cost is not yet paid for. Said
+plainly rather than rounded up.
+
+### Pi can enforce — proven, 4/4, offline, $0
+
+A Pi extension **can veto a tool call**: `{block: true, reason}` on `tool_call`, the
+tool function never runs, the model receives the denial. Executed against Pi's faux
+model provider — no API key, ~2s, $0 — with a negative control and a mutation check,
+because a green test is not evidence until it can go red.
+`docs/spike-artifacts/pi-veto-transcript.txt`. Tier **B**, port **2–3 person-weeks**.
+
+Pi still has **no contract row**: the capability is proven, but Sage has no Pi
+*platform*, and building one is a port. The claim does not get to precede the thing.
+
+### Packs stop being a promise
+
+`packs/` was wired to **nothing** — while `sage update` had been printing `sage add
+xoai/sage-product` since v1.2: **a command for a repository that does not exist.**
+
+- `sage add <owner>/<repo>[@vX.Y.Z]` — resolves a release tag, **verifies the tarball
+  against the published `checksums.txt`, and fails closed.** No checksums → installs
+  loudly, records `sha256: unverified` (not a blank; a blank reads as "not applicable").
+- `.sage/packs.lock` — source, tag, verified digest, skills installed.
+- `release_lib.py` — one implementation of the checksum chain, shared by Sage and all
+  three pack repos. `stage_packs.py` **generates** the repo trees, so they cannot drift.
+- `release.py --dist-status`, `docs/install.md`, tar-escape and symlink members refused.
+
+**Nothing is published yet** — the repos are staged, not pushed.
+
+### The instrument found five bugs before it found anything about Sage
+
+The first L-series run cost $7.32 and produced zero findings about Sage — only grader
+bugs. Three were the same mistake:
+
+> **An agent that writes the rule down looks, to a naive grep, exactly like an agent
+> that breaks it.**
+
+The bare agent wrote `assert "time.sleep" not in text` — a regression test *enforcing*
+the decision under test — and was marked a violator for naming the thing it forbade.
+**The better it behaved, the more places the forbidden string appeared.** Fixed:
+session anchors are working-tree snapshots (a commit cannot anchor a session —
+uncommitted work leaks forward), checks are path-scoped, and code checks read *code*.
+
+### Also
+
+- **`docs/authoring-skills.md`** — write the scenario *before* the skill.
+- **Coverage** — `workflow-continue` and `capability-session-bridge` are measured now.
+- **Two spec claims were false** and are recorded as such: `sage-product` carries no
+  eval assets; `sage-autoresearch` has five test files (not a "15-module suite") and no
+  `SKILL.md` at all, so `sage add` cannot install it.
+
 ## [1.3.1] — The navigator was a second copy, and it had drifted
 
 A plugin cannot install a `CLAUDE.md`, so **`sage-navigator` IS the eager layer for

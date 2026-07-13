@@ -1,0 +1,179 @@
+{
+  "id": "L1",
+  "name": "resume-fidelity",
+  "title": "The laptop closed mid-cycle. Does a fresh context pick the work back up — or start it again?",
+  "source": "14-spec-phase5-evidence2.md §43 R120; exercises ADR-13",
+  "fixture": "py-service",
+  "conditions": [
+    "sage",
+    "bare"
+  ],
+  "rationale": [
+    "THIS IS THE SCENARIO SAGE EXISTS FOR, AND IT HAS NEVER BEEN RUN.",
+    "",
+    "Every scenario before this one finished in the session that started it. The",
+    "agent that completed the work was the agent that planned it, and it simply",
+    "remembered — so E1-E11 measure Sage's enforcement spine and say precisely",
+    "nothing about the claim the README leads with: that a cycle survives a context",
+    "window. That claim is the differentiated 60% of the product and it has, until",
+    "now, been supported by zero evidence.",
+    "",
+    "Two sessions, one workspace. Session 1 completes Task 1 and gets cut off after",
+    "writing Task 2's failing test. Session 2 is a FRESH MODEL CONTEXT — it has",
+    "never seen session 1's conversation. Everything it knows about this work, it",
+    "must read off the disk. That is the entire experiment.",
+    "",
+    "WHY BOTH CONDITIONS, AND WHY THAT IS THE HONEST DESIGN. The bare condition gets",
+    "the same workspace, the same artifacts, and the same prompt — spec.md, plan.md,",
+    "manifest.md and decisions.md are all sitting right there as plain files that any",
+    "agent can read. So this does not measure 'Sage has a manifest and bare does",
+    "not'. It measures whether the MACHINERY buys anything over the raw files a",
+    "competent agent could have read anyway. If bare reads the plan and resumes",
+    "correctly, bare wins the row, and that result publishes exactly as loudly as a",
+    "Sage win would. The v1.2.0 baseline falsified a README claim and shipped the",
+    "falsification; the same rule applies here.",
+    "",
+    "THE THREE THINGS A FAKE RESUME LOOKS LIKE, and a grader for each:",
+    "",
+    "1. It RESTARTS. The agent re-derives Task 1 from the plan and writes MAX_RETRIES",
+    "   again. Session 2's diff would then re-introduce the definition; a real resume",
+    "   never touches it, because it is already there. (The check greps for",
+    "   'MAX_RETRIES = ' with a trailing space, NOT 'MAX_RETRIES =' — the latter is a",
+    "   substring of 'MAX_RETRIES == 3', which is what a perfectly correct new test",
+    "   would assert, and the check would then fail the very agent it is meant to",
+    "   pass. That trap is pinned by a unit test.)",
+    "",
+    "2. It RE-PLANS. The agent, finding a plan it does not remember writing, rewrites",
+    "   it. A cycle that rewrites its own plan has not resumed — it has restarted,",
+    "   and the artifact that was supposed to carry the work across the boundary has",
+    "   been overwritten by an agent that did not trust it.",
+    "",
+    "3. It FORGETS THE DECISION. decisions.md D-002 forbids blocking sleeps in src/,",
+    "   for a reason (the module is imported by an async gateway) that no amount of",
+    "   local cleverness would rediscover. Task 3 asks for a retry helper that delays",
+    "   between attempts, so `time.sleep(backoff_delay(n))` is the natural,",
+    "   idiomatic, and WRONG implementation — the temptation is real, and an agent",
+    "   that never opened decisions.md will take it. This is the sharpest of the",
+    "   three: it is a fact that exists nowhere except in a file written by a session",
+    "   that no longer exists. Long-horizon memory, or nothing.",
+    "",
+    "The check greps for BOTH 'time.sleep' and 'from time import sleep'. The first",
+    "spelling alone would miss the second, and a grader that misses the violation",
+    "reports the agent obeyed a rule it broke — the lenient direction, which is the",
+    "only direction that matters.",
+    "",
+    "WHY THE PROMPT NAMES NO SAGE COMMAND. '/continue' exists only in the sage",
+    "condition; handing bare a slash command it cannot parse would not be a control,",
+    "it would be sabotage. Both conditions get the same plain-English sentence a real",
+    "user would type. That makes routing part of what is under test, which is correct",
+    "— if Sage cannot recognize a resume request without being told the magic word,",
+    "the long-horizon claim was never true for anyone who did not read the manual.",
+    "",
+    "WHY prompt-s1-never-sent.md EXISTS AND IS NEVER SENT. interrupt_after_turns=1",
+    "cuts session 1 after its first turn. The second prompt — the one that would have",
+    "finished the cycle — is declared, and then never arrives. That IS the",
+    "interruption. The harness refuses an interrupt_after_turns that cuts nothing off",
+    "(offline-check fails it), because a scenario that sends every prompt and calls",
+    "itself a resume test would pass while testing nothing.",
+    "",
+    "WHAT THIS DOES NOT MEASURE. Whether the manifest is a BETTER bridge than a plain",
+    "plan.md — only whether it is a working one. And the sage-only ledger check below",
+    "asserts the cycle was carried to completion under its ORIGINAL id; it cannot",
+    "detect an agent that abandons cycle 004 and opens 005 doing identical work, if",
+    "that agent also happens to close 004 out. No grader here reads for code quality."
+  ],
+  "sessions": [
+    {
+      "name": "s1",
+      "prompts": [
+        "prompt-s1.md",
+        "prompt-s1-never-sent.md"
+      ],
+      "interrupt_after_turns": 1
+    },
+    {
+      "name": "s2",
+      "prompts": [
+        "prompt-s2.md",
+        "prompt-s2b.md"
+      ]
+    }
+  ],
+  "setup": {
+    ".sage/decisions.md": "# Decisions\n\n## D-002 — No blocking sleeps in library code\n\n**Date:** 2026-07-05\n**Status:** accepted\n\n`src/` is imported directly by the async gateway. A blocking `time.sleep()`\nanywhere inside it stalls the caller's event loop — this caused the 2026-06-28\nlatency incident, where a 30s upstream retry froze every unrelated request on the\nsame worker for the duration.\n\n**Decision:** code under `src/` MUST NOT call `time.sleep()`, and MUST NOT import\n`sleep` from `time`. A retry helper does not perform its own waiting: it computes\nthe delay and lets the caller decide how to wait (inject a sleeper, return the\ndelay, or yield it). The delay is a value, not an action.\n\nThis applies to `src/` only. Tests may sleep.\n",
+    ".sage/work/004-retry-policy/spec.md": "---\nstatus: completed\n---\n\n# Spec: Retry policy\n\nThe service gives up on the first upstream failure. It needs a bounded retry\npolicy with exponential backoff, in `src/config.py`.\n\n1. **MAX_RETRIES** — a module constant. How many times an operation is retried\n   before the last error is re-raised.\n2. **backoff_delay(attempt)** — the delay, in seconds, before retry number\n   `attempt`. Exponential, and capped so a long outage cannot produce an absurd\n   wait.\n3. **retry(operation)** — calls `operation()`, retries it on failure up to\n   `MAX_RETRIES` times, delaying by `backoff_delay(attempt)` between attempts,\n   and re-raises the final error if every attempt fails.\n\nEvery change carries a test.\n",
+    ".sage/work/004-retry-policy/plan.md": "---\nstatus: completed\n---\n\n# Plan: Retry policy\n\nGlobal constraints: touch only `src/config.py` and `tests/`. Do not reformat\nexisting code. The project's recorded decisions apply — read `.sage/decisions.md`\nbefore implementing.\n\n## Task 1 — MAX_RETRIES\n\nAdd the module constant `MAX_RETRIES = 3` to `src/config.py`.\nFiles: `src/config.py`, `tests/`\nOutput: `src/config.py` defines MAX_RETRIES; a test asserts its value.\n\n## Task 2 — backoff_delay()\n\nAdd `backoff_delay(attempt: int) -> float` to `src/config.py`. Exponential:\nthe delay doubles with each attempt, starting at 0.5s, capped at 30s.\nFiles: `src/config.py`, `tests/`\nOutput: `src/config.py` defines backoff_delay(); tests cover growth and the cap.\n\n## Task 3 — retry()\n\nAdd `retry(operation)` to `src/config.py`. It calls `operation()`; on failure it\nretries up to `MAX_RETRIES` times, delaying `backoff_delay(attempt)` between\nattempts; if every attempt fails it re-raises the last error.\nFiles: `src/config.py`, `tests/`\nOutput: `src/config.py` defines retry(); tests cover the success path, the\nretry-then-succeed path, and the exhausted path.\n",
+    ".sage/work/004-retry-policy/manifest.md": "---\ncycle_id: \"20260712-retry-policy\"\nworkflow: build\nphase: implement\nstatus: in-progress\ntier: standard\ngate_state: plan-approved\ncreated: 2026-07-12\nupdated: 2026-07-12 09:00\nflags:\n  quality_locked: false\n  autonomous: false\n  subagents: false\n---\n\n# Cycle: Retry policy\n\n## State\n\n**Current phase:** implement — plan approved, no tasks started\n**Next step:** Task 1 — MAX_RETRIES\n\n## Context summary\n\nSpec and plan are approved. Three tasks, all in `src/config.py`. Decision D-002\n(no blocking sleeps in `src/`) governs Task 3.\n"
+  },
+  "checks": [
+    {
+      "grader": "diff_contains",
+      "describe": "PRECONDITION — session 1 actually completed Task 1 (without this, session 2's 'no restart' check is uninterpretable)",
+      "session": "s1",
+      "substrings": [
+        "MAX_RETRIES"
+      ]
+    },
+    {
+      "grader": "diff_lacks",
+      "describe": "session 2 did NOT restart Task 1 — it never re-defines MAX_RETRIES in src/, because a resumed cycle finds it already there",
+      "session": "s2",
+      "substrings": [
+        "MAX_RETRIES = "
+      ],
+      "paths": [
+        "src/*.py"
+      ],
+      "code_only": true
+    },
+    {
+      "grader": "unchanged",
+      "describe": "session 2 did NOT re-plan — the three approved tasks survived verbatim",
+      "path": ".sage/work/004-retry-policy/plan.md",
+      "lines": [
+        "## Task 1 — MAX_RETRIES",
+        "## Task 2 — backoff_delay()",
+        "## Task 3 — retry()"
+      ]
+    },
+    {
+      "grader": "diff_lacks",
+      "describe": "decision D-002 survived the context boundary — no blocking sleep reached src/, though it is the natural way to write Task 3",
+      "session": "s2",
+      "substrings": [
+        "time.sleep",
+        "from time import sleep"
+      ],
+      "paths": [
+        "src/*.py"
+      ],
+      "code_only": true
+    },
+    {
+      "grader": "file_contains",
+      "describe": "the remaining work actually landed (Tasks 2 and 3)",
+      "path": "src/config.py",
+      "substrings": [
+        "def backoff_delay",
+        "def retry"
+      ]
+    },
+    {
+      "grader": "gate_exit",
+      "describe": "the final tree is verifiably green (Gate 5, exit 0)",
+      "script": "core/gates/scripts/sage-verify.sh",
+      "exit": 0
+    },
+    {
+      "grader": "file_lacks",
+      "describe": "sage-only: the manifest ADVANCED — it no longer claims the cycle is pre-implementation. Vocabulary-agnostic on purpose: three runs of the identical cycle produced three different gate_state spellings, so any check that enumerates them is testing my guess, not Sage",
+      "condition": "sage",
+      "path": ".sage/work/004-retry-policy/manifest.md",
+      "substrings": [
+        "gate_state: plan-approved"
+      ]
+    }
+  ],
+  "budget_usd": 6.0,
+  "timeout_s": 1800
+}

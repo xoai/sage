@@ -14,12 +14,45 @@ back to the global file.
 
 ## Manifest gate_state discipline
 
-The manifest's `gate_state` is the machine field the Claude Code spec-gate hook
-reads (see the manifest template's "Machine state contract"). Advance it at every
-checkpoint — pre-spec → spec-approved → plan-approved → building → gates-passed →
-complete — in lockstep with `status`. A stale `pre-spec` keeps the hook blocking
-the very work just approved; a `complete` set before `gates-passed` is blocked by
-the completion guard (Rule 5).
+`gate_state` is the machine field the spec-gate hook reads, and the field a resumed
+session trusts to tell it where the work stopped. The vocabulary is closed:
+
+```
+pre-spec → spec-approved → plan-approved → building → gates-passed → complete
+```
+
+**You are not asked to advance it to `building` any more.** The
+`sage-manifest-sync` PostToolUse hook does that: the moment source is written under
+an active `plan-approved` cycle, the manifest records `building`. It fires because
+you wrote code, and the firing *is* the evidence.
+
+This used to be your job, and L1 measured what that was worth. Three runs of the
+identical cycle, all three completing and committing all three tasks:
+
+| run | `gate_state` recorded | reality |
+|---|---|---|
+| 1 | `gates-passed` | 3/3 tasks done |
+| 2 | **`plan-approved`** | 3/3 tasks done |
+| 3 | `complete` | 3/3 tasks done |
+
+Run 2 is why this is a hook. A session resuming from *"plan approved, no tasks
+started"* redoes work that is already committed. The bridge between sessions had
+drifted from the tree it describes.
+
+**What is still yours, and cannot be automated:** `spec-approved`, `plan-approved`,
+`gates-passed`, `complete`. Those are *approval* states. A script that awarded
+`gates-passed` because the files looked finished would be forging the signature the
+gate exists to collect — so the hook refuses to, by design, and the completion guard
+(Rule 5) still blocks a `complete` that outruns `gates-passed`.
+
+Fact is mechanical. Approval is not.
+
+Check a cycle at any time:
+
+```bash
+python3 sage/runtime/tools/manifest.py check      # does the manifest match the tree?
+python3 sage/runtime/tools/manifest.py sync <manifest.md>   # repair it if not
+```
 
 ## Phase announcements
 

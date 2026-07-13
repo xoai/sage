@@ -16,8 +16,14 @@ Usage:
     python skill_manager.py update [target]                   # update community skills
 """
 from __future__ import annotations
-import argparse, json, os, re, shutil, subprocess, sys, time
+import argparse, json, os, re, shutil, subprocess, sys, tarfile, tempfile, time
 from pathlib import Path
+
+# The checksum chain, shared with release.py and install.sh. Reused, not
+# re-implemented: a second copy of an integrity check is a second chance to get it
+# subtly wrong, and the one that is wrong is the one that says OK.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import release_lib  # noqa: E402
 from typing import Any, Dict, List, Optional, Tuple
 
 # ── Constants ──
@@ -118,13 +124,17 @@ def parse_frontmatter(content: str) -> dict:
 
 # ── Source Parser ──
 class SourceInfo:
-    def __init__(self, stype, owner="", repo="", path="", branch="", url=""):
+    def __init__(self, stype, owner="", repo="", path="", branch="", url="", ref=""):
         self.type = stype
         self.owner = owner
         self.repo = repo
         self.path = path
         self.branch = branch
         self.url = url
+        # A pinned release tag, from `owner/repo@v1.2.3`. Empty means "latest
+        # release" — which is a moving target, and the lockfile is what makes it
+        # reproducible after the fact.
+        self.ref = ref
 
 def parse_source(source):
     # Local path
@@ -139,7 +149,16 @@ def parse_source(source):
     m = re.match(r"https?://github\.com/([^/]+)/([^/.]+)/?$", source)
     if m:
         return SourceInfo("github", owner=m.group(1), repo=m.group(2))
-    # GitHub shorthand
+    # GitHub shorthand, optionally pinned to a release tag: owner/repo@v1.2.3
+    #
+    # The pin is the point of R126. `sage add xoai/sage-product` resolves to whatever
+    # is latest TODAY — fine for a human, useless for a build: two developers running
+    # the same command a week apart get different trees, and nothing records that they
+    # did. The resolved tag and the sha256 actually verified both go into
+    # .sage/packs.lock, so the second developer can reproduce the first.
+    m = re.match(r"^([a-zA-Z0-9_.-]+)/([a-zA-Z0-9_.-]+)@([A-Za-z0-9_.\-]+)$", source)
+    if m:
+        return SourceInfo("github", owner=m.group(1), repo=m.group(2), ref=m.group(3))
     m = re.match(r"^([a-zA-Z0-9_.-]+)/([a-zA-Z0-9_.-]+)$", source)
     if m:
         return SourceInfo("github", owner=m.group(1), repo=m.group(2))
@@ -147,6 +166,181 @@ def parse_source(source):
     if source.startswith("http://") or source.startswith("https://"):
         return SourceInfo("wellknown", url=source.rstrip("/"))
     raise ValueError(f'Cannot parse source: "{source}"')
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Packs from a tagged release (ADR-15 / R126)
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# Until now `packs/` was wired to NOTHING. A pack installed only from a local
+# checkout, and `sage update` has been printing `sage add xoai/sage-product` since
+# v1.2 — a command for a repository that does not exist. This is the code that makes
+# that sentence true.
+#
+# The integrity story, stated plainly because it is the part users cannot see:
+#
+#   checksums.txt present  →  verified, or the install FAILS. No prompt, no override.
+#   checksums.txt absent   →  commit-pinned fetch and a LOUD warning. We fetched a
+#                             tarball nobody attested; the user gets told so, and the
+#                             lockfile records `sha256: unverified` rather than a
+#                             comfortable blank.
+#
+# The one thing this must never do is print a tick it has not earned. install.sh
+# has refused unverified downloads since v1.0 ("Refusing to install an unverified
+# download"); a pack is not a lesser artifact than the framework.
+
+PACKS_LOCK = ".sage/packs.lock"
+
+
+def gh_latest_release(owner, repo):
+    """The tag of the latest published release, or None if the repo has none."""
+    try:
+        data = http_json(f"{GITHUB_API}/repos/{owner}/{repo}/releases/latest")
+    except Exception:
+        return None
+    return (data or {}).get("tag_name")
+
+
+def gh_release_assets(owner, repo, tag):
+    """{asset_name: browser_download_url} for a release, or {} if there is none."""
+    try:
+        data = http_json(f"{GITHUB_API}/repos/{owner}/{repo}/releases/tags/{tag}")
+    except Exception:
+        return {}
+    return {a["name"]: a["browser_download_url"]
+            for a in (data or {}).get("assets", [])}
+
+
+def _download(url, dest):
+    from urllib.request import Request, urlopen
+    r = Request(url, headers={"User-Agent": "sage-skills",
+                              "Accept": "application/octet-stream"})
+    with urlopen(r, timeout=60) as resp, open(dest, "wb") as fh:
+        shutil.copyfileobj(resp, fh)
+    return dest
+
+
+class PacksLock:
+    """`.sage/packs.lock` — what was installed, from where, at what version, and
+    whether we could prove it.
+
+    `sage/skills/skills.json` already records *a* source, but for a local install it
+    records an ABSOLUTE MACHINE PATH, which is not portable and not a version. It
+    cannot answer "is my sage-product the same as yours". This can.
+    """
+
+    def __init__(self, project_dir=None):
+        self.path = Path(project_dir or Path.cwd()) / PACKS_LOCK
+
+    def read(self):
+        if not self.path.is_file():
+            return {"version": 1, "packs": {}}
+        try:
+            with open(self.path) as f:
+                return json.load(f)
+        except (OSError, json.JSONDecodeError):
+            return {"version": 1, "packs": {}}
+
+    def record(self, name, source, version, sha256, skills):
+        data = self.read()
+        data.setdefault("packs", {})[name] = {
+            "source": source,
+            "version": version,
+            "sha256": sha256,          # "unverified" when the release published none
+            "skills": sorted(skills),
+            "installed": time.strftime("%Y-%m-%d"),
+        }
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self.path.with_suffix(".tmp")
+        with open(tmp, "w") as f:
+            json.dump(data, f, indent=2)
+            f.write("\n")
+        tmp.replace(self.path)
+        return self.path
+
+
+def fetch_pack_release(src, workdir):
+    """Resolve → download → VERIFY. Returns (unpacked_dir, tag, sha256) or None.
+
+    None means "this repo publishes no releases", which is not an error — it is a
+    plain GitHub skills repo, and the caller falls back to the per-file API path that
+    has always existed. A pack repo and a skills repo are told apart by whether
+    anyone has ever cut a release, which is the only signal that does not require
+    guessing at a layout.
+    """
+    tag = src.ref or gh_latest_release(src.owner, src.repo)
+    if not tag:
+        return None
+
+    assets = gh_release_assets(src.owner, src.repo, tag)
+    tarballs = [n for n in assets if n.endswith(".tar.gz")]
+    if not tarballs:
+        # A release with no tarball asset: fall back to the source archive GitHub
+        # generates for every tag. Nothing attests it — say so.
+        url = f"https://github.com/{src.owner}/{src.repo}/archive/refs/tags/{tag}.tar.gz"
+        tarball = _download(url, workdir / f"{src.repo}-{tag}.tar.gz")
+        ui.warning(
+            f"{src.owner}/{src.repo}@{tag} publishes no checksums.txt — "
+            f"installing a commit-pinned archive that NOBODY has attested.")
+        ui.dim("      Its integrity rests on GitHub alone. Recorded as `unverified`.")
+        return _unpack(tarball, workdir), tag, "unverified"
+
+    name = tarballs[0]
+    tarball = _download(assets[name], workdir / name)
+
+    if "checksums.txt" not in assets:
+        ui.warning(
+            f"{src.owner}/{src.repo}@{tag} ships a tarball but NO checksums.txt — "
+            f"there is nothing to verify it against.")
+        ui.dim("      Recorded as `unverified` in .sage/packs.lock.")
+        return _unpack(tarball, workdir), tag, "unverified"
+
+    _download(assets["checksums.txt"], workdir / "checksums.txt")
+
+    # Fails closed. The same chain install.sh walks, and the same refusal.
+    try:
+        release_lib.verify_checksums(workdir, required=[name])
+    except release_lib.Problem as exc:
+        raise RuntimeError(
+            f"{exc}\n\nNothing has been installed. Your existing skills are untouched.")
+
+    digest = release_lib.sha256_file(tarball)
+    ui.dim(f"Verified sha256 {digest[:16]}… against the published checksums.txt")
+    return _unpack(tarball, workdir), tag, digest
+
+
+def _unpack(tarball, workdir):
+    """Extract, and refuse anything that tries to escape the directory.
+
+    A tar member named ../../.ssh/authorized_keys is a real thing that real
+    archives have really contained. `sage add` runs on a developer's machine with
+    their permissions; it does not get to be casual about this.
+    """
+    dest = workdir / "unpacked"
+    dest.mkdir(parents=True, exist_ok=True)
+    with tarfile.open(tarball) as tf:
+        for member in tf.getmembers():
+            target = (dest / member.name).resolve()
+            if not str(target).startswith(str(dest.resolve()) + os.sep):
+                raise RuntimeError(
+                    f"refusing to unpack {member.name!r} — it escapes the "
+                    f"extraction directory")
+            if member.issym() or member.islnk():
+                raise RuntimeError(
+                    f"refusing to unpack link {member.name!r} from an archive")
+        # Belt AND braces. The loop above is the guard that works on 3.8; `filter`
+        # is CPython's own hardening, added in 3.12 and becoming the default in
+        # 3.14. Take it where it exists rather than waiting to be surprised.
+        try:
+            tf.extractall(dest, filter="data")
+        except TypeError:
+            tf.extractall(dest)
+
+    # git archive prefixes everything with <name>-<version>/; unwrap a lone root.
+    entries = [p for p in dest.iterdir()]
+    if len(entries) == 1 and entries[0].is_dir():
+        return entries[0]
+    return dest
+
 
 # ── GitHub Skill Discovery ──
 def gh_tree(owner, repo):
@@ -508,10 +702,122 @@ def cmd_find(query, limit=10, as_json=False):
             ui.warning("Enter a number or press Enter.")
     if installed: print(); ui.success(f"{installed} skill(s) installed.")
 
+def select_skills(skills, skill_name=None, install_all=False, source_str=""):
+    """Which skills to install: one named, all of them, or an interactive pick.
+
+    Extracted so the release path and the per-file path share it. Two copies of a
+    selection prompt is how one of them quietly stops honouring --all.
+    """
+    if skill_name:
+        match = ([s for s in skills if s["name"] == skill_name]
+                 or [s for s in skills if s["name"].lower() == skill_name.lower()])
+        if not match:
+            ui.error(f"Skill '{skill_name}' not found in {source_str}")
+            ui.dim(f"Available: {', '.join(s['name'] for s in skills[:10])}")
+            return []
+        return match[:1]
+
+    print_discovered(skills)
+    if install_all:
+        return list(skills)
+
+    try:
+        choice = input(f"  [1-{len(skills)}] Select (comma-separated)  |  "
+                       f"[A] All  |  [Enter] Cancel: ").strip()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return []
+    if not choice:
+        return []
+    if choice.upper() == "A":
+        return list(skills)
+
+    indices = []
+    for part in choice.split(","):
+        try:
+            idx = int(part.strip()) - 1
+            if 0 <= idx < len(skills):
+                indices.append(idx)
+        except ValueError:
+            pass
+    if not indices:
+        ui.warning("No valid selection.")
+        return []
+    return [skills[i] for i in indices]
+
+
+def try_install_pack(src, cfg, skill_name=None, install_all=False):
+    """Install a pack from its tagged release. Returns None if there is no release.
+
+    None is not failure — it means "this is not a pack repo", and cmd_add falls
+    through to the per-file GitHub path unchanged. Anything else (including a
+    verification failure, which RAISES) is a decision this function owns.
+    """
+    workdir = Path(tempfile.mkdtemp(prefix="sage-pack-"))
+    try:
+        ui.info(f"Looking for a release in {src.owner}/{src.repo}...")
+        found = fetch_pack_release(src, workdir)
+        if found is None:
+            ui.dim(f"  {src.owner}/{src.repo} publishes no releases — "
+                   f"falling back to reading skills from the default branch.")
+            return None
+
+        tree, tag, digest = found
+        ui.success(f"{src.owner}/{src.repo}@{tag}")
+
+        skills = discover_skills_local(str(tree))
+        if not skills:
+            # sage-autoresearch is exactly this: a Python package, no SKILL.md
+            # anywhere. Today `sage add ./packs/sage-autoresearch` prints "No
+            # SKILL.md files found" and returns success, having installed nothing.
+            # A pack that installs nothing and says so quietly is a pack that is
+            # broken for everyone who did not read the output carefully.
+            ui.warning(f"{src.repo}@{tag} contains no SKILL.md — nothing to install.")
+            ui.dim("      If this is a Python-package pack (e.g. sage-autoresearch),")
+            ui.dim("      install it with pip/uv; `sage add` delivers skills.")
+            return 1
+
+        chosen = select_skills(skills, skill_name, install_all)
+        if not chosen:
+            return 0
+
+        source_str = f"{src.owner}/{src.repo}@{tag}"
+        n = 0
+        for skill in chosen:
+            skill["local"] = True
+            if install_one(skill, skill["name"], SourceInfo("local", url=str(tree)),
+                           source_str, cfg):
+                n += 1
+
+        lock = PacksLock(cfg.project_dir).record(
+            name=src.repo, source=f"{src.owner}/{src.repo}", version=tag,
+            sha256=digest, skills=[s["name"] for s in chosen])
+
+        print()
+        ui.success(f"Installed {n} skill(s) from {source_str}")
+        ui.dim(f"  provenance → {lock.relative_to(cfg.project_dir) if cfg.project_dir in lock.parents else lock}")
+        if digest == "unverified":
+            ui.warning("  integrity: UNVERIFIED (the release published no checksums.txt)")
+        else:
+            ui.dim(f"  integrity: sha256 verified")
+        return 0
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
+
+
 def cmd_add(source, skill_name=None, install_all=False, do_audit=False):
     cfg = SkillsConfig()
     src = parse_source(source)
     print(); ui.bold("Sage — Add Skills"); print()
+
+    # A pack repo publishes releases; a plain skills repo does not. That is the only
+    # signal that does not require guessing at a layout, and it degrades the right
+    # way: a repo with no releases falls through to the per-file path that has
+    # always worked, unchanged.
+    if src.type == "github" and not src.path:
+        installed = try_install_pack(src, cfg, skill_name, install_all)
+        if installed is not None:
+            return installed
 
     if src.type == "github":
         ui.info(f"Discovering skills in {src.owner}/{src.repo}...")
@@ -545,38 +851,9 @@ def cmd_add(source, skill_name=None, install_all=False, do_audit=False):
                     ui.dim(f"  {slug}: {risk} ({partner})")
         if result: print()
 
-    if skill_name:
-        match = [s for s in skills if s["name"] == skill_name]
-        if not match:
-            match = [s for s in skills if s["name"].lower() == skill_name.lower()]
-        if not match:
-            ui.error(f"Skill '{skill_name}' not found in {source_str}")
-            ui.dim(f"Available: {', '.join(s['name'] for s in skills[:10])}"); return
-        ok = install_one(match[0], match[0]["name"], src, source_str, cfg, branch)
-        if ok: print(); ui.bold(f"Installed: {match[0]['name']}"); ui.dim(f"Source: {source_str}")
+    selected = select_skills(skills, skill_name, install_all, source_str)
+    if not selected:
         return
-
-    if install_all:
-        print_discovered(skills)
-        ok = sum(1 for s in skills if install_one(s, s["name"], src, source_str, cfg, branch))
-        print(); ui.success(f"{ok}/{len(skills)} skill(s) installed from {source_str}."); return
-
-    print_discovered(skills)
-    try: choice = input(f"  [1-{len(skills)}] Select (comma-separated)  |  [A] All  |  [Enter] Cancel: ").strip()
-    except (EOFError, KeyboardInterrupt): print(); return
-    if not choice: return
-
-    if choice.upper() == "A":
-        selected = skills
-    else:
-        indices = []
-        for part in choice.split(","):
-            try:
-                idx = int(part.strip()) - 1
-                if 0 <= idx < len(skills): indices.append(idx)
-            except ValueError: pass
-        if not indices: ui.warning("No valid selection."); return
-        selected = [skills[i] for i in indices]
 
     print()
     ok = sum(1 for s in selected if install_one(s, s["name"], src, source_str, cfg, branch))

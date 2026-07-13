@@ -24,10 +24,14 @@ Python 3.8+, stdlib only.
 """
 from __future__ import annotations
 
+import difflib
+import fnmatch
+import io
 import json
 import pathlib
 import re
 import subprocess
+import tokenize
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 
@@ -38,11 +42,25 @@ class Transcript:
     The interesting facts are rarely in the final message. "Did it run the tests
     before it said it was done" is a claim about the ORDER of a tool call and a
     sentence, so the events are kept in sequence, not summarized.
+
+    `before` is a SNAPSHOT of the workspace as the session found it — {path: content}
+    — set when this transcript is scoped to one session of a multi-session scenario.
+    It is what lets a grader ask "what did session 2 change", which is a different
+    question from "what does the tree look like now". In L1, session 1 legitimately
+    writes the plan; grading the whole-run diff for a foreclosed implementation would
+    convict session 1's planning of session 2's sins.
+
+    It is a snapshot and not a commit sha because the first real run proved a commit
+    cannot anchor a session: untracked files have no timestamp, and uncommitted work
+    belongs to whoever wrote it, not to whoever came next. See snapshot_tree().
     """
 
-    def __init__(self, events: list, turns: list):
+    def __init__(self, events: list, turns: list, before: dict = None,
+                 session: str = None):
         self.events = events or []
         self.turns = turns or []
+        self.before = before or {}
+        self.session = session
 
     def text(self) -> str:
         """Everything the agent said, in order."""
@@ -603,8 +621,271 @@ def ledger_attributes_commits(ws, tx, p) -> tuple:
     return True, f"{len(done)} task(s) attributed to real commit ranges"
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Diff graders — "what did THIS SESSION do", not "what does the tree look like"
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# Sage's own installed framework is not the agent's work. `sage init` writes a
+# few hundred files into sage/ and .claude/ and leaves most of them untracked, so
+# a grader that naively asks git "what changed" attributes the entire framework to
+# the agent: a scope-hold check would then fail every sage run on principle, and a
+# `diff_lacks` check would trip over any word that appears anywhere in Sage's own
+# source.
+#
+# This is E5's bug wearing a new hat. E5's Gate 4 scanned the whole workspace,
+# found "phantom imports" in Sage's vendored example code, and scored sage 0/3
+# against bare 3/3 — a clean "Sage makes the agent worse" result manufactured
+# entirely by the harness. The exclusion is therefore NAMED and visible, not a
+# silent filter, and it deliberately does NOT exclude `.sage/work/` — the cycle
+# manifest and its ledger ARE the agent's work, and grading them is the point.
+FRAMEWORK_PATHS = (
+    ".git/", "sage/", ".claude/", ".agent/", ".sage-memory/",
+    "__pycache__/", ".pytest_cache/",
+)
+
+
+def _is_framework(rel: str) -> bool:
+    if any(part in ("__pycache__", ".pytest_cache") for part in rel.split("/")):
+        return True
+    return any(rel == p.rstrip("/") or rel.startswith(p) for p in FRAMEWORK_PATHS)
+
+
+def snapshot_tree(ws: pathlib.Path) -> dict:
+    """{relative_path: content} for the whole workspace, right now.
+
+    THE SESSION ANCHOR IS A SNAPSHOT, NOT A COMMIT — and the first eval run is what
+    taught us that, by failing two scenarios for things the agents had not done.
+
+    A commit cannot anchor a session, for two reasons that both bit immediately:
+
+      1. UNTRACKED FILES HAVE NO TIME DIMENSION. `git ls-files --others` reports what
+         is untracked NOW; it cannot say when it appeared. So a CLAUDE.md the agent
+         wrote in session 1 was still landing in session 3's diff, and L2 failed the
+         bare agent for "introducing" `list[str]` — a string that was sitting in a doc
+         it had written two sessions earlier to REMIND ITSELF NOT TO USE IT.
+
+      2. A SESSION'S UNCOMMITTED WORK BELONGS TO THE NEXT SESSION'S DIFF. `git diff
+         <anchor>` compares the working tree against a COMMIT, so anything session 1
+         wrote and did not commit shows up as session 2's work. L1 accused session 2
+         of restarting task 1 and re-defining MAX_RETRIES, when session 1 had written
+         it and simply never committed it.
+
+    A session boundary is a moment in the working tree, so the anchor has to be the
+    working tree. This also removes the need to special-case generated files: in the
+    sage condition `sage init` writes CLAUDE.md BEFORE session 1, so it is in the
+    first snapshot and never counts as anyone's work — while in bare, the agent
+    writing its own CLAUDE.md in session 1 shows up in session 1's diff, exactly
+    where it belongs. Provenance falls out of the mechanism instead of a path list.
+    """
+    out = {}
+    for path in ws.rglob("*"):
+        if not path.is_file():
+            continue
+        rel = path.relative_to(ws).as_posix()
+        if _is_framework(rel):
+            continue
+        try:
+            out[rel] = path.read_text(errors="replace")
+        except OSError:
+            continue
+    return out
+
+
+def _session_diff(ws: pathlib.Path, before: dict, paths=None) -> tuple:
+    """(files_touched, added_text) for everything that changed since the snapshot.
+
+    `paths` scopes the question to code. Without it, a grader reads every file the
+    agent touched — including the ones where it WROTE THE RULE DOWN. The first run
+    failed L1's bare agent for "using time.sleep" when what it had actually done was
+    write `assert "time.sleep" not in text` — a regression test ENFORCING the very
+    decision the check exists to protect. It did the most correct thing available and
+    was marked a violator for naming the thing it forbade.
+
+    Citing a rule is not breaking it. A check about code must look only at code.
+    """
+    before = before or {}
+    now = snapshot_tree(ws)
+
+    files, added = [], []
+    for rel in sorted(now):
+        if paths and not any(fnmatch.fnmatch(rel, g) for g in paths):
+            continue
+        old, new = before.get(rel), now[rel]
+        if old == new:
+            continue
+        files.append(rel)
+        if old is None:
+            added.extend(new.splitlines())
+        else:
+            added.extend(
+                line[1:] for line in difflib.unified_diff(
+                    old.splitlines(), new.splitlines(), n=0, lineterm="")
+                if line.startswith("+") and not line.startswith("+++")
+            )
+    return files, "\n".join(added)
+
+
+def code_only(text: str) -> str:
+    """The same Python, with comments and string literals blanked out.
+
+    THE THIRD TIME THE SAME LESSON ARRIVED, AND THE EXPENSIVE ONE.
+
+    L1's decision D-002 forbids `time.sleep` in `src/`. The bare agent obeyed it
+    perfectly — `def retry(operation, sleeper)`, the wait injected, no blocking call
+    anywhere — and then wrote a DOCSTRING explaining what a caller might pass:
+
+        \"\"\"...the caller supplies the waiting strategy — `time.sleep` from sync
+        code, an await from async...\"\"\"
+
+    The grader failed it. Scoping to `src/*.py` had not been enough, because the
+    violation it "found" was inside a docstring, in the file, describing the rule it
+    was following.
+
+    Citing a rule is not breaking it. A check about what the CODE does must read the
+    code — so comments and string literals are blanked (positions preserved, so
+    `MAX_RETRIES = ` and `time.sleep(` still match where they are real).
+
+    Fails STRICT, not lenient: if the file will not tokenize, the raw text is
+    returned and the check stays suspicious. A grader that silently passes because
+    it could not parse is the one bug this file exists to prevent.
+    """
+    lines = text.splitlines(keepends=True)
+    try:
+        toks = list(tokenize.generate_tokens(io.StringIO(text).readline))
+    except (tokenize.TokenError, IndentationError, SyntaxError, ValueError):
+        return text
+
+    blanked = [list(line) for line in lines]
+    for tok in toks:
+        if tok.type not in (tokenize.COMMENT, tokenize.STRING):
+            continue
+        (srow, scol), (erow, ecol) = tok.start, tok.end
+        for row in range(srow, erow + 1):
+            if row - 1 >= len(blanked):
+                break
+            line = blanked[row - 1]
+            lo = scol if row == srow else 0
+            hi = ecol if row == erow else len(line)
+            for i in range(lo, min(hi, len(line))):
+                if line[i] != "\n":
+                    line[i] = " "
+    return "".join("".join(line) for line in blanked)
+
+
+def _introduced(ws, tx, p) -> tuple:
+    """(hits, checked) — which substrings THIS session put into scope that were not
+    there when it started.
+
+    File-level rather than line-level, which independently closes the same hole the
+    snapshot closed: a needle already present before the session began was not
+    introduced by it, no matter how the diff is sliced.
+    """
+    scope = p.get("paths")
+    as_code = p.get("code_only", False)
+    now = snapshot_tree(ws)
+    before = tx.before or {}
+
+    hits, checked = [], 0
+    for rel in sorted(now):
+        if scope and not any(fnmatch.fnmatch(rel, g) for g in scope):
+            continue
+        old, new = before.get(rel, ""), now[rel]
+        if old == new:
+            continue
+        checked += 1
+        if as_code and rel.endswith(".py"):
+            old, new = code_only(old), code_only(new)
+        for s in p["substrings"]:
+            if s in new and s not in old and s not in hits:
+                hits.append(s)
+    return hits, checked
+
+
+def diff_lacks(ws, tx, p) -> tuple:
+    """This session introduced none of these strings, in the files that matter.
+
+    The L1 decision check: a decision recorded in session 1 forecloses an
+    implementation option, and session 2 — which never saw that conversation — must
+    still honour it. Scoped to the session, because session 1 may legitimately have
+    WRITTEN the foreclosed word down while recording the decision to avoid it; to
+    `paths`, because so may a note the agent leaves itself; and, with `code_only`, to
+    the code, because so may a docstring. Three times the same lesson.
+    """
+    hits, _ = _introduced(ws, tx, p)
+    if hits:
+        where = f"session {tx.session!r}" if tx.session else "the run"
+        return False, f"{where} introduced: {', '.join(hits)}"
+    return True, f"none of {len(p['substrings'])} forbidden string(s) introduced"
+
+
+def diff_contains(ws, tx, p) -> tuple:
+    """This session introduced every one of these strings."""
+    hits, checked = _introduced(ws, tx, p)
+    missing = [s for s in p["substrings"] if s not in hits]
+    if missing:
+        where = f"session {tx.session!r}" if tx.session else "the run"
+        return False, (f"{where} never introduced: {', '.join(missing)} "
+                       f"({checked} file(s) in scope changed)")
+    return True, f"all {len(p['substrings'])} string(s) introduced"
+
+
+def diff_files_within(ws, tx, p) -> tuple:
+    """Every file this session touched matches one of the allowed globs.
+
+    Scope-hold (R122). The claim is not "the agent did the work" but "the agent did
+    ONLY the work" — and an agent that fixes a tempting unrelated bug on the way
+    past has broken the plan's contract even though every test still passes.
+    """
+    files, _ = _session_diff(ws, tx.before)
+    allowed = p["allowed"]
+    stray = [f for f in files
+             if not any(fnmatch.fnmatch(f, g) for g in allowed)]
+    if stray:
+        return False, (f"touched {len(stray)} file(s) outside the plan: "
+                       f"{', '.join(stray[:6])}")
+    return True, f"all {len(files)} touched file(s) within the plan's scope"
+
+
+def used_tool(ws, tx, p) -> tuple:
+    """The agent actually called a tool whose name matches this pattern.
+
+    This is the mechanism check, and L2 does not mean anything without it. If the
+    sage arm honours a constraint in session 3, there are two completely different
+    stories: it RECALLED the constraint from the memory system, or it REREAD the
+    session-1 log sitting in the repo — which is precisely what the bare arm does,
+    and which would mean the memory system contributed nothing while taking the
+    credit. Asserting that a memory tool was actually called in session 1 is what
+    keeps those two stories apart.
+
+    The same confusion has already cost this project once: codex's read-only sandbox
+    blocked an edit, and a naive check would have recorded a successful veto. Nothing
+    -happened and it-worked are indistinguishable unless you instrument the mechanism.
+    """
+    pattern = re.compile(p["pattern"])
+    names = [c["name"] for c in tx.tool_calls()]
+    hits = [n for n in names if pattern.search(n)]
+    if not hits:
+        return False, (f"no tool call matching {p['pattern']!r} "
+                       f"(called: {', '.join(sorted(set(names))[:8]) or 'nothing'})")
+    return True, f"called {len(hits)}× — {', '.join(sorted(set(hits))[:3])}"
+
+
+def file_unchanged_since(ws, tx, p) -> tuple:
+    """This file was NOT modified during this session."""
+    files, _ = _session_diff(ws, tx.before)
+    if p["path"] in files:
+        where = f"session {tx.session!r}" if tx.session else "the run"
+        return False, f"{where} rewrote {p['path']}"
+    return True, f"{p['path']} survived untouched"
+
+
 GRADERS = {
     "file_exists":              (file_exists, ("path",)),
+    "diff_lacks":               (diff_lacks, ("substrings",)),
+    "diff_contains":            (diff_contains, ("substrings",)),
+    "diff_files_within":        (diff_files_within, ("allowed",)),
+    "file_unchanged_since":     (file_unchanged_since, ("path",)),
+    "used_tool":                (used_tool, ("pattern",)),
     "file_absent":              (file_absent, ("path",)),
     "file_contains":            (file_contains, ("path", "substrings")),
     "file_lacks":               (file_lacks, ("path", "substrings")),

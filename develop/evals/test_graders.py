@@ -438,5 +438,631 @@ class TranscriptTest(unittest.TestCase):
         self.assertEqual(tx.sequence(), [])
 
 
+# ═════════════════════════════════════════════════════════════════════════════
+# Multi-session (R116) — the machinery behind every long-horizon claim
+# ═════════════════════════════════════════════════════════════════════════════
+class SessionDiffGraderTest(unittest.TestCase):
+    """The diff graders answer "what did THIS SESSION do".
+
+    Every one of them is a lenient-direction hazard: an empty diff passes every
+    `_lacks` check there is, so a grader that silently computes the wrong diff
+    reports a clean run for an agent that did nothing — or, worse, for an agent
+    the harness simply failed to observe.
+    """
+
+    def setUp(self):
+        self.ws = pathlib.Path(tempfile.mkdtemp(prefix="session-diff-"))
+        self.addCleanup(shutil.rmtree, self.ws, ignore_errors=True)
+        self.git("init", "-q")
+        self.write("src/app.py", "def start():\n    pass\n")
+        self.commit("fixture: initial state")
+        self.run_start = G.snapshot_tree(self.ws)
+
+    def write(self, rel, text):
+        p = self.ws / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(text)
+        return p
+
+    def git(self, *args):
+        return subprocess.run(["git", "-C", str(self.ws), *args],
+                              capture_output=True, text=True, check=False)
+
+    def commit(self, message):
+        self.git("add", "-A")
+        self.git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-m", message)
+
+    def head(self):
+        return self.git("rev-parse", "HEAD").stdout.strip()
+
+    def snap(self):
+        return G.snapshot_tree(self.ws)
+
+    def check(self, grader, before, **params):
+        params["grader"] = grader
+        tx = G.Transcript([], [], before=before, session="s2")
+        return G.run_check(params, self.ws, tx)
+
+    def test_diff_lacks_sees_only_this_session(self):
+        """The check that makes L1 possible.
+
+        Session 1 records the decision "do not use threading" — which means session
+        1's diff CONTAINS the word `threading`. Grading the whole run would then
+        convict session 1 of writing down the very rule it was obeying.
+        """
+        self.write(".sage/decisions.md", "Do not use threading. Use asyncio.\n")
+        self.commit("s1: record the decision")
+        s2_anchor = self.snap()
+
+        # Session 2 obeys it.
+        self.write("src/app.py", "import asyncio\n\nasync def start():\n    pass\n")
+        self.commit("s2: implement with asyncio")
+
+        ok = self.check("diff_lacks", s2_anchor, substrings=["threading"])
+        self.assertTrue(ok["pass"], ok["detail"])
+
+        # ...and the same check over the WHOLE run fails, because session 1 wrote
+        # the word down. That is the bug this scoping exists to prevent.
+        whole = self.check("diff_lacks", self.run_start, substrings=["threading"])
+        self.assertFalse(whole["pass"],
+                         "unscoped, session 1's decision record trips the check — "
+                         "which is exactly why checks must be session-scoped")
+
+    def test_diff_lacks_catches_the_violation(self):
+        s2_anchor = self.snap()
+        self.write("src/app.py", "import threading\n")
+        self.commit("s2: used the foreclosed option")
+        r = self.check("diff_lacks", s2_anchor, substrings=["threading"])
+        self.assertFalse(r["pass"], "the foreclosed import must be caught")
+
+    def test_diff_sees_uncommitted_and_untracked_work(self):
+        """An agent that writes a file and never commits it has still written it."""
+        s2_anchor = self.snap()
+        self.write("src/new_module.py", "import threading\n")     # untracked
+        r = self.check("diff_lacks", s2_anchor, substrings=["threading"])
+        self.assertFalse(r["pass"], "untracked files are still the agent's work")
+
+        self.write("src/app.py", "import socket\n")               # tracked, uncommitted
+        r = self.check("diff_lacks", s2_anchor, substrings=["socket"])
+        self.assertFalse(r["pass"], "uncommitted edits are still the agent's work")
+
+    def test_framework_files_are_not_the_agents_work(self):
+        """E5's bug, in its new costume.
+
+        `sage init` leaves hundreds of untracked files under sage/ and .claude/.
+        If the diff graders counted them, a scope-hold check would fail every sage
+        run on principle and the harness would report that Sage causes the very
+        behaviour it prevents.
+        """
+        s2_anchor = self.snap()
+        self.write("sage/skills/tdd/SKILL.md", "import threading  # Sage's own text\n")
+        self.write(".claude/settings.json", '{"x": "threading"}\n')
+
+        r = self.check("diff_lacks", s2_anchor, substrings=["threading"])
+        self.assertTrue(r["pass"],
+                        "Sage's own vendored framework is not the agent's diff")
+
+        scope = self.check("diff_files_within", s2_anchor, allowed=["src/*.py"])
+        self.assertTrue(scope["pass"],
+                        "the framework must not count against the agent's scope")
+
+    def test_the_cycle_manifest_IS_the_agents_work(self):
+        """.sage/work/ is excluded from the exclusion — grading the ledger is the point."""
+        s2_anchor = self.snap()
+        self.write(".sage/work/001-x/manifest.md", "status: done\n")
+        r = self.check("diff_files_within", s2_anchor, allowed=["src/*.py"])
+        self.assertFalse(r["pass"],
+                         ".sage/work/ is agent-authored and must be visible to graders")
+
+    def test_diff_files_within_holds_and_catches_scope(self):
+        s2_anchor = self.snap()
+        self.write("src/app.py", "def start():\n    return 1\n")
+        r = self.check("diff_files_within", s2_anchor,
+                       allowed=["src/*.py", "tests/*"])
+        self.assertTrue(r["pass"], r["detail"])
+
+        self.write("src/unrelated_refactor.py", "x = 1\n")
+        r = self.check("diff_files_within", s2_anchor, allowed=["src/app.py"])
+        self.assertFalse(r["pass"], "the tempting adjacent file must be caught")
+
+    def test_file_unchanged_since_detects_a_replan(self):
+        self.write(".sage/work/001-x/plan.md", "## Task 1\n")
+        self.commit("s1: plan")
+        s2_anchor = self.snap()
+
+        r = self.check("file_unchanged_since", s2_anchor,
+                       path=".sage/work/001-x/plan.md")
+        self.assertTrue(r["pass"], "an untouched plan is a resumed cycle")
+
+        self.write(".sage/work/001-x/plan.md", "## Task 1 (rewritten)\n")
+        r = self.check("file_unchanged_since", s2_anchor,
+                       path=".sage/work/001-x/plan.md")
+        self.assertFalse(r["pass"],
+                         "rewriting the plan is restarting, not resuming")
+
+    def test_diff_contains_both_directions(self):
+        s2_anchor = self.snap()
+        self.write("src/app.py", "import asyncio\n")
+        r = self.check("diff_contains", s2_anchor, substrings=["asyncio"])
+        self.assertTrue(r["pass"], r["detail"])
+        r = self.check("diff_contains", s2_anchor, substrings=["nowhere"])
+        self.assertFalse(r["pass"])
+
+    def test_L1_restart_check_does_not_trip_on_an_assertion(self):
+        """L1's "did session 2 restart Task 1" check, and the trap inside it.
+
+        The check greps session 2's diff for the DEFINITION `MAX_RETRIES = `. Note
+        the trailing space. Without it, the needle `MAX_RETRIES =` is a substring of
+        `MAX_RETRIES == 3` — which is exactly what a correct, freshly-written test
+        for a LATER task would assert. The grader would then fail the very agent it
+        exists to pass, and L1 would report that resume is broken because resume
+        worked.
+
+        Both directions are pinned here because a grader is code and has bugs like
+        code, and this one is a single character wide.
+        """
+        s2_anchor = self.snap()
+
+        # A correct session 2: references and asserts Task 1's constant, never
+        # redefines it.
+        self.write("tests/test_retry.py",
+                   "from src.config import MAX_RETRIES, backoff_delay\n"
+                   "def test_default():\n"
+                   "    assert MAX_RETRIES == 3\n"
+                   "def test_growth():\n"
+                   "    assert backoff_delay(MAX_RETRIES) > 0\n")
+        r = self.check("diff_lacks", s2_anchor, substrings=["MAX_RETRIES = "])
+        self.assertTrue(r["pass"],
+                        "asserting `MAX_RETRIES == 3` is what a CORRECT resume does "
+                        "— it must not read as a restart")
+
+        # A restarting session 2: re-derives Task 1 and writes the definition again.
+        self.write("src/config.py", "MAX_RETRIES = 3\n")
+        r = self.check("diff_lacks", s2_anchor, substrings=["MAX_RETRIES = "])
+        self.assertFalse(r["pass"], "re-defining the constant IS the restart")
+
+    def test_L1_sleep_check_catches_both_spellings(self):
+        """`time.sleep` alone would miss `from time import sleep`.
+
+        A grader that misses the violation reports that the agent obeyed a rule it
+        broke. That is the lenient direction, and it is the only one that matters.
+        """
+        s2_anchor = self.snap()
+        needles = ["time.sleep", "from time import sleep"]
+
+        self.write("src/app.py", "from time import sleep\n\ndef retry():\n    sleep(1)\n")
+        r = self.check("diff_lacks", s2_anchor, substrings=needles)
+        self.assertFalse(r["pass"], "the aliased import must be caught too")
+
+
+class UsedToolTest(unittest.TestCase):
+    """The mechanism check. L2 means nothing without it.
+
+    If the sage arm honours the constraint in session 3, it either RECALLED it from
+    the memory system or REREAD the session-1 log — and the second is exactly what
+    bare does. Conflating them credits memory for a file.
+    """
+
+    def setUp(self):
+        self.ws = pathlib.Path(tempfile.mkdtemp(prefix="used-tool-"))
+        self.addCleanup(shutil.rmtree, self.ws, ignore_errors=True)
+
+    def check(self, tx, pattern):
+        return G.run_check({"grader": "used_tool", "pattern": pattern}, self.ws, tx)
+
+    def test_detects_the_memory_tool(self):
+        tx = transcript(
+            ("say", "Noted — I'll store that."),
+            ("tool", "mcp__sage-memory__sage_memory_store", {"content": "py3.8"}))
+        self.assertTrue(self.check(tx, "sage_memory|memory_store")["pass"])
+
+    def test_an_agent_that_only_talked_about_remembering_fails(self):
+        """Saying "I'll remember that" is not remembering it. The whole reason this
+        grader exists is that prose and mechanism look identical in a transcript."""
+        tx = transcript(("say", "Understood, I will remember: Python 3.8, use typing."))
+        r = self.check(tx, "sage_memory|memory_store")
+        self.assertFalse(r["pass"], "an agent that merely SAID it would remember "
+                                    "has not touched the memory system")
+
+    def test_other_tools_do_not_satisfy_it(self):
+        tx = transcript(("tool", "Write", {"file_path": "notes.md"}))
+        self.assertFalse(self.check(tx, "sage_memory")["pass"])
+
+    def test_empty_transcript_fails_rather_than_passes(self):
+        """The lenient direction is the dangerous one: an unobserved session must
+        never read as a satisfied one."""
+        self.assertFalse(self.check(G.Transcript([], []), "sage_memory")["pass"])
+
+
+class FirstRunBugsTest(unittest.TestCase):
+    """The three bugs the FIRST REAL L-series run found, pinned so they cannot return.
+
+    All three failed in the LENIENT-LOOKING direction — they reported violations that
+    had not happened — and all three would have published as findings about Sage. The
+    run cost $7.32 and every dollar of it went on discovering that the instrument was
+    wrong, which is exactly what a shakedown is for.
+
+    "A grader is code. It has bugs like code. Only reality finds them."
+    """
+
+    def setUp(self):
+        self.ws = pathlib.Path(tempfile.mkdtemp(prefix="firstrun-"))
+        self.addCleanup(shutil.rmtree, self.ws, ignore_errors=True)
+        self.git("init", "-q")
+        self.write("src/config.py", "DEFAULT = 30\n")
+        self.commit("fixture: initial state")
+
+    def write(self, rel, text):
+        p = self.ws / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(text)
+        return p
+
+    def git(self, *args):
+        return subprocess.run(["git", "-C", str(self.ws), *args],
+                              capture_output=True, text=True, check=False)
+
+    def commit(self, message):
+        self.git("add", "-A")
+        self.git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-m", message)
+
+    def check(self, grader, before, **params):
+        params["grader"] = grader
+        tx = G.Transcript([], [], before=before, session="s3")
+        return G.run_check(params, self.ws, tx)
+
+    def test_BUG1_an_untracked_file_from_an_earlier_session_is_not_this_sessions_work(self):
+        """`git ls-files --others` reports what is untracked NOW. It cannot say WHEN.
+
+        L2's bare agent wrote a CLAUDE.md in session 1 to remind itself of the Python
+        3.8 constraint — quoting `list[str]` as an example of what NOT to write. That
+        file was still untracked in session 3, so the commit-anchored diff kept
+        attributing it to session 3, and L2 failed the agent for "introducing"
+        `list[str]`. It had done the opposite: it had written the rule down.
+        """
+        # Session 1 writes a note, never commits it.
+        self.write("CLAUDE.md", "Do NOT use `list[str]` — this project targets 3.8.\n")
+
+        # Session 3 starts here, and does something entirely unrelated.
+        s3 = G.snapshot_tree(self.ws)
+        self.write("src/config.py", "DEFAULT = 30\nEXTRA = 1\n")
+
+        r = self.check("diff_lacks", s3, substrings=["list["])
+        self.assertTrue(r["pass"],
+                        "a note written two sessions ago is not this session's diff")
+
+    def test_BUG2_a_previous_sessions_uncommitted_work_is_not_this_sessions_work(self):
+        """`git diff <sha>` compares the working tree to a COMMIT.
+
+        L1's session 1 wrote MAX_RETRIES and never committed it. Session 2's anchor
+        was therefore a commit that predated it, and the diff charged session 1's work
+        to session 2 — so L1 reported that session 2 had RESTARTED task 1, when
+        session 2 had correctly left it alone.
+        """
+        # Session 1 does task 1 and does NOT commit.
+        self.write("src/config.py", "DEFAULT = 30\nMAX_RETRIES = 3\n")
+
+        # Session 2 starts. Its anchor is the working tree, not HEAD.
+        s2 = G.snapshot_tree(self.ws)
+        self.write("src/config.py",
+                   "DEFAULT = 30\nMAX_RETRIES = 3\n\ndef backoff_delay(a):\n    return a\n")
+
+        r = self.check("diff_lacks", s2, substrings=["MAX_RETRIES = "])
+        self.assertTrue(r["pass"],
+                        "session 1 wrote it and did not commit it — that does not make "
+                        "it session 2's restart")
+
+        # And the work session 2 DID do is still seen.
+        r = self.check("diff_contains", s2, substrings=["def backoff_delay"])
+        self.assertTrue(r["pass"])
+
+    def test_BUG3_citing_a_rule_is_not_breaking_it(self):
+        """The most humiliating of the three.
+
+        L1's decision D-002 says, in as many words: "This applies to `src/` only.
+        Tests may sleep." The bare agent wrote
+
+            assert "time.sleep" not in text
+
+        — a regression test ENFORCING the decision — and the grader failed it for
+        containing the string `time.sleep`. The agent did the single most correct
+        thing available to it and was marked a violator for naming the thing it
+        forbade.
+        """
+        s2 = G.snapshot_tree(self.ws)
+
+        # The agent obeys D-002 in src/ AND writes a test that enforces it.
+        self.write("src/config.py",
+                   "DEFAULT = 30\n\ndef retry(op, sleeper=None):\n"
+                   "    delay = 1.0\n    return op()\n")
+        self.write("tests/test_config.py",
+                   'def test_no_blocking_sleep():\n'
+                   '    text = open("src/config.py").read()\n'
+                   '    assert "time.sleep" not in text\n')
+
+        unscoped = self.check("diff_lacks", s2,
+                              substrings=["time.sleep", "from time import sleep"])
+        self.assertFalse(unscoped["pass"],
+                         "unscoped, the enforcement test itself trips the check — "
+                         "this is the bug, reproduced")
+
+        scoped = self.check("diff_lacks", s2,
+                            substrings=["time.sleep", "from time import sleep"],
+                            paths=["src/*.py"])
+        self.assertTrue(scoped["pass"],
+                        "a check about src/ must look only at src/ — the decision "
+                        "says tests may sleep")
+
+        # And a REAL violation in src/ is still caught. The fix must not blind it.
+        self.write("src/config.py",
+                   "import time\n\ndef retry(op):\n    time.sleep(1)\n    return op()\n")
+        r = self.check("diff_lacks", s2,
+                       substrings=["time.sleep", "from time import sleep"],
+                       paths=["src/*.py"])
+        self.assertFalse(r["pass"], "a genuine sleep in src/ must still fail")
+
+    def test_BUG4_a_docstring_that_names_the_rule_is_not_a_violation_of_it(self):
+        """The same lesson, a third time, and the one that nearly published.
+
+        Run 2 of L1: the BARE agent honoured D-002 perfectly — `def retry(operation,
+        sleeper)`, the wait injected, no blocking call anywhere — and then wrote a
+        docstring explaining what a caller might pass:
+
+            "...the caller supplies the waiting strategy — `time.sleep` from sync
+             code, an await from async..."
+
+        The grader failed it. Scoping to src/*.py was not enough: the "violation" was
+        inside a docstring, in the file, DESCRIBING THE RULE IT WAS FOLLOWING. Had
+        this shipped, the baseline would have reported that a bare agent breaks the
+        decision — on the strength of an agent that kept it and documented why.
+        """
+        s2 = G.snapshot_tree(self.ws)
+
+        # The compliant implementation, which mentions the forbidden call in prose.
+        self.write("src/config.py",
+                   'def retry(operation, sleeper):\n'
+                   '    """The caller supplies the wait — `time.sleep` from sync code."""\n'
+                   '    # never call time.sleep in here; D-002\n'
+                   '    sleeper(1.0)\n'
+                   '    return operation()\n')
+
+        text_level = self.check("diff_lacks", s2, substrings=["time.sleep"],
+                                paths=["src/*.py"])
+        self.assertFalse(text_level["pass"],
+                         "reading the file as TEXT, the docstring trips it — the bug")
+
+        as_code = self.check("diff_lacks", s2, substrings=["time.sleep"],
+                             paths=["src/*.py"], code_only=True)
+        self.assertTrue(as_code["pass"],
+                        "read as CODE, the agent plainly did not call it")
+
+        # The fix must not blind the check to a real call.
+        self.write("src/config.py",
+                   "import time\n\ndef retry(op):\n    time.sleep(1)\n    return op()\n")
+        r = self.check("diff_lacks", s2, substrings=["time.sleep"],
+                       paths=["src/*.py"], code_only=True)
+        self.assertFalse(r["pass"], "an actual blocking call must still fail")
+
+    def test_code_only_fails_strict_when_a_file_will_not_parse(self):
+        """A grader that silently passes because it could not parse is the one bug
+        this file exists to prevent. Unparseable → fall back to raw text → stay
+        suspicious."""
+        broken = "def f(:\n    time.sleep(1)\n"
+        self.assertIn("time.sleep", G.code_only(broken),
+                      "on a tokenize failure the check must stay strict, not lenient")
+
+    def test_the_snapshot_ignores_the_framework_sage_init_generated(self):
+        """In the sage arm, `sage init` writes CLAUDE.md and sage/ BEFORE session 1.
+
+        The snapshot makes provenance fall out of the mechanism: generated files are
+        in the first snapshot, so they are nobody's work. No path allow-list needed.
+        """
+        self.write("sage/skills/tdd/SKILL.md", "list[str] appears in Sage's own docs\n")
+        self.write("CLAUDE.md", "generated by sage init\n")
+        s1 = G.snapshot_tree(self.ws)
+        self.assertNotIn("sage/skills/tdd/SKILL.md", s1,
+                         "the vendored framework is excluded outright")
+        self.assertIn("CLAUDE.md", s1,
+                      "CLAUDE.md IS snapshotted — so it counts as nobody's work in "
+                      "sage (init wrote it) and as the agent's work in bare (the "
+                      "agent wrote it). Provenance from the mechanism, not a list.")
+
+        self.write("src/config.py", "DEFAULT = 60\n")
+        r = self.check("diff_lacks", s1, substrings=["list["])
+        self.assertTrue(r["pass"])
+
+
+class ScenarioShapeTest(unittest.TestCase):
+    """Scenario parsing: sessions, modes, and the ways they can be declared wrong.
+
+    A scenario that is malformed in the LENIENT direction is the whole hazard: a
+    check scoped to a session name that does not exist grades the empty transcript,
+    and the empty transcript passes every `_lacks` check ever written. That is a
+    green result produced by a typo, and --offline-check exists to refuse it.
+    """
+
+    def setUp(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "run_evals", pathlib.Path(__file__).resolve().parent / "run_evals.py")
+        self.R = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.R)
+        self.dir = pathlib.Path(tempfile.mkdtemp(prefix="scenario-shape-"))
+        self.addCleanup(shutil.rmtree, self.dir, ignore_errors=True)
+
+    def scenario(self, spec: dict, prompts=("p1.md", "p2.md", "p3.md")):
+        import json
+        for p in prompts:
+            (self.dir / p).write_text("do the thing")
+        (self.dir / "scenario.json").write_text(json.dumps(spec))
+        return self.R.Scenario(self.dir)
+
+    def base(self, **over):
+        spec = {"id": "T1", "name": "t", "fixture": "py-service",
+                "checks": [{"grader": "file_exists", "path": "x"}]}
+        spec.update(over)
+        return spec
+
+    def test_legacy_prompts_become_one_session(self):
+        """E1–E11 must not change shape. A single-session scenario is the degenerate
+        multi-session one, and normalizing it means there is only one code path."""
+        s = self.scenario(self.base(prompts=["p1.md", "p2.md"]))
+        self.assertFalse(s.multi_session)
+        self.assertEqual(len(s.sessions), 1)
+        self.assertEqual(s.sessions[0].name, "main")
+        self.assertEqual(len(s.prompts()), 2)
+
+    def test_prompts_and_sessions_together_is_refused(self):
+        with self.assertRaises(self.R.EvalError):
+            self.scenario(self.base(
+                prompts=["p1.md"],
+                sessions=[{"name": "s1", "prompts": ["p2.md"]}]))
+
+    def test_sessions_parse(self):
+        s = self.scenario(self.base(sessions=[
+            {"name": "s1", "prompts": ["p1.md", "p2.md"], "interrupt_after_turns": 1},
+            {"name": "s2", "prompts": ["p3.md"]},
+        ]))
+        self.assertTrue(s.multi_session)
+        self.assertEqual(s.session_names, ["s1", "s2"])
+        self.assertTrue(s.sessions[0].interrupted)
+        # An interrupted session sends only the turns before the kill.
+        self.assertEqual(len(s.sessions[0].prompts()), 1)
+        self.assertFalse(s.sessions[1].interrupted)
+
+    def test_an_interruption_that_interrupts_nothing_is_refused(self):
+        """Sending every prompt and calling it an interruption is the harness lying
+        to itself: it would report a tested resume where nothing was ever cut off."""
+        s = self.scenario(self.base(sessions=[
+            {"name": "s1", "prompts": ["p1.md"], "interrupt_after_turns": 1},
+            {"name": "s2", "prompts": ["p2.md"]},
+        ]))
+        problems = s.validate()
+        self.assertTrue(any("no interruption is being simulated" in p
+                            for p in problems), problems)
+
+    def test_check_scoped_to_an_unknown_session_is_refused(self):
+        s = self.scenario(self.base(
+            sessions=[{"name": "s1", "prompts": ["p1.md"]}],
+            checks=[{"grader": "file_exists", "path": "x", "session": "typo"}]))
+        problems = s.validate()
+        self.assertTrue(any("does not declare" in p for p in problems), problems)
+
+    def test_duplicate_session_names_are_refused(self):
+        s = self.scenario(self.base(sessions=[
+            {"name": "s1", "prompts": ["p1.md"]},
+            {"name": "s1", "prompts": ["p2.md"]},
+        ]))
+        self.assertTrue(any("duplicate session name" in p
+                            for p in s.validate()))
+
+    def test_driver_args_may_differ_per_condition(self):
+        """L2's memory isolation depends on this. A user-scoped MCP server attaches
+        to every claude subprocess regardless of cwd, so without per-condition args
+        the bare arm would silently inherit the memory system and the control would
+        be measuring Sage against Sage."""
+        s = self.scenario(self.base(
+            prompts=["p1.md"],
+            driver_args={"sage": ["--strict-mcp-config", "--mcp-config", ".mcp.json"],
+                         "bare": ["--strict-mcp-config"]}))
+        self.assertIn("--mcp-config", s.args_for("sage"))
+        self.assertNotIn("--mcp-config", s.args_for("bare"))
+        self.assertIn("--strict-mcp-config", s.args_for("bare"))
+
+    def test_flat_driver_args_still_apply_to_every_condition(self):
+        """E8 uses the flat form to make the Task tool genuinely absent."""
+        s = self.scenario(self.base(prompts=["p1.md"],
+                                    driver_args=["--disallowed-tools", "Task"]))
+        self.assertEqual(s.args_for("sage"), s.args_for("bare"))
+        self.assertIn("Task", s.args_for("bare"))
+
+    def test_a_condition_with_no_applicable_checks_is_refused(self):
+        """Otherwise the bare arm of a scenario whose every check was sage-scoped
+        would appear in the results table as a real comparison that had quietly
+        asserted nothing."""
+        s = self.scenario(self.base(
+            prompts=["p1.md"],
+            checks=[{"grader": "file_exists", "path": "x", "condition": "sage"}]))
+        problems = s.validate()
+        self.assertTrue(any("asserts nothing" in p for p in problems), problems)
+
+
+class ExecutionModeTest(unittest.TestCase):
+    """Mode is a property of the RUN, not of the scenario (R119)."""
+
+    def setUp(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "run_evals", pathlib.Path(__file__).resolve().parent / "run_evals.py")
+        self.R = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.R)
+        self.ws = pathlib.Path(tempfile.mkdtemp(prefix="mode-test-"))
+        self.addCleanup(shutil.rmtree, self.ws, ignore_errors=True)
+        (self.ws / ".sage").mkdir(parents=True)
+
+    def config(self):
+        return (self.ws / ".sage" / "config.yaml").read_text()
+
+    def test_mode_is_written_in_the_one_spelling_sage_reads(self):
+        """sage_flags honours exactly `subagents: true` — one space, no trailing
+        content — so Bash and Python agree byte-for-byte. Any other spelling parses
+        as "no default", and the flag would silently not take effect."""
+        (self.ws / ".sage" / "config.yaml").write_text("hard_enforcement: true\n")
+        self.R.set_execution_mode(self.ws, "subagents")
+        self.assertIn("subagents: true", self.config())
+
+        # And it round-trips through Sage's own parser, not a lookalike regex.
+        sys.path.insert(0, str(REPO_ROOT / "runtime" / "tools"))
+        import sage_flags
+        defaults = sage_flags.load_defaults(self.ws / ".sage" / "config.yaml")
+        self.assertTrue(defaults.get("subagents"),
+                        "Sage's own flag parser must see the mode the harness set")
+
+    def test_inline_is_written_explicitly_not_omitted(self):
+        (self.ws / ".sage" / "config.yaml").write_text("hard_enforcement: true\n")
+        self.R.set_execution_mode(self.ws, "inline")
+        self.assertIn("subagents: false", self.config())
+
+    def test_setting_the_mode_twice_does_not_duplicate_the_key(self):
+        (self.ws / ".sage" / "config.yaml").write_text("hard_enforcement: true\n")
+        self.R.set_execution_mode(self.ws, "subagents")
+        self.R.set_execution_mode(self.ws, "inline")
+        self.assertEqual(self.config().count("subagents:"), 1)
+        self.assertIn("subagents: false", self.config())
+
+    def test_a_seeded_manifest_flag_is_forced_to_match_the_mode(self):
+        """E9 hard-codes `subagents: true` in the manifest it seeds. Running it
+        inline for the comparison would otherwise leave the config saying one thing
+        and the manifest another — and the results table would name a mode the run
+        did not use."""
+        manifest = "flags:\n  quality_locked: false\n  subagents: true\n"
+        inline = self.R.apply_mode_to_setup(manifest, "inline")
+        self.assertIn("subagents: false", inline)
+        self.assertIn("quality_locked: false", inline)
+
+        back = self.R.apply_mode_to_setup(inline, "subagents")
+        self.assertIn("subagents: true", back)
+
+    def test_bare_never_gets_a_mode(self):
+        """"bare in subagent mode" is not a thing that exists, and running it twice
+        under two labels would double the bill to produce one number twice."""
+        self.assertEqual(self.R.modes_for("bare", ["inline", "subagents"]), [None])
+        self.assertEqual(self.R.modes_for("sage", ["inline", "subagents"]),
+                         ["inline", "subagents"])
+
+    def test_verdicts_do_not_average_the_modes_together(self):
+        """A mode comparison that merged its two arms would answer the question it
+        exists to ask by erasing it."""
+        results = [
+            {"scenario": "E1", "condition": "sage", "mode": "inline",
+             "pass": True, "cost_usd": 1.0, "tokens_in": 10, "tokens_out": 1},
+            {"scenario": "E1", "condition": "sage", "mode": "subagents",
+             "pass": False, "cost_usd": 9.0, "tokens_in": 90, "tokens_out": 9},
+        ]
+        v = self.R.verdicts(results, 1)
+        self.assertTrue(v[("E1", "sage", "inline")]["verdict"])
+        self.assertFalse(v[("E1", "sage", "subagents")]["verdict"])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
