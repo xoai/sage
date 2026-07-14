@@ -1140,7 +1140,7 @@ DECMD
   moved_hits=$(grep -rlE 'jtbd|ux-audit|ux-evaluate|ux-review|opportunity-map|prd-|user-interview' \
                  "$target/.sage/docs" "$target/.sage/work" 2>/dev/null | head -1 || true)
   if [ -n "$moved_hits" ]; then
-    migration_notes="${migration_notes}\n  ${YELLOW}↻${RESET} PM/UX skills moved to a pack. If you use them, install it:\n     sage add xoai/sage-product@v${SAGE_FRAMEWORK_VERSION} --all"
+    migration_notes="${migration_notes}\n  ${YELLOW}↻${RESET} PM/UX skills moved to a pack. If you use them, install it:\n     sage add xoai/sage-product --all"
   fi
 
   # ── Migration: packs installed from a local packs/ checkout (R127) ──
@@ -1158,8 +1158,8 @@ DECMD
   if [ -f "$skills_json" ] && grep -q '"source": *"[^"]*/packs/' "$skills_json" 2>/dev/null; then
     migration_notes="${migration_notes}\n  ${YELLOW}↻${RESET} Some skills were installed from a local ${DIM}packs/${RESET} checkout, which no longer exists."
     migration_notes="${migration_notes}\n     The packs live in their own repos now. Reinstall to get a verified, pinned copy:"
-    migration_notes="${migration_notes}\n       sage add xoai/sage-product@v${SAGE_FRAMEWORK_VERSION} --all"
-    migration_notes="${migration_notes}\n       sage add xoai/sage-pack-authoring@v${SAGE_FRAMEWORK_VERSION} --all"
+    migration_notes="${migration_notes}\n       sage add xoai/sage-product --all"
+    migration_notes="${migration_notes}\n       sage add xoai/sage-pack-authoring --all"
     migration_notes="${migration_notes}\n     ${DIM}The reinstall records source + version + sha256 in .sage/packs.lock;${RESET}"
     migration_notes="${migration_notes}\n     ${DIM}the old skills.json entry recorded a path on one machine.${RESET}"
   fi
