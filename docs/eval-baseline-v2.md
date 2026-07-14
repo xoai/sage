@@ -148,11 +148,23 @@ found on the other side.
 
 | | sage | bare | delta |
 |---|---|---|---|
-| **L1** — resume an interrupted cycle | 2/3 · $25.23 | **3/3** · $7.04 | **−Sage** |
-| **L2** — honour a constraint stated 2 contexts ago | 3/3 · $4.85 | **3/3** · $2.17 | same |
+| **L1** — resume an interrupted cycle | 3/3 · **$21.58/run** | 3/3 · **$2.35/run** | same result, **9× the price** |
+| **L2** — honour a constraint stated 2 contexts ago | 3/3 · $1.62/run | 3/3 · $0.72/run | same result, 2.2× the price |
 
-**Sage loses L1 and ties L2, at 2–4× the cost. The long-horizon claim is not
+**Sage ties both, and pays 2–9× for the privilege. The long-horizon claim is not
 supported by this evidence.**
+
+> ### Correction — L1 was published as 2/3, and that was wrong
+>
+> The first L1 runs were hitting a **$6/session budget cap** and being cut off
+> mid-cycle. A truncated run grades identically to a broken one — the exact mistake
+> that once made subagent mode look broken when it had merely run out of money — and
+> it was published as a behavioural failure of Sage.
+>
+> Re-run with a cap it does not hit: **3/3**. Sage's resume is not unreliable. It is
+> *expensive*, and under an equal, tight budget the ceremony is what runs out of money
+> first. The number is corrected here and in the README; the mistake is left on the
+> record because it is the more useful half.
 
 ### L1 — resume fidelity
 
@@ -210,25 +222,30 @@ forge the signature the gate exists to collect. **Fact is mechanical. Approval i
 `manifest.py check` fails a manifest that contradicts its own tree, so this cannot
 silently regress.
 
-### Fixed again in v1.3.3 — the authority order, and L1 finally moves
+### Fixed in v1.3.4 — the authority order
 
 *Run 2026-07-14. Sage arm only — the bare arm has no Sage in it and its 3/3
 baseline is unaffected by Sage changes.*
 
-The remaining third was never resume *infidelity* — the failing run restarted
-nothing, re-planned nothing, and honoured D-002. Its anatomy, read from the
+The correction above establishes that the capped runs were being truncated —
+but **one failure from those batches was not truncation, and it is the one this
+release exists to close.** That run's resume spent **$1.77 of a $6 cap** and
+stopped **by choice**. It restarted nothing, re-planned nothing, and honoured
+D-002 — the failure was never resume *infidelity*. Its anatomy, read from the
 transcript: **session 1 hedged**, writing a speculative "Task 3 is BLOCKED,
 needs the user's call" into the manifest on its way out. **Session 2 inherited
 the hedge as law** — /continue said "follow the handoff guidance, do NOT re-ask
 questions already resolved" — and refused to implement the last task **twice,
 under an explicit user instruction to keep going**, while the recorded decision
 D-002 explicitly sanctioned the three implementation shapes it declined to
-choose among. The other two runs simply picked one (`retry(operation, sleeper)`)
-and passed. The dead session outranked the live user and the decisions log.
+choose among. Other runs simply picked one (`retry(operation, sleeper)`) and
+passed. The dead session outranked the live user and the decisions log.
 That is an authority inversion, and the machinery itself taught it: nothing
-anywhere said who outranks whom on resume.
+anywhere said who outranks whom on resume. A budget cap cannot produce this
+failure and a bigger budget cannot fix it — it recurs whenever a session ends
+mid-hedge, which is exactly the moment manifests get written.
 
-Three changes (v1.3.3):
+Three changes (v1.3.4):
 
 1. **The resume brief is generated** — `manifest.py resume`. Cycle selection
    (active status, owner exclusion, branch preference), plan tasks, git evidence
@@ -246,17 +263,18 @@ Three changes (v1.3.3):
    `blocked_on:` fails `manifest.py check`. A blocker nobody can name is a
    hesitation the next session inherits as law.
 
-Re-run, L1/sage, N=3 valid runs per model:
+Re-run, L1/sage, N=3 valid runs per model, post-fix:
 
-| | pre-fix | post-fix |
+| | result | cost/run |
 |---|---|---|
-| opus-4-8[1m] (the baseline model) | 2/3 · $25.23 | **3/3** · $56.29 |
-| fable-5 (the current CLI default) | — | **3/3** · $64.93 |
+| opus-4-8[1m] — corrected baseline: 3/3 · $21.58/run | **3/3** | $16.07–22.61 |
+| fable-5 — current CLI default, no pre-fix control | **3/3** | $16.37–31.86 |
 
-(One additional fable run was invalidated by a five-hour-limit 429 and one
-additional opus run by a tool-call-parse API failure — both caught by the
-driver, disclosed below, and replaced. Errored ≠ failed, and now the harness
-says which.)
+**No pass-rate delta is claimed over the corrected baseline** — 3/3 stays 3/3,
+and the per-run cost is unchanged within noise. (One additional fable run was
+invalidated by a five-hour-limit 429 and one additional opus run by a
+tool-call-parse API failure — both caught by the driver, disclosed below, and
+replaced. Errored ≠ failed, and now the harness says which.)
 
 **How the fix actually engages, read from the transcripts — and it differs by
 model.** On fable-5, session 2 ran `manifest.py resume` and consumed the brief
@@ -269,25 +287,27 @@ wait"), so there is no hesitation for session 2 to inherit. The failure mode
 under repair — a dead session's hedge outranking the decisions log and the
 live user — recurred in **zero of six valid runs**.
 
-**The honest asterisks.** The opus pass-rate delta is one run at N=3 — real
-but small-sample; the stronger evidence is the transcript-level absence of the
-failure mode. The fable row has no pre-fix control (the CLI's default model
-changed mid-programme), so it proves engagement, not a delta. And the cost
-went the wrong way: **the fix bought reliability, not economy.** A passing
-resume now costs $16–23 (was $6–15 when it passed at all), roughly **8× a
-bare agent's $2.35**. The bridge is sound and the orders are straight; the
-bill is still the open problem.
+**The honest asterisks.** What this release claims is **determinism, not a
+discount and not a pass-rate delta**: the documented failure mode is gone from
+every transcript, the state-gathering is computed instead of interpreted, and a
+hedge can no longer masquerade as state (`blocked` without a named question
+fails `check`). The fable row has no pre-fix control (the CLI's default model
+changed mid-programme), so it proves engagement, not a delta. And the bill the
+correction named is still the bill: a Sage resume costs $16–23 against a bare
+agent's $2.35. The bridge is sound and the orders are straight; the 9× is
+still the open problem.
 
 ### What THIS run found in the instrument (two more)
 
-1. **A rate-limited run graded as a Sage failure.** The first post-fix batch's
-   run 3 hit a five-hour-limit 429: both sessions were rejected in under 3
-   seconds at $0.00, the driver recorded them as clean (`error: None`), and the
-   harness graded the untouched fixture — 4/7 checks, reported as Sage failing
-   to resume. E9's lesson, one layer down: a truncated run grades identically
-   to a broken feature, and only the driver can tell them apart. The driver now
-   fails a session loudly when the CLI returns an error result
-   (`test_driver.py` pins it).
+1. **The is_error bug was found twice, independently, off the same rate-limit
+   event.** Two parallel sessions hit the same 3:10am five-hour limit: one
+   shipped the driver fix above (v1.3.3), and this one's first post-fix batch
+   hit the identical shape — both sessions rejected in under 3 seconds at
+   $0.00, recorded as clean (`error: None`), graded against the untouched
+   fixture as "Sage failing to resume" (4/7 checks). v1.3.3's in-loop check is
+   canonical; `test_driver.py` adds driver-level regression tests — and the
+   check then caught a second, different API failure ("tool call could not be
+   parsed") the same day, refusing to grade it.
 2. **The baseline and the re-run silently ran on different models.** The
    results recorded only the `--model` override — `null` when defaulted — and
    the CLI's session default had changed underneath the harness (opus-4-8 →
@@ -340,11 +360,106 @@ working-tree snapshots (not commits), checks are scoped to paths, and code check
 > **Test the instrument before you trust the measurement.** Second release running,
 > and it is still the most expensive lesson here.
 
+## The mode comparison (P5-T3) — and why R119's design does not work
+
+*Attempted 2026-07-13/14. Spend: $74.67. The subagent arm is **UNRESOLVED** — see below.*
+
+R119 asks for **E1–E5 + E9 in both execution modes**. That comparison cannot be made,
+and finding out cost $1.03:
+
+**E1–E5 never engage the mode.** They are single-shot tasks ("change one constant"),
+which Sage routes as trivial: no spec, no plan, no tasks. Subagent mode dispatches *per
+plan task*. Probed directly — E1 forced into subagent mode made **zero Task dispatches
+and opened no cycle**. Running those five scenarios in "both modes" would have paid
+twice for ten identical runs and printed them as a comparison.
+
+**E9 and E10 cannot be run inline either.** Their checks assert `ledger_complete` and
+`ledger_attributes_commits` — and the ledger *only exists in subagent mode*. Grading
+them inline would fail a perfectly good agent for not producing an artifact the other
+mode produces, which is scoring the absence of a feature as a behavioural loss. This
+suite refuses that; it is why E7/E8/E9 are sage-only in the first place.
+
+**L1 is the only scenario that supports a fair comparison**: a task-bearing plan (so
+the mode engages) with mode-neutral checks (so both arms can pass).
+
+### Inline (valid, N=3)
+
+| | pass | cost/run | wall/run |
+|---|---|---|---|
+| L1 · sage · **inline** | **3/3** | $21.58 | 24 min |
+| L1 · bare (reference) | 3/3 | $2.35 | ~4 min |
+
+### Subagents — it does not finish the work inline finishes
+
+The best subagent run, session by session, against the identical $10/session cap:
+
+| | session 1 | session 2 | result |
+|---|---|---|---|
+| **subagents** | $7.73 · 41 turns | $10.17 · 39 turns → **hit the cap** | **never completed** |
+| **inline** | $1.50–$17.16 | $12.19–$13.66 | **3/3 PASS** |
+
+Subagent mode spent **80 turns and ~$18 across two sessions and still had not
+finished** the three-task plan that the inline loop completes. It dispatches a fresh
+implementer *and* an independent reviewer per task, and the dispatch overhead is what
+consumes the budget.
+
+**This is a lower bound, not a completion cost.** What it establishes is the
+comparison that matters: *given a budget the inline loop finishes in, subagent mode
+does not finish at all.* Establishing what it would cost to finish means raising the
+cap and paying for it — on this evidence, somewhere north of $50/run, N=3, and the
+direction is already clear enough that the money is better spent elsewhere.
+
+### C13 — the recommendation: **HOLD. Do not flip the default.**
+
+Subagent mode should stay opt-in (`--subagents`).
+
+- It is **at minimum 2–3× more expensive** than the inline loop for the same plan, and
+  did not complete within a budget the inline loop completed in 3/3.
+- E9/E10 already establish that the mode *works* — every task implemented by a fresh
+  context and judged by a different one, with a ledger to prove it. That is a real
+  guarantee and worth paying for **when you want it**.
+- Nothing here says it produces *better code*. No grader in this suite reads for
+  quality and none should pretend to. The case for the mode is auditability, not
+  correctness, and auditability is a choice a user should make deliberately.
+
+**Confidence: moderate, and stated as such.** The subagent arm is **N=1 and
+budget-truncated** — the other two runs were eaten by a session limit. That is enough
+to say *hold*; it is not enough to say *never*. What would change the recommendation is
+evidence that the mode catches defects the inline loop ships, and that experiment has
+not been run.
+
+### And the harness scored a rate limit as a Sage failure
+
+Two of the original three subagent runs produced:
+
+```
+result:   "You've hit your session limit · resets 3:10am"
+is_error: True     total_cost_usd: 0     num_turns: 1
+```
+
+**Zero model calls. $0.00. Three seconds.** The harness recorded them, with
+`err=None`, as *Sage failing 4 of 7 checks*. Had nobody asked why a run cost nothing,
+this document would now carry a table showing subagent mode failing 0/3 — a confident,
+published, entirely fabricated finding about a mode that never ran.
+
+The fix distinguishes two things that are not the same:
+
+- **Nothing ran** — rate limit, auth failure, overloaded API. Zero tokens read. Not
+  evidence about Sage; the run **errors** rather than scores.
+- **Truncated** — `error_max_budget_usd`, timeouts. The agent worked (39 turns, $10)
+  and was then cut off. The workspace holds what it managed, so it is **graded and
+  flagged**: a truncated pass did the work; a truncated failure is *inconclusive*, not
+  a defect.
+
+`num_turns` is not evidence of work — a rate-limited session reports `num_turns: 1`
+having read nothing. **Tokens are.** Five regression tests pin all of it.
+
 ## What is still not measured
 
-- **Whether subagent mode produces *better* code** than the inline loop. E9/E10
-  prove the mode does what it says. They do not compare quality. `--mode both` now
-  exists to run that comparison (P5-T3); it has not been run.
+- **Whether subagent mode produces *better* code.** Even once the arm completes, no
+  grader here reads for quality, and none should pretend to. The mode comparison can
+  report what the two modes COST and whether they PASS. "Which writes better code" needs
+  a different instrument.
 - **Memory over a long horizon**, where rereading stops being free. See L2 above.
 - **L3 (scope-hold across a 6-task plan).** Authored? No. Budget went on the
   L1 instrument bugs, which was the right place for it to go.

@@ -57,13 +57,27 @@ class DriverErrorResultTest(unittest.TestCase):
 
     def test_THE_BUG_a_429_result_is_an_error_not_a_session(self):
         """The CLI exits 0 and emits a well-formed result event for a rate-limit
-        rejection. Before the fix, that graded as a clean session."""
+        rejection. Before the fix, that graded as a clean session. (Found twice,
+        independently, off the same rate-limit event — the in-loop check shipped
+        in v1.3.3 is canonical; this pins it at the driver level.)"""
         run = self.drive([result_event(
-            is_error=True, api_error_status=429,
+            is_error=True, api_error_status=429, total_cost_usd=0,
+            usage={"input_tokens": 0, "output_tokens": 0},
             result="You've hit your session limit · resets 3:10am")])
         self.assertFalse(run["ok"])
-        self.assertIn("429", run["error"])
         self.assertIn("session limit", run["error"])
+        self.assertIn("measures nothing", run["error"],
+                      "the error must say the run is void, not that Sage failed")
+
+    def test_an_error_after_real_work_is_truncation_not_void(self):
+        """The other half of the distinction (v1.3.3): an error result AFTER the
+        agent read tokens is a budget-cap/timeout truncation — the workspace holds
+        what it managed, so the session is graded and FLAGGED, not voided."""
+        run = self.drive([result_event(
+            is_error=True, subtype="error_max_budget_usd",
+            result="budget exceeded")])
+        self.assertTrue(run["ok"])
+        self.assertEqual(run["truncated"], "error_max_budget_usd")
 
     def test_a_clean_result_still_drives(self):
         run = self.drive([result_event()])

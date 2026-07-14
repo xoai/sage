@@ -872,6 +872,121 @@ class FirstRunBugsTest(unittest.TestCase):
         self.assertTrue(r["pass"])
 
 
+class PlatformFailureIsNotAgentFailureTest(unittest.TestCase):
+    """A rate limit is not a finding about Sage.
+
+    The mode comparison hit this for real. Two of three subagent runs produced:
+
+        result:   "You've hit your session limit · resets 3:10am"
+        is_error: True     total_cost_usd: 0     num_turns: 1
+
+    Zero model calls, $0.00, ~3 seconds — and the harness recorded them, with
+    err=None, as Sage failing 4 of 7 checks. On a results table that is
+    indistinguishable from a real defect, and it would have published as one.
+
+    The harness committing the exact sin the harness exists to catch:
+    nothing-happened, scored as it-happened-badly.
+    """
+
+    def setUp(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "run_evals", pathlib.Path(__file__).resolve().parent / "run_evals.py")
+        self.R = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.R)
+
+    def _driver_result(self, events):
+        """Drive ClaudeCodeDriver.run's event loop over a canned stream."""
+        d = self.R.ClaudeCodeDriver()
+        ws = pathlib.Path(tempfile.mkdtemp(prefix="platfail-"))
+        self.addCleanup(shutil.rmtree, ws, ignore_errors=True)
+        out = ws / "t.jsonl"
+
+        class FakeProc:
+            returncode = 0
+            stdout = "\n".join(__import__("json").dumps(e) for e in events)
+            stderr = ""
+
+        real_run = subprocess.run
+        subprocess.run = lambda *a, **k: FakeProc()
+        try:
+            return d.run(ws, ["do the thing"], out)
+        finally:
+            subprocess.run = real_run
+
+    def test_a_rate_limit_is_an_ERROR_not_a_failed_scenario(self):
+        r = self._driver_result([
+            {"type": "system", "subtype": "init", "session_id": "s"},
+            {"type": "result", "subtype": "success", "is_error": True,
+             "result": "You've hit your session limit · resets 3:10am",
+             "total_cost_usd": 0, "num_turns": 1},
+        ])
+        self.assertFalse(r["ok"], "a platform error must not be scored as a run")
+        self.assertIn("session limit", r["error"])
+        self.assertIn("measures nothing", r["error"])
+
+    def test_a_session_with_no_model_calls_is_an_ERROR(self):
+        """Even with nobody reporting an error. Zero tokens read means nothing ran,
+        and a scenario graded against an agent that never woke up is a coin toss with
+        a stern face."""
+        r = self._driver_result([
+            {"type": "system", "subtype": "init", "session_id": "s"},
+        ])
+        self.assertFalse(r["ok"])
+        self.assertIn("no model calls", r["error"])
+
+    def test_a_BUDGET_truncation_is_graded_not_discarded(self):
+        """The other half, and collapsing the two is its own bug.
+
+        `error_max_budget_usd` means the agent WORKED — 39 turns, $10 — and was then
+        cut off. The workspace holds whatever it managed, and that is gradeable: a
+        truncated run that still passed did the work. Discarding it would throw away a
+        real result; scoring it silently would present an inconclusive failure as a
+        defect. So it is graded, and FLAGGED.
+        """
+        r = self._driver_result([
+            {"type": "system", "subtype": "init", "session_id": "s"},
+            {"type": "result", "subtype": "error_max_budget_usd", "is_error": True,
+             "result": "", "total_cost_usd": 10.17, "num_turns": 39,
+             "usage": {"input_tokens": 44, "cache_read_input_tokens": 1_886_144,
+                       "output_tokens": 30_256}},
+        ])
+        self.assertTrue(r["ok"], "real work was done — this is gradeable, not void")
+        self.assertEqual(r["truncated"], "error_max_budget_usd")
+        self.assertGreater(r["tokens_in"], 1_000_000)
+        self.assertAlmostEqual(r["cost_usd"], 10.17, places=2)
+
+    def test_num_turns_is_not_evidence_of_work(self):
+        """A rate-limited session reports `num_turns: 1` while having read nothing.
+
+        Trusting the turn count would let "nothing ran" masquerade as "ran and was cut
+        off" — which is the exact confusion this class exists to prevent. Tokens are
+        the evidence.
+        """
+        r = self._driver_result([
+            {"type": "result", "subtype": "success", "is_error": True,
+             "result": "You've hit your session limit", "total_cost_usd": 0,
+             "num_turns": 1, "usage": {"input_tokens": 0, "output_tokens": 0}},
+        ])
+        self.assertFalse(r["ok"], "num_turns:1 with zero tokens is still 'nothing ran'")
+        self.assertIn("nothing ran", r["error"])
+
+    def test_a_real_run_still_succeeds(self):
+        """The fix must not make every run an error."""
+        r = self._driver_result([
+            {"type": "system", "subtype": "init", "session_id": "s"},
+            {"type": "assistant", "message": {"content": [
+                {"type": "text", "text": "done"}]}},
+            {"type": "result", "subtype": "success", "is_error": False,
+             "result": "done", "total_cost_usd": 0.5,
+             "usage": {"input_tokens": 10, "cache_read_input_tokens": 900,
+                       "output_tokens": 20}},
+        ])
+        self.assertTrue(r["ok"], r["error"])
+        self.assertEqual(r["cost_usd"], 0.5)
+        self.assertEqual(r["tokens_in"], 910)
+
+
 class ScenarioShapeTest(unittest.TestCase):
     """Scenario parsing: sessions, modes, and the ways they can be declared wrong.
 

@@ -41,11 +41,14 @@ the verification is the block at the top.
 /plugin install sage@sage-marketplace
 ```
 
-> **Not yet live.** The marketplace repo is staged but unpublished (Phase 6, C17 —
-> publishing is a public, hard-to-retract act and it needs a maintainer's hand, not
-> an agent's). Until it is, install via the script or vendor the plugin directly
-> from the `plugin-dist` branch, where the built tree lives under
-> `tools/sage-claude-plugin/` — note the path; the branch root is empty by design.
+Live, and both of those commands were **run** before this page said so. They install
+[sage@sage-marketplace](https://github.com/xoai/sage-marketplace) — v1.3.2, 28 skills,
+5 agents, 3 hook events, ~2,064 always-on tokens.
+
+The marketplace pins the plugin at the main repo's `plugin-dist` branch (a branch, not
+a tag), so you always get the current release and there is no version here to fall out
+of date. `release.py --dist-status` checks that pin against this repo's and **fails on
+drift**.
 
 **Integrity: GitHub's transport, and nothing else.** There is no checksum on this
 path. The plugin is a build output, force-pushed to `plugin-dist` on every release
@@ -73,15 +76,23 @@ nobody updates is a vendored copy that quietly rots.
 Packs are optional skill bundles that version independently of the framework.
 
 ```bash
-sage add xoai/sage-product@v1.3.1 --all   # pinned to a tag
+sage add xoai/sage-product@v1.3.2 --all   # pinned to a tag — reproducible
 sage add xoai/sage-product --all          # whatever is latest today
-sage add ./packs/sage-product --all       # from a local checkout
+sage add ./some/local/checkout --all      # a local directory, unchanged
 ```
 
-> **Not yet live.** The three pack repos are staged but unpublished (C17). Until
-> they are pushed, use the local-checkout form. `sage update` has been recommending
-> `sage add xoai/sage-product` since v1.2 — that command does not resolve yet, and
-> making it true is what Phase 6 is for.
+The three packs are live: [sage-product](https://github.com/xoai/sage-product),
+[sage-pack-authoring](https://github.com/xoai/sage-pack-authoring),
+[sage-autoresearch](https://github.com/xoai/sage-autoresearch).
+
+> `sage add ./packs/sage-product` **no longer works.** The packs left this repo in
+> v1.3.2 and live in their own repositories now; `packs/` is a pointer README. Use
+> the repo form above.
+>
+> For two minor versions before that, `sage update` printed `sage add
+> xoai/sage-product` at users — for a repository that did not exist. It resolves now,
+> and `release.py --dist-status` asks GitHub whether it still does rather than
+> assuming.
 
 **Integrity: verified when the release publishes a `checksums.txt`, and loud when it
 does not.**
@@ -104,10 +115,10 @@ Every pack install records what it actually got:
   "packs": {
     "sage-product": {
       "source": "xoai/sage-product",
-      "version": "v1.3.1",
+      "version": "v1.3.2",
       "sha256": "9f2c…",
       "skills": ["jtbd", "prd", "ux-review"],
-      "installed": "2026-07-12"
+      "installed": "2026-07-13"
     }
   }
 }
@@ -124,19 +135,21 @@ can.
 `SKILL.md`, so `sage add` cannot deliver it — `sage add` delivers skills:
 
 ```bash
-pip install sage-autoresearch      # or: uv pip install sage-autoresearch
-python -m autoresearch --help
+pip install git+https://github.com/xoai/sage-autoresearch@v1.3.2
+autoresearch --help          # or: python -m autoresearch --help
 ```
 
-Today, `sage add ./packs/sage-autoresearch` prints *"No SKILL.md files found"* and
-exits successfully, having installed nothing. It now says what to do instead.
+**Not on PyPI** — that command installs straight from the tagged release, and it is one
+that works. This page used to say `pip install sage-autoresearch`, which 404s: the
+package was not on PyPI and the pack had no `pyproject.toml`, so it was not installable
+by any means at all. It has real packaging metadata now.
 
 ---
 
 ## Which one should you use?
 
 - **Trying Sage out** → the script. It is verified and it is one line.
-- **Working inside Claude Code** → the plugin, once it is live.
+- **Working inside Claude Code** → the plugin. Two commands, and it is live.
 - **A team repo, or anything you will still be running in a year** → vendor it. The
   supply chain you do not depend on is the one that cannot break.
 - **You want the PM/UX or pack-authoring skills** → a pack, on top of any of the above.

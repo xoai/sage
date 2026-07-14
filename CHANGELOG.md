@@ -4,9 +4,10 @@ All notable changes to Sage will be documented in this file.
 
 ## [Unreleased] — The dead session outranked the live user
 
-v1.3.2 made the manifest's *state* mechanical, and L1 did not move: 2/3, with the
-remaining failure filed as "ceremony cost". The transcript says otherwise, and it
-is worth being precise because the fix follows from the anatomy:
+v1.3.3 corrected L1's headline: given a budget it does not hit, Sage resumes 3/3,
+and the published 2/3 was truncation. **One failure from the capped batches was not
+truncation, and this release closes it.** That run spent $1.77 of a $6 cap and
+stopped **by choice**; its transcript is the anatomy the fix follows:
 
 Session 1 hedged — it wrote a speculative *"Task 3 is BLOCKED, needs the user's
 call"* into the manifest on its way out. Session 2 inherited the hedge as law
@@ -24,8 +25,7 @@ outranks whom on resume.
   began, decisions in force, and the manifest body verbatim under a header that
   says what it is: *context, not orders*. Same files, same brief. `/continue`,
   `/build`, `/fix` and `/architect` Auto-Pickup all start there — resume
-  state-gathering was judgment-driven prose in three places, measured at 3–9× a
-  bare agent's resume cost.
+  state-gathering was judgment-driven prose in three places.
 - **Resume authority order** (cycle-protocol.md, printed with every brief): the
   live user's instruction outranks recorded decisions; recorded decisions
   outrank the manifest's judgment prose; evidence outranks all prose. A question
@@ -36,35 +36,117 @@ outranks whom on resume.
   session inherits as law. (`is_source` also stops counting `__pycache__`/`.pyc`
   droppings — they polluted the first real brief's evidence.)
 
-Measured (L1, sage arm, N=3 valid runs per model; the bare arm has no Sage in
-it and its 3/3 · $7.04 baseline is unaffected):
+Measured, post-fix (L1, sage arm, N=3 valid runs per model):
 
-| | pre-fix | post-fix |
+| | result | cost/run |
 |---|---|---|
-| opus-4-8[1m] (baseline model) | 2/3 · $25.23 | **3/3** · $56.29 |
-| fable-5 (current CLI default) | — | **3/3** · $64.93 |
+| opus-4-8[1m] — corrected baseline: 3/3 · $21.58/run | **3/3** | $16.07–22.61 |
+| fable-5 — current CLI default, no pre-fix control | **3/3** | $16.37–31.86 |
 
-How it engages differs by model, and the transcripts say which: on fable,
-session 2 consumed the generated brief in 3/3 runs; on opus 1/3 — but the
-*write side* engaged in all three: session 1's handoffs no longer hedge (zero
-"blocked / needs the user's call"; D-002 arrives pre-digested), so there is no
-hesitation for session 2 to inherit. The failure mode recurred in **zero of
-six valid runs**. Honest asterisks: the opus delta is one run at N=3; the
-fable row has no pre-fix control (the CLI default changed mid-programme); and
-**the fix bought reliability, not economy** — a passing resume costs $16–23,
-roughly 8× bare. The bill is still the open problem.
+**No pass-rate delta is claimed over the corrected baseline** — 3/3 stays 3/3.
+What is claimed, transcript-backed: the failure mode is gone (zero recurrences in
+six valid runs; session 1's handoffs no longer hedge — none say "blocked / needs
+the user's call", and D-002 arrives pre-digested), and resume state-gathering is
+deterministic — same files, same brief. Engagement differs by model: fable-5
+consumed the brief in 3/3 runs, opus in 1/3 (there the fix works through the
+write side). Cost is unchanged within noise; the 9× bill v1.3.3 named is still
+the open problem.
 
-### The instrument caught two more of its own bugs
+### The instrument, twice more
 
-- **A rate-limited run graded as a Sage failure.** A five-hour-limit 429
-  rejected both sessions in <3s at $0.00; the driver recorded them as clean and
-  the harness graded the untouched fixture (4/7 checks, "Sage failed to
-  resume"). The driver now fails a session loudly when the CLI returns an error
-  result. `develop/evals/test_driver.py` pins it.
+- **The is_error bug was found twice, independently, off the same rate-limit
+  event** — two parallel sessions hit the same 3:10am five-hour limit; one shipped
+  the driver fix in v1.3.3, this one hit the identical $0.00-graded-as-failure
+  shape in its first post-fix batch. v1.3.3's in-loop check is canonical;
+  `develop/evals/test_driver.py` adds driver-level regression tests (an error
+  result fails the session; a clean one drives on) — and the check caught a
+  second, different API failure ("tool call could not be parsed") the same day.
 - **The baseline and the re-run silently ran on different models.** Results
   recorded only the `--model` override (null when defaulted) while the CLI's
-  session default changed underneath the harness. Sessions now record the model
-  that actually served them, off the init event.
+  session default changed underneath the harness (opus-4-8 → fable-5). Caught
+  before publication only by reading init events in both transcripts. Sessions
+  now record the model that actually served them.
+
+## [1.3.3] — The corrections
+
+**A release whose headline is a retraction.** v1.3.2 published a number that was
+wrong, and the tool that was supposed to catch that class of mistake had the same bug.
+Both are fixed here. Nothing new is claimed.
+
+### L1 was published as 2/3. It is 3/3.
+
+The README said a bare agent **beat** Sage at resuming an interrupted cycle. It does
+not. The runs were hitting a per-session budget cap and being **truncated mid-cycle** —
+and *a truncated run grades identically to a broken one*, which is the exact mistake
+E9's own scenario file warns about in as many words. We made it anyway and shipped it.
+
+| L1 — resume an interrupted cycle | result | cost/run |
+|---|---|---|
+| **bare agent** | 3/3 | **$2.35** |
+| **Sage** | 3/3 | **$21.58** |
+
+**Sage gets there. It pays about 9× to get there.** That is a sharper finding than the
+one it replaces, and worse for Sage: the resume is not unreliable, it is *extravagant*.
+Under an equal, tight budget the ceremony is what runs out of money first.
+
+### The harness scored a rate limit as a Sage failure
+
+```
+result:   "You've hit your session limit · resets 3:10am"
+is_error: True     total_cost_usd: 0     num_turns: 1
+```
+
+Zero model calls. $0.00. Three seconds. Recorded, with `err=None`, as **Sage failing
+4 of 7 checks.** Had nobody asked why a run cost nothing, the baseline would now carry
+a table showing subagent mode failing 0/3 — a confident, published, entirely fabricated
+finding about a mode that never ran.
+
+The fix separates two things that are not the same:
+
+- **Nothing ran** — rate limit, auth failure, outage. Zero tokens. Not evidence about
+  Sage; the run **errors** rather than scores.
+- **Truncated** — budget cap, timeout. The agent worked, then was cut off. The
+  workspace holds what it managed, so it is **graded and flagged**.
+
+`num_turns` is not evidence of work: a rate-limited session reports `num_turns: 1`
+having read nothing. **Tokens are.**
+
+### Mode comparison (C13): HOLD — subagent mode stays opt-in
+
+Under an identical budget, on the identical 3-task plan, subagent mode spent **80 turns
+and ~$18 across two sessions and never finished** work the inline loop completes 3/3.
+Confidence *moderate*: the subagent arm is N=1 and budget-truncated. Enough to say
+hold; not enough to say never.
+
+R119's design does not work, and $1.03 established it: **E1–E5 never engage the mode**
+(single-shot tasks, no plan — the mode dispatches *per plan task*; E1 forced into it
+made zero dispatches), and **E9/E10 cannot run inline** (their checks assert a ledger
+that only exists in subagent mode). L1 is the only scenario with both a task-bearing
+plan and mode-neutral checks.
+
+### `sage update` was fabricating provenance on every run
+
+It replaces `sage/` wholesale — which deletes `skills.json` — and then *re-registered*
+every surviving skill as `{"source": "community", "added": "<today>"}`. A skill
+installed from a pack **did not come from the community catalog** and was **not added
+today**. A true record was overwritten with a false one, every run, and nothing noticed
+because nothing read it back. The record is preserved verbatim now.
+
+### Packs version independently — and pinning them to Sage's version was a dead link
+
+`sage update` printed `sage add xoai/sage-product@v${SAGE_VERSION}`. Cutting **this**
+release would have made that a tag nobody had cut. Unpinned; `.sage/packs.lock` is
+where reproducibility belongs. `--dist-status` no longer demands a pack carry Sage's
+version number — that is the lockstep ADR-7 exists to break.
+
+### Also
+
+- **`autoresearch --version`** printed `0.1.0` while shipping as 1.3.2 — wrong since
+  its first release. Derived from package metadata now.
+- **`packs/`** is a pointer README; the three packs live in their own repos.
+- **The marketplace is live**: `/plugin marketplace add xoai/sage-marketplace`. The
+  documented install command was a **dead link** until it was run — the manifest's
+  `name` *is* the marketplace id, and copied verbatim it read `sage`.
 
 ## [1.3.2] — The manifest was lying, and now it cannot
 

@@ -308,6 +308,88 @@ def with_evals(root: pathlib.Path, runs: int) -> int:
 
 PACK_REPOS = ("sage-product", "sage-pack-authoring", "sage-autoresearch")
 
+PACK_OWNER = "xoai"
+
+
+MARKETPLACE_REPO = "sage-marketplace"
+
+
+def canonical_plugin_source(root: pathlib.Path) -> dict:
+    """The plugin `source` block this repo publishes — the thing that must not drift."""
+    path = root / ".claude-plugin" / "marketplace.json"
+    if not path.is_file():
+        return {}
+    try:
+        d = json.loads(path.read_text())
+        return (d.get("plugins") or [{}])[0].get("source") or {}
+    except (ValueError, OSError, IndexError):
+        return {}
+
+
+def marketplace_repo_state() -> tuple:
+    """('published'|'no-repo'|'unknown', source_block).
+
+    Reads the manifest out of the published marketplace repo. Fail-soft: an
+    unreachable network returns 'unknown' and no claim, because a check that guesses
+    reads exactly like a check that knows.
+    """
+    import base64
+    import urllib.error
+    import urllib.request
+
+    url = (f"https://api.github.com/repos/{PACK_OWNER}/{MARKETPLACE_REPO}"
+           f"/contents/.claude-plugin/marketplace.json")
+    req = urllib.request.Request(url, headers={"User-Agent": "sage-release"})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+        raw = base64.b64decode(payload.get("content", "")).decode("utf-8")
+        d = json.loads(raw)
+        return "published", (d.get("plugins") or [{}])[0].get("source") or {}
+    except urllib.error.HTTPError as exc:
+        return ("no-repo" if exc.code == 404 else "unknown"), {}
+    except (urllib.error.URLError, OSError, ValueError, IndexError):
+        return "unknown", {}
+
+
+def pack_release_state(name: str) -> tuple:
+    """('published'|'missing-release'|'no-repo'|'unknown', latest_tag).
+
+    Asks whether the pack has a LATEST RELEASE — not whether it carries Sage's
+    version. Packs version independently (ADR-7); tying them to Sage's number is the
+    lockstep the extraction exists to break.
+
+    Fail-soft: an unreachable network yields 'unknown' and no claim. A release check
+    that guesses is worse than one that says it does not know, because a guess reads
+    exactly like an answer.
+    """
+    import urllib.error
+    import urllib.request
+
+    url = f"https://api.github.com/repos/{PACK_OWNER}/{name}/releases/latest"
+    req = urllib.request.Request(url, headers={"User-Agent": "sage-release"})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        return "published", data.get("tag_name") or "?"
+    except urllib.error.HTTPError as exc:
+        if exc.code != 404:
+            return "unknown", None
+    except (urllib.error.URLError, OSError, ValueError):
+        return "unknown", None
+
+    # 404 on /releases/latest is ambiguous: no repo, or a repo with no releases.
+    repo = f"https://api.github.com/repos/{PACK_OWNER}/{name}"
+    try:
+        with urllib.request.urlopen(
+                urllib.request.Request(repo, headers={"User-Agent": "sage-release"}),
+                timeout=10):
+            return "missing-release", None
+    except urllib.error.HTTPError as exc:
+        return ("no-repo" if exc.code == 404 else "unknown"), None
+    except (urllib.error.URLError, OSError):
+        return "unknown", None
+
 
 def dist_status(root: pathlib.Path) -> int:
     """What is distributable, what is staged, and what is still a promise (R132).
@@ -349,35 +431,68 @@ def dist_status(root: pathlib.Path) -> int:
         elif (root / rel).is_file():
             print(f"  ✓ market  {rel} → defers to plugin.json")
 
-    marketplace_repo = root / "dist" / "repos" / "sage-marketplace"
-    if not marketplace_repo.is_dir():
+    # The published marketplace repo carries a COPY of the plugin source block. A copy
+    # of a thing with a canonical source is exactly what shipped the navigator a
+    # release out of date, so the two are checked against each other rather than
+    # trusted to stay in step.
+    #
+    # The `name` field is deliberately NOT compared: it is the marketplace's ID, and it
+    # must be `sage-marketplace` there and `sage` here. Copying it verbatim is what made
+    # `/plugin install sage@sage-marketplace` fail with "not found in marketplace" —
+    # the documented command was a dead link until it was actually run.
+    state, remote_source = marketplace_repo_state()
+    local_source = canonical_plugin_source(root)
+    if state == "no-repo":
         warnings.append(
-            "no marketplace repo staged — `/plugin marketplace add xoai/sage-marketplace` "
-            "is not yet a real command (P6-T4)")
+            "xoai/sage-marketplace does not exist — "
+            "`/plugin marketplace add xoai/sage-marketplace` is a dead link (P6-T4)")
+    elif state == "unknown":
+        warnings.append("could not reach xoai/sage-marketplace — pin unverified")
+    elif remote_source != local_source:
+        problems.append(
+            f"xoai/sage-marketplace's plugin source has drifted from this repo's:\n"
+            f"      here:   {json.dumps(local_source, sort_keys=True)}\n"
+            f"      there:  {json.dumps(remote_source, sort_keys=True)}")
+        print("  ✗ market  xoai/sage-marketplace → source block DRIFTED")
+    else:
+        print("  ✓ market  xoai/sage-marketplace → published, source block agrees")
 
     # ── The packs ───────────────────────────────────────────────────────────
-    staged = root / "dist" / "repos"
-    for name in PACK_REPOS:
-        tree = staged / name
-        if not tree.is_dir():
-            warnings.append(f"pack {name} is not staged — run stage_packs.py")
-            print(f"  · pack    {name} → not staged")
-            continue
-        pv = (tree / "VERSION").read_text().strip() if (tree / "VERSION").is_file() else "?"
-        mark = "✓" if pv == version else "✗"
-        print(f"  {mark} pack    {name} → staged at {pv}")
-        if pv != version:
-            problems.append(f"staged pack {name} is at {pv}, not {version} "
-                            f"— re-run stage_packs.py")
+    # There is no "staged" state any more. The packs left this repo in v1.3.2 and
+    # their own repositories are canonical; packs/ is a pointer README. What is left
+    # to check is the only thing that was ever load-bearing: are they actually THERE.
 
-    # ── The promise nobody has kept ─────────────────────────────────────────
-    # A staged repo is not a published one. Until the maintainer pushes these and
-    # cuts a tag, `sage add xoai/sage-product` resolves to nothing — and bin/sage
-    # has been recommending it for two minor versions.
-    warnings.append(
-        "staged ≠ published. Until the three pack repos exist on GitHub with a "
-        "tagged release, `sage add xoai/<pack>` cannot resolve — and `sage update` "
-        "has been printing that command since v1.2 (bin/sage, the R54 block).")
+    # ── Staged is not published, and this must ASK rather than assume ───────
+    #
+    # This block used to print "staged ≠ published" unconditionally. The moment the
+    # repos went live it became a lie — the tool asserting a fact it had not checked,
+    # which is the exact defect this release spent its whole budget chasing. It looks
+    # now. Fail-soft: no network, no claim.
+    # PACKS VERSION INDEPENDENTLY OF SAGE. That is what ADR-7 extracted them for — a
+    # pack should not need a Sage release to ship a fix — so demanding the pack carry
+    # a tag matching Sage's VERSION is the lockstep assumption the extraction exists to
+    # break. It also manufactures a dead link: cutting Sage v1.3.3 would have this
+    # check demand a pack tag v1.3.3 that nobody has any reason to have cut, and
+    # `sage update` would have told users to install it.
+    #
+    # What matters is that the pack HAS a release, so `sage add xoai/<pack>` resolves.
+    # Which release is the pack's business, and `.sage/packs.lock` records the one the
+    # user actually got.
+    for name in PACK_REPOS:
+        state, latest = pack_release_state(name)
+        if state == "published":
+            print(f"  ✓ remote  {name} → {latest} published (versions independently)")
+        elif state == "missing-release":
+            warnings.append(
+                f"xoai/{name} exists but has published NO release — "
+                f"`sage add xoai/{name}` cannot resolve")
+        elif state == "no-repo":
+            warnings.append(
+                f"xoai/{name} does not exist. `sage update` has been printing "
+                f"`sage add xoai/{name}` since v1.2 (bin/sage, the R54 block) — "
+                f"that is a dead link until the repo is published (C17).")
+        else:
+            warnings.append(f"{name}: could not reach GitHub — publication unverified")
 
     print()
     for w in warnings:
