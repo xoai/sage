@@ -2,7 +2,7 @@
 
 All notable changes to Sage will be documented in this file.
 
-## [Unreleased] — The dead session outranked the live user
+## [1.3.4] — The dead session outranked the live user
 
 v1.3.3 corrected L1's headline: given a budget it does not hit, Sage resumes 3/3,
 and the published 2/3 was truncation. **One failure from the capped batches was not
