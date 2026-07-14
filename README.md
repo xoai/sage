@@ -84,6 +84,15 @@ story — a frontier model was going to do the right thing anyway, or wasn't, an
 paragraph didn't change that. The cost is known: ~1.6× context on short tasks, and
 roughly **9× the dollars** on multi-session work.
 
+**How to read the dollar figures.** Every cost in this README is API-metered: the
+eval harness drives headless sessions billed at API prices, because that is the only
+thing it can meter. Most people run Sage inside an agent harness (Claude Code) on a
+subscription, where the same consumption surfaces as usage-limit quota and wall-clock
+time — never as a bill. Treat the absolute dollars as a development-phase reference;
+the **ratios** are the durable finding (~1.6× context on short tasks, ~9× on
+multi-session work), because they describe how much more of your quota and your time
+Sage spends, whatever the billing model.
+
 The lesson we'd offer, having measured our own framework and not much liked the
 first answer: **if a rule matters, make it code. If you can't, don't claim it.**
 
@@ -199,7 +208,9 @@ cycle that was interrupted mid-plan.
 | **bare agent**, same files, same prompt | 3/3 | **$2.35** |
 | **Sage** | 3/3 | **$21.58** |
 
-**Sage gets there, and it pays about 9× to do it.**
+**Sage gets there, and it pays about 9× to do it.** (Dollars are API-metered — see
+[the note above](#what-we-measured). On a subscription, the 9× arrives as quota and
+time, not money.)
 
 This number was published as **2/3** first, and that was wrong. The runs were hitting a
 per-session budget cap and being cut off mid-cycle — and *a truncated run grades

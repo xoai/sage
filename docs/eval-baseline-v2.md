@@ -6,6 +6,13 @@ Same method as v1: same scenario, same prompts, same graders, twice — once in 
 `sage init`-ed project, once in a bare one. The only independent variable is
 whether Sage is there. Every number below was measured. None was inferred.
 
+**A note on dollars.** Every cost in this document is API-metered: the harness
+drives headless Claude Code sessions billed at API prices, because that is the
+only thing it can meter. On subscription plans the same consumption appears as
+usage-limit quota and wall-clock time instead of a bill. The sage:bare **ratios**
+transfer across billing models; the absolute dollars are a development-phase
+reference, kept because they are what was actually measured.
+
 ---
 
 ## Results
