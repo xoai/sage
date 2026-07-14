@@ -58,10 +58,10 @@ now too, for the first time.** It did not go the way we wanted. Across two
 multi-session scenarios (N=3, both conditions), a bare agent given the same files and
 the same prompts matched Sage on both — and did it for a fraction of the money:
 
-| | sage | bare |
-|---|---|---|
-| **L1** — resume an interrupted cycle | 3/3 · **$21.58/run** | 3/3 · **$2.35/run** |
-| **L2** — honour a constraint stated 2 contexts ago | 3/3 · $1.62/run | 3/3 · $0.72/run |
+| | sage | bare | spend, sage:bare |
+|---|---|---|---|
+| **L1** — resume an interrupted cycle | 3/3 | 3/3 | **~9×** |
+| **L2** — honour a constraint stated 2 contexts ago | 3/3 | 3/3 | ~2.2× |
 
 **Sage gets there. It costs roughly 9× as much to get there.**
 
@@ -69,8 +69,8 @@ L1's first published number was **2/3**, and it was wrong — the runs were bein
 starved by a per-session budget cap, and a truncated run grades identically to a
 broken one. Given a cap it does not hit, Sage resumes the interrupted cycle correctly
 every time. What it cannot do is resume it *cheaply*: a bare agent, handed the same
-files, does the same work for **$2.35** while Sage spends **$21.58** on process. Under
-an equal, tight budget the ceremony is what runs out of money first.
+files, does the same work for **about a ninth of the spend** — the rest is Sage's
+process. Under an equal, tight budget the ceremony is what runs out of budget first.
 
 L2 is the more instructive of the two. Sage's memory system *worked* — the run is
 instrumented, and session 1 provably wrote the constraint to it. It just didn't
@@ -84,14 +84,14 @@ story — a frontier model was going to do the right thing anyway, or wasn't, an
 paragraph didn't change that. The cost is known: ~1.6× context on short tasks, and
 roughly **9× the dollars** on multi-session work.
 
-**How to read the dollar figures.** Every cost in this README is API-metered: the
-eval harness drives headless sessions billed at API prices, because that is the only
-thing it can meter. Most people run Sage inside an agent harness (Claude Code) on a
-subscription, where the same consumption surfaces as usage-limit quota and wall-clock
-time — never as a bill. Treat the absolute dollars as a development-phase reference;
-the **ratios** are the durable finding (~1.6× context on short tasks, ~9× on
-multi-session work), because they describe how much more of your quota and your time
-Sage spends, whatever the billing model.
+**How to read the cost figures.** Costs were measured by API metering — the only
+thing the eval harness can meter — and are published as sage:bare **ratios**, because
+the ratio is what transfers across billing models. Most people run Sage inside an
+agent harness (Claude Code) on a subscription, where the same consumption surfaces as
+usage-limit quota and wall-clock time, never as a bill: ~1.6× context on short tasks
+and ~9× on multi-session work describe how much more of your quota and your time Sage
+spends, whatever the pricing. Absolute spend stays with the raw results in
+`develop/evals/`.
 
 The lesson we'd offer, having measured our own framework and not much liked the
 first answer: **if a rule matters, make it code. If you can't, don't claim it.**
@@ -203,14 +203,14 @@ manifest, routes to the correct workflow, and picks the work back up.
 make here.** L1 (resume fidelity, N=3, both conditions): a fresh context resumes a
 cycle that was interrupted mid-plan.
 
-| | resumed correctly | cost per run |
+| | resumed correctly | spend |
 |---|---|---|
-| **bare agent**, same files, same prompt | 3/3 | **$2.35** |
-| **Sage** | 3/3 | **$21.58** |
+| **bare agent**, same files, same prompt | 3/3 | 1× |
+| **Sage** | 3/3 | **~9×** |
 
-**Sage gets there, and it pays about 9× to do it.** (Dollars are API-metered — see
-[the note above](#what-we-measured). On a subscription, the 9× arrives as quota and
-time, not money.)
+**Sage gets there, and it pays about 9× to do it.** (Costs are published as ratios —
+see [the note above](#what-we-measured). On a subscription, the 9× arrives as quota
+and time, not money.)
 
 This number was published as **2/3** first, and that was wrong. The runs were hitting a
 per-session budget cap and being cut off mid-cycle — and *a truncated run grades
@@ -236,7 +236,8 @@ loses on price by roughly an order of magnitude. That is the honest state of the
 long-horizon claim: the *bridge* is sound now; the *bill* is not.
 
 **One failure mode from the early batches was real, and v1.3.4 closes it.** In one
-under-budget run (its resume spent $1.77 of a $6 cap — it stopped by *choice*),
+under-budget run (its resume spent less than a third of its session budget — it
+stopped by *choice*),
 session 1 hedged — "Task 3 is blocked, needs the user's call" — and session 2
 inherited that hedge as law, refusing to finish under an explicit "keep going" while
 the recorded decision had already sanctioned the exact implementation shape it
@@ -247,7 +248,7 @@ printed with every brief (live user > recorded decisions > manifest prose; evide
 beats all), and a `blocked` cycle must name its question or `manifest.py check`
 fails it. Re-measured: **3/3 on opus-4-8 and 3/3 on fable-5** (N=3 valid runs each),
 the failure mode absent from all six transcripts, per-run cost unchanged within
-noise ($16–23). The fix buys determinism, not a discount.
+noise. The fix buys determinism, not a discount.
 
 Numbers: [docs/eval-baseline-v2.md](docs/eval-baseline-v2.md). The fix:
 [docs/plans/manifest-state-is-prose.md](docs/plans/manifest-state-is-prose.md).

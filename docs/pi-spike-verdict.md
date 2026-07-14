@@ -11,7 +11,7 @@ Pi and all three pass. The transcript is committed.
 | Elapsed | ~1 day of the 2-day box (10-spec §22) |
 | Derived tier | **B** (`contract.py derive_tier`: veto + context-injection, no subagent chain) |
 | Port estimate | **2–3 person-weeks** — inside ADR-12's ≤3-week GO bar |
-| Proof | `spike-artifacts/pi-veto-transcript.txt` — 4/4 pass, offline, $0 |
+| Proof | `spike-artifacts/pi-veto-transcript.txt` — 4/4 pass, offline, zero spend |
 | Port code landed | **none**, per ADR-12 and R84. This document and `spike-artifacts/` are the deliverable. |
 
 ---
@@ -27,7 +27,7 @@ Pi and all three pass. The transcript is committed.
 Test Files  1 passed (1)      Tests  4 passed (4)      Duration 2.38s
 ```
 
-No network. No API key. **$0** — Pi ships a faux model provider whose base URL is
+No network. No API key. **Zero spend** — Pi ships a faux model provider whose base URL is
 `http://localhost:0` and is never dialed, so the model's turns are scripted and the
 whole thing runs offline in two seconds.
 
@@ -220,7 +220,7 @@ implementation, many adapters. Never two.
 (`packages/ai/src/providers/faux.ts`, publicly re-exported) that scripts the
 model's turns with no network and no API key — its `DEFAULT_BASE_URL` is
 `http://localhost:0` and is never dialed. Every capability above is verifiable
-**offline, deterministically, for $0**, and Pi's own suite harness
+**offline, deterministically, for nothing**, and Pi's own suite harness
 (`test/suite/harness.ts`) is built entirely from publicly exported constructors, so
 Sage can reuse the pattern against published npm packages rather than a fork.
 

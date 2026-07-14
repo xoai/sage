@@ -6,8 +6,8 @@ All notable changes to Sage will be documented in this file.
 
 v1.3.3 corrected L1's headline: given a budget it does not hit, Sage resumes 3/3,
 and the published 2/3 was truncation. **One failure from the capped batches was not
-truncation, and this release closes it.** That run spent $1.77 of a $6 cap and
-stopped **by choice**; its transcript is the anatomy the fix follows:
+truncation, and this release closes it.** That run spent less than a third of its
+session budget and stopped **by choice**; its transcript is the anatomy the fix follows:
 
 Session 1 hedged — it wrote a speculative *"Task 3 is BLOCKED, needs the user's
 call"* into the manifest on its way out. Session 2 inherited the hedge as law
@@ -38,10 +38,10 @@ outranks whom on resume.
 
 Measured, post-fix (L1, sage arm, N=3 valid runs per model):
 
-| | result | cost/run |
+| | result | cost/run vs corrected baseline |
 |---|---|---|
-| opus-4-8[1m] — corrected baseline: 3/3 · $21.58/run | **3/3** | $16.07–22.61 |
-| fable-5 — current CLI default, no pre-fix control | **3/3** | $16.37–31.86 |
+| opus-4-8[1m] — corrected baseline: 3/3 | **3/3** | unchanged within noise |
+| fable-5 — current CLI default, no pre-fix control | **3/3** | comparable; high variance |
 
 **No pass-rate delta is claimed over the corrected baseline** — 3/3 stays 3/3.
 What is claimed, transcript-backed: the failure mode is gone (zero recurrences in
@@ -56,7 +56,7 @@ the open problem.
 
 - **The is_error bug was found twice, independently, off the same rate-limit
   event** — two parallel sessions hit the same 3:10am five-hour limit; one shipped
-  the driver fix in v1.3.3, this one hit the identical $0.00-graded-as-failure
+  the driver fix in v1.3.3, this one hit the identical zero-spend-graded-as-failure
   shape in its first post-fix batch. v1.3.3's in-loop check is canonical;
   `develop/evals/test_driver.py` adds driver-level regression tests (an error
   result fails the session; a clean one drives on) — and the check caught a
@@ -82,8 +82,8 @@ E9's own scenario file warns about in as many words. We made it anyway and shipp
 
 | L1 — resume an interrupted cycle | result | cost/run |
 |---|---|---|
-| **bare agent** | 3/3 | **$2.35** |
-| **Sage** | 3/3 | **$21.58** |
+| **bare agent** | 3/3 | 1× |
+| **Sage** | 3/3 | **~9×** |
 
 **Sage gets there. It pays about 9× to get there.** That is a sharper finding than the
 one it replaces, and worse for Sage: the resume is not unreliable, it is *extravagant*.
@@ -96,7 +96,7 @@ result:   "You've hit your session limit · resets 3:10am"
 is_error: True     total_cost_usd: 0     num_turns: 1
 ```
 
-Zero model calls. $0.00. Three seconds. Recorded, with `err=None`, as **Sage failing
+Zero model calls. Zero spend. Three seconds. Recorded, with `err=None`, as **Sage failing
 4 of 7 checks.** Had nobody asked why a run cost nothing, the baseline would now carry
 a table showing subagent mode failing 0/3 — a confident, published, entirely fabricated
 finding about a mode that never ran.
@@ -114,11 +114,11 @@ having read nothing. **Tokens are.**
 ### Mode comparison (C13): HOLD — subagent mode stays opt-in
 
 Under an identical budget, on the identical 3-task plan, subagent mode spent **80 turns
-and ~$18 across two sessions and never finished** work the inline loop completes 3/3.
+and nearly two full session budgets and never finished** work the inline loop completes 3/3.
 Confidence *moderate*: the subagent arm is N=1 and budget-truncated. Enough to say
 hold; not enough to say never.
 
-R119's design does not work, and $1.03 established it: **E1–E5 never engage the mode**
+R119's design does not work, and one cheap probe established it: **E1–E5 never engage the mode**
 (single-shot tasks, no plan — the mode dispatches *per plan task*; E1 forced into it
 made zero dispatches), and **E9/E10 cannot run inline** (their checks assert a ledger
 that only exists in subagent mode). L1 is the only scenario with both a task-bearing
@@ -159,12 +159,12 @@ Sage's README led with a claim about surviving a context window. Eleven scenario
 nothing had ever tested it — not from neglect, but because a single-session harness
 *cannot*: the agent that finished the work was the agent that started it, and it simply
 remembered. `run_evals.py` can cross a context boundary now. Here is what was on the
-other side (N=3, both conditions, $92.71 of model time):
+other side (N=3, both conditions, model-in-loop):
 
 | | sage | bare |
 |---|---|---|
-| **L1** — resume an interrupted cycle | 2/3 · $25.23 | **3/3** · $7.04 |
-| **L2** — honour a constraint stated 2 contexts ago | 3/3 · $4.85 | **3/3** · $2.17 |
+| **L1** — resume an interrupted cycle | 2/3 · ~3.6× the spend | **3/3** · 1× |
+| **L2** — honour a constraint stated 2 contexts ago | 3/3 · ~2.2× the spend | **3/3** · 1× |
 
 **A bare agent, given the same files and the same prompts, matched or beat Sage on
 both, at a third of the cost.** The README now says so.
@@ -210,11 +210,11 @@ its own tree.
 **And L1 stayed at 2/3.** The bridge is sound now; the cost is not yet paid for. Said
 plainly rather than rounded up.
 
-### Pi can enforce — proven, 4/4, offline, $0
+### Pi can enforce — proven, 4/4, offline, zero spend
 
 A Pi extension **can veto a tool call**: `{block: true, reason}` on `tool_call`, the
 tool function never runs, the model receives the denial. Executed against Pi's faux
-model provider — no API key, ~2s, $0 — with a negative control and a mutation check,
+model provider — no API key, ~2s, zero spend — with a negative control and a mutation check,
 because a green test is not evidence until it can go red.
 `docs/spike-artifacts/pi-veto-transcript.txt`. Tier **B**, port **2–3 person-weeks**.
 
@@ -238,7 +238,7 @@ xoai/sage-product` since v1.2: **a command for a repository that does not exist.
 
 ### The instrument found five bugs before it found anything about Sage
 
-The first L-series run cost $7.32 and produced zero findings about Sage — only grader
+The first L-series run produced zero findings about Sage for its entire spend — only grader
 bugs. Three were the same mistake:
 
 > **An agent that writes the rule down looks, to a naive grep, exactly like an agent
@@ -334,7 +334,7 @@ explainer, tiers, the constitution's full text, the decision-log protocol — is
 now **seven system skills**, fetched when a description matches what the user
 actually said. A session that never asks about tiers never pays for tiers.
 
-**And then we measured it.** 11 scenarios, N=3, 78 sessions, $188.67.
+**And then we measured it.** 11 scenarios, N=3, 78 sessions, model-in-loop.
 
     input tokens (sage:bare)   1.9× → 1.6×
     cost                       1.7× → 1.6×
@@ -358,7 +358,7 @@ It is generated by `ledger.py` now, from the approved plan. E9 went 1/3 → **3/
 Sage's own thesis, landing on Sage's newest feature, measured by Sage's own
 harness: *if a rule matters, make it code.*
 
-**Subagent mode costs $9.34/session and 23 minutes, against $0.73 and 1 minute
+**Subagent mode costs ~13× per session and 23 minutes, against 1× and 1 minute
 inline** — roughly 13× the money and 20× the wall-clock. That is the number C13's
 default-off decision was waiting for. It stays off by default.
 
@@ -855,7 +855,7 @@ the way a user does, which nothing had done before.
   was blind to the one file that stamps it. It now scans extensionless scripts.
 
 **The first baseline says the delta is zero.** Eight scenarios, N=3, both
-conditions, $33.55. On all five scenarios that ran in *both* conditions, Sage
+conditions, model-in-loop. On all five scenarios that ran in *both* conditions, Sage
 showed **no measurable behavioural delta** — and read **1.9× the input tokens**
 for it. The bare agent already refused to hardcode the secret, already ran the
 tests rather than believing the user's false claim that they passed, already

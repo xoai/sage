@@ -92,6 +92,7 @@ it."*
 
 ## Also worth knowing
 
-A bare agent with the same files resumed correctly **3/3** at **$7.04**. Sage managed
-**2/3** at **$25.23**, and needed an extra turn to get there. The ceremony is not
-currently buying what it costs.
+A bare agent with the same files resumed correctly **3/3**. Sage managed **2/3** at
+roughly **3.6× the spend**, and needed an extra turn to get there. The ceremony is
+not currently buying what it costs. (The 2/3 itself was later corrected — budget
+truncation; see eval-baseline-v2. The cost ratio stood.)

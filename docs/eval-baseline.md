@@ -7,7 +7,7 @@ the same fixture, twice: once in a project with `sage init`, once without. Grade
 are deterministic — a file exists, a commit precedes another commit, a gate exits
 0, a command actually ran. N=3, majority wins. No LLM judge.
 
-Driver: Claude Code headless (CLI 2.1.207), default model. Cost: **$31.32**.
+Driver: Claude Code headless (CLI 2.1.207), default model. Model-in-loop.
 
 Measured at v1.2.0, then re-measured in v1.2.1 after the two claims it falsified
 were made mechanical. Both columns are shown, because the *change* is the finding.
@@ -56,7 +56,7 @@ The five contested scenarios, like for like:
 | | sage | bare | ratio |
 |---|---:|---:|---:|
 | input tokens | 5,791,063 | 3,021,396 | **1.9×** |
-| cost | $11.07 | $6.35 | **1.7×** |
+| cost, sage:bare | | | **1.7×** |
 
 Sage reads roughly twice as much and costs roughly twice as much. At v1.2.0 that
 bought a behavioural delta of zero. It now buys exactly one thing on these scenarios:

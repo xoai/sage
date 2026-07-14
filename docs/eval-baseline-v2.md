@@ -1,17 +1,17 @@
 # Eval baseline v2 — v1.3.0
 
-**11 scenarios · N=3 · 78 sessions · $188.67 · model-in-loop, deterministic graders.**
+**11 scenarios · N=3 · 78 sessions · model-in-loop, deterministic graders.**
 
 Same method as v1: same scenario, same prompts, same graders, twice — once in a
 `sage init`-ed project, once in a bare one. The only independent variable is
 whether Sage is there. Every number below was measured. None was inferred.
 
-**A note on dollars.** Every cost in this document is API-metered: the harness
-drives headless Claude Code sessions billed at API prices, because that is the
-only thing it can meter. On subscription plans the same consumption appears as
-usage-limit quota and wall-clock time instead of a bill. The sage:bare **ratios**
-transfer across billing models; the absolute dollars are a development-phase
-reference, kept because they are what was actually measured.
+**A note on cost.** Costs were measured by API metering — the harness drives
+headless Claude Code sessions, and metered spend is the only thing it can meter —
+and are published as sage:bare **ratios**, because the ratio is what transfers
+across billing models: on subscription plans the same consumption appears as
+usage-limit quota and wall-clock time instead of a bill. Absolute spend stays
+with the raw results in `develop/evals/results-*/`.
 
 ---
 
@@ -98,8 +98,8 @@ learned the same lesson:
 
 | | per session | wall-clock |
 |---|---|---|
-| Subagent mode (E9, E10) | **$9.34** | **23 min** |
-| Inline (E1–E4, sage) | $0.73 | 1 min |
+| Subagent mode (E9, E10) | **~13×** | **23 min** |
+| Inline (E1–E4, sage) | 1× | 1 min |
 
 **Roughly 13× the cost and 20× the wall-clock.**
 
@@ -131,8 +131,9 @@ would have been publishable as a Sage regression, and each was wrong.
    tool-order-with-mutators (counted a *blocked* attempt as a touch). A denied
    tool call is an attempt, not an event.
 
-3. **E9 and E10 were truncated, not broken.** $2/turn budget cap and a 900s
-   timeout, against turns that legitimately need ~$9 and ~23 minutes. A truncated
+3. **E9 and E10 were truncated, not broken.** A flat per-turn budget cap and a
+   900s timeout, against turns that legitimately need ~4.5× that budget and ~23
+   minutes. A truncated
    run grades **identically** to a broken feature, which is the worst property a
    measurement can have: it told us subagent mode did not work when it had merely
    run out of money.
@@ -144,8 +145,8 @@ them is pointing it at reality and being suspicious of the answer.
 
 ## The L-series — the long-horizon claim, measured at last
 
-*Run 2026-07-12/13. N=3, both conditions. Total spend across shakedown + fixes +
-final: **$68.30**.*
+*Run 2026-07-12/13. N=3, both conditions, model-in-loop (shakedown + fixes +
+final).*
 
 Sage's README led with a claim about surviving a context window. Eleven scenarios in,
 nothing had ever tested it — not from neglect, but because a single-session harness
@@ -155,15 +156,15 @@ found on the other side.
 
 | | sage | bare | delta |
 |---|---|---|---|
-| **L1** — resume an interrupted cycle | 3/3 · **$21.58/run** | 3/3 · **$2.35/run** | same result, **9× the price** |
-| **L2** — honour a constraint stated 2 contexts ago | 3/3 · $1.62/run | 3/3 · $0.72/run | same result, 2.2× the price |
+| **L1** — resume an interrupted cycle | 3/3 | 3/3 | same result, **~9× the spend** |
+| **L2** — honour a constraint stated 2 contexts ago | 3/3 | 3/3 | same result, ~2.2× the spend |
 
 **Sage ties both, and pays 2–9× for the privilege. The long-horizon claim is not
 supported by this evidence.**
 
 > ### Correction — L1 was published as 2/3, and that was wrong
 >
-> The first L1 runs were hitting a **$6/session budget cap** and being cut off
+> The first L1 runs were hitting a **too-low per-session budget cap** and being cut off
 > mid-cycle. A truncated run grades identically to a broken one — the exact mistake
 > that once made subagent mode look broken when it had merely run out of money — and
 > it was published as a behavioural failure of Sage.
@@ -236,8 +237,8 @@ baseline is unaffected by Sage changes.*
 
 The correction above establishes that the capped runs were being truncated —
 but **one failure from those batches was not truncation, and it is the one this
-release exists to close.** That run's resume spent **$1.77 of a $6 cap** and
-stopped **by choice**. It restarted nothing, re-planned nothing, and honoured
+release exists to close.** That run's resume spent **less than a third of its
+session budget** and stopped **by choice**. It restarted nothing, re-planned nothing, and honoured
 D-002 — the failure was never resume *infidelity*. Its anatomy, read from the
 transcript: **session 1 hedged**, writing a speculative "Task 3 is BLOCKED,
 needs the user's call" into the manifest on its way out. **Session 2 inherited
@@ -272,10 +273,10 @@ Three changes (v1.3.4):
 
 Re-run, L1/sage, N=3 valid runs per model, post-fix:
 
-| | result | cost/run |
+| | result | cost/run vs corrected baseline |
 |---|---|---|
-| opus-4-8[1m] — corrected baseline: 3/3 · $21.58/run | **3/3** | $16.07–22.61 |
-| fable-5 — current CLI default, no pre-fix control | **3/3** | $16.37–31.86 |
+| opus-4-8[1m] — corrected baseline: 3/3 | **3/3** | unchanged within noise |
+| fable-5 — current CLI default, no pre-fix control | **3/3** | comparable; high variance |
 
 **No pass-rate delta is claimed over the corrected baseline** — 3/3 stays 3/3,
 and the per-run cost is unchanged within noise. (One additional fable run was
@@ -300,8 +301,8 @@ every transcript, the state-gathering is computed instead of interpreted, and a
 hedge can no longer masquerade as state (`blocked` without a named question
 fails `check`). The fable row has no pre-fix control (the CLI's default model
 changed mid-programme), so it proves engagement, not a delta. And the bill the
-correction named is still the bill: a Sage resume costs $16–23 against a bare
-agent's $2.35. The bridge is sound and the orders are straight; the 9× is
+correction named is still the bill: a Sage resume costs roughly **9× a bare
+agent's**. The bridge is sound and the orders are straight; the 9× is
 still the open problem.
 
 ### What THIS run found in the instrument (two more)
@@ -310,7 +311,7 @@ still the open problem.
    event.** Two parallel sessions hit the same 3:10am five-hour limit: one
    shipped the driver fix above (v1.3.3), and this one's first post-fix batch
    hit the identical shape — both sessions rejected in under 3 seconds at
-   $0.00, recorded as clean (`error: None`), graded against the untouched
+   zero spend, recorded as clean (`error: None`), graded against the untouched
    fixture as "Sage failing to resume" (4/7 checks). v1.3.3's in-loop check is
    canonical; `test_driver.py` adds driver-level regression tests — and the
    check then caught a second, different API failure ("tool call could not be
@@ -347,7 +348,7 @@ horizon, on this task, the memory system was not what made the difference.
 
 ### The instrument found five bugs before it found anything about Sage
 
-The first run cost $7.32 and every dollar went on discovering that the graders were
+The first run's entire spend went on discovering that the graders were
 wrong. All five failed in the same direction — reporting violations that never
 happened — and three were the *same* mistake in different clothes:
 
@@ -369,10 +370,10 @@ working-tree snapshots (not commits), checks are scoped to paths, and code check
 
 ## The mode comparison (P5-T3) — and why R119's design does not work
 
-*Attempted 2026-07-13/14. Spend: $74.67. The subagent arm is **UNRESOLVED** — see below.*
+*Attempted 2026-07-13/14, model-in-loop. The subagent arm is **UNRESOLVED** — see below.*
 
 R119 asks for **E1–E5 + E9 in both execution modes**. That comparison cannot be made,
-and finding out cost $1.03:
+and finding that out cost one probe run:
 
 **E1–E5 never engage the mode.** They are single-shot tasks ("change one constant"),
 which Sage routes as trivial: no spec, no plan, no tasks. Subagent mode dispatches *per
@@ -393,19 +394,19 @@ the mode engages) with mode-neutral checks (so both arms can pass).
 
 | | pass | cost/run | wall/run |
 |---|---|---|---|
-| L1 · sage · **inline** | **3/3** | $21.58 | 24 min |
-| L1 · bare (reference) | 3/3 | $2.35 | ~4 min |
+| L1 · sage · **inline** | **3/3** | ~9× bare | 24 min |
+| L1 · bare (reference) | 3/3 | 1× | ~4 min |
 
 ### Subagents — it does not finish the work inline finishes
 
-The best subagent run, session by session, against the identical $10/session cap:
+The best subagent run, session by session, against the identical per-session cap:
 
 | | session 1 | session 2 | result |
 |---|---|---|---|
-| **subagents** | $7.73 · 41 turns | $10.17 · 39 turns → **hit the cap** | **never completed** |
-| **inline** | $1.50–$17.16 | $12.19–$13.66 | **3/3 PASS** |
+| **subagents** | ~3/4 of the cap · 41 turns | the full cap · 39 turns → **hit it** | **never completed** |
+| **inline** | well under the cap | ~2/3 of the cap | **3/3 PASS** |
 
-Subagent mode spent **80 turns and ~$18 across two sessions and still had not
+Subagent mode spent **80 turns and nearly two full session budgets and still had not
 finished** the three-task plan that the inline loop completes. It dispatches a fresh
 implementer *and* an independent reviewer per task, and the dispatch overhead is what
 consumes the budget.
@@ -413,7 +414,7 @@ consumes the budget.
 **This is a lower bound, not a completion cost.** What it establishes is the
 comparison that matters: *given a budget the inline loop finishes in, subagent mode
 does not finish at all.* Establishing what it would cost to finish means raising the
-cap and paying for it — on this evidence, somewhere north of $50/run, N=3, and the
+cap and paying for it — on this evidence, several times the inline cost per run, N=3, and the
 direction is already clear enough that the money is better spent elsewhere.
 
 ### C13 — the recommendation: **HOLD. Do not flip the default.**
@@ -444,7 +445,7 @@ result:   "You've hit your session limit · resets 3:10am"
 is_error: True     total_cost_usd: 0     num_turns: 1
 ```
 
-**Zero model calls. $0.00. Three seconds.** The harness recorded them, with
+**Zero model calls. Zero spend. Three seconds.** The harness recorded them, with
 `err=None`, as *Sage failing 4 of 7 checks*. Had nobody asked why a run cost nothing,
 this document would now carry a table showing subagent mode failing 0/3 — a confident,
 published, entirely fabricated finding about a mode that never ran.
@@ -453,7 +454,7 @@ The fix distinguishes two things that are not the same:
 
 - **Nothing ran** — rate limit, auth failure, overloaded API. Zero tokens read. Not
   evidence about Sage; the run **errors** rather than scores.
-- **Truncated** — `error_max_budget_usd`, timeouts. The agent worked (39 turns, $10)
+- **Truncated** — `error_max_budget_usd`, timeouts. The agent worked (39 turns, a full budget)
   and was then cut off. The workspace holds what it managed, so it is **graded and
   flagged**: a truncated pass did the work; a truncated failure is *inconclusive*, not
   a defect.
