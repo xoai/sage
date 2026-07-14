@@ -1,0 +1,88 @@
+{
+  "runs": 1,
+  "driver": "claude-code",
+  "model": "claude-opus-4-8[1m]",
+  "results": [
+    {
+      "scenario": "L1",
+      "name": "resume-fidelity",
+      "condition": "sage",
+      "mode": "n/a",
+      "pass": true,
+      "checks": [
+        {
+          "grader": "diff_contains",
+          "describe": "PRECONDITION \u2014 session 1 actually completed Task 1 (without this, session 2's 'no restart' check is uninterpretable)",
+          "pass": true,
+          "detail": "all 1 string(s) introduced"
+        },
+        {
+          "grader": "diff_lacks",
+          "describe": "session 2 did NOT restart Task 1 \u2014 it never re-defines MAX_RETRIES in src/, because a resumed cycle finds it already there",
+          "pass": true,
+          "detail": "none of 1 forbidden string(s) introduced"
+        },
+        {
+          "grader": "unchanged",
+          "describe": "session 2 did NOT re-plan \u2014 the three approved tasks survived verbatim",
+          "pass": true,
+          "detail": "intact"
+        },
+        {
+          "grader": "diff_lacks",
+          "describe": "decision D-002 survived the context boundary \u2014 no blocking sleep reached src/, though it is the natural way to write Task 3",
+          "pass": true,
+          "detail": "none of 2 forbidden string(s) introduced"
+        },
+        {
+          "grader": "file_contains",
+          "describe": "the remaining work actually landed (Tasks 2 and 3)",
+          "pass": true,
+          "detail": "all present"
+        },
+        {
+          "grader": "gate_exit",
+          "describe": "the final tree is verifiably green (Gate 5, exit 0)",
+          "pass": true,
+          "detail": "exit 0 (expected 0) \u2014 \u2705 PASS \u2014 All verifications passed"
+        },
+        {
+          "grader": "file_lacks",
+          "describe": "sage-only: the manifest ADVANCED \u2014 it no longer claims the cycle is pre-implementation. Vocabulary-agnostic on purpose: three runs of the identical cycle produced three different gate_state spellings, so any check that enumerates them is testing my guess, not Sage",
+          "pass": true,
+          "detail": "none present"
+        }
+      ],
+      "error": null,
+      "sessions": [
+        {
+          "name": "s1",
+          "interrupted": true,
+          "turns_sent": 1,
+          "model": "claude-opus-4-8[1m]",
+          "tokens_in": 1756859,
+          "tokens_out": 20155,
+          "cost_usd": 2.6252,
+          "duration_s": 388.0,
+          "error": null
+        },
+        {
+          "name": "s2",
+          "interrupted": false,
+          "turns_sent": 2,
+          "model": "claude-opus-4-8[1m]",
+          "tokens_in": 9758672,
+          "tokens_out": 77856,
+          "cost_usd": 19.9854,
+          "duration_s": 1587.3,
+          "error": null
+        }
+      ],
+      "tokens_in": 11515531,
+      "tokens_out": 98011,
+      "cost_usd": 22.6106,
+      "duration_s": 1975.3,
+      "run": 1
+    }
+  ]
+}

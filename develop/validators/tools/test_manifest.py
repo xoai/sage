@@ -187,5 +187,148 @@ class CheckTest(unittest.TestCase):
             self.assertTrue(ok, f"{s} must be a legal gate_state")
 
 
+class BlockedClaimTest(unittest.TestCase):
+    """The L1 run-3 bug, half one: `status: blocked` was a free-text claim.
+
+    Session 1 hedged, wrote 'blocked' into the manifest, and session 2 inherited
+    the hesitation as law — refusing to finish under an explicit user instruction,
+    while the recorded decision had already sanctioned the implementation shape.
+    A blocker must now name its question, or `check` fails the manifest."""
+
+    def setUp(self):
+        self.d = pathlib.Path(tempfile.mkdtemp(prefix="manifest-blocked-"))
+        self.addCleanup(shutil.rmtree, self.d, ignore_errors=True)
+        self.m = self.d / "manifest.md"
+
+    def _manifest(self, status, extra=""):
+        return a_manifest("building", status=status).replace(
+            "gate_state: building\n", f"gate_state: building\n{extra}")
+
+    def test_blocked_without_blocked_on_fails_check(self):
+        """THE BUG: the failing run's manifest, reproduced — blocked, no question."""
+        self.m.write_text(self._manifest("blocked"))
+        self.assertEqual(M.check([self.m], self.d), 1,
+                         "an unnamed blocker must not survive check")
+
+    def test_blocked_with_blocked_on_passes_check(self):
+        self.m.write_text(self._manifest(
+            "blocked",
+            'blocked_on: "retry() signature — D-004-03 options A/B/C — user picks"\n'))
+        self.assertEqual(M.check([self.m], self.d), 0)
+
+    def test_in_progress_needs_no_blocked_on(self):
+        self.m.write_text(self._manifest("in-progress"))
+        self.assertEqual(M.check([self.m], self.d), 0)
+
+
+class ResumeTest(unittest.TestCase):
+    """The L1 run-3 bug, half two: the resume brief was prose, re-derived by each
+    session, at 3-9x a bare agent's cost — and with the authority order inverted
+    (manifest prose outranked the decisions log and the live user). The brief is
+    generated now. Same files, same brief."""
+
+    def setUp(self):
+        self.d = pathlib.Path(tempfile.mkdtemp(prefix="manifest-resume-"))
+        self.addCleanup(shutil.rmtree, self.d, ignore_errors=True)
+        self.git("init", "-q")
+        self.cycle = self.d / ".sage" / "work" / "004-retry"
+        self.cycle.mkdir(parents=True)
+        self.m = self.cycle / "manifest.md"
+
+    def git(self, *args):
+        return subprocess.run(["git", "-C", str(self.d), *args],
+                              capture_output=True, text=True, check=False)
+
+    def commit(self, msg):
+        self.git("add", "-A")
+        self.git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-m", msg)
+
+    def brief(self, manifest=None):
+        import contextlib
+        import io
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = M.resume(self.d, manifest)
+        self.assertEqual(code, 0, "resume is informational — always exit 0")
+        return out.getvalue()
+
+    def test_no_active_cycle(self):
+        self.assertIn("no active cycle", self.brief())
+
+    def test_the_brief_carries_the_authority_order(self):
+        """The load-bearing lines. The failing run's session 2 obeyed a dead
+        session's hedge over the live user's 'keep going' — the brief now states
+        who outranks whom, next to the evidence."""
+        self.m.write_text(a_manifest("building"))
+        self.commit("cycle: begin")
+        text = self.brief()
+        self.assertIn("AUTHORITY ORDER", text)
+        self.assertIn("context, NOT orders", text)
+        self.assertIn("EVIDENCE", text)
+
+    def test_a_blocked_cycle_is_surfaced_not_skipped(self):
+        self.m.write_text(a_manifest("building", status="blocked"))
+        self.commit("cycle: begin")
+        text = self.brief()
+        self.assertIn("BLOCKED CLAIM", text)
+        self.assertIn("UNVERIFIED", text,
+                      "an unnamed blocker must be flagged as unverified")
+
+    def test_a_completed_cycle_is_not_resumed(self):
+        self.m.write_text(a_manifest("complete", status="complete"))
+        self.commit("cycle: done")
+        self.assertIn("no active cycle", self.brief())
+
+    def test_another_checkouts_cycle_is_excluded(self):
+        """Owner exclusion was prose in continue.workflow; now it is computed."""
+        self.m.write_text(a_manifest("building").replace(
+            "workflow: build\n", "workflow: build\nowner: /somewhere/else\n"))
+        self.commit("cycle: begin")
+        text = self.brief()
+        self.assertIn("no active cycle", text)
+        self.assertIn("owned by another checkout", text)
+
+    def test_evidence_beats_prose(self):
+        """A pre-implementation gate_state with work in the tree gets a WARNING
+        line — the brief says 'trust the tree' instead of repeating the lie."""
+        self.m.write_text(a_manifest("plan-approved"))
+        self.commit("cycle: begin")
+        (self.d / "src").mkdir()
+        (self.d / "src" / "config.py").write_text("MAX_RETRIES = 3\n")
+        self.commit("feat: task 1")
+        text = self.brief()
+        self.assertIn("WARNING", text)
+        self.assertIn("trust the tree", text.lower())
+
+    def test_plan_tasks_and_decisions_are_listed(self):
+        self.m.write_text(a_manifest("building"))
+        (self.cycle / "plan.md").write_text(
+            "# Plan\n\n## Task 1 — MAX_RETRIES\n\n## Task 2 — backoff_delay()\n")
+        (self.d / ".sage" / "decisions.md").write_text(
+            "# Decisions\n\n## D-002 — No blocking sleeps in library code\n")
+        self.commit("cycle: begin")
+        text = self.brief()
+        self.assertIn("Task 1 — MAX_RETRIES", text)
+        self.assertIn("D-002 — No blocking sleeps", text)
+
+    def test_multiple_cycles_ask_the_user(self):
+        other = self.d / ".sage" / "work" / "005-other"
+        other.mkdir(parents=True)
+        (other / "manifest.md").write_text(a_manifest("building"))
+        self.m.write_text(a_manifest("building"))
+        self.commit("cycles: two at once")
+        text = self.brief()
+        self.assertIn("Ask the user", text)
+        self.assertIn("004-retry", text)
+        self.assertIn("005-other", text)
+
+    def test_pyc_droppings_are_not_source(self):
+        """__pycache__ noise polluted the first real brief's evidence line, and a
+        .pyc write must never flip a cycle to building either."""
+        for p in ("src/__pycache__/config.cpython-312.pyc", "src/app.pyc"):
+            self.assertFalse(M.is_source(p), f"{p} is not source")
+        self.assertTrue(M.is_source("src/config.py"))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -16,9 +16,12 @@ Feature development guided by Sage.
 BEFORE ANYTHING: Scan `.sage/work/` for existing artifacts.
 This scan is MANDATORY — check the DISK.
 
-**Manifest-first path:** If `.sage/work/*/manifest.md` exists, read it.
-Resume at the phase indicated. Use context summary and handoff guidance
-for judgment context. The manifest is the primary context source.
+**Manifest-first path:** If `.sage/work/*/manifest.md` exists, run
+`python3 "${CLAUDE_PLUGIN_ROOT}/tools/manifest.py" resume` (no python3 →
+read the manifest by hand). The brief it prints is the primary context
+source: resume at the phase indicated, with the manifest body as judgment
+*context, not orders* — the live user outranks recorded decisions,
+recorded decisions outrank manifest prose, and evidence outranks all of it.
 
 **Fallback path:** If no manifest.md but artifacts exist, use file-scan
 routing (below). Create manifest.md from inferred state before proceeding

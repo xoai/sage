@@ -17,6 +17,10 @@ cycle_id: "YYYYMMDD-slug"
 workflow: build | architect | fix | research | design | analyze | reflect
 phase: framing | brief | spec | plan | implement | quality-gates | review | complete
 status: in-progress | paused | blocked | complete
+blocked_on: ""          # REQUIRED when status: blocked — the question, the
+                        # options, and whose call it is. manifest.py check fails
+                        # a blocked cycle without it: a blocker nobody can name
+                        # is a hesitation the next session inherits as law.
 tier: standard          # tier1 | standard | large — scope of the cycle
 gate_state: pre-spec    # pre-spec | spec-approved | plan-approved | building | gates-passed | complete
 created: YYYY-MM-DD
@@ -100,8 +104,12 @@ should behave.}
 
 ## Open questions
 
-{What's unresolved. What the previous agent was thinking about but
-didn't get to decide. What the user seemed uncertain about.}
+{ONLY questions the artifacts do not answer. Never restate a question a
+recorded decision already answers — cite the decision instead; if a decision
+sanctions several options, choosing among them is the resuming agent's job,
+not an open question. These lines are judgment, not orders: they expire
+against decisions.md and the live user (see cycle-protocol.md § Resume
+authority order).}
 
 ## Provenance
 

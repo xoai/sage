@@ -541,6 +541,7 @@ class ClaudeCodeDriver(Driver):
         """
         events, turns = [], []
         session_id = None
+        model_seen = None
         cost, tok_in, tok_out = 0.0, 0, 0
         started = time.time()
         budget = budget_usd or self.budget_usd
@@ -552,6 +553,7 @@ class ClaudeCodeDriver(Driver):
             out.write_text("\n".join(json.dumps(e) for e in events), encoding="utf-8")
             return {"ok": ok, "error": error, "events": events, "turns": turns,
                     "interrupted": interrupted, "truncated": truncated,
+                    "model": model_seen,
                     "cost_usd": round(cost, 4),
                     "tokens_in": tok_in, "tokens_out": tok_out,
                     "duration_s": round(time.time() - started, 1)}
@@ -670,6 +672,13 @@ class ClaudeCodeDriver(Driver):
                     turns.append(ev.get("result") or "")
                 elif ev.get("type") == "system" and ev.get("session_id"):
                     session_id = session_id or ev["session_id"]
+                    # The model that ACTUALLY served the session, off the init
+                    # event. The results used to record only the --model override
+                    # (null when defaulted) — which is how a baseline and its
+                    # re-run silently ran on two different models when the CLI's
+                    # session default changed underneath the harness.
+                    if ev.get("subtype") == "init" and ev.get("model"):
+                        model_seen = model_seen or ev["model"]
 
             if proc.returncode != 0 and not events:
                 return snapshot(
@@ -760,6 +769,7 @@ def run_once(scenario: Scenario, condition: str, driver: Driver,
             "interrupted": bool(run.get("interrupted")) or bool(sess.interrupt_after_turns),
             "truncated": run.get("truncated"),
             "turns_sent": len(sess.prompts()),
+            "model": run.get("model"),
             "tokens_in": run["tokens_in"], "tokens_out": run["tokens_out"],
             "cost_usd": run["cost_usd"], "duration_s": run["duration_s"],
             "error": run["error"],

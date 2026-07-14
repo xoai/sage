@@ -12,10 +12,20 @@ disable-model-invocation: true
 Resume any active cycle with full context. The user doesn't need
 to remember which workflow or initiative was in progress.
 
-## Step 1: Scan for Active Cycles
+## Step 1: Find the Cycle — run the tool, don't scan
 
-Scan `.sage/work/*/manifest.md` for cycles where
-`status: in-progress` or `status: paused`.
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/tools/manifest.py" resume
+```
+
+One command. It applies the selection rules (active status including
+`blocked`, owner exclusion, branch preference) and prints the resume
+brief: machine fields, plan tasks, git evidence, decisions in force,
+the previous session's judgment, and the authority order. Same files,
+same brief.
+
+**Manual fallback** (no python3 only): scan `.sage/work/*/manifest.md`
+for cycles where `status: in-progress`, `paused`, or `blocked`.
 
 ### One cycle found (Zone 2: Approval)
 
@@ -31,9 +41,15 @@ Next step: {next step from manifest}
 Pick C/S/X, or tell me what you need.
 ```
 
-On [C]: Load manifest context. Route to the workflow's Auto-Pickup
-with manifest as primary context source. The resuming agent follows
-the handoff guidance and does NOT re-ask questions already resolved.
+On [C]: Route to the workflow's Auto-Pickup with the resume brief as
+primary context source. The resuming agent does NOT re-ask questions
+already resolved — and does not inherit a dead session's hesitation.
+The authority order (printed with the brief): the live user's
+instruction outranks recorded decisions; recorded decisions outrank
+the manifest's judgment prose; evidence outranks everything. A
+question a recorded decision answers is CLOSED — choosing among
+options a decision already sanctions is execution, not a new
+approval: pick, record the choice, proceed.
 
 On [S]: Show full manifest contents (State, Context summary,
 Decisions, Open questions, Handoff guidance). Then offer [C]/[X].
@@ -64,16 +80,18 @@ Describe what you want to work on, or type / to see commands.
 
 ## Step 2: Load Context and Resume
 
-1. Read the selected manifest.md
-2. Read the relevant artifacts (spec, plan, brief)
-3. Read decisions.md entries for this cycle
-4. Resume at the phase indicated by the manifest
+The brief already contains the state, the evidence, the decisions in
+force, and the manifest body. Do NOT re-derive them by hand. Then:
 
-The resuming agent behaves as if it has the context described
-in the manifest's context summary. It follows the handoff
-guidance. It does NOT re-ask questions the previous agent
-already resolved — those decisions are in the manifest and
-decisions.md.
+1. Read spec.md and plan.md for the *detail* of the remaining work
+2. Resume at the phase the brief indicates
+
+The resuming agent does NOT re-ask questions the previous agent
+already resolved — those decisions are in decisions.md. It also does
+not treat the previous session's judgment as orders: an "open
+question" or "blocked" claim that a recorded decision answers is
+CLOSED, and the live user's instruction to continue IS the approval a
+pending checkpoint was waiting for.
 
 ## Routing
 
@@ -100,9 +118,10 @@ the corresponding workflow's Auto-Pickup:
 
 ## Rules
 
-- /continue reads the manifest as PRIMARY context source
-- Do NOT ignore the manifest and re-scan artifacts from scratch
-- The manifest's phase routing and context summary take precedence
+- /continue reads the generated resume brief as PRIMARY context source
+- Do NOT ignore the brief and re-scan artifacts from scratch
+- Phase routing comes from the manifest's machine fields; its judgment
+  prose (context summary, open questions, handoff) is context, NOT orders
 - Agent MAY additionally read artifacts for detail
 - If manifest doesn't exist but artifacts do, route to the
   workflow's Auto-Pickup which will use file-scan fallback

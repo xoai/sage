@@ -224,6 +224,20 @@ evidence. Manifest coherence went **2/3 → 3/3**; the manifest has not lied sin
 loses on price by roughly an order of magnitude. That is the honest state of the
 long-horizon claim: the *bridge* is sound now; the *bill* is not.
 
+**One failure mode from the early batches was real, and v1.3.4 closes it.** In one
+under-budget run (its resume spent $1.77 of a $6 cap — it stopped by *choice*),
+session 1 hedged — "Task 3 is blocked, needs the user's call" — and session 2
+inherited that hedge as law, refusing to finish under an explicit "keep going" while
+the recorded decision had already sanctioned the exact implementation shape it
+declined to pick. The dead session outranked the live user. Now: the resume brief is
+**generated** (`manifest.py resume` — selection, evidence, decisions, and the
+manifest body labeled *context, not orders*), the **authority order** is stated and
+printed with every brief (live user > recorded decisions > manifest prose; evidence
+beats all), and a `blocked` cycle must name its question or `manifest.py check`
+fails it. Re-measured: **3/3 on opus-4-8 and 3/3 on fable-5** (N=3 valid runs each),
+the failure mode absent from all six transcripts, per-run cost unchanged within
+noise ($16–23). The fix buys determinism, not a discount.
+
 Numbers: [docs/eval-baseline-v2.md](docs/eval-baseline-v2.md). The fix:
 [docs/plans/manifest-state-is-prose.md](docs/plans/manifest-state-is-prose.md).
 

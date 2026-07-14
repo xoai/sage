@@ -2,6 +2,71 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [1.3.4] — The dead session outranked the live user
+
+v1.3.3 corrected L1's headline: given a budget it does not hit, Sage resumes 3/3,
+and the published 2/3 was truncation. **One failure from the capped batches was not
+truncation, and this release closes it.** That run spent $1.77 of a $6 cap and
+stopped **by choice**; its transcript is the anatomy the fix follows:
+
+Session 1 hedged — it wrote a speculative *"Task 3 is BLOCKED, needs the user's
+call"* into the manifest on its way out. Session 2 inherited the hedge as law
+(/continue: "follow the handoff guidance, do NOT re-ask questions already
+resolved") and refused to implement the last task **twice, under an explicit
+user instruction to keep going** — while the recorded decision D-002 explicitly
+sanctioned the three implementation shapes it declined to choose among. The dead
+session outranked the decisions log and the live user. Nothing anywhere said who
+outranks whom on resume.
+
+### Session resilience: the resume brief is generated, and the authority order is stated
+
+- **`manifest.py resume`** — cycle selection (active status including `blocked`,
+  owner exclusion, branch preference), plan tasks, git evidence since the cycle
+  began, decisions in force, and the manifest body verbatim under a header that
+  says what it is: *context, not orders*. Same files, same brief. `/continue`,
+  `/build`, `/fix` and `/architect` Auto-Pickup all start there — resume
+  state-gathering was judgment-driven prose in three places.
+- **Resume authority order** (cycle-protocol.md, printed with every brief): the
+  live user's instruction outranks recorded decisions; recorded decisions
+  outrank the manifest's judgment prose; evidence outranks all prose. A question
+  a recorded decision answers is CLOSED — choosing among options a decision
+  already sanctions is execution, not a new approval.
+- **A blocker must name its question**: `status: blocked` without `blocked_on:`
+  fails `manifest.py check`. A blocker nobody can name is a hesitation the next
+  session inherits as law. (`is_source` also stops counting `__pycache__`/`.pyc`
+  droppings — they polluted the first real brief's evidence.)
+
+Measured, post-fix (L1, sage arm, N=3 valid runs per model):
+
+| | result | cost/run |
+|---|---|---|
+| opus-4-8[1m] — corrected baseline: 3/3 · $21.58/run | **3/3** | $16.07–22.61 |
+| fable-5 — current CLI default, no pre-fix control | **3/3** | $16.37–31.86 |
+
+**No pass-rate delta is claimed over the corrected baseline** — 3/3 stays 3/3.
+What is claimed, transcript-backed: the failure mode is gone (zero recurrences in
+six valid runs; session 1's handoffs no longer hedge — none say "blocked / needs
+the user's call", and D-002 arrives pre-digested), and resume state-gathering is
+deterministic — same files, same brief. Engagement differs by model: fable-5
+consumed the brief in 3/3 runs, opus in 1/3 (there the fix works through the
+write side). Cost is unchanged within noise; the 9× bill v1.3.3 named is still
+the open problem.
+
+### The instrument, twice more
+
+- **The is_error bug was found twice, independently, off the same rate-limit
+  event** — two parallel sessions hit the same 3:10am five-hour limit; one shipped
+  the driver fix in v1.3.3, this one hit the identical $0.00-graded-as-failure
+  shape in its first post-fix batch. v1.3.3's in-loop check is canonical;
+  `develop/evals/test_driver.py` adds driver-level regression tests (an error
+  result fails the session; a clean one drives on) — and the check caught a
+  second, different API failure ("tool call could not be parsed") the same day.
+- **The baseline and the re-run silently ran on different models.** Results
+  recorded only the `--model` override (null when defaulted) while the CLI's
+  session default changed underneath the harness (opus-4-8 → fable-5). Caught
+  before publication only by reading init events in both transcripts. Sessions
+  now record the model that actually served them.
+
 ## [1.3.3] — The corrections
 
 **A release whose headline is a retraction.** v1.3.2 published a number that was
