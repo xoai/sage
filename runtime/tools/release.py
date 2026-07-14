@@ -352,39 +352,43 @@ def marketplace_repo_state() -> tuple:
         return "unknown", {}
 
 
-def pack_release_state(name: str, version: str) -> str:
-    """'published' | 'missing-release' | 'no-repo' | 'unknown'.
+def pack_release_state(name: str) -> tuple:
+    """('published'|'missing-release'|'no-repo'|'unknown', latest_tag).
 
-    Asks GitHub instead of assuming. Fail-soft by design: an unreachable network
-    yields 'unknown', never a confident answer — a release check that guesses is
-    worse than one that says it does not know.
+    Asks whether the pack has a LATEST RELEASE — not whether it carries Sage's
+    version. Packs version independently (ADR-7); tying them to Sage's number is the
+    lockstep the extraction exists to break.
+
+    Fail-soft: an unreachable network yields 'unknown' and no claim. A release check
+    that guesses is worse than one that says it does not know, because a guess reads
+    exactly like an answer.
     """
     import urllib.error
     import urllib.request
 
-    url = (f"https://api.github.com/repos/{PACK_OWNER}/{name}"
-           f"/releases/tags/v{version}")
+    url = f"https://api.github.com/repos/{PACK_OWNER}/{name}/releases/latest"
     req = urllib.request.Request(url, headers={"User-Agent": "sage-release"})
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
-            return "published" if resp.status == 200 else "unknown"
+            data = json.loads(resp.read().decode("utf-8"))
+        return "published", data.get("tag_name") or "?"
     except urllib.error.HTTPError as exc:
         if exc.code != 404:
-            return "unknown"
-    except (urllib.error.URLError, OSError):
-        return "unknown"
+            return "unknown", None
+    except (urllib.error.URLError, OSError, ValueError):
+        return "unknown", None
 
-    # A 404 on the release is ambiguous: no repo, or a repo with no such release.
+    # 404 on /releases/latest is ambiguous: no repo, or a repo with no releases.
     repo = f"https://api.github.com/repos/{PACK_OWNER}/{name}"
     try:
         with urllib.request.urlopen(
                 urllib.request.Request(repo, headers={"User-Agent": "sage-release"}),
                 timeout=10):
-            return "missing-release"
+            return "missing-release", None
     except urllib.error.HTTPError as exc:
-        return "no-repo" if exc.code == 404 else "unknown"
+        return ("no-repo" if exc.code == 404 else "unknown"), None
     except (urllib.error.URLError, OSError):
-        return "unknown"
+        return "unknown", None
 
 
 def dist_status(root: pathlib.Path) -> int:
@@ -464,14 +468,24 @@ def dist_status(root: pathlib.Path) -> int:
     # repos went live it became a lie — the tool asserting a fact it had not checked,
     # which is the exact defect this release spent its whole budget chasing. It looks
     # now. Fail-soft: no network, no claim.
+    # PACKS VERSION INDEPENDENTLY OF SAGE. That is what ADR-7 extracted them for — a
+    # pack should not need a Sage release to ship a fix — so demanding the pack carry
+    # a tag matching Sage's VERSION is the lockstep assumption the extraction exists to
+    # break. It also manufactures a dead link: cutting Sage v1.3.3 would have this
+    # check demand a pack tag v1.3.3 that nobody has any reason to have cut, and
+    # `sage update` would have told users to install it.
+    #
+    # What matters is that the pack HAS a release, so `sage add xoai/<pack>` resolves.
+    # Which release is the pack's business, and `.sage/packs.lock` records the one the
+    # user actually got.
     for name in PACK_REPOS:
-        state = pack_release_state(name, version)
+        state, latest = pack_release_state(name)
         if state == "published":
-            print(f"  ✓ remote  {name} → v{version} published")
+            print(f"  ✓ remote  {name} → {latest} published (versions independently)")
         elif state == "missing-release":
             warnings.append(
-                f"{name} exists on GitHub but has no v{version} release — "
-                f"`sage add xoai/{name}@v{version}` will not resolve")
+                f"xoai/{name} exists but has published NO release — "
+                f"`sage add xoai/{name}` cannot resolve")
         elif state == "no-repo":
             warnings.append(
                 f"xoai/{name} does not exist. `sage update` has been printing "

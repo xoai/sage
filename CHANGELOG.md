@@ -2,6 +2,87 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [1.3.3] — The corrections
+
+**A release whose headline is a retraction.** v1.3.2 published a number that was
+wrong, and the tool that was supposed to catch that class of mistake had the same bug.
+Both are fixed here. Nothing new is claimed.
+
+### L1 was published as 2/3. It is 3/3.
+
+The README said a bare agent **beat** Sage at resuming an interrupted cycle. It does
+not. The runs were hitting a per-session budget cap and being **truncated mid-cycle** —
+and *a truncated run grades identically to a broken one*, which is the exact mistake
+E9's own scenario file warns about in as many words. We made it anyway and shipped it.
+
+| L1 — resume an interrupted cycle | result | cost/run |
+|---|---|---|
+| **bare agent** | 3/3 | **$2.35** |
+| **Sage** | 3/3 | **$21.58** |
+
+**Sage gets there. It pays about 9× to get there.** That is a sharper finding than the
+one it replaces, and worse for Sage: the resume is not unreliable, it is *extravagant*.
+Under an equal, tight budget the ceremony is what runs out of money first.
+
+### The harness scored a rate limit as a Sage failure
+
+```
+result:   "You've hit your session limit · resets 3:10am"
+is_error: True     total_cost_usd: 0     num_turns: 1
+```
+
+Zero model calls. $0.00. Three seconds. Recorded, with `err=None`, as **Sage failing
+4 of 7 checks.** Had nobody asked why a run cost nothing, the baseline would now carry
+a table showing subagent mode failing 0/3 — a confident, published, entirely fabricated
+finding about a mode that never ran.
+
+The fix separates two things that are not the same:
+
+- **Nothing ran** — rate limit, auth failure, outage. Zero tokens. Not evidence about
+  Sage; the run **errors** rather than scores.
+- **Truncated** — budget cap, timeout. The agent worked, then was cut off. The
+  workspace holds what it managed, so it is **graded and flagged**.
+
+`num_turns` is not evidence of work: a rate-limited session reports `num_turns: 1`
+having read nothing. **Tokens are.**
+
+### Mode comparison (C13): HOLD — subagent mode stays opt-in
+
+Under an identical budget, on the identical 3-task plan, subagent mode spent **80 turns
+and ~$18 across two sessions and never finished** work the inline loop completes 3/3.
+Confidence *moderate*: the subagent arm is N=1 and budget-truncated. Enough to say
+hold; not enough to say never.
+
+R119's design does not work, and $1.03 established it: **E1–E5 never engage the mode**
+(single-shot tasks, no plan — the mode dispatches *per plan task*; E1 forced into it
+made zero dispatches), and **E9/E10 cannot run inline** (their checks assert a ledger
+that only exists in subagent mode). L1 is the only scenario with both a task-bearing
+plan and mode-neutral checks.
+
+### `sage update` was fabricating provenance on every run
+
+It replaces `sage/` wholesale — which deletes `skills.json` — and then *re-registered*
+every surviving skill as `{"source": "community", "added": "<today>"}`. A skill
+installed from a pack **did not come from the community catalog** and was **not added
+today**. A true record was overwritten with a false one, every run, and nothing noticed
+because nothing read it back. The record is preserved verbatim now.
+
+### Packs version independently — and pinning them to Sage's version was a dead link
+
+`sage update` printed `sage add xoai/sage-product@v${SAGE_VERSION}`. Cutting **this**
+release would have made that a tag nobody had cut. Unpinned; `.sage/packs.lock` is
+where reproducibility belongs. `--dist-status` no longer demands a pack carry Sage's
+version number — that is the lockstep ADR-7 exists to break.
+
+### Also
+
+- **`autoresearch --version`** printed `0.1.0` while shipping as 1.3.2 — wrong since
+  its first release. Derived from package metadata now.
+- **`packs/`** is a pointer README; the three packs live in their own repos.
+- **The marketplace is live**: `/plugin marketplace add xoai/sage-marketplace`. The
+  documented install command was a **dead link** until it was run — the manifest's
+  `name` *is* the marketplace id, and copied verbatim it read `sage`.
+
 ## [1.3.2] — The manifest was lying, and now it cannot
 
 Upgrade program 2, phases 1, 5 and 6. **The headline is a result, not a feature: we
