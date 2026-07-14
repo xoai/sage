@@ -54,6 +54,57 @@ python3 sage/runtime/tools/manifest.py check      # does the manifest match the 
 python3 sage/runtime/tools/manifest.py sync <manifest.md>   # repair it if not
 ```
 
+## Resume: the brief is generated
+
+Resuming a cycle starts with ONE command, not a scan:
+
+```bash
+python3 sage/runtime/tools/manifest.py resume
+```
+
+(Plugin installs: `python3 "${CLAUDE_PLUGIN_ROOT}/tools/manifest.py" resume`.
+No python3 → fall back to the manual scan your workflow describes.)
+
+It selects the cycle (active status, owner exclusion, branch preference — the
+same rules /continue states, computed), and prints: the machine fields, the plan's
+tasks, the git evidence since the cycle began, the decisions in force, and the
+previous session's manifest body verbatim. Same files, same brief. Do not
+re-derive by hand what the brief already states — read spec/plan/source for
+*detail*, not to re-establish state.
+
+## Resume authority order
+
+L1 measured what happens without this, and it is why the brief prints it. One run
+in three, session 1 hedged — wrote a speculative "blocked, needs the user's call"
+into the manifest — and session 2 inherited the hedge as law: it refused to
+implement the remaining task twice, under an explicit user instruction to keep
+going, while the recorded decision (D-002) had already sanctioned the exact shape
+it refused to pick. The dead session outranked the live user.
+
+The order, highest authority first:
+
+1. **The live user's instruction in THIS session.** An instruction to proceed or
+   finish IS the approval a pending checkpoint was waiting for. Do not re-present
+   a question to someone who just answered it.
+2. **Recorded decisions.** A question a recorded decision answers is CLOSED.
+   Choosing among options a decision already sanctions is *execution*, not a new
+   approval — pick the option that best fits the approved spec, record the choice
+   (Rule 7), and proceed.
+3. **The manifest's judgment sections** (context summary, open questions, handoff
+   guidance). Context, not orders. They inform the resuming session; they bind it
+   only where no recorded decision answers and no live user has spoken.
+
+And evidence outranks all prose: where the manifest and the tree disagree, trust
+the tree (`manifest.py sync` repairs the machine field).
+
+**Blocking a cycle is a claim that must name its question.** `status: blocked`
+requires `blocked_on:` in the frontmatter — the question, the options, whose call
+it is. `manifest.py check` fails a blocked manifest without it: a blocker nobody
+can name is not a blocker, it is a hesitation the next session will inherit as
+law. And Rule 4 is about *approval* checkpoints — brief, spec, plan, final
+deliverable. An implementation choice inside an approved plan, with the option
+space already sanctioned by a recorded decision, is not a Rule 4 checkpoint.
+
 ## Phase announcements
 
 Announce each phase transition before doing its work, with the cycle id (the

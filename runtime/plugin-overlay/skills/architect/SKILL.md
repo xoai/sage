@@ -18,8 +18,12 @@ Scan `.sage/work/` for architect initiatives.
 This scan is MANDATORY — check the DISK.
 
 **Manifest-first path:** If `.sage/work/*/manifest.md` exists with
-`workflow: architect`, read it. Resume at the phase indicated.
-Use context summary and handoff guidance for judgment context.
+`workflow: architect`, run
+`python3 "${CLAUDE_PLUGIN_ROOT}/tools/manifest.py" resume` (no python3 →
+read the manifest by hand). Resume at the phase the brief indicates, with
+the manifest body as judgment *context, not orders* — the live user
+outranks recorded decisions, recorded decisions outrank manifest prose,
+and evidence outranks all of it.
 Multi-session architect cycles benefit most from the manifest —
 it preserves the reasoning behind architecture decisions across sessions.
 

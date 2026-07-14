@@ -203,11 +203,24 @@ It is generated now (v1.3.2). A PostToolUse hook advances the manifest the momen
 source is written — it fires *because* the agent wrote code, and the firing **is** the
 evidence. Manifest coherence went **2/3 → 3/3**; the manifest has not lied since.
 
-**And Sage still loses this scenario.** L1 stays at **2/3**, because in one run it
-simply did not finish the work — ceremony is not free, and a hook cannot fix that. A
-bare agent with the same files still resumes correctly 3/3, for a quarter of the
-money. That is the honest state of the long-horizon claim: the *bridge* is sound now;
-the *cost* is not yet paid for.
+**The remaining third was an authority inversion, and it is fixed too
+(v1.3.3).** In the failing run, session 1 hedged — "Task 3 is blocked, needs the
+user's call" — and session 2 inherited that hedge as law, refusing to finish
+under an explicit "keep going" while the recorded decision had already
+sanctioned the exact implementation shape it declined to pick. The dead session
+outranked the live user. Now: the resume brief is **generated**
+(`manifest.py resume` — selection, evidence, decisions, and the manifest body
+labeled *context, not orders*), the **authority order** is stated and printed
+with every brief (live user > recorded decisions > manifest prose; evidence
+beats all), and a `blocked` cycle must name its question or `manifest.py check`
+fails it.
+
+Re-measured (L1, sage arm, N=3 valid runs per model): **3/3 on the baseline
+model** (opus-4-8, was 2/3) and **3/3 on fable-5** — and the failure mode under
+repair recurred in zero of six transcripts. Still honest: the delta is one run
+at N=3, and the fix bought **reliability, not economy** — a passing resume
+costs $16–23 against a bare agent's ~$2.35. The bridge is sound and the orders
+are straight; the bill is still the open problem.
 
 Numbers: [docs/eval-baseline-v2.md](docs/eval-baseline-v2.md). The fix:
 [docs/plans/manifest-state-is-prose.md](docs/plans/manifest-state-is-prose.md).

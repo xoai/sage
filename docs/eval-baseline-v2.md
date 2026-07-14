@@ -210,6 +210,91 @@ forge the signature the gate exists to collect. **Fact is mechanical. Approval i
 `manifest.py check` fails a manifest that contradicts its own tree, so this cannot
 silently regress.
 
+### Fixed again in v1.3.3 — the authority order, and L1 finally moves
+
+*Run 2026-07-14. Sage arm only — the bare arm has no Sage in it and its 3/3
+baseline is unaffected by Sage changes.*
+
+The remaining third was never resume *infidelity* — the failing run restarted
+nothing, re-planned nothing, and honoured D-002. Its anatomy, read from the
+transcript: **session 1 hedged**, writing a speculative "Task 3 is BLOCKED,
+needs the user's call" into the manifest on its way out. **Session 2 inherited
+the hedge as law** — /continue said "follow the handoff guidance, do NOT re-ask
+questions already resolved" — and refused to implement the last task **twice,
+under an explicit user instruction to keep going**, while the recorded decision
+D-002 explicitly sanctioned the three implementation shapes it declined to
+choose among. The other two runs simply picked one (`retry(operation, sleeper)`)
+and passed. The dead session outranked the live user and the decisions log.
+That is an authority inversion, and the machinery itself taught it: nothing
+anywhere said who outranks whom on resume.
+
+Three changes (v1.3.3):
+
+1. **The resume brief is generated** — `manifest.py resume`. Cycle selection
+   (active status, owner exclusion, branch preference), plan tasks, git evidence
+   since the cycle began, decisions in force, and the manifest body verbatim
+   under a header that says what it is: *context, not orders*. Same files, same
+   brief. /continue, /build, /fix and /architect Auto-Pickup all start there
+   instead of re-deriving state by hand — which is where the 3–9× resume
+   ceremony went.
+2. **The authority order is stated** — once, in cycle-protocol.md, and printed
+   with every brief: the live user's instruction outranks recorded decisions;
+   recorded decisions outrank the manifest's judgment prose; evidence outranks
+   all prose. A question a recorded decision answers is CLOSED — choosing among
+   options a decision already sanctions is execution, not a new approval.
+3. **A blocker must name its question** — `status: blocked` without
+   `blocked_on:` fails `manifest.py check`. A blocker nobody can name is a
+   hesitation the next session inherits as law.
+
+Re-run, L1/sage, N=3 valid runs per model:
+
+| | pre-fix | post-fix |
+|---|---|---|
+| opus-4-8[1m] (the baseline model) | 2/3 · $25.23 | **3/3** · $56.29 |
+| fable-5 (the current CLI default) | — | **3/3** · $64.93 |
+
+(One additional fable run was invalidated by a five-hour-limit 429 and one
+additional opus run by a tool-call-parse API failure — both caught by the
+driver, disclosed below, and replaced. Errored ≠ failed, and now the harness
+says which.)
+
+**How the fix actually engages, read from the transcripts — and it differs by
+model.** On fable-5, session 2 ran `manifest.py resume` and consumed the brief
+in 3/3 runs. On opus, only 1/3 did — the other two read the manifest directly.
+But the fix's *write side* engaged in all three opus runs: session 1's handoff
+no longer hedges. Zero of three manifests contain a "blocked" or "needs the
+user's call" — instead they pre-digest the decision ("D-002 governs Task 3:
+the retry helper must not wait; it computes the delay and lets the caller
+wait"), so there is no hesitation for session 2 to inherit. The failure mode
+under repair — a dead session's hedge outranking the decisions log and the
+live user — recurred in **zero of six valid runs**.
+
+**The honest asterisks.** The opus pass-rate delta is one run at N=3 — real
+but small-sample; the stronger evidence is the transcript-level absence of the
+failure mode. The fable row has no pre-fix control (the CLI's default model
+changed mid-programme), so it proves engagement, not a delta. And the cost
+went the wrong way: **the fix bought reliability, not economy.** A passing
+resume now costs $16–23 (was $6–15 when it passed at all), roughly **8× a
+bare agent's $2.35**. The bridge is sound and the orders are straight; the
+bill is still the open problem.
+
+### What THIS run found in the instrument (two more)
+
+1. **A rate-limited run graded as a Sage failure.** The first post-fix batch's
+   run 3 hit a five-hour-limit 429: both sessions were rejected in under 3
+   seconds at $0.00, the driver recorded them as clean (`error: None`), and the
+   harness graded the untouched fixture — 4/7 checks, reported as Sage failing
+   to resume. E9's lesson, one layer down: a truncated run grades identically
+   to a broken feature, and only the driver can tell them apart. The driver now
+   fails a session loudly when the CLI returns an error result
+   (`test_driver.py` pins it).
+2. **The baseline and the re-run silently ran on different models.** The
+   results recorded only the `--model` override — `null` when defaulted — and
+   the CLI's session default had changed underneath the harness (opus-4-8 →
+   fable-5). The comparison was caught before publication only by reading the
+   init events in both transcripts. Sessions now record the model that actually
+   served them, off the init event.
+
 ### L2 — memory recall, and the null result
 
 A constraint is stated in session 1 (the deploy image is pinned to Python 3.8 — use

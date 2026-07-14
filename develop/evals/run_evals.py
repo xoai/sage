@@ -541,6 +541,7 @@ class ClaudeCodeDriver(Driver):
         """
         events, turns = [], []
         session_id = None
+        model_seen = None
         cost, tok_in, tok_out = 0.0, 0, 0
         started = time.time()
         budget = budget_usd or self.budget_usd
@@ -550,7 +551,7 @@ class ClaudeCodeDriver(Driver):
         def snapshot(ok, error):
             out.write_text("\n".join(json.dumps(e) for e in events), encoding="utf-8")
             return {"ok": ok, "error": error, "events": events, "turns": turns,
-                    "interrupted": interrupted,
+                    "interrupted": interrupted, "model": model_seen,
                     "cost_usd": round(cost, 4),
                     "tokens_in": tok_in, "tokens_out": tok_out,
                     "duration_s": round(time.time() - started, 1)}
@@ -615,11 +616,33 @@ class ClaudeCodeDriver(Driver):
                     turns.append(ev.get("result") or "")
                 elif ev.get("type") == "system" and ev.get("session_id"):
                     session_id = session_id or ev["session_id"]
+                    # The model that ACTUALLY served the session, off the init
+                    # event. The results used to record only the --model override
+                    # (null when defaulted) — which is how a baseline and its
+                    # re-run silently ran on two different models when the CLI's
+                    # session default changed underneath the harness.
+                    if ev.get("subtype") == "init" and ev.get("model"):
+                        model_seen = model_seen or ev["model"]
 
             if proc.returncode != 0 and not events:
                 return snapshot(
                     False, f"claude exited {proc.returncode}: "
                            f"{(proc.stderr or '')[-1500:]}")
+
+            # A result the CLI itself marks as an error (rate limit, auth, API
+            # refusal) means this turn never ran. Stop and say so — grading the
+            # untouched workspace would report Sage broken when the API was.
+            # Found live: a five-hour-limit 429 produced two 3-second $0.00
+            # "sessions" that graded as a Sage failure. Same lesson as E9's
+            # budget cap: a truncated run grades identically to a broken
+            # feature, and only the driver can tell them apart.
+            api_err = next((e for e in events if e.get("type") == "result"
+                            and e.get("is_error")), None)
+            if api_err:
+                return snapshot(
+                    False, f"prompt {i + 1}: the driver returned an error result"
+                           f" (api status {api_err.get('api_error_status')}): "
+                           f"{(api_err.get('result') or '')[:200]}")
 
         return snapshot(True, None)
 
@@ -694,6 +717,7 @@ def run_once(scenario: Scenario, condition: str, driver: Driver,
             "name": sess.name,
             "interrupted": bool(run.get("interrupted")) or bool(sess.interrupt_after_turns),
             "turns_sent": len(sess.prompts()),
+            "model": run.get("model"),
             "tokens_in": run["tokens_in"], "tokens_out": run["tokens_out"],
             "cost_usd": run["cost_usd"], "duration_s": run["duration_s"],
             "error": run["error"],

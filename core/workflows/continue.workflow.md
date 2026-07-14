@@ -13,16 +13,25 @@ user-role: "Confirm which cycle to resume"
 Resume any active cycle with full context. The user doesn't need
 to remember which workflow or initiative was in progress.
 
-## Step 1: Scan for Active Cycles
+## Step 1: Find the Cycle — run the tool, don't scan
 
-Scan `.sage/work/*/manifest.md` for cycles where
-`status: in-progress` or `status: paused`. Skip cycles whose
-manifest carries `status: abandoned`, and skip cycles owned by a
-different checkout — an `owner:` field that does not match this
-session's `git rev-parse --show-toplevel` after path normalization
-(they belong to another worktree's session; see git-discipline).
-In a git project, prefer the cycle whose recorded `branch:` field
-matches the current branch.
+```bash
+python3 sage/runtime/tools/manifest.py resume
+```
+
+(Plugin installs: `python3 "${CLAUDE_PLUGIN_ROOT}/tools/manifest.py" resume`.)
+
+One command. It applies the selection rules (active status including `blocked`,
+owner exclusion, branch preference) and prints the resume brief: machine fields,
+plan tasks, git evidence, decisions in force, the previous session's judgment,
+and the authority order. Same files, same brief.
+
+**Manual fallback** (no python3 only): scan `.sage/work/*/manifest.md` for
+cycles where `status:` is `in-progress`, `paused`, or `blocked` (never
+`abandoned`). Skip cycles whose `owner:` field does not match this session's
+`git rev-parse --show-toplevel` after path normalization — they belong to
+another worktree (see git-discipline). Prefer the cycle whose recorded
+`branch:` field matches the current branch.
 
 ### One cycle found (Zone 2: Approval)
 
@@ -38,9 +47,10 @@ Next step: {next step from manifest}
 Pick C/S/X, or tell me what you need.
 ```
 
-On [C]: Load manifest context. Route to the workflow's Auto-Pickup
-with manifest as primary context source. The resuming agent follows
-the handoff guidance and does NOT re-ask questions already resolved.
+On [C]: Route to the workflow's Auto-Pickup with the resume brief as
+primary context source. Do NOT re-ask resolved questions or inherit a
+dead session's hesitation — apply the authority order the brief prints
+(live user > recorded decisions > manifest prose; evidence beats all).
 
 On [S]: Show full manifest contents (State, Context summary,
 Decisions, Open questions, Handoff guidance). Then offer [C]/[X].
@@ -91,16 +101,16 @@ next slash command.
 
 ## Step 2: Load Context and Resume
 
-1. Read the selected manifest.md
-2. Read the relevant artifacts (spec, plan, brief)
-3. Read decisions.md entries for this cycle
-4. Resume at the phase indicated by the manifest
+The brief already contains the state, evidence, decisions in force, and the
+manifest body — do NOT re-derive them by hand. Read spec.md and plan.md for
+the *detail* of the remaining work, and resume at the phase the brief indicates.
 
-The resuming agent behaves as if it has the context described
-in the manifest's context summary. It follows the handoff
-guidance. It does NOT re-ask questions the previous agent
-already resolved — those decisions are in the manifest and
-decisions.md.
+Do NOT re-ask questions already resolved in decisions.md, and do not
+treat the previous session's judgment as orders: an "open question" or
+"blocked" claim a recorded decision answers is CLOSED (choose among the
+sanctioned options, record the choice, proceed), and the live user's
+instruction to continue IS the approval a pending checkpoint was
+waiting for (cycle-protocol.md § Resume authority order).
 
 ## Routing
 
@@ -127,9 +137,11 @@ the corresponding workflow's Auto-Pickup:
 
 ## Rules
 
-- /continue reads the manifest as PRIMARY context source
-- Do NOT ignore the manifest and re-scan artifacts from scratch
-- The manifest's phase routing and context summary take precedence
+- /continue reads the generated resume brief as PRIMARY context source
+- Do NOT ignore the brief and re-scan artifacts from scratch
+- Phase routing comes from the manifest's machine fields; its judgment
+  prose (context summary, open questions, handoff) is context, NOT
+  orders — see cycle-protocol.md § Resume authority order
 - Agent MAY additionally read artifacts for detail
 - If manifest doesn't exist but artifacts do, route to the
   workflow's Auto-Pickup which will use file-scan fallback

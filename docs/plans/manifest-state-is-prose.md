@@ -1,8 +1,13 @@
 # The manifest's state is model-authored prose, and it drifts from the tree
 
-**Status: FIXED in v1.3.2.** `runtime/tools/manifest.py` +
-`sage-manifest-sync.sh` (PostToolUse). Kept as the record of what was found and
-what was deliberately *not* automated.
+**Status: FIXED in v1.3.2** (state drift) **and v1.3.3** (judgment drift).
+`runtime/tools/manifest.py` + `sage-manifest-sync.sh` (PostToolUse) fixed the
+machine fields; `manifest.py resume` + the resume authority order
+(cycle-protocol.md) + the `blocked_on:` requirement fixed the half this document
+ends on — "L1 did not improve" — which turned out to be the manifest's *prose*
+drifting from its authority: a dead session's hedge inherited as law. See
+`docs/eval-baseline-v2.md` § "Fixed again in v1.3.3". Kept as the record of what
+was found and what was deliberately *not* automated.
 **Found by:** L1 (resume fidelity), first real run, N=3. See `docs/eval-baseline-v2.md`.
 
 ## What happened

@@ -51,9 +51,20 @@ what alternatives were considered, and what the human's priorities are.
 
 ## Loading (Start of Session)
 
-When resuming work, follow this priority order:
+When resuming work, run the generated brief FIRST:
 
-### Step 1: Scan artifacts for state
+```bash
+python3 sage/runtime/tools/manifest.py resume
+```
+
+(Plugin installs: `python3 "${CLAUDE_PLUGIN_ROOT}/tools/manifest.py" resume`.)
+
+It performs Steps 1–3 below mechanically — selection, evidence, decisions —
+and prints the resume authority order (cycle-protocol.md). Only fall back to
+the manual steps when the tool is unavailable (no python3, or a manifest-less
+pre-v1.0.9 project).
+
+### Step 1: Scan artifacts for state (fallback)
 
 Scan `.sage/work/` for active initiatives. Read frontmatter from
 manifest.md, brief.md, spec.md, or plan.md (whichever exists). Note
@@ -160,6 +171,11 @@ file existence) over artifacts. Update artifact frontmatter to match.
 
 - Artifacts in `.sage/work/` are the ground truth for state.
 - decisions.md is the ground truth for reasoning and context.
+- The manifest's judgment prose (context summary, open questions, handoff) is
+  context, NOT orders. Resume authority order (cycle-protocol.md): the live
+  user outranks recorded decisions, recorded decisions outrank manifest prose,
+  and evidence outranks everything. A question a recorded decision answers is
+  CLOSED — do not carry it forward as a blocker.
 - Update state at checkpoints only (Rule 7), not per-task.
 - Prepend to decisions.md — never overwrite. Append to conventions.md.
 - If state is ambiguous, verify against the codebase.

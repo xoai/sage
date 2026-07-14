@@ -2,6 +2,70 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [Unreleased] — The dead session outranked the live user
+
+v1.3.2 made the manifest's *state* mechanical, and L1 did not move: 2/3, with the
+remaining failure filed as "ceremony cost". The transcript says otherwise, and it
+is worth being precise because the fix follows from the anatomy:
+
+Session 1 hedged — it wrote a speculative *"Task 3 is BLOCKED, needs the user's
+call"* into the manifest on its way out. Session 2 inherited the hedge as law
+(/continue: "follow the handoff guidance, do NOT re-ask questions already
+resolved") and refused to implement the last task **twice, under an explicit
+user instruction to keep going** — while the recorded decision D-002 explicitly
+sanctioned the three implementation shapes it declined to choose among. The dead
+session outranked the decisions log and the live user. Nothing anywhere said who
+outranks whom on resume.
+
+### Session resilience: the resume brief is generated, and the authority order is stated
+
+- **`manifest.py resume`** — cycle selection (active status including `blocked`,
+  owner exclusion, branch preference), plan tasks, git evidence since the cycle
+  began, decisions in force, and the manifest body verbatim under a header that
+  says what it is: *context, not orders*. Same files, same brief. `/continue`,
+  `/build`, `/fix` and `/architect` Auto-Pickup all start there — resume
+  state-gathering was judgment-driven prose in three places, measured at 3–9× a
+  bare agent's resume cost.
+- **Resume authority order** (cycle-protocol.md, printed with every brief): the
+  live user's instruction outranks recorded decisions; recorded decisions
+  outrank the manifest's judgment prose; evidence outranks all prose. A question
+  a recorded decision answers is CLOSED — choosing among options a decision
+  already sanctions is execution, not a new approval.
+- **A blocker must name its question**: `status: blocked` without `blocked_on:`
+  fails `manifest.py check`. A blocker nobody can name is a hesitation the next
+  session inherits as law. (`is_source` also stops counting `__pycache__`/`.pyc`
+  droppings — they polluted the first real brief's evidence.)
+
+Measured (L1, sage arm, N=3 valid runs per model; the bare arm has no Sage in
+it and its 3/3 · $7.04 baseline is unaffected):
+
+| | pre-fix | post-fix |
+|---|---|---|
+| opus-4-8[1m] (baseline model) | 2/3 · $25.23 | **3/3** · $56.29 |
+| fable-5 (current CLI default) | — | **3/3** · $64.93 |
+
+How it engages differs by model, and the transcripts say which: on fable,
+session 2 consumed the generated brief in 3/3 runs; on opus 1/3 — but the
+*write side* engaged in all three: session 1's handoffs no longer hedge (zero
+"blocked / needs the user's call"; D-002 arrives pre-digested), so there is no
+hesitation for session 2 to inherit. The failure mode recurred in **zero of
+six valid runs**. Honest asterisks: the opus delta is one run at N=3; the
+fable row has no pre-fix control (the CLI default changed mid-programme); and
+**the fix bought reliability, not economy** — a passing resume costs $16–23,
+roughly 8× bare. The bill is still the open problem.
+
+### The instrument caught two more of its own bugs
+
+- **A rate-limited run graded as a Sage failure.** A five-hour-limit 429
+  rejected both sessions in <3s at $0.00; the driver recorded them as clean and
+  the harness graded the untouched fixture (4/7 checks, "Sage failed to
+  resume"). The driver now fails a session loudly when the CLI returns an error
+  result. `develop/evals/test_driver.py` pins it.
+- **The baseline and the re-run silently ran on different models.** Results
+  recorded only the `--model` override (null when defaulted) while the CLI's
+  session default changed underneath the harness. Sessions now record the model
+  that actually served them, off the init event.
+
 ## [1.3.2] — The manifest was lying, and now it cannot
 
 Upgrade program 2, phases 1, 5 and 6. **The headline is a result, not a feature: we
