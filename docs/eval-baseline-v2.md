@@ -148,11 +148,23 @@ found on the other side.
 
 | | sage | bare | delta |
 |---|---|---|---|
-| **L1** — resume an interrupted cycle | 2/3 · $25.23 | **3/3** · $7.04 | **−Sage** |
-| **L2** — honour a constraint stated 2 contexts ago | 3/3 · $4.85 | **3/3** · $2.17 | same |
+| **L1** — resume an interrupted cycle | 3/3 · **$21.58/run** | 3/3 · **$2.35/run** | same result, **9× the price** |
+| **L2** — honour a constraint stated 2 contexts ago | 3/3 · $1.62/run | 3/3 · $0.72/run | same result, 2.2× the price |
 
-**Sage loses L1 and ties L2, at 2–4× the cost. The long-horizon claim is not
+**Sage ties both, and pays 2–9× for the privilege. The long-horizon claim is not
 supported by this evidence.**
+
+> ### Correction — L1 was published as 2/3, and that was wrong
+>
+> The first L1 runs were hitting a **$6/session budget cap** and being cut off
+> mid-cycle. A truncated run grades identically to a broken one — the exact mistake
+> that once made subagent mode look broken when it had merely run out of money — and
+> it was published as a behavioural failure of Sage.
+>
+> Re-run with a cap it does not hit: **3/3**. Sage's resume is not unreliable. It is
+> *expensive*, and under an equal, tight budget the ceremony is what runs out of money
+> first. The number is corrected here and in the README; the mistake is left on the
+> record because it is the more useful half.
 
 ### L1 — resume fidelity
 
@@ -255,11 +267,106 @@ working-tree snapshots (not commits), checks are scoped to paths, and code check
 > **Test the instrument before you trust the measurement.** Second release running,
 > and it is still the most expensive lesson here.
 
+## The mode comparison (P5-T3) — and why R119's design does not work
+
+*Attempted 2026-07-13/14. Spend: $74.67. The subagent arm is **UNRESOLVED** — see below.*
+
+R119 asks for **E1–E5 + E9 in both execution modes**. That comparison cannot be made,
+and finding out cost $1.03:
+
+**E1–E5 never engage the mode.** They are single-shot tasks ("change one constant"),
+which Sage routes as trivial: no spec, no plan, no tasks. Subagent mode dispatches *per
+plan task*. Probed directly — E1 forced into subagent mode made **zero Task dispatches
+and opened no cycle**. Running those five scenarios in "both modes" would have paid
+twice for ten identical runs and printed them as a comparison.
+
+**E9 and E10 cannot be run inline either.** Their checks assert `ledger_complete` and
+`ledger_attributes_commits` — and the ledger *only exists in subagent mode*. Grading
+them inline would fail a perfectly good agent for not producing an artifact the other
+mode produces, which is scoring the absence of a feature as a behavioural loss. This
+suite refuses that; it is why E7/E8/E9 are sage-only in the first place.
+
+**L1 is the only scenario that supports a fair comparison**: a task-bearing plan (so
+the mode engages) with mode-neutral checks (so both arms can pass).
+
+### Inline (valid, N=3)
+
+| | pass | cost/run | wall/run |
+|---|---|---|---|
+| L1 · sage · **inline** | **3/3** | $21.58 | 24 min |
+| L1 · bare (reference) | 3/3 | $2.35 | ~4 min |
+
+### Subagents — it does not finish the work inline finishes
+
+The best subagent run, session by session, against the identical $10/session cap:
+
+| | session 1 | session 2 | result |
+|---|---|---|---|
+| **subagents** | $7.73 · 41 turns | $10.17 · 39 turns → **hit the cap** | **never completed** |
+| **inline** | $1.50–$17.16 | $12.19–$13.66 | **3/3 PASS** |
+
+Subagent mode spent **80 turns and ~$18 across two sessions and still had not
+finished** the three-task plan that the inline loop completes. It dispatches a fresh
+implementer *and* an independent reviewer per task, and the dispatch overhead is what
+consumes the budget.
+
+**This is a lower bound, not a completion cost.** What it establishes is the
+comparison that matters: *given a budget the inline loop finishes in, subagent mode
+does not finish at all.* Establishing what it would cost to finish means raising the
+cap and paying for it — on this evidence, somewhere north of $50/run, N=3, and the
+direction is already clear enough that the money is better spent elsewhere.
+
+### C13 — the recommendation: **HOLD. Do not flip the default.**
+
+Subagent mode should stay opt-in (`--subagents`).
+
+- It is **at minimum 2–3× more expensive** than the inline loop for the same plan, and
+  did not complete within a budget the inline loop completed in 3/3.
+- E9/E10 already establish that the mode *works* — every task implemented by a fresh
+  context and judged by a different one, with a ledger to prove it. That is a real
+  guarantee and worth paying for **when you want it**.
+- Nothing here says it produces *better code*. No grader in this suite reads for
+  quality and none should pretend to. The case for the mode is auditability, not
+  correctness, and auditability is a choice a user should make deliberately.
+
+**Confidence: moderate, and stated as such.** The subagent arm is **N=1 and
+budget-truncated** — the other two runs were eaten by a session limit. That is enough
+to say *hold*; it is not enough to say *never*. What would change the recommendation is
+evidence that the mode catches defects the inline loop ships, and that experiment has
+not been run.
+
+### And the harness scored a rate limit as a Sage failure
+
+Two of the original three subagent runs produced:
+
+```
+result:   "You've hit your session limit · resets 3:10am"
+is_error: True     total_cost_usd: 0     num_turns: 1
+```
+
+**Zero model calls. $0.00. Three seconds.** The harness recorded them, with
+`err=None`, as *Sage failing 4 of 7 checks*. Had nobody asked why a run cost nothing,
+this document would now carry a table showing subagent mode failing 0/3 — a confident,
+published, entirely fabricated finding about a mode that never ran.
+
+The fix distinguishes two things that are not the same:
+
+- **Nothing ran** — rate limit, auth failure, overloaded API. Zero tokens read. Not
+  evidence about Sage; the run **errors** rather than scores.
+- **Truncated** — `error_max_budget_usd`, timeouts. The agent worked (39 turns, $10)
+  and was then cut off. The workspace holds what it managed, so it is **graded and
+  flagged**: a truncated pass did the work; a truncated failure is *inconclusive*, not
+  a defect.
+
+`num_turns` is not evidence of work — a rate-limited session reports `num_turns: 1`
+having read nothing. **Tokens are.** Five regression tests pin all of it.
+
 ## What is still not measured
 
-- **Whether subagent mode produces *better* code** than the inline loop. E9/E10
-  prove the mode does what it says. They do not compare quality. `--mode both` now
-  exists to run that comparison (P5-T3); it has not been run.
+- **Whether subagent mode produces *better* code.** Even once the arm completes, no
+  grader here reads for quality, and none should pretend to. The mode comparison can
+  report what the two modes COST and whether they PASS. "Which writes better code" needs
+  a different instrument.
 - **Memory over a long horizon**, where rereading stops being free. See L2 above.
 - **L3 (scope-hold across a 6-task plan).** Authored? No. Budget went on the
   L1 instrument bugs, which was the right place for it to go.

@@ -174,6 +174,6 @@
       ]
     }
   ],
-  "budget_usd": 6.0,
-  "timeout_s": 1800
+  "budget_usd": 10.0,
+  "timeout_s": 2700
 }

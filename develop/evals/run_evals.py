@@ -546,11 +546,12 @@ class ClaudeCodeDriver(Driver):
         budget = budget_usd or self.budget_usd
         timeout = timeout_s or self.timeout_s
         interrupted = False
+        truncated = None          # 'error_max_budget_usd' &c — worked, then cut off
 
         def snapshot(ok, error):
             out.write_text("\n".join(json.dumps(e) for e in events), encoding="utf-8")
             return {"ok": ok, "error": error, "events": events, "turns": turns,
-                    "interrupted": interrupted,
+                    "interrupted": interrupted, "truncated": truncated,
                     "cost_usd": round(cost, 4),
                     "tokens_in": tok_in, "tokens_out": tok_out,
                     "duration_s": round(time.time() - started, 1)}
@@ -608,8 +609,62 @@ class ClaudeCodeDriver(Driver):
                 events.append(ev)
                 if ev.get("type") == "result":
                     session_id = ev.get("session_id") or session_id
-                    cost += ev.get("total_cost_usd") or 0.0
+
+                    # THE PLATFORM FAILING IS NOT THE AGENT FAILING.
+                    #
+                    # A result event carries is_error. The driver used to ignore it,
+                    # and so a session that never ran was scored as a session that ran
+                    # and did badly. The mode comparison hit exactly this:
+                    #
+                    #   result:  "You've hit your session limit · resets 3:10am"
+                    #   is_error: True     total_cost_usd: 0     num_turns: 1
+                    #
+                    # Two of three subagent runs made ZERO model calls, cost $0.00, and
+                    # were recorded — with err=None — as Sage failing 4/7 checks. On a
+                    # results table that is indistinguishable from a real defect, and it
+                    # would have published as one.
+                    #
+                    # This is the harness committing the sin the harness exists to
+                    # catch: nothing-happened graded as it-happened-badly. A rate limit,
+                    # an auth failure, an overloaded API — none of them are evidence
+                    # about Sage, and the run must ERROR rather than score.
+                    # ...but there are two very different kinds of is_error, and
+                    # collapsing them is its own bug:
+                    #
+                    #   NOTHING RAN     rate limit, auth failure, overloaded API.
+                    #                   0 turns, $0, no tokens. This is not evidence
+                    #                   about Sage and must not be scored.
+                    #
+                    #   TRUNCATED       error_max_budget_usd, timeouts. The agent
+                    #                   worked — 39 turns, $10 — and was then cut off.
+                    #                   The workspace holds whatever it managed, and
+                    #                   that IS gradeable: a truncated run that still
+                    #                   passed did the work. A truncated run that
+                    #                   failed is INCONCLUSIVE, not a defect, and the
+                    #                   results carry the flag so nobody reads it as
+                    #                   one.
+                    #
+                    # E9's scenario file already warns about this in as many words —
+                    # a truncated run grades identically to a broken feature — and
+                    # the first L1 baseline made the mistake anyway and published it.
                     usage = ev.get("usage") or {}
+                    # TOKENS, not num_turns. A rate-limited session still reports
+                    # `num_turns: 1` while having read nothing and done nothing —
+                    # so num_turns is not evidence of work, and trusting it would let
+                    # "nothing ran" masquerade as "ran and was cut off". A unit test
+                    # caught exactly that.
+                    ran = input_tokens(usage) > 0
+
+                    if ev.get("is_error") and not ran:
+                        return snapshot(
+                            False,
+                            f"the platform errored and nothing ran, so this measures "
+                            f"nothing: {(ev.get('result') or 'unknown error')[:180]}")
+
+                    if ev.get("is_error"):
+                        truncated = ev.get("subtype") or "error"
+
+                    cost += ev.get("total_cost_usd") or 0.0
                     tok_in += input_tokens(usage)
                     tok_out += usage.get("output_tokens") or 0
                     turns.append(ev.get("result") or "")
@@ -620,6 +675,16 @@ class ClaudeCodeDriver(Driver):
                 return snapshot(
                     False, f"claude exited {proc.returncode}: "
                            f"{(proc.stderr or '')[-1500:]}")
+
+        # Belt and braces on the same class of failure. A session that read no tokens
+        # made no model calls, whatever it claimed on the way out — and a scenario
+        # graded against an agent that never woke up is not a measurement, it is a
+        # coin toss with a stern face. An interrupted session is exempt: being cut off
+        # is what it is FOR.
+        if not interrupted and tok_in == 0:
+            return snapshot(
+                False, "the session made no model calls (0 input tokens) — "
+                       "nothing ran, so nothing can be concluded")
 
         return snapshot(True, None)
 
@@ -693,6 +758,7 @@ def run_once(scenario: Scenario, condition: str, driver: Driver,
         result["sessions"].append({
             "name": sess.name,
             "interrupted": bool(run.get("interrupted")) or bool(sess.interrupt_after_turns),
+            "truncated": run.get("truncated"),
             "turns_sent": len(sess.prompts()),
             "tokens_in": run["tokens_in"], "tokens_out": run["tokens_out"],
             "cost_usd": run["cost_usd"], "duration_s": run["duration_s"],
