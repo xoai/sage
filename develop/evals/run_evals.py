@@ -608,6 +608,31 @@ class ClaudeCodeDriver(Driver):
                 events.append(ev)
                 if ev.get("type") == "result":
                     session_id = ev.get("session_id") or session_id
+
+                    # THE PLATFORM FAILING IS NOT THE AGENT FAILING.
+                    #
+                    # A result event carries is_error. The driver used to ignore it,
+                    # and so a session that never ran was scored as a session that ran
+                    # and did badly. The mode comparison hit exactly this:
+                    #
+                    #   result:  "You've hit your session limit · resets 3:10am"
+                    #   is_error: True     total_cost_usd: 0     num_turns: 1
+                    #
+                    # Two of three subagent runs made ZERO model calls, cost $0.00, and
+                    # were recorded — with err=None — as Sage failing 4/7 checks. On a
+                    # results table that is indistinguishable from a real defect, and it
+                    # would have published as one.
+                    #
+                    # This is the harness committing the sin the harness exists to
+                    # catch: nothing-happened graded as it-happened-badly. A rate limit,
+                    # an auth failure, an overloaded API — none of them are evidence
+                    # about Sage, and the run must ERROR rather than score.
+                    if ev.get("is_error"):
+                        return snapshot(
+                            False,
+                            f"the platform errored, so this run measures nothing: "
+                            f"{(ev.get('result') or 'unknown error')[:200]}")
+
                     cost += ev.get("total_cost_usd") or 0.0
                     usage = ev.get("usage") or {}
                     tok_in += input_tokens(usage)
@@ -620,6 +645,16 @@ class ClaudeCodeDriver(Driver):
                 return snapshot(
                     False, f"claude exited {proc.returncode}: "
                            f"{(proc.stderr or '')[-1500:]}")
+
+        # Belt and braces on the same class of failure. A session that read no tokens
+        # made no model calls, whatever it claimed on the way out — and a scenario
+        # graded against an agent that never woke up is not a measurement, it is a
+        # coin toss with a stern face. An interrupted session is exempt: being cut off
+        # is what it is FOR.
+        if not interrupted and tok_in == 0:
+            return snapshot(
+                False, "the session made no model calls (0 input tokens) — "
+                       "nothing ran, so nothing can be concluded")
 
         return snapshot(True, None)
 

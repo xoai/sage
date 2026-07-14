@@ -56,12 +56,21 @@ either made mechanical or withdrawn.
 **And the part Sage is probably actually for — long multi-session work — is measured
 now too, for the first time.** It did not go the way we wanted. Across two
 multi-session scenarios (N=3, both conditions), a bare agent given the same files and
-the same prompts matched or beat Sage on both, at a third of the cost:
+the same prompts matched Sage on both — and did it for a fraction of the money:
 
 | | sage | bare |
 |---|---|---|
-| **L1** — resume an interrupted cycle | 2/3 · $25.23 | **3/3** · $7.04 |
-| **L2** — honour a constraint stated 2 contexts ago | 3/3 · $4.85 | **3/3** · $2.17 |
+| **L1** — resume an interrupted cycle | 3/3 · **$21.58/run** | 3/3 · **$2.35/run** |
+| **L2** — honour a constraint stated 2 contexts ago | 3/3 · $1.62/run | 3/3 · $0.72/run |
+
+**Sage gets there. It costs roughly 9× as much to get there.**
+
+L1's first published number was **2/3**, and it was wrong — the runs were being
+starved by a per-session budget cap, and a truncated run grades identically to a
+broken one. Given a cap it does not hit, Sage resumes the interrupted cycle correctly
+every time. What it cannot do is resume it *cheaply*: a bare agent, handed the same
+files, does the same work for **$2.35** while Sage spends **$21.58** on process. Under
+an equal, tight budget the ceremony is what runs out of money first.
 
 L2 is the more instructive of the two. Sage's memory system *worked* — the run is
 instrumented, and session 1 provably wrote the constraint to it. It just didn't
@@ -72,8 +81,8 @@ So, precisely: Sage's benefit is **whatever it has made mechanical, and nothing
 else.** Where a rule is a hook, it holds (test-first, 3/3 vs 0/3; the spec gate; the
 degradation record). Where a rule is a paragraph — including, now, the long-horizon
 story — a frontier model was going to do the right thing anyway, or wasn't, and the
-paragraph didn't change that. The cost is known: ~1.6× context, and 2–4× the dollars
-on multi-session work.
+paragraph didn't change that. The cost is known: ~1.6× context on short tasks, and
+roughly **9× the dollars** on multi-session work.
 
 The lesson we'd offer, having measured our own framework and not much liked the
 first answer: **if a rule matters, make it code. If you can't, don't claim it.**
@@ -185,13 +194,21 @@ manifest, routes to the correct workflow, and picks the work back up.
 make here.** L1 (resume fidelity, N=3, both conditions): a fresh context resumes a
 cycle that was interrupted mid-plan.
 
-| | resumed correctly | cost |
+| | resumed correctly | cost per run |
 |---|---|---|
-| **bare agent**, same files, same prompt | **3/3** | $7.04 |
-| **Sage** | 2/3 — and only when given a second turn | $25.23 |
+| **bare agent**, same files, same prompt | 3/3 | **$2.35** |
+| **Sage** | 3/3 | **$21.58** |
 
-Given one turn, Sage finished the work in **1 of 3** runs; the bare agent finished in
-3 of 3.
+**Sage gets there, and it pays about 9× to do it.**
+
+This number was published as **2/3** first, and that was wrong. The runs were hitting a
+per-session budget cap and being cut off mid-cycle — and *a truncated run grades
+identically to a broken one*, which is the same mistake that once made subagent mode
+look broken when it had merely run out of money. Given a cap it does not hit, Sage
+resumes the interrupted cycle correctly every time.
+
+What it cannot do is resume it cheaply. The ceremony is the cost, and under an equal,
+tight budget the ceremony is what runs out of money first.
 
 **The worst of it is fixed.** In one run, Sage's manifest read `gate_state:
 plan-approved` — *"no tasks started"* — with all three tasks implemented and
@@ -203,11 +220,9 @@ It is generated now (v1.3.2). A PostToolUse hook advances the manifest the momen
 source is written — it fires *because* the agent wrote code, and the firing **is** the
 evidence. Manifest coherence went **2/3 → 3/3**; the manifest has not lied since.
 
-**And Sage still loses this scenario.** L1 stays at **2/3**, because in one run it
-simply did not finish the work — ceremony is not free, and a hook cannot fix that. A
-bare agent with the same files still resumes correctly 3/3, for a quarter of the
-money. That is the honest state of the long-horizon claim: the *bridge* is sound now;
-the *cost* is not yet paid for.
+**And Sage still does not win this scenario.** It matches bare on correctness and
+loses on price by roughly an order of magnitude. That is the honest state of the
+long-horizon claim: the *bridge* is sound now; the *bill* is not.
 
 Numbers: [docs/eval-baseline-v2.md](docs/eval-baseline-v2.md). The fix:
 [docs/plans/manifest-state-is-prose.md](docs/plans/manifest-state-is-prose.md).

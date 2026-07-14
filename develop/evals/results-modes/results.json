@@ -1,0 +1,481 @@
+{
+  "runs": 3,
+  "driver": "claude-code",
+  "model": null,
+  "results": [
+    {
+      "scenario": "L1",
+      "name": "resume-fidelity",
+      "condition": "sage",
+      "mode": "inline",
+      "pass": true,
+      "checks": [
+        {
+          "grader": "diff_contains",
+          "describe": "PRECONDITION \u2014 session 1 actually completed Task 1 (without this, session 2's 'no restart' check is uninterpretable)",
+          "pass": true,
+          "detail": "all 1 string(s) introduced"
+        },
+        {
+          "grader": "diff_lacks",
+          "describe": "session 2 did NOT restart Task 1 \u2014 it never re-defines MAX_RETRIES in src/, because a resumed cycle finds it already there",
+          "pass": true,
+          "detail": "none of 1 forbidden string(s) introduced"
+        },
+        {
+          "grader": "unchanged",
+          "describe": "session 2 did NOT re-plan \u2014 the three approved tasks survived verbatim",
+          "pass": true,
+          "detail": "intact"
+        },
+        {
+          "grader": "diff_lacks",
+          "describe": "decision D-002 survived the context boundary \u2014 no blocking sleep reached src/, though it is the natural way to write Task 3",
+          "pass": true,
+          "detail": "none of 2 forbidden string(s) introduced"
+        },
+        {
+          "grader": "file_contains",
+          "describe": "the remaining work actually landed (Tasks 2 and 3)",
+          "pass": true,
+          "detail": "all present"
+        },
+        {
+          "grader": "gate_exit",
+          "describe": "the final tree is verifiably green (Gate 5, exit 0)",
+          "pass": true,
+          "detail": "exit 0 (expected 0) \u2014 \u2705 PASS \u2014 All verifications passed"
+        },
+        {
+          "grader": "file_lacks",
+          "describe": "sage-only: the manifest ADVANCED \u2014 it no longer claims the cycle is pre-implementation. Vocabulary-agnostic on purpose: three runs of the identical cycle produced three different gate_state spellings, so any check that enumerates them is testing my guess, not Sage",
+          "pass": true,
+          "detail": "none present"
+        }
+      ],
+      "error": null,
+      "sessions": [
+        {
+          "name": "s1",
+          "interrupted": true,
+          "turns_sent": 1,
+          "tokens_in": 1285694,
+          "tokens_out": 12112,
+          "cost_usd": 1.505,
+          "duration_s": 189.8,
+          "error": null
+        },
+        {
+          "name": "s2",
+          "interrupted": false,
+          "turns_sent": 2,
+          "tokens_in": 3420206,
+          "tokens_out": 35961,
+          "cost_usd": 12.1917,
+          "duration_s": 910.6,
+          "error": null
+        }
+      ],
+      "tokens_in": 4705900,
+      "tokens_out": 48073,
+      "cost_usd": 13.6967,
+      "duration_s": 1100.4,
+      "run": 1
+    },
+    {
+      "scenario": "L1",
+      "name": "resume-fidelity",
+      "condition": "sage",
+      "mode": "inline",
+      "pass": true,
+      "checks": [
+        {
+          "grader": "diff_contains",
+          "describe": "PRECONDITION \u2014 session 1 actually completed Task 1 (without this, session 2's 'no restart' check is uninterpretable)",
+          "pass": true,
+          "detail": "all 1 string(s) introduced"
+        },
+        {
+          "grader": "diff_lacks",
+          "describe": "session 2 did NOT restart Task 1 \u2014 it never re-defines MAX_RETRIES in src/, because a resumed cycle finds it already there",
+          "pass": true,
+          "detail": "none of 1 forbidden string(s) introduced"
+        },
+        {
+          "grader": "unchanged",
+          "describe": "session 2 did NOT re-plan \u2014 the three approved tasks survived verbatim",
+          "pass": true,
+          "detail": "intact"
+        },
+        {
+          "grader": "diff_lacks",
+          "describe": "decision D-002 survived the context boundary \u2014 no blocking sleep reached src/, though it is the natural way to write Task 3",
+          "pass": true,
+          "detail": "none of 2 forbidden string(s) introduced"
+        },
+        {
+          "grader": "file_contains",
+          "describe": "the remaining work actually landed (Tasks 2 and 3)",
+          "pass": true,
+          "detail": "all present"
+        },
+        {
+          "grader": "gate_exit",
+          "describe": "the final tree is verifiably green (Gate 5, exit 0)",
+          "pass": true,
+          "detail": "exit 0 (expected 0) \u2014 \u2705 PASS \u2014 All verifications passed"
+        },
+        {
+          "grader": "file_lacks",
+          "describe": "sage-only: the manifest ADVANCED \u2014 it no longer claims the cycle is pre-implementation. Vocabulary-agnostic on purpose: three runs of the identical cycle produced three different gate_state spellings, so any check that enumerates them is testing my guess, not Sage",
+          "pass": true,
+          "detail": "none present"
+        }
+      ],
+      "error": null,
+      "sessions": [
+        {
+          "name": "s1",
+          "interrupted": true,
+          "turns_sent": 1,
+          "tokens_in": 2625271,
+          "tokens_out": 34265,
+          "cost_usd": 7.6868,
+          "duration_s": 554.8,
+          "error": null
+        },
+        {
+          "name": "s2",
+          "interrupted": false,
+          "turns_sent": 2,
+          "tokens_in": 3902047,
+          "tokens_out": 49096,
+          "cost_usd": 13.6631,
+          "duration_s": 1197.2,
+          "error": null
+        }
+      ],
+      "tokens_in": 6527318,
+      "tokens_out": 83361,
+      "cost_usd": 21.3499,
+      "duration_s": 1752.0,
+      "run": 2
+    },
+    {
+      "scenario": "L1",
+      "name": "resume-fidelity",
+      "condition": "sage",
+      "mode": "inline",
+      "pass": true,
+      "checks": [
+        {
+          "grader": "diff_contains",
+          "describe": "PRECONDITION \u2014 session 1 actually completed Task 1 (without this, session 2's 'no restart' check is uninterpretable)",
+          "pass": true,
+          "detail": "all 1 string(s) introduced"
+        },
+        {
+          "grader": "diff_lacks",
+          "describe": "session 2 did NOT restart Task 1 \u2014 it never re-defines MAX_RETRIES in src/, because a resumed cycle finds it already there",
+          "pass": true,
+          "detail": "none of 1 forbidden string(s) introduced"
+        },
+        {
+          "grader": "unchanged",
+          "describe": "session 2 did NOT re-plan \u2014 the three approved tasks survived verbatim",
+          "pass": true,
+          "detail": "intact"
+        },
+        {
+          "grader": "diff_lacks",
+          "describe": "decision D-002 survived the context boundary \u2014 no blocking sleep reached src/, though it is the natural way to write Task 3",
+          "pass": true,
+          "detail": "none of 2 forbidden string(s) introduced"
+        },
+        {
+          "grader": "file_contains",
+          "describe": "the remaining work actually landed (Tasks 2 and 3)",
+          "pass": true,
+          "detail": "all present"
+        },
+        {
+          "grader": "gate_exit",
+          "describe": "the final tree is verifiably green (Gate 5, exit 0)",
+          "pass": true,
+          "detail": "exit 0 (expected 0) \u2014 \u2705 PASS \u2014 All verifications passed"
+        },
+        {
+          "grader": "file_lacks",
+          "describe": "sage-only: the manifest ADVANCED \u2014 it no longer claims the cycle is pre-implementation. Vocabulary-agnostic on purpose: three runs of the identical cycle produced three different gate_state spellings, so any check that enumerates them is testing my guess, not Sage",
+          "pass": true,
+          "detail": "none present"
+        }
+      ],
+      "error": null,
+      "sessions": [
+        {
+          "name": "s1",
+          "interrupted": true,
+          "turns_sent": 1,
+          "tokens_in": 2454315,
+          "tokens_out": 25555,
+          "cost_usd": 17.1586,
+          "duration_s": 563.0,
+          "error": null
+        },
+        {
+          "name": "s2",
+          "interrupted": false,
+          "turns_sent": 2,
+          "tokens_in": 3195823,
+          "tokens_out": 35307,
+          "cost_usd": 12.543,
+          "duration_s": 859.1,
+          "error": null
+        }
+      ],
+      "tokens_in": 5650138,
+      "tokens_out": 60862,
+      "cost_usd": 29.7016,
+      "duration_s": 1422.1,
+      "run": 3
+    },
+    {
+      "scenario": "L1",
+      "name": "resume-fidelity",
+      "condition": "sage",
+      "mode": "subagents",
+      "pass": false,
+      "checks": [
+        {
+          "grader": "diff_contains",
+          "describe": "PRECONDITION \u2014 session 1 actually completed Task 1 (without this, session 2's 'no restart' check is uninterpretable)",
+          "pass": true,
+          "detail": "all 1 string(s) introduced"
+        },
+        {
+          "grader": "diff_lacks",
+          "describe": "session 2 did NOT restart Task 1 \u2014 it never re-defines MAX_RETRIES in src/, because a resumed cycle finds it already there",
+          "pass": true,
+          "detail": "none of 1 forbidden string(s) introduced"
+        },
+        {
+          "grader": "unchanged",
+          "describe": "session 2 did NOT re-plan \u2014 the three approved tasks survived verbatim",
+          "pass": true,
+          "detail": "intact"
+        },
+        {
+          "grader": "diff_lacks",
+          "describe": "decision D-002 survived the context boundary \u2014 no blocking sleep reached src/, though it is the natural way to write Task 3",
+          "pass": true,
+          "detail": "none of 2 forbidden string(s) introduced"
+        },
+        {
+          "grader": "file_contains",
+          "describe": "the remaining work actually landed (Tasks 2 and 3)",
+          "pass": false,
+          "detail": "missing: 'def backoff_delay', 'def retry'"
+        },
+        {
+          "grader": "gate_exit",
+          "describe": "the final tree is verifiably green (Gate 5, exit 0)",
+          "pass": false,
+          "detail": "exit 1 (expected 0) \u2014 \u274c FAIL \u2014 See evidence above"
+        },
+        {
+          "grader": "file_lacks",
+          "describe": "sage-only: the manifest ADVANCED \u2014 it no longer claims the cycle is pre-implementation. Vocabulary-agnostic on purpose: three runs of the identical cycle produced three different gate_state spellings, so any check that enumerates them is testing my guess, not Sage",
+          "pass": true,
+          "detail": "none present"
+        }
+      ],
+      "error": null,
+      "sessions": [
+        {
+          "name": "s1",
+          "interrupted": true,
+          "turns_sent": 1,
+          "tokens_in": 2525516,
+          "tokens_out": 31088,
+          "cost_usd": 8.8905,
+          "duration_s": 734.6,
+          "error": null
+        },
+        {
+          "name": "s2",
+          "interrupted": false,
+          "turns_sent": 2,
+          "tokens_in": 0,
+          "tokens_out": 0,
+          "cost_usd": 0.0,
+          "duration_s": 6.2,
+          "error": null
+        }
+      ],
+      "tokens_in": 2525516,
+      "tokens_out": 31088,
+      "cost_usd": 8.8905,
+      "duration_s": 740.8,
+      "run": 1
+    },
+    {
+      "scenario": "L1",
+      "name": "resume-fidelity",
+      "condition": "sage",
+      "mode": "subagents",
+      "pass": false,
+      "checks": [
+        {
+          "grader": "diff_contains",
+          "describe": "PRECONDITION \u2014 session 1 actually completed Task 1 (without this, session 2's 'no restart' check is uninterpretable)",
+          "pass": false,
+          "detail": "session 's1' never introduced: MAX_RETRIES (2 file(s) in scope changed)"
+        },
+        {
+          "grader": "diff_lacks",
+          "describe": "session 2 did NOT restart Task 1 \u2014 it never re-defines MAX_RETRIES in src/, because a resumed cycle finds it already there",
+          "pass": true,
+          "detail": "none of 1 forbidden string(s) introduced"
+        },
+        {
+          "grader": "unchanged",
+          "describe": "session 2 did NOT re-plan \u2014 the three approved tasks survived verbatim",
+          "pass": true,
+          "detail": "intact"
+        },
+        {
+          "grader": "diff_lacks",
+          "describe": "decision D-002 survived the context boundary \u2014 no blocking sleep reached src/, though it is the natural way to write Task 3",
+          "pass": true,
+          "detail": "none of 2 forbidden string(s) introduced"
+        },
+        {
+          "grader": "file_contains",
+          "describe": "the remaining work actually landed (Tasks 2 and 3)",
+          "pass": false,
+          "detail": "missing: 'def backoff_delay', 'def retry'"
+        },
+        {
+          "grader": "gate_exit",
+          "describe": "the final tree is verifiably green (Gate 5, exit 0)",
+          "pass": true,
+          "detail": "exit 0 (expected 0) \u2014 \u2705 PASS \u2014 All verifications passed"
+        },
+        {
+          "grader": "file_lacks",
+          "describe": "sage-only: the manifest ADVANCED \u2014 it no longer claims the cycle is pre-implementation. Vocabulary-agnostic on purpose: three runs of the identical cycle produced three different gate_state spellings, so any check that enumerates them is testing my guess, not Sage",
+          "pass": false,
+          "detail": "forbidden present: 'gate_state: plan-approved'"
+        }
+      ],
+      "error": null,
+      "sessions": [
+        {
+          "name": "s1",
+          "interrupted": true,
+          "turns_sent": 1,
+          "tokens_in": 0,
+          "tokens_out": 0,
+          "cost_usd": 0.0,
+          "duration_s": 2.8,
+          "error": null
+        },
+        {
+          "name": "s2",
+          "interrupted": false,
+          "turns_sent": 2,
+          "tokens_in": 0,
+          "tokens_out": 0,
+          "cost_usd": 0.0,
+          "duration_s": 6.0,
+          "error": null
+        }
+      ],
+      "tokens_in": 0,
+      "tokens_out": 0,
+      "cost_usd": 0.0,
+      "duration_s": 8.8,
+      "run": 2
+    },
+    {
+      "scenario": "L1",
+      "name": "resume-fidelity",
+      "condition": "sage",
+      "mode": "subagents",
+      "pass": false,
+      "checks": [
+        {
+          "grader": "diff_contains",
+          "describe": "PRECONDITION \u2014 session 1 actually completed Task 1 (without this, session 2's 'no restart' check is uninterpretable)",
+          "pass": false,
+          "detail": "session 's1' never introduced: MAX_RETRIES (2 file(s) in scope changed)"
+        },
+        {
+          "grader": "diff_lacks",
+          "describe": "session 2 did NOT restart Task 1 \u2014 it never re-defines MAX_RETRIES in src/, because a resumed cycle finds it already there",
+          "pass": true,
+          "detail": "none of 1 forbidden string(s) introduced"
+        },
+        {
+          "grader": "unchanged",
+          "describe": "session 2 did NOT re-plan \u2014 the three approved tasks survived verbatim",
+          "pass": true,
+          "detail": "intact"
+        },
+        {
+          "grader": "diff_lacks",
+          "describe": "decision D-002 survived the context boundary \u2014 no blocking sleep reached src/, though it is the natural way to write Task 3",
+          "pass": true,
+          "detail": "none of 2 forbidden string(s) introduced"
+        },
+        {
+          "grader": "file_contains",
+          "describe": "the remaining work actually landed (Tasks 2 and 3)",
+          "pass": false,
+          "detail": "missing: 'def backoff_delay', 'def retry'"
+        },
+        {
+          "grader": "gate_exit",
+          "describe": "the final tree is verifiably green (Gate 5, exit 0)",
+          "pass": true,
+          "detail": "exit 0 (expected 0) \u2014 \u2705 PASS \u2014 All verifications passed"
+        },
+        {
+          "grader": "file_lacks",
+          "describe": "sage-only: the manifest ADVANCED \u2014 it no longer claims the cycle is pre-implementation. Vocabulary-agnostic on purpose: three runs of the identical cycle produced three different gate_state spellings, so any check that enumerates them is testing my guess, not Sage",
+          "pass": false,
+          "detail": "forbidden present: 'gate_state: plan-approved'"
+        }
+      ],
+      "error": null,
+      "sessions": [
+        {
+          "name": "s1",
+          "interrupted": true,
+          "turns_sent": 1,
+          "tokens_in": 0,
+          "tokens_out": 0,
+          "cost_usd": 0.0,
+          "duration_s": 2.8,
+          "error": null
+        },
+        {
+          "name": "s2",
+          "interrupted": false,
+          "turns_sent": 2,
+          "tokens_in": 0,
+          "tokens_out": 0,
+          "cost_usd": 0.0,
+          "duration_s": 6.0,
+          "error": null
+        }
+      ],
+      "tokens_in": 0,
+      "tokens_out": 0,
+      "cost_usd": 0.0,
+      "duration_s": 8.8,
+      "run": 3
+    }
+  ]
+}
