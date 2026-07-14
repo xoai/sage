@@ -935,6 +935,42 @@ class PlatformFailureIsNotAgentFailureTest(unittest.TestCase):
         self.assertFalse(r["ok"])
         self.assertIn("no model calls", r["error"])
 
+    def test_a_BUDGET_truncation_is_graded_not_discarded(self):
+        """The other half, and collapsing the two is its own bug.
+
+        `error_max_budget_usd` means the agent WORKED — 39 turns, $10 — and was then
+        cut off. The workspace holds whatever it managed, and that is gradeable: a
+        truncated run that still passed did the work. Discarding it would throw away a
+        real result; scoring it silently would present an inconclusive failure as a
+        defect. So it is graded, and FLAGGED.
+        """
+        r = self._driver_result([
+            {"type": "system", "subtype": "init", "session_id": "s"},
+            {"type": "result", "subtype": "error_max_budget_usd", "is_error": True,
+             "result": "", "total_cost_usd": 10.17, "num_turns": 39,
+             "usage": {"input_tokens": 44, "cache_read_input_tokens": 1_886_144,
+                       "output_tokens": 30_256}},
+        ])
+        self.assertTrue(r["ok"], "real work was done — this is gradeable, not void")
+        self.assertEqual(r["truncated"], "error_max_budget_usd")
+        self.assertGreater(r["tokens_in"], 1_000_000)
+        self.assertAlmostEqual(r["cost_usd"], 10.17, places=2)
+
+    def test_num_turns_is_not_evidence_of_work(self):
+        """A rate-limited session reports `num_turns: 1` while having read nothing.
+
+        Trusting the turn count would let "nothing ran" masquerade as "ran and was cut
+        off" — which is the exact confusion this class exists to prevent. Tokens are
+        the evidence.
+        """
+        r = self._driver_result([
+            {"type": "result", "subtype": "success", "is_error": True,
+             "result": "You've hit your session limit", "total_cost_usd": 0,
+             "num_turns": 1, "usage": {"input_tokens": 0, "output_tokens": 0}},
+        ])
+        self.assertFalse(r["ok"], "num_turns:1 with zero tokens is still 'nothing ran'")
+        self.assertIn("nothing ran", r["error"])
+
     def test_a_real_run_still_succeeds(self):
         """The fix must not make every run an error."""
         r = self._driver_result([

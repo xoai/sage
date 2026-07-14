@@ -296,31 +296,70 @@ the mode engages) with mode-neutral checks (so both arms can pass).
 | L1 · sage · **inline** | **3/3** | $21.58 | 24 min |
 | L1 · bare (reference) | 3/3 | $2.35 | ~4 min |
 
-### Subagents — **UNRESOLVED, and the harness is why**
+### Subagents — it does not finish the work inline finishes
 
-Two of the three subagent runs produced:
+The best subagent run, session by session, against the identical $10/session cap:
+
+| | session 1 | session 2 | result |
+|---|---|---|---|
+| **subagents** | $7.73 · 41 turns | $10.17 · 39 turns → **hit the cap** | **never completed** |
+| **inline** | $1.50–$17.16 | $12.19–$13.66 | **3/3 PASS** |
+
+Subagent mode spent **80 turns and ~$18 across two sessions and still had not
+finished** the three-task plan that the inline loop completes. It dispatches a fresh
+implementer *and* an independent reviewer per task, and the dispatch overhead is what
+consumes the budget.
+
+**This is a lower bound, not a completion cost.** What it establishes is the
+comparison that matters: *given a budget the inline loop finishes in, subagent mode
+does not finish at all.* Establishing what it would cost to finish means raising the
+cap and paying for it — on this evidence, somewhere north of $50/run, N=3, and the
+direction is already clear enough that the money is better spent elsewhere.
+
+### C13 — the recommendation: **HOLD. Do not flip the default.**
+
+Subagent mode should stay opt-in (`--subagents`).
+
+- It is **at minimum 2–3× more expensive** than the inline loop for the same plan, and
+  did not complete within a budget the inline loop completed in 3/3.
+- E9/E10 already establish that the mode *works* — every task implemented by a fresh
+  context and judged by a different one, with a ledger to prove it. That is a real
+  guarantee and worth paying for **when you want it**.
+- Nothing here says it produces *better code*. No grader in this suite reads for
+  quality and none should pretend to. The case for the mode is auditability, not
+  correctness, and auditability is a choice a user should make deliberately.
+
+**Confidence: moderate, and stated as such.** The subagent arm is **N=1 and
+budget-truncated** — the other two runs were eaten by a session limit. That is enough
+to say *hold*; it is not enough to say *never*. What would change the recommendation is
+evidence that the mode catches defects the inline loop ships, and that experiment has
+not been run.
+
+### And the harness scored a rate limit as a Sage failure
+
+Two of the original three subagent runs produced:
 
 ```
 result:   "You've hit your session limit · resets 3:10am"
 is_error: True     total_cost_usd: 0     num_turns: 1
 ```
 
-**Zero model calls. $0.00. Three seconds.** And the harness recorded them, with
-`err=None`, as *Sage failing 4 of 7 checks*.
-
-That is the harness committing the exact sin the harness exists to catch:
-**nothing-happened, scored as it-happened-badly.** Had it not been caught, this
-document would now contain a table showing subagent mode failing 0/3 — a confident,
+**Zero model calls. $0.00. Three seconds.** The harness recorded them, with
+`err=None`, as *Sage failing 4 of 7 checks*. Had nobody asked why a run cost nothing,
+this document would now carry a table showing subagent mode failing 0/3 — a confident,
 published, entirely fabricated finding about a mode that never ran.
 
-Fixed: a `result` event carrying `is_error` now fails the run as a *platform* error,
-and a session that reads **zero input tokens** errors rather than scores. A rate limit,
-an auth failure, an overloaded API — none of them are evidence about Sage. Three
-regression tests pin it.
+The fix distinguishes two things that are not the same:
 
-**The C13 default-flip question is therefore still open.** One valid subagent run
-completed (5/7, $8.89, 12 min) and one arm of a three-run comparison is an anecdote,
-not a result. Re-run when the limit resets.
+- **Nothing ran** — rate limit, auth failure, overloaded API. Zero tokens read. Not
+  evidence about Sage; the run **errors** rather than scores.
+- **Truncated** — `error_max_budget_usd`, timeouts. The agent worked (39 turns, $10)
+  and was then cut off. The workspace holds what it managed, so it is **graded and
+  flagged**: a truncated pass did the work; a truncated failure is *inconclusive*, not
+  a defect.
+
+`num_turns` is not evidence of work — a rate-limited session reports `num_turns: 1`
+having read nothing. **Tokens are.** Five regression tests pin all of it.
 
 ## What is still not measured
 
