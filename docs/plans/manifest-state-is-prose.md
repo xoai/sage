@@ -4,13 +4,13 @@
 `runtime/tools/manifest.py` + `sage-manifest-sync.sh` (PostToolUse) fixed the
 machine fields; `manifest.py resume` + the resume authority order
 (cycle-protocol.md) + the `blocked_on:` requirement fixed the half this document
-ends on — "L1 did not improve" — which was two distinct things: mostly budget
-truncation (corrected in v1.3.3: L1 was 3/3 all along), plus one real,
-under-budget refusal — the manifest's *prose* drifting from its authority, a
-dead session's hedge inherited as law. See `docs/eval-baseline-v2.md`
-§ "Fixed in v1.3.4". Kept as the record of what was found and what was
-deliberately *not* automated.
-**Found by:** L1 (resume fidelity), first real run, N=3. See `docs/eval-baseline-v2.md`.
+ends on — "the resume scenario did not improve" — which was two distinct things:
+mostly budget truncation (later corrected: the resume scenario was 3/3 all along),
+plus one real, under-budget refusal — the manifest's *prose* drifting from its
+authority, a dead session's hedge inherited as law. See `docs/eval-baseline.md`.
+Kept as the record of what was found and what was deliberately *not* automated.
+**Found by:** the resume-fidelity scenario, first real run, N=3. See
+`docs/eval-baseline.md`.
 
 ## What happened
 
@@ -39,7 +39,7 @@ any of them against reality.
 **This is the same bug v1.3.0 found in the task ledger** — *"the entire evidence
 base for 'every task was independently reviewed' was being produced by the model's
 goodwill; in two runs of three it simply was not written."* The fix there was
-`ledger.py`: generate it. E9 went 1/3 → 3/3.
+`ledger.py`: generate it. The sub-agent scenario went 1/3 → 3/3.
 
 Same bug. Same place. Same fix.
 
@@ -58,18 +58,20 @@ exists to collect, which is a worse bug than the one being fixed.
 
 **Fact is mechanical. Approval is not.**
 
-Result (L1, sage, N=3, re-run with the hook):
+Result (resume scenario, sage, N=3, re-run with the hook):
 
 | | before | after |
 |---|---|---|
 | manifest coherent with the tree | 2/3 | **3/3** |
 | `gate_state` values seen | `gates-passed`, **`plan-approved`**, `complete` | `building`, `gates-passed`, `building` |
-| **L1 overall** | 2/3 | **2/3 — unchanged** |
+| **Resume scenario overall** | 2/3 | **2/3 — unchanged** |
 
-**L1 did not improve, and that is worth stating plainly.** The manifest has not lied
-since. But in one run of three Sage still failed to *finish the work* — a different
-failure, which ceremony cost causes and a hook cannot fix. `manifest.py check` now
-fails a manifest that contradicts its own tree, so this cannot silently regress.
+**The resume scenario did not improve, and that is worth stating plainly.** The
+manifest has not lied since. But in one run of three Sage still failed to *finish the
+work* — a different failure, which ceremony cost causes and a hook cannot fix.
+`manifest.py check` now fails a manifest that contradicts its own tree, so this
+cannot silently regress. (That 2/3 was later corrected to 3/3 — the shortfall was
+budget truncation, not resume infidelity; see `docs/eval-baseline.md`.)
 
 ## The original plan, for the record
 
@@ -81,8 +83,8 @@ fails a manifest that contradicts its own tree, so this cannot silently regress.
 3. **A coherence check.** A manifest claiming `plan-approved` while the plan's
    deliverables exist in the tree is a contradiction. Something should fail loudly
    rather than let the next session inherit a lie.
-4. **L1 is already the regression test.** It catches this today. It should go
-   2/3 → 3/3.
+4. **The resume scenario is already the regression test.** It catches this today.
+   It should go 2/3 → 3/3.
 
 ## Until then
 
@@ -95,4 +97,4 @@ it."*
 A bare agent with the same files resumed correctly **3/3**. Sage managed **2/3** at
 roughly **3.6× the spend**, and needed an extra turn to get there. The ceremony is
 not currently buying what it costs. (The 2/3 itself was later corrected — budget
-truncation; see eval-baseline-v2. The cost ratio stood.)
+truncation; see eval-baseline. The cost ratio stood.)

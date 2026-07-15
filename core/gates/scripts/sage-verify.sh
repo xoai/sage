@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # sage-verify.sh — Deterministic verification for Gate 5
 # Runs tests, checks results, collects evidence.
-# Usage: bash sage/core/gates/scripts/sage-verify.sh [project-root]
+# Usage: bash sage/core/gates/scripts/sage-verify.sh [--quiet] [project-root]
 #
 # This script replaces language-based "verify tests pass" instructions
 # with deterministic execution. Code is deterministic; language isn't.
@@ -14,28 +14,44 @@
 # Exit 2 exists because "the suite is green" and "there is no suite" are not
 # the same claim. They used to share exit 0, so a project with zero tests
 # passed the verification gate.
+#
+# --quiet (context diet, profile 2026-07-15): on the PASS path, print one
+# summary line instead of a dozen section banners — that output is re-paid in
+# every later call's context. It NEVER trims a FAIL or an UNVERIFIABLE: the
+# evidence a failure carries is the whole point of the gate, and a quiet
+# failure would be a lie the same shape as a skipped one.
 
 set -uo pipefail
 
-ROOT="${1:-.}"
+QUIET=false
+ROOT="."
+_root_set=false
+for _arg in "$@"; do
+  case "$_arg" in
+    --quiet) QUIET=true ;;
+    *) if [ "$_root_set" = false ]; then ROOT="$_arg"; _root_set=true; fi ;;
+  esac
+done
+ROOT_ARG="$ROOT"
 PASS=true
 
-log() { echo "$1"; }
+log()  { echo "$1"; }                       # always printed
+vlog() { [ "$QUIET" = true ] || echo "$1"; } # decorative — dropped when quiet
 
 unverifiable() {
-  log ""
-  log "═══ Gate 5 Result ═══"
+  vlog ""
+  vlog "═══ Gate 5 Result ═══"
   log "⚠️ UNVERIFIABLE — $1"
   exit 2
 }
 
-log "═══ Sage Gate 5: Verification ═══"
-log "Root: $ROOT"
-log "Time: $(date -Iseconds 2>/dev/null || date)"
-log ""
+vlog "═══ Sage Gate 5: Verification ═══"
+vlog "Root: $ROOT"
+vlog "Time: $(date -Iseconds 2>/dev/null || date)"
+vlog ""
 
 if ! ROOT=$(cd "$ROOT" 2>/dev/null && pwd); then
-  unverifiable "project root does not exist: ${1:-.}"
+  unverifiable "project root does not exist: $ROOT_ARG"
 fi
 
 if ! command -v python3 >/dev/null 2>&1; then
@@ -232,16 +248,16 @@ if [ ${#PRECHECK_ARGV[@]} -gt 0 ]; then
   fi
 fi
 
-log "Test runner: $TEST_RUNNER"
-log "Command: ${TEST_ARGV[*]+"${TEST_ARGV[*]}"}"
-log ""
+vlog "Test runner: $TEST_RUNNER"
+vlog "Command: ${TEST_ARGV[*]+"${TEST_ARGV[*]}"}"
+vlog ""
 
 # ── Step 2: Run tests ──
 #
 # argv is executed directly. The old script built a string and ran `eval` on
 # it, which is needless indirection for an internally-constructed command and
 # a hazard the moment detection reads anything from project config.
-log "── Running tests ──"
+vlog "── Running tests ──"
 
 TEST_OUTPUT=$(cd "$ROOT" && ${TEST_ARGV[@]+"${TEST_ARGV[@]}"} 2>&1)
 TEST_RC=$?
@@ -253,15 +269,17 @@ if [ "$TEST_RC" -ne 0 ]; then
   printf '%s\n' "$TEST_OUTPUT" | tail -40
   PASS=false
 else
-  log "✅ ALL TESTS PASSED"
+  vlog "✅ ALL TESTS PASSED"
   SUMMARY=$(printf '%s\n' "$TEST_OUTPUT" | tail -5 | grep -e "passed" -e "PASS" -e "ok" | tail -1)
-  [ -n "$SUMMARY" ] && log "    $SUMMARY"
+  [ -n "$SUMMARY" ] && vlog "    $SUMMARY"
+  TESTS_NOTE="tests passed"
 fi
 
-log ""
+vlog ""
 
 # ── Step 3: Check build compiles ──
-log "── Build check ──"
+vlog "── Build check ──"
+BUILD_NOTE="no build step"
 if [ ${#BUILD_ARGV[@]} -gt 0 ]; then
   BUILD_OUTPUT=$(cd "$ROOT" && ${BUILD_ARGV[@]+"${BUILD_ARGV[@]}"} 2>&1)
   if [ $? -ne 0 ]; then
@@ -269,16 +287,17 @@ if [ ${#BUILD_ARGV[@]} -gt 0 ]; then
     printf '%s\n' "$BUILD_OUTPUT" | tail -20
     PASS=false
   else
-    log "✅ Build succeeds"
+    vlog "✅ Build succeeds"
+    BUILD_NOTE="build ok"
   fi
 else
-  log "⚠️  No build step detected"
+  vlog "⚠️  No build step detected"
 fi
 
-log ""
+vlog ""
 
 # ── Step 4: Check for leftover markers ──
-log "── Clean code check ──"
+vlog "── Clean code check ──"
 TODO_COUNT=0
 for d in src app lib; do
   [ -d "$ROOT/$d" ] || continue
@@ -290,24 +309,32 @@ for d in src app lib; do
 done
 
 if [ "$TODO_COUNT" -gt 0 ]; then
+  # Markers never fail the gate (they are advisory) — but they are evidence, so
+  # they print even when quiet.
   log "⚠️  Found $TODO_COUNT TODO/FIXME/HACK/XXX markers in source"
-  for d in src app lib; do
-    [ -d "$ROOT/$d" ] || continue
-    grep -rn -e TODO -e FIXME -e HACK -e XXX \
-      --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" \
-      --include="*.py" --include="*.dart" \
-      "$ROOT/$d" 2>/dev/null | head -5
-  done
+  MARKER_NOTE="$TODO_COUNT marker(s)"
+  if [ "$QUIET" = false ]; then
+    for d in src app lib; do
+      [ -d "$ROOT/$d" ] || continue
+      grep -rn -e TODO -e FIXME -e HACK -e XXX \
+        --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" \
+        --include="*.py" --include="*.dart" \
+        "$ROOT/$d" 2>/dev/null | head -5
+    done
+  fi
 else
-  log "✅ No TODO/FIXME/HACK markers"
+  vlog "✅ No TODO/FIXME/HACK markers"
+  MARKER_NOTE="no markers"
 fi
 
-log ""
+vlog ""
 
 # ── Result ──
-log "═══ Gate 5 Result ═══"
+vlog "═══ Gate 5 Result ═══"
 if [ "$PASS" = true ]; then
-  log "✅ PASS — All verifications passed"
+  # Quiet PASS collapses to one line that still carries the word the gate
+  # harness asserts on (PASS) plus the summary facts. Verbose keeps the banner.
+  log "✅ Gate 5 PASS — ${TESTS_NOTE:-tests passed}; ${BUILD_NOTE}; ${MARKER_NOTE:-no markers}"
   exit 0
 else
   log "❌ FAIL — See evidence above"

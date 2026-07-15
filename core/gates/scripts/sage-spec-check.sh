@@ -1,12 +1,17 @@
 #!/usr/bin/env bash
 # sage-spec-check.sh — Deterministic checks for Gate 1 (Spec Compliance)
 # Verifies that files listed in a task spec actually exist.
-# Usage: bash sage/core/gates/scripts/sage-spec-check.sh <plan-file> <task-number>
+# Usage: bash sage/core/gates/scripts/sage-spec-check.sh [--quiet] <plan-file> <task-number>
 #
 # Exit contract (ADR-1):
 #   0 = every declared deliverable exists
 #   1 = a declared deliverable is missing, or the task is absent from the plan
 #   2 = unverifiable — the task declares no deliverables to check
+#
+# --quiet (context diet, profile 2026-07-15): drop the section banners on the
+# PASS path. The per-deliverable existence lines STAY even when quiet — a spec
+# PASS that does not name what it checked is the vacuous pass this gate's
+# tests exist to prevent. A FAIL or UNVERIFIABLE is never trimmed.
 #
 # Task extraction runs in python3. It used to be
 #     awk "/Task ${N}[^0-9]/,/^- \[/"
@@ -17,15 +22,24 @@
 
 set -uo pipefail
 
-PLAN="${1:-}"
-TASK_NUM="${2:-}"
+QUIET=false
+_pos=()
+for _arg in "$@"; do
+  case "$_arg" in
+    --quiet) QUIET=true ;;
+    *) _pos+=("$_arg") ;;
+  esac
+done
+PLAN="${_pos[0]:-}"
+TASK_NUM="${_pos[1]:-}"
 PASS=true
 
-log() { echo "$1"; }
+log()  { echo "$1"; }                        # always printed
+vlog() { [ "$QUIET" = true ] || echo "$1"; }  # decorative — dropped when quiet
 fail() { log "❌ $1"; PASS=false; }
 
 if [ -z "$PLAN" ] || [ ! -f "$PLAN" ] || [ -z "$TASK_NUM" ]; then
-  echo "Usage: sage-spec-check.sh <plan-file> <task-number>"
+  echo "Usage: sage-spec-check.sh [--quiet] <plan-file> <task-number>"
   echo "  plan-file: path to plan.md"
   echo "  task-number: task number to verify (e.g., 1, 2, 3)"
   exit 1
@@ -37,10 +51,10 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 2
 fi
 
-log "═══ Sage Gate 1: Spec Compliance Check ═══"
-log "Plan: $PLAN"
-log "Task: $TASK_NUM"
-log ""
+vlog "═══ Sage Gate 1: Spec Compliance Check ═══"
+vlog "Plan: $PLAN"
+vlog "Task: $TASK_NUM"
+vlog ""
 
 # ── Extract the task's declared deliverables ──
 #
@@ -213,28 +227,30 @@ while IFS=$'\t' read -r kind a b c; do
 done <<< "$EXTRACT"
 
 # ── Step 1: Task extraction ──
-log "── Task extraction ──"
+vlog "── Task extraction ──"
 if [ "$FOUND" != "1" ]; then
   log "❌ Task $TASK_NUM not found in plan"
-  log ""
-  log "═══ Gate 1 Result ═══"
+  vlog ""
+  vlog "═══ Gate 1 Result ═══"
   log "❌ FAIL — Task $TASK_NUM is not in $PLAN"
   exit 1
 fi
-log "  Found task section"
+vlog "  Found task section"
 
 # ── Step 2: Check declared deliverables exist ──
-log ""
-log "── File existence check ──"
+vlog ""
+vlog "── File existence check ──"
 
 if [ "$CHECKED" -eq 0 ]; then
-  log "  Task $TASK_NUM declares no Files: or Output: deliverables"
-  log ""
-  log "═══ Gate 1 Result ═══"
+  vlog "  Task $TASK_NUM declares no Files: or Output: deliverables"
+  vlog ""
+  vlog "═══ Gate 1 Result ═══"
   log "⚠️ UNVERIFIABLE — task $TASK_NUM declares no deliverables to check"
   exit 2
 fi
 
+# The per-deliverable lines are evidence, not decoration — they print even when
+# quiet, so a PASS still names the paths it actually resolved.
 while IFS='|' read -r path exists kind; do
   [ -z "$path" ] && continue
   if [ "$exists" = "1" ]; then
@@ -244,38 +260,38 @@ while IFS='|' read -r path exists kind; do
   fi
 done <<< "$DELIV_LINES"
 
-log ""
-log "  Checked $CHECKED files, $MISSING missing"
+vlog ""
+vlog "  Checked $CHECKED files, $MISSING missing"
 
 # ── Step 3: Check task checkbox status ──
-log ""
-log "── Completion status ──"
+vlog ""
+vlog "── Completion status ──"
 case "$CHECKBOX" in
-  complete)   log "  ✅ Task $TASK_NUM is marked complete in plan" ;;
-  incomplete) log "  ⚠️  Task $TASK_NUM is NOT yet marked complete" ;;
-  *)          log "  ⚠️  Could not determine checkbox status" ;;
+  complete)   vlog "  ✅ Task $TASK_NUM is marked complete in plan" ;;
+  incomplete) vlog "  ⚠️  Task $TASK_NUM is NOT yet marked complete" ;;
+  *)          vlog "  ⚠️  Could not determine checkbox status" ;;
 esac
 
 # ── Step 4: Check for test files ──
-log ""
-log "── Test existence ──"
+vlog ""
+vlog "── Test existence ──"
 if [ "$MENTIONS_TEST" = "1" ] && [ -n "$TEST_LINES" ]; then
   while IFS='|' read -r path testfile; do
     [ -z "$path" ] && continue
     if [ "$testfile" = "-" ]; then
-      log "  ⚠️  No test file found for $path"
+      vlog "  ⚠️  No test file found for $path"
     else
-      log "  ✅ Test found: $testfile"
+      vlog "  ✅ Test found: $testfile"
     fi
   done <<< "$TEST_LINES"
 else
-  log "  No test mentioned in task spec"
+  vlog "  No test mentioned in task spec"
 fi
 
-log ""
+vlog ""
 
 # ── Result ──
-log "═══ Gate 1 Result ═══"
+vlog "═══ Gate 1 Result ═══"
 if [ "$PASS" = true ]; then
   log "✅ PASS — All $CHECKED spec deliverable(s) verified"
   exit 0

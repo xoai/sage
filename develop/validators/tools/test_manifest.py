@@ -266,6 +266,17 @@ class ResumeTest(unittest.TestCase):
         self.assertIn("context, NOT orders", text)
         self.assertIn("EVIDENCE", text)
 
+    def test_the_brief_states_the_close_out_economy(self):
+        """A resumed session is on the lean close-out path by construction — the
+        brief tells it so, next to the authority order, so it finishes the delta
+        instead of re-running the whole gate ceremony (2026-07-15 profile)."""
+        self.m.write_text(a_manifest("building"))
+        self.commit("cycle: begin")
+        text = self.brief()
+        self.assertIn("CLOSE-OUT ECONOMY", text)
+        self.assertIn("combined", text)
+        self.assertIn("Inherited red", text)
+
     def test_a_blocked_cycle_is_surfaced_not_skipped(self):
         self.m.write_text(a_manifest("building", status="blocked"))
         self.commit("cycle: begin")

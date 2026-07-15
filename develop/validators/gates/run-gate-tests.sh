@@ -274,6 +274,35 @@ run_case G10d "[DOC] task's Output: path is checked like Files:" \
 
 echo ""
 
+# ── Context diet: --quiet drops banners on PASS, keeps evidence always ─────
+# (profile 2026-07-15) A quiet PASS is one summary line that still carries the
+# verdict word and the artifact it checked; a quiet FAIL is never trimmed.
+echo "Context diet — --quiet"
+
+run_case G13 "quiet verify PASS: one line, no section banners, still says PASS" \
+  --script "$V" --exit 0 --contains "PASS" \
+  --not-contains "── Running tests ──" --not-contains "Gate 5 Result" \
+  --requires pytest \
+  -- --quiet "$FIX/verify/passing-pytest"
+
+run_case G14 "quiet verify FAIL keeps the failing test name (evidence untrimmed)" \
+  --script "$V" --exit 1 --contains "FAIL" --contains "test_arithmetic_is_broken" \
+  --requires pytest \
+  -- --quiet "$FIX/verify/failing-pytest"
+
+run_case G15 "quiet spec-check PASS still names the deliverable it resolved" \
+  --script "$S" --exit 0 --contains "PASS" --contains "src/greeter.ts" \
+  --not-contains "── Task extraction ──" \
+  --cwd "$FIX/spec-check/pass" \
+  -- --quiet plan.md 1
+
+run_case G16 "quiet hallucination PASS keeps the truthful counter (no vacuous pass)" \
+  --script "$H" --exit 0 --contains "PASS" --contains "Checked 1 imports, 0 missing" \
+  --not-contains "── File reference check ──" \
+  -- --quiet "$FIX/hallucination/clean-ts/src/app.ts" "$FIX/hallucination/clean-ts"
+
+echo ""
+
 # ── Gate 6: visual verification ──────────────────────────────────────────
 echo "Gate 6 — sage-visual-gate.sh"
 W=sage-visual-gate.sh

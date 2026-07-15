@@ -230,7 +230,11 @@ surfaces:
     uncovered: >
       No scenario invokes Gate 1 directly. E7 exercises the spec-gate HOOK,
       which is a different mechanism (a PreToolUse veto, not a standalone
-      script). The gate's own regression tests live in the 17-case gate suite.
+      script). The gate's own regression tests live in the gate suite — which
+      the v1.3.5 --quiet flag extended: the flag is output-only (the PASS path
+      collapses to one line; FAIL/UNVERIFIABLE and the checked-artifact names
+      are never trimmed), so it changes no graded behavior, and the gate suite
+      pins that the verdict and evidence still print.
 
   gate-visual:
     path: core/gates/scripts/sage-visual-gate.sh
@@ -802,7 +806,12 @@ surfaces:
   overlay-skill-configure:
     path: runtime/plugin-overlay/skills/configure/SKILL.md
     kind: overlay-skill
-    uncovered: "Plugin-only configuration skill; no scenario installs the plugin."
+    uncovered: >
+      Plugin-only configuration skill; no scenario installs the plugin. v1.3.5
+      added documentation of the close-out economy config knobs (gate_review,
+      batch_bookkeeping, trust_inherited_red) — prose only; the knobs' behavior
+      is measured through the workflows/capabilities they gate (E1/E4/E5/E8 and
+      L1-resume-fidelity, all re-measured 3/3), not through this doc.
 
   overlay-skill-continue:
     path: runtime/plugin-overlay/skills/continue/SKILL.md

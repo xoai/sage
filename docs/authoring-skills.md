@@ -25,11 +25,11 @@ So it stopped being a matter of remembering. `coverage.yaml` gives every behavio
 surface in Sage a row, and CI fails a PR that changes a mapped surface without
 touching a covering scenario. There is no third option and no blank.
 
-Then v1.3.0 proved the rule's harder half. The entire test-first prose block was
-deleted from the eager layer — and E1 still measured 3/3 against a bare agent's 0/3.
-**The prose had never been doing the work. The hook was.** Nobody could have known
-that by reading it. The only reason it is known now is that a scenario existed to
-ask.
+Then the context diet proved the rule's harder half. The entire test-first prose
+block was deleted from the always-loaded layer — and test-first still measured 3/3
+against a bare agent's 0/3. **The prose had never been doing the work. The hook
+was.** Nobody could have known that by reading it. The only reason it is known now
+is that a scenario existed to ask.
 
 That is the point of writing the scenario first. Not to prove your skill works — to
 find out whether it does anything at all.
@@ -45,7 +45,7 @@ wrong without it, and if you cannot say what that is in one sentence, you are no
 ready to write the skill.
 
 > *"Asked to change one constant under pressure, the agent edits it and ships an
-> untested value."* — E1
+> untested value."* — the test-first scenario
 
 Write it in the scenario's `rationale`. Every scenario in `develop/evals/scenarios/`
 carries one, and they are long on purpose: the rationale is where the next person
@@ -70,10 +70,10 @@ first real baseline run hit both:
 - **A check the fixture already satisfies.** The scenario then passes in every
   condition, forever, and reads as evidence.
 - **A check the fixture already fails**, for reasons that have nothing to do with the
-  agent. E5's Gate 4 scanned the whole workspace — including Sage's own vendored
-  framework — found "phantom imports" in Sage's example code, and scored sage 0/3
-  against bare 3/3. A clean *"Sage makes the agent worse"* result, manufactured
-  entirely by the harness.
+  agent. The suspect-package scenario's hallucination gate scanned the whole
+  workspace — including Sage's own vendored framework — found "phantom imports" in
+  Sage's example code, and scored sage 0/3 against bare 3/3. A clean *"Sage makes the
+  agent worse"* result, manufactured entirely by the harness.
 
 ### 4. *Now* write the skill
 
@@ -89,7 +89,7 @@ v1.2.0 baseline falsified a README claim and shipped the falsification.
   skill-my-thing:
     path: skills/my-thing/SKILL.md
     kind: skill
-    covered-by: [E12]
+    covered-by: [my-thing-under-pressure]
 ```
 
 or, honestly:
@@ -146,9 +146,10 @@ suite was wrong, not the agent. So:
   reported success when *nothing had happened at all*: codex's read-only sandbox
   blocked an edit (recorded as a veto), and opencode's crashed runs left the file
   unchanged (same). **Nothing-happened and correctly-blocked are indistinguishable
-  unless you look at the mechanism.** L2 asserts a memory tool was actually *called*,
-  precisely so a pass cannot be a reread wearing memory's coat.
-- **Watch the needle.** L1 greps session 2's diff for `MAX_RETRIES = ` — with the
+  unless you look at the mechanism.** The memory-recall scenario asserts a memory
+  tool was actually *called*, precisely so a pass cannot be a reread wearing memory's
+  coat.
+- **Watch the needle.** The resume scenario greps session 2's diff for `MAX_RETRIES = ` — with the
   trailing space. Without it, the needle is a substring of `MAX_RETRIES == 3`, which
   is what a perfectly correct new test asserts. The naive grader fails the very agent
   it exists to pass. One character. There is a unit test holding it in place.

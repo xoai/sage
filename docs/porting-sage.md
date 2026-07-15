@@ -57,8 +57,8 @@ CONST="$(build_constitution_section "$CORE" "$PROJECT_SAGE")"   # merge the cons
 emit_system_skills_inline "$CORE" >> "$OUT"           # IF you have no skill discovery
 ```
 
-**That last line is not optional if `native-skill-discovery: false`.** ADR-9
-moved ~220 lines out of the eager body and into skills. If your platform can
+**That last line is not optional if `native-skill-discovery: false`.** The context
+diet moved ~220 lines out of the always-loaded body and into skills. If your platform can
 neither fetch them nor inline them, your users do not have that content — while
 their instructions file still points at it ("→ the sage-gates skill") as though
 they did.
@@ -121,7 +121,7 @@ maintainer: "your-github-handle"
 
 This is what makes the lifecycle clock mean something. **A platform that fails
 conformance for two consecutive minor releases is dropped from the generated
-docs** (R113). `maintainer: unclaimed` means nobody answers when it goes red, and
+docs.** `maintainer: unclaimed` means nobody answers when it goes red, and
 that is how a port quietly becomes an advertised promise nobody is keeping.
 
 ---

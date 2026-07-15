@@ -65,3 +65,27 @@ Change management discipline.
 **Open Source**: Changes proposed as RFCs. Public decision log.
 Contributor-friendly: explain WHY in every decision. Breaking changes
 get migration guides. Backward compatibility by default.
+
+## Cost controls — the close-out economy
+
+Top-level `.sage/config.yaml` keys that trim the resume-session tax the
+2026-07-15 profile measured. They apply on a **resumed** cycle's close-out only
+(a session that started from `manifest.py resume`); a first-session build always
+runs full rigor. Each has a safe default and can be restored to the old behavior.
+Details: `core/workflows/_shared/cycle-protocol.md` § "Resume close-out economy".
+
+| Key | Default | Effect | Restore old behavior |
+|---|---|---|---|
+| `gate_review` | `combined` | Judgment gates 1–3 reach an independent verdict via ONE adversarial reviewer instead of a dispatch per gate. | `per-gate` (a reviewer per gate) or `off` (self-review) |
+| `batch_bookkeeping` | `true` | Memory writes and prose checkpoints deferred to the checkpoint, not emitted per task. The manifest bridge is never batched. | `false` |
+| `trust_inherited_red` | `true` | On resume, a test the prior session already recorded as written-and-failing is not re-run just to re-witness the failure. Never applies to a test this session writes. | `false` |
+
+What these never touch: the deterministic script gates (they always run, and are
+the evidence base), the final full-suite verification, at least one independent
+whole-change review, and per-task commits. The balance is rigor front-loaded on
+the session that does the design, not re-purchased by the session that finishes a
+small delta.
+
+When a user asks to "make Sage cheaper on resume" / "reduce the resume cost", these
+are the levers; when they want "maximum rigor regardless of cost", set
+`gate_review: per-gate`, `batch_bookkeeping: false`, `trust_inherited_red: false`.

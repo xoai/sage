@@ -2,6 +2,57 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [1.3.5] — the resume bill, itemised and trimmed
+
+v1.3.4 made the resume *bridge* sound. The *bill* was still ~9× a bare agent, and
+the 2026-07-15 profile (`develop/evals/profile_session.py`) itemised it: **4.1× the
+API calls × 2.1× the context per call**, compounding. The three levers it named are
+now implemented. Each is a **resume close-out economy** — leaner on a session that
+resumed a cycle and is finishing a small delta, unchanged on a first-session build
+that does the design. The principle: rigor is front-loaded on the session that does
+the work, banked, and not re-purchased by the session that finishes.
+
+**Re-measured — no behaviour loss; no cost delta claimed.** Because the levers
+touch reliability-sensitive paths, they were re-run before shipping (N=3,
+deterministic graders, levers default-on): the covering first-session scenarios
+hold **3/3** and the resume-fidelity scenario holds **3/3** — pass-rate parity with
+the prior baseline, the failure mode absent. What is **not** claimed is a discount:
+the cost *reduction* is not yet quantified (that needs a controlled before/after),
+so no new sage:bare ratio is published here.
+
+- **One combined gate review, not the whole ceremony again** (`gate_review`,
+  default `combined`) — the largest lever (~24% of the resume session's spend was
+  the adversarial gate sub-agents re-running from scratch: "Gate 1 review", "Gates
+  2+3 review", "Adversarial Gate 3 review", "Re-verify gates on fixed HEAD"). The
+  judgment gates (1 spec, 2 constitution, 3 quality) now reach their independent
+  verdict via ONE adversarial reviewer over the whole cycle diff instead of a
+  dispatch per gate. On resume close-out, that one review replaces the per-task
+  re-reviews the first session already ran; Auto-QA (Gate 8) folds into it.
+  `per-gate` restores a reviewer per gate; `off` is self-review. The independent
+  whole-change review — the thing that catches real defects — always happens.
+- **Batch the loop** (`batch_bookkeeping`, default `true`; `trust_inherited_red`,
+  default `true`) — the loop's granularity was structural cost (3.1× the implement
+  calls, 2.5× the test runs for the same functions, each step re-paying ~95k tokens
+  of context). Memory writes and prose checkpoints now batch to the checkpoint
+  (the manifest bridge at a session break is never batched). On resume, a test the
+  prior session already recorded as written-and-failing is not re-run solely to
+  re-witness the failure — the red-confirm's observer requirement was met by the
+  session that wrote it (`tdd` § "Inherited red"; narrow, evidence-gated, never for
+  a test this session writes).
+- **Context diet, execution side** — the deterministic gate scripts
+  (`sage-verify.sh`, `sage-spec-check.sh`, `sage-hallucination-check.sh`) take
+  `--quiet`: the PASS path collapses to one summary line instead of a dozen
+  banners re-paid in every later call's context. A FAIL or UNVERIFIABLE is never
+  trimmed, and the truthful counters / checked-artifact names stay even when quiet
+  (a gate that does not say what it verified is the vacuous pass the gate tests
+  exist to prevent). Workflows invoke the scripts `--quiet` by default.
+
+What none of these touch: the deterministic script gates (they always run, and are
+the evidence base), the final full-suite verification, at least one independent
+whole-change review, and per-task commits. `.sage/config.yaml` documents each knob;
+`/configure` explains them. Restore full pre-lever behavior with `gate_review:
+per-gate`, `batch_bookkeeping: false`, `trust_inherited_red: false`.
+
 ## [1.3.4] — The dead session outranked the live user
 
 v1.3.3 corrected L1's headline: given a budget it does not hit, Sage resumes 3/3,
@@ -215,8 +266,7 @@ plainly rather than rounded up.
 A Pi extension **can veto a tool call**: `{block: true, reason}` on `tool_call`, the
 tool function never runs, the model receives the denial. Executed against Pi's faux
 model provider — no API key, ~2s, zero spend — with a negative control and a mutation check,
-because a green test is not evidence until it can go red.
-`docs/spike-artifacts/pi-veto-transcript.txt`. Tier **B**, port **2–3 person-weeks**.
+because a green test is not evidence until it can go red. Tier **B**, port **2–3 person-weeks**.
 
 Pi still has **no contract row**: the capability is proven, but Sage has no Pi
 *platform*, and building one is a port. The claim does not get to precede the thing.
@@ -345,7 +395,7 @@ E1 still measures 3/3 against a bare agent's 0/3 with the entire test-first pros
 block deleted. The prose was not doing the work; the hook was.
 
 11/11 scenarios pass. Full results, and the four harness bugs the run exposed:
-[docs/eval-baseline-v2.md](docs/eval-baseline-v2.md).
+[docs/eval-baseline.md](docs/eval-baseline.md).
 
 **The most important thing the run found was in Phase 3, not Phase 2.** Subagent
 execution worked perfectly *when its ledger existed* (E10: 3/3) and failed 2 runs

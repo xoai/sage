@@ -460,6 +460,15 @@ gates:
   additional: []
   disabled: []
 
+# Close-out economy — trims the resume-session cost the 2026-07-15 profile found
+# (a resumed cycle paid ~9x a bare agent; ~24% was the adversarial gate sub-agents
+# re-running from scratch). These apply on a RESUMED cycle's close-out only;
+# first-session builds keep full rigor. See
+# core/workflows/_shared/cycle-protocol.md "Resume close-out economy".
+gate_review: combined       # combined (default) | per-gate | off — how judgment gates 1-3 reach an independent verdict
+batch_bookkeeping: true     # defer memory/prose to the checkpoint; the manifest bridge is never batched
+trust_inherited_red: true   # on resume, skip re-confirming a test the prior session already recorded failing
+
 # Extensions
 packs:
   enabled: [${options.extensions.join(', ')}]
