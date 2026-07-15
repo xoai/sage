@@ -512,10 +512,14 @@ fi
 #                                         source is written, so a resumed session
 #                                         cannot read "no tasks started" off a
 #                                         cycle whose work is already in the tree
+#   sage-bookkeeping-gate.sh PreToolUse — redirects hand-edits of an active
+#                                         cycle's manifest/decisions to the
+#                                         one-command close-out writer
 SPEC_GATE_SRC="$CORE/../runtime/platforms/claude-code/hooks/sage-spec-gate.sh"
 DEG_LOG_SRC="$CORE/../runtime/platforms/claude-code/hooks/sage-degradation-log.sh"
 TDD_GATE_SRC="$CORE/../runtime/platforms/claude-code/hooks/sage-tdd-gate.sh"
 MANIFEST_SYNC_SRC="$CORE/../runtime/platforms/claude-code/hooks/sage-manifest-sync.sh"
+BOOKKEEPING_GATE_SRC="$CORE/../runtime/platforms/claude-code/hooks/sage-bookkeeping-gate.sh"
 if [ -f "$SPEC_GATE_SRC" ]; then
   cp "$SPEC_GATE_SRC" "$CLAUDE_DIR/hooks/sage-spec-gate.sh"
   chmod +x "$CLAUDE_DIR/hooks/sage-spec-gate.sh"
@@ -530,6 +534,10 @@ if [ -f "$SPEC_GATE_SRC" ]; then
   if [ -f "$MANIFEST_SYNC_SRC" ]; then
     cp "$MANIFEST_SYNC_SRC" "$CLAUDE_DIR/hooks/sage-manifest-sync.sh"
     chmod +x "$CLAUDE_DIR/hooks/sage-manifest-sync.sh"
+  fi
+  if [ -f "$BOOKKEEPING_GATE_SRC" ]; then
+    cp "$BOOKKEEPING_GATE_SRC" "$CLAUDE_DIR/hooks/sage-bookkeeping-gate.sh"
+    chmod +x "$CLAUDE_DIR/hooks/sage-bookkeeping-gate.sh"
   fi
 
   # Merge the hook into settings.json rather than overwriting, so the user's
@@ -548,6 +556,7 @@ path = sys.argv[1]
 WANTED = [
     ("PreToolUse", "Edit|Write|MultiEdit", "sage-spec-gate.sh"),
     ("PreToolUse", "Edit|Write|MultiEdit", "sage-tdd-gate.sh"),
+    ("PreToolUse", "Edit|Write|MultiEdit", "sage-bookkeeping-gate.sh"),
     ("PostToolUse", "Write|Edit", "sage-degradation-log.sh"),
     ("PostToolUse", "Write|Edit", "sage-manifest-sync.sh"),
 ]

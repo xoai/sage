@@ -182,6 +182,20 @@ surfaces:
       E8 is the scenario that proved the thesis: the decisions.md line appears
       because a script writes it, not because the model remembered to.
 
+  hook-bookkeeping-gate:
+    path: runtime/platforms/claude-code/hooks/sage-bookkeeping-gate.sh
+    kind: hook
+    covered-by: [L1]
+    notes: >
+      The fourth instance of the same bug. The close-out command shipped with its
+      instruction in four documents, and the next kept run made zero calls to it —
+      the session read none of those documents (it skipped `manifest.py resume` and
+      read the manifest directly). The tool call is the only channel that provably
+      reaches every session: this hook redirects a hand-edit of an active cycle's
+      manifest/decisions to the one-command writer, exit-2-with-reason, the proven
+      block-recover-retry pattern. Its own 10-case suite lives in run-hook-tests.sh
+      (B1-B10); L1 covers it end-to-end on the resume path.
+
   hook-manifest-sync:
     path: runtime/platforms/claude-code/hooks/sage-manifest-sync.sh
     kind: hook

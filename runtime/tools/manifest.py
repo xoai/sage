@@ -655,7 +655,7 @@ def check(manifests, root: pathlib.Path) -> int:
 
 def close_out(manifest: pathlib.Path, summary=None, next_step=None,
               decisions=(), complete_tasks=(), open_questions=None,
-              status=None, phase=None) -> int:
+              status=None, phase=None, blocked_on=None) -> int:
     text = manifest.read_text(encoding="utf-8", errors="replace")
     cycle_dir = manifest.parent
     wrote = []
@@ -682,6 +682,11 @@ def close_out(manifest: pathlib.Path, summary=None, next_step=None,
     if status:
         text = write_field(text, "status", status)
         wrote.append(f"status={status}")
+    if blocked_on is not None:
+        # `status: blocked` without blocked_on: fails `check` — so the command
+        # that sets a blocker must be able to name its question in the same pass.
+        text = write_field(text, "blocked_on", f"\"{blocked_on}\"")
+        wrote.append("blocked_on")
     text = stamp_updated(text)
     manifest.write_text(text, encoding="utf-8")
 
@@ -764,6 +769,9 @@ def main(argv=None) -> int:
                     metavar="N", help="check Task N's box in plan.md (repeatable)")
     co.add_argument("--phase", help="set frontmatter phase")
     co.add_argument("--status", help="set frontmatter status")
+    co.add_argument("--blocked-on",
+                    help="name the blocker (required by `check` when status is "
+                         "blocked): the question, the options, whose call")
 
     args = p.parse_args(argv)
 
@@ -789,7 +797,8 @@ def main(argv=None) -> int:
                              decisions=args.decision,
                              complete_tasks=args.complete_task,
                              open_questions=args.open_questions,
-                             status=args.status, phase=args.phase)
+                             status=args.status, phase=args.phase,
+                             blocked_on=args.blocked_on)
 
         manifests = args.manifest or find_manifests(args.repo_root.resolve())
         if not manifests:

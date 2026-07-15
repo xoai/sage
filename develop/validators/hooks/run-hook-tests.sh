@@ -603,6 +603,64 @@ assert H40 "updating the ledger mid-cycle (no gates-passed claim) → allowed" "
   '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/led-e/manifest.md","new_string":"    status: done"}}' \
   --exit 0
 
+# ── sage-bookkeeping-gate: hand-edits of cycle bookkeeping redirect to close-out ──
+# The 2026-07-16 kept profile: the close-out command shipped with instructions in
+# four documents and got ZERO calls, because the session read none of them. The
+# tool call is the only channel that provably reaches every session.
+echo ""
+echo "sage-bookkeeping-gate — the close-out redirect"
+BKG="$REPO_ROOT/runtime/platforms/claude-code/hooks/sage-bookkeeping-gate.sh"
+
+P="$(new_project)"; set_config "$P" "hard_enforcement: true"
+add_manifest "$P" bk "building"
+assert B1 "hand-edit of an active cycle's manifest is redirected to close-out" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/bk/manifest.md","new_string":"## Context summary\nnew prose"}}' \
+  --exit 2 --stderr "close-out" --stderr "ONE pass" --hook "$BKG"
+
+printf -- '# Decisions\n' > "$P/.sage/work/bk/decisions.md"
+assert B2 "hand-edit of the cycle decisions.md is redirected too" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/bk/decisions.md","new_string":"### new decision"}}' \
+  --exit 2 --stderr "close-out" --hook "$BKG"
+
+assert B3 "CREATION is authoring, not bookkeeping — a new manifest may be written" "$P" \
+  '{"tool_name":"Write","tool_input":{"file_path":".sage/work/brand-new/manifest.md","content":"---\n---"}}' \
+  --exit 0 --hook "$BKG"
+
+assert B4 "a gate_state transition YIELDS to the spec-gate's completion guard" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/bk/manifest.md","new_string":"gate_state: gates-passed"}}' \
+  --exit 0 --hook "$BKG"
+
+assert B5 "plan.md stays free (authored and revised as an artifact)" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/bk/plan.md","new_string":"- [x] Task 1"}}' \
+  --exit 0 --hook "$BKG"
+
+assert B6 "the global .sage/decisions.md stays free (cross-initiative log)" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/decisions.md","new_string":"### x"}}' \
+  --exit 0 --hook "$BKG"
+
+assert B7 "source edits are none of this hook's business" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"src/app.ts","new_string":"x"}}' \
+  --exit 0 --hook "$BKG"
+
+P="$(new_project)"; set_config "$P" "hard_enforcement: true"
+add_manifest "$P" done-c "complete" "complete"
+assert B8 "a dead cycle's manifest may be edited (post-mortems are fine)" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/done-c/manifest.md","new_string":"note"}}' \
+  --exit 0 --hook "$BKG"
+
+P="$(new_project)"; set_config "$P" "hard_enforcement: false"
+add_manifest "$P" bk2 "building"
+assert B9 "hard_enforcement false → the gate never fires" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/bk2/manifest.md","new_string":"x"}}' \
+  --exit 0 --hook "$BKG"
+
+P="$(new_project)"
+printf 'sage-version: "1.1.11"\nhard_enforcement: true\nbookkeeping_gate: false\n' > "$P/.sage/config.yaml"
+add_manifest "$P" bk3 "building"
+assert B10 "bookkeeping_gate: false is a dedicated opt-out" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/bk3/manifest.md","new_string":"x"}}' \
+  --exit 0 --hook "$BKG"
+
 echo ""
 echo "═══ Summary ═══"
 printf '  pass %d · fail %d · xfail %d · xpass %d\n' "$N_PASS" "$N_FAIL" "$N_XFAIL" "$N_XPASS"

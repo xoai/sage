@@ -13,6 +13,20 @@ edits per resume session). Two clean levers landed first; the bookkeeping fix is
 now mechanical (below) — a prose rule that doesn't hold has to become code, the
 same lesson, again.
 
+- **The close-out redirect is a hook now** — the kept profile run after the
+  close-out command shipped found it never called (zero calls): the session read
+  the manifest directly, skipped `manifest.py resume`, and so never saw any of
+  the four documents carrying the instruction. The instruction channel, not
+  disobedience — and the only channel that provably reaches every session is the
+  tool call itself. `sage-bookkeeping-gate` (PreToolUse) now redirects a
+  hand-edit of an active cycle's `manifest.md`/`decisions.md` to the one-command
+  writer, exit-2-with-reason — the proven block→recover→retry pattern. Carefully
+  scoped: creation is allowed (authoring, not bookkeeping), `gate_state`
+  transitions yield to the spec-gate's completion guard, `plan.md` and the
+  global decisions log stay free, dead cycles may be edited, `hard_enforcement:
+  true` is the master switch and `bookkeeping_gate: false` a dedicated opt-out.
+  `close-out` gains `--blocked-on` so recording a blocker never gets trapped.
+  10 new hook tests (B1–B10).
 - **Bookkeeping is ONE command now** — `manifest.py close-out` applies the whole
   close-out write in a single pass: replaces the manifest's context summary /
   next step / open questions, prepends decisions (Rule 7), checks plan

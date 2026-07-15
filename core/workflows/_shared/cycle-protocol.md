@@ -141,13 +141,15 @@ resumed:
      [--phase X] [--status Y] [--open-questions "..."]
    ```
 
-   Do NOT hand-edit manifest.md, decisions.md, or plan.md incrementally during a
-   resume close-out — every field the machine can derive is already mechanical
-   (`gate_state` via the sync hook, and `updated:` is stamped by every
-   advance/sync/close-out write; never set it by hand). The manifest bridge at an
-   `[N]`/context-budget break is still written immediately (§ Session-break
-   contract — use `close-out` for it too: one command, one pass) — that is the
-   bridge, never batched away.
+   Do NOT hand-edit manifest.md or decisions.md during an active cycle — **and on
+   claude-code this is enforced, not asked**: the `sage-bookkeeping-gate` hook
+   redirects such an edit (exit 2) to the command above. Every field the machine
+   can derive is already mechanical (`gate_state` via the sync hook, `updated:`
+   stamped by every advance/sync/close-out write; never set either by hand).
+   Recording a blocker goes through the same command (`--status blocked
+   --blocked-on "..."`). The manifest bridge at an `[N]`/context-budget break is
+   still written immediately (§ Session-break contract — use `close-out` for it
+   too: one command, one pass) — that is the bridge, never batched away.
 
 3. **Trust inherited red** (`trust_inherited_red`, default `true`). When the
    prior session's evidence already records a test as written-and-observed-failing

@@ -108,6 +108,7 @@ FILE_MAP = {
     "hooks/scripts/sage-spec-gate.sh": "runtime/platforms/claude-code/hooks/sage-spec-gate.sh",
     "hooks/scripts/sage-degradation-log.sh": "runtime/platforms/claude-code/hooks/sage-degradation-log.sh",
     "hooks/scripts/sage-manifest-sync.sh": "runtime/platforms/claude-code/hooks/sage-manifest-sync.sh",
+    "hooks/scripts/sage-bookkeeping-gate.sh": "runtime/platforms/claude-code/hooks/sage-bookkeeping-gate.sh",
     # The manifest hook delegates here rather than inlining a second copy of the
     # state machine. A plugin-only project may have no vendored sage/, so the tool
     # ships with the plugin too.
