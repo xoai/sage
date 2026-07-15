@@ -20,6 +20,51 @@ python3 develop/evals/run_evals.py --scenario E1
 python3 develop/evals/run_evals.py --runs 3 --report      # the baseline
 ```
 
+## The fast iteration loop — don't pay the agentic tax to learn you broke a hook
+
+A full sage-vs-bare run is minutes to hours. Most forward progress — especially
+*cutting* ceremony — does not need it. Match the method to the question:
+
+```bash
+# 1. INNER LOOP (seconds). Run after every cut. Exercises the layer that carries
+#    the value — hooks, gate scripts, generated state — with zero model calls.
+bash develop/fastcheck.sh
+
+# 2. PER-BATCH CONFIRM (minutes). After a BATCH of cuts, confirm behaviour held.
+#    Sage arm only (bare is unaffected), low N. Add --model haiku for a cheaper
+#    screen. Background it so the wall-clock isn't your time.
+bash develop/evals/confirm.sh E1 E4 E5 E8 > /tmp/confirm.log 2>&1 &
+
+# 3. PUBLISHED NUMBER (the slow path). Full sage-vs-bare, N=3, both arms — only
+#    when you need a ratio to publish, not to answer "did I break it".
+python3 develop/evals/run_evals.py --runs 3 --report
+```
+
+The rule: **the deterministic suite is the guard; the agentic eval only confirms
+batches and produces final numbers.** Two data points (the context diet, the
+resume levers) already show ceremony cuts are cheap and safe — so treat prose as
+guilty until a measurement says it is load-bearing, and cut in batches.
+
+### The long-horizon question, forced to happen fast
+
+Sage's remaining live claim is that memory *compounds* — that a bare agent which
+rereads its own log breaks down over dozens of sessions. That looks like it needs
+30 real sessions; it doesn't. `longhorizon_probe.py` forces the crossover instead
+of waiting for it: it buries one checkable constraint under a synthetic log grown
+past the context window and measures recall for *rereading the whole log* vs
+*perfect retrieval*, across sizes, in minutes.
+
+```bash
+python3 develop/evals/longhorizon_probe.py --dry-run      # plan, no spend
+python3 develop/evals/longhorizon_probe.py                # the sweep (real calls)
+```
+
+If rereading never breaks in range, the memory layer earns nothing at these sizes
+— evidence *against* the ceremony. If it falls off a cliff while retrieval holds,
+that crossover is the memory layer's whole case — confirm it with a real
+multi-session run before publishing. It is a fast **screen**, not a verdict:
+the padding is synthetic and retrieval here is a perfect-recall upper bound.
+
 ## How a run works
 
 1. The scenario's fixture is copied to a temp dir and `git init`-ed with a seed
