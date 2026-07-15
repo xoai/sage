@@ -60,22 +60,23 @@ the same prompts matched Sage on both — and did it for a fraction of the money
 
 | | sage | bare | spend, sage:bare |
 |---|---|---|---|
-| **L1** — resume an interrupted cycle | 3/3 | 3/3 | **~9×** |
-| **L2** — honour a constraint stated 2 contexts ago | 3/3 | 3/3 | ~2.2× |
+| **Resume an interrupted cycle** | 3/3 | 3/3 | **~9×** |
+| **Honour a constraint stated 2 contexts ago** | 3/3 | 3/3 | ~2.2× |
 
 **Sage gets there. It costs roughly 9× as much to get there.**
 
-L1's first published number was **2/3**, and it was wrong — the runs were being
-starved by a per-session budget cap, and a truncated run grades identically to a
-broken one. Given a cap it does not hit, Sage resumes the interrupted cycle correctly
-every time. What it cannot do is resume it *cheaply*: a bare agent, handed the same
-files, does the same work for **about a ninth of the spend** — the rest is Sage's
-process. Under an equal, tight budget the ceremony is what runs out of budget first.
+The resume scenario's first published number was **2/3**, and it was wrong — the runs
+were being starved by a per-session budget cap, and a truncated run grades identically
+to a broken one. Given a cap it does not hit, Sage resumes the interrupted cycle
+correctly every time. What it cannot do is resume it *cheaply*: a bare agent, handed
+the same files, does the same work for **about a ninth of the spend** — the rest is
+Sage's process. Under an equal, tight budget the ceremony is what runs out of budget
+first.
 
-L2 is the more instructive of the two. Sage's memory system *worked* — the run is
-instrumented, and session 1 provably wrote the constraint to it. It just didn't
-**matter**: the bare agent reread its own session log off the disk and got the same
-answer for a third of the price. Retrieval did not beat rereading.
+The memory scenario is the more instructive of the two. Sage's memory system
+*worked* — the run is instrumented, and session 1 provably wrote the constraint to
+it. It just didn't **matter**: the bare agent reread its own session log off the disk
+and got the same answer for a third of the price. Retrieval did not beat rereading.
 
 So, precisely: Sage's benefit is **whatever it has made mechanical, and nothing
 else.** Where a rule is a hook, it holds (test-first, 3/3 vs 0/3; the spec gate; the
@@ -176,8 +177,8 @@ would. What is left names the mechanism instead of restating it.
 
 **And it was re-measured, not inferred.** v1.2.1 cost 1.9× a bare agent's input
 tokens; v1.3.0 costs **1.6×** (N=3, model-in-loop,
-[eval-baseline-v2](docs/eval-baseline-v2.md)). Short of the ≤1.5× target, and not
-rounded there. Crucially, the diet cost no behaviour: E1 still measures 3/3
+[eval-baseline](docs/eval-baseline.md)). Short of the ≤1.5× target, and not
+rounded there. Crucially, the diet cost no behaviour: test-first still measures 3/3
 against a bare agent's 0/3 with the entire test-first prose block deleted — the
 hook was doing the work all along.
 
@@ -200,8 +201,8 @@ and handoff guidance at every checkpoint. Type `/continue` and Sage reads the
 manifest, routes to the correct workflow, and picks the work back up.
 
 **We finally measured this, and the result does not support the claim we used to
-make here.** L1 (resume fidelity, N=3, both conditions): a fresh context resumes a
-cycle that was interrupted mid-plan.
+make here.** The resume-fidelity scenario (N=3, both conditions): a fresh context
+resumes a cycle that was interrupted mid-plan.
 
 | | resumed correctly | spend |
 |---|---|---|
@@ -235,6 +236,21 @@ evidence. Manifest coherence went **2/3 → 3/3**; the manifest has not lied sin
 loses on price by roughly an order of magnitude. That is the honest state of the
 long-horizon claim: the *bridge* is sound now; the *bill* is not.
 
+**The bill is now itemised, and the levers are built.** Profiling the resume
+session (`develop/evals/profile_session.py`) resolved the ~9× into **4.1× the API
+calls × 2.1× the context per call**, compounding — and located ~24% of it in the
+adversarial gate sub-agents re-running from scratch. Sage now runs a leaner
+**close-out economy** on a *resumed* cycle (a first-session build is unchanged):
+one combined gate review instead of a dispatch per gate, batched bookkeeping, and
+no re-confirming a test the prior session already recorded as failing — each a
+config knob with a safe default (`gate_review`, `batch_bookkeeping`,
+`trust_inherited_red`; see `/configure`). The deterministic script gates, the
+final full-suite verification, and at least one independent whole-change review
+never get leaner — the balance is *rigor front-loaded on the session that does the
+design, not re-purchased by the session that finishes the delta.* **No cheaper
+number is claimed yet**: the levers change behavior, and the cost is being
+re-measured by re-running the resume scenario before any new ratio is published.
+
 **One failure mode from the early batches was real, and v1.3.4 closes it.** In one
 under-budget run (its resume spent less than a third of its session budget — it
 stopped by *choice*),
@@ -250,7 +266,7 @@ fails it. Re-measured: **3/3 on opus-4-8 and 3/3 on fable-5** (N=3 valid runs ea
 the failure mode absent from all six transcripts, per-run cost unchanged within
 noise. The fix buys determinism, not a discount.
 
-Numbers: [docs/eval-baseline-v2.md](docs/eval-baseline-v2.md). The fix:
+Numbers: [docs/eval-baseline.md](docs/eval-baseline.md). The fix:
 [docs/plans/manifest-state-is-prose.md](docs/plans/manifest-state-is-prose.md).
 
 ### Memory That Compounds
@@ -650,8 +666,8 @@ Off Claude Code (no hooks), this is still prose — see the table below.
 | Layer 4 — gate scripts (3-state, self-tested) | ✅ deterministic | ✅ deterministic (run manually) |
 | **Tests before code** (blocks a source edit until a test exists) | ✅ **mechanical (PreToolUse)** — 3/3 vs bare 0/3 | ❌ prose only — measured 0/3 |
 | Spec-gate hook (blocks pre-spec edits, blocks premature completion) | ✅ mechanical (PreToolUse) | ❌ not available — prose rules only |
-| Completion must declare what happened to QA (R29) | ✅ mechanical — the hook blocks a cycle that stays silent | ❌ prose only |
-| A degraded run is recorded in `decisions.md` (R29) | ✅ mechanical — a hook writes it; the model is not asked to | ⚠️ prose — *was written in 1 run of 3 when measured* |
+| Completion must declare what happened to QA | ✅ mechanical — the hook blocks a cycle that stays silent | ❌ prose only |
+| A degraded run is recorded in `decisions.md` | ✅ mechanical — a hook writes it; the model is not asked to | ⚠️ prose — *was written in 1 run of 3 when measured* |
 | Sub-agent reviews (auto-review, auto-QA, independent Gate 3) | ✅ via Task tool | ❌ skipped — see the two rows above for whether you'll find out |
 
 The deterministic layers — gate scripts and the spec-gate hook — carry their

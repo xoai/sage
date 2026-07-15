@@ -328,6 +328,21 @@ AUTHORITY ORDER on resume (highest first)
   trust the tree."""
 
 
+CLOSE_OUT_ECONOMY = """\
+CLOSE-OUT ECONOMY (you resumed — finish the delta, do not re-buy banked rigor)
+  The first session paid full rigor on everything it built. Finishing the last
+  task(s) runs a LEANER close-out, not a repeat of the whole ceremony:
+  - Gates: run the deterministic script gates (--quiet) per remaining task, then
+    ONE combined adversarial review over the whole cycle diff — not a dispatch
+    per gate, not a re-review of tasks a prior session already reviewed.
+  - Bookkeeping: batch memory/prose to the close-out checkpoint (the manifest
+    bridge at a session break is NOT batched).
+  - Inherited red: a test the plan/manifest records as already-failing, still in
+    the tree, is not re-run just to re-witness it — write the code, confirm green.
+  Config overrides: gate_review (combined|per-gate|off), batch_bookkeeping,
+  trust_inherited_red. Full rule: cycle-protocol.md § Resume close-out economy."""
+
+
 def _read(path: pathlib.Path) -> str:
     return path.read_text(encoding="utf-8", errors="replace")
 
@@ -473,6 +488,8 @@ def print_brief(manifest: pathlib.Path, root: pathlib.Path) -> None:
 
     print()
     print(AUTHORITY_ORDER)
+    print()
+    print(CLOSE_OUT_ECONOMY)
 
 
 def resume(root: pathlib.Path, manifest: pathlib.Path = None) -> int:

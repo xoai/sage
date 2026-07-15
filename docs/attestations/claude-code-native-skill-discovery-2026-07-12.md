@@ -8,15 +8,16 @@
 | **Method** | live headless probe (canary token) |
 | **Verified** | 2026-07-12 |
 | **Platform version** | Claude Code 2.1.207 |
-| **Expires** | release 1.4 (re-attest each minor — C15) |
-| **Probed by** | P2-T4, resolving ADR-9's **[V]** flag |
+| **Expires** | release 1.4 (re-attest each minor release) |
+| **Probed by** | live probe, resolving the context diet's open assumption |
 
 ## The claim under test
 
-ADR-9 delivers Sage's non-mechanical content as skills instead of eager prose.
-That rests on an assumption the spec explicitly flagged **[V]**: a skill placed
-in a *project's* `.claude/skills/` is **discovered and auto-activated by its
-description** — not merely readable if the agent happens to go looking.
+The context diet delivers Sage's non-mechanical content as skills instead of
+always-loaded prose. That rests on an assumption the design explicitly flagged as
+unverified: a skill placed in a *project's* `.claude/skills/` is **discovered and
+auto-activated by its description** — not merely readable if the agent happens to go
+looking.
 
 The distinction is the whole design. If skills are only readable-on-request, the
 content does not arrive unless something already told the model to fetch it, and
@@ -61,8 +62,8 @@ The canary came back. **Confirmed.**
 
 ## Consequences
 
-1. ADR-9's hedge — *"if plugin-only, vendored installs keep a mid-size eager
-   layer sized by its own budget row"* — is not needed. Vendored installs get
+1. The context diet's hedge — *"if plugin-only, vendored installs keep a mid-size
+   always-loaded layer sized by its own budget row"* — is not needed. Vendored installs get
    the same diet as plugin installs. One eager budget, not two.
 
 2. Sage was **already** relying on this in production. `generate-claude-code.sh`
@@ -77,8 +78,9 @@ This is a *platform* behavior. It can regress under us without warning and
 without a line in our own diff — and if it does, Sage's entire delivery model
 silently stops working while every one of our tests still passes.
 
-So it is not trusted; it is re-checked. Phase 4 (R109) wires this canary in as a
-level-2 conformance probe for `native-skill-discovery`. If Anthropic changes the
-behavior, conformance goes red and the truth table regenerates to say so. That
-is the point of ADR-11: an enforcement claim with no mechanism behind it is the
-pre-1.2.0 mistake, and this file would be one if it did not expire.
+So it is not trusted; it is re-checked. The conformance harness wires this canary
+in as a level-2 probe for `native-skill-discovery`. If Anthropic changes the
+behavior, conformance goes red and the truth table regenerates to say so. That is
+the point of the platform contract: an enforcement claim with no mechanism behind
+it is the mistake this whole layer exists to prevent, and this file would be one if
+it did not expire.

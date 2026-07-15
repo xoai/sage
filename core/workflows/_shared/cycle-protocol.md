@@ -105,6 +105,59 @@ law. And Rule 4 is about *approval* checkpoints — brief, spec, plan, final
 deliverable. An implementation choice inside an approved plan, with the option
 space already sanctioned by a recorded decision, is not a Rule 4 checkpoint.
 
+## Resume close-out economy
+
+L1 measured the other half of the resume story. The bridge is sound (the brief is
+generated, the authority order is stated) — but a resumed session still paid ~9× a
+bare agent to finish, and the 2026-07-15 profile itemised why: 4.1× the API calls
+× 2.1× the context per call, compounding. The waste is concentrated on the
+**resume close-out** — a session that started from `manifest.py resume` and is
+finishing the last task(s). The first session already paid full rigor on
+everything it built; the resume session was re-running the whole ceremony over a
+small delta.
+
+So a resume close-out runs a **leaner path than a first-session build**. This is
+not less rigor — it is not paying twice for rigor already banked. Three behaviors,
+each config-gated with a safe default, each applying ONLY when the session
+resumed:
+
+1. **One combined gate review, not the whole suite again** (`gate_review`,
+   default `combined`). The final quality gates dispatch ONE adversarial reviewer
+   over the whole cycle diff instead of per-gate and per-already-reviewed-task
+   re-runs. Deterministic script gates (spec-check, hallucination, verify) still
+   run, `--quiet`. See `quality-gates.workflow.md` § "Resume close-out".
+
+2. **Batch the bookkeeping** (`batch_bookkeeping`, default `true`). Defer
+   memory writes and prose checkpoints to the close-out checkpoint rather than
+   emitting them per task — at ~95k tokens of context per call, a prose-only
+   per-task checkpoint is real money for no state that the manifest and git
+   evidence don't already carry. The manifest bridge is still written at every
+   `[N]`/context-budget break (§ Session-break contract) — that is not
+   bookkeeping, it is the bridge, and it is never batched away. `gate_state` is
+   still mechanical (the sync hook), so batching prose costs no coherence.
+
+3. **Trust inherited red** (`trust_inherited_red`, default `true`). When the
+   prior session's evidence already records a test as written-and-observed-failing
+   (it is in the plan/manifest and the test file exists in the tree), the
+   resuming session does NOT re-run the suite solely to re-watch it fail before
+   writing the code. The red-confirm's one question — *did anyone watch it fail?* —
+   was answered by the session that wrote it. Write the code, confirm GREEN. This
+   is narrow: it never applies to a test THIS session writes (full RED→VERIFY-FAIL
+   there), and if the "failing" test is absent or unexpectedly green, fall back to
+   the full cycle. See `tdd/SKILL.md` § "Inherited red".
+
+**What never gets leaner, on resume or otherwise:** the deterministic script
+gates (they are cheap and they are the evidence base); the final full-suite
+verification (batching trims intermediate re-runs, never the closing proof); the
+whole-change independent review (one reviewer, but always at least one); per-task
+commits (git evidence granularity is nearly free and the resume brief reads it).
+The balance is *rigor front-loaded on the session that does the design, banked,
+and not re-purchased by the session that finishes a small delta.*
+
+First-session builds keep the full per-task loop below. `gate_review: per-gate`,
+`batch_bookkeeping: false`, `trust_inherited_red: false` each restore the old
+behavior for a project that wants it.
+
 ## Phase announcements
 
 Announce each phase transition before doing its work, with the cycle id (the

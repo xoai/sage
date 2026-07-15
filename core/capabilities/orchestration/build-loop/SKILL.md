@@ -6,7 +6,7 @@ description: >
   dispatches implementation, validates, updates progress, and continues. Use
   after a plan is approved and the user says "go", "start building", "execute
   the plan", or "implement the feature".
-version: "1.0.0"
+version: "1.1.0"
 modes: [build, architect]
 ---
 
@@ -67,6 +67,8 @@ For the current task:
 2. **Implement** using TDD (`tdd` skill):
    - Write failing test
    - Verify it fails for the right reason
+     (on resume, a test the prior session already recorded as
+     written-and-failing is not re-watched — `tdd` § "Inherited red")
    - Write minimal code to pass
    - Verify it passes
    - Refactor if needed
@@ -81,13 +83,13 @@ drifts beyond the task spec.
 
 ### Step 4: Run Quality Gates
 
-Quality gates run after EVERY task. This is NOT optional.
-Do not skip gates because:
+The **deterministic script gates run after EVERY task. This is NOT optional.**
+Do not skip them because:
 - "The change was small"
 - "I already verified during implementation"
 - "The tests pass, so gates aren't needed"
 - "This is just a refactor"
-Gates run. Every task. No exceptions.
+Script gates run. Every task. No exceptions.
 
 After each task, run the quality gate sub-workflow:
 
@@ -96,6 +98,20 @@ Gate 2: constitution   → Does it violate any project principles?
 Gate 3: quality-review → Clean code, security, maintainability?
 Gate 4: hallucination  → All imports, APIs, versions real and correct?
 Gate 5: verification   → Tests pass? Feature works as expected?
+
+The judgment gates (1–3) reach their independent verdict via one combined
+reviewer by default (`gate_review`); the script gates (1-script, 4, 5) run
+`--quiet`. See `sage/core/workflows/sub-workflows/quality-gates.workflow.md`.
+
+**On a RESUMED cycle's close-out** (this session started from `manifest.py
+resume`), follow the resume close-out economy
+(`sage/core/workflows/_shared/cycle-protocol.md` § "Resume close-out economy"):
+run the deterministic script gates per remaining task for fast failure, but
+**defer the adversarial sub-agent review to ONE combined review over the whole
+cycle diff at close-out** — the first session already reviewed everything it
+built; re-running per-task adversarial dispatches over a small delta is the cost
+the profile targeted. On a first-session build, run the full per-task sequence
+below.
 
 **If gates pass:** Move to next task. Plan checkboxes updated in bulk
 at the completion checkpoint (Rule 7).
@@ -138,6 +154,15 @@ After every task (or every 3 tasks for long plans), show brief progress:
 
 **Sage:** Task [N] complete. Continuing to Task [N+1] — [name].
 Say "pause" to stop.
+
+**Batch the bookkeeping** (`batch_bookkeeping`, default `true`): defer memory
+writes and non-essential prose to the completion/session-break checkpoint rather
+than emitting them per task. `gate_state` is mechanical (the sync hook) and plan
+checkboxes update in bulk at completion — so a per-task prose checkpoint carries
+no state git and the manifest don't already have, and at ~95k tokens of context
+per call it is not free. Keep the one-line progress note above; batch the rest.
+The manifest bridge at an `[N]`/context-budget break is NOT bookkeeping and is
+never batched (`cycle-protocol.md` § Session-break contract).
 
 For tasks marked `[P]` (parallelizable), note: "Tasks [N] and [M] can run
 in parallel. Running sequentially on this platform." (On Tier 1, dispatch both.)
@@ -208,7 +233,11 @@ Updated: <timestamp>
 ## Rules
 
 **MUST (violation = lost work or broken trust):**
-- MUST NOT skip quality gates. They are mandatory, not suggestions.
+- MUST NOT skip quality gates. They are mandatory, not suggestions. Consolidating
+  the adversarial review into one combined dispatch on resume close-out is not
+  skipping — the deterministic script gates still run every task and the
+  whole-change independent review still happens; what stops is re-reviewing, from
+  scratch, work a prior session already reviewed.
 - MUST NOT implement multiple tasks without committing between them.
 - MUST NOT continue past a mandatory checkpoint without human approval.
 - MUST update plan checkboxes in bulk at the completion checkpoint (Rule 7).

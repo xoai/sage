@@ -34,8 +34,8 @@ each workflow rather than pointing at it.
 
 ## On-demand layer (system skills)
 
-Content ADR-9 moved out of the eager layer. Fetched only when the
-platform's description-triggered discovery matches — so the TOTAL below is
+Content moved out of the always-loaded layer during the context diet. Fetched only
+when the platform's description-triggered discovery matches — so the TOTAL below is
 not a per-turn cost, and a session that never asks about tiers never pays
 for `sage-tiers`.
 
@@ -61,7 +61,7 @@ fetch on demand, so the same content is INLINED into their instructions
 file. Their eager layer is therefore larger — necessarily, not accidentally.
 
 This row exists so that number is visible instead of hiding inside
-claude-code's. Delivery is capability-gated (ADR-11); the cost of a platform
+claude-code's. Delivery is capability-gated; the cost of a platform
 that cannot fetch on demand is that it carries everything.
 
 | File | Lines | ~Tokens | Budget | |

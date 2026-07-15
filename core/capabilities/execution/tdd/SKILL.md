@@ -6,7 +6,7 @@ description: >
   production code, implementing features, fixing bugs, refactoring, or when
   the user says "write code", "implement", "fix this", or "add a feature".
   Code written before its test is deleted.
-version: "1.0.0"
+version: "1.1.0"
 modes: [fix, build, architect]
 ---
 
@@ -22,9 +22,11 @@ outputs: [implementation, test-suite]
 
 Write the test first. Watch it fail. Write minimal code to pass. Refactor. Commit.
 
-**The Iron Law:** If you didn't watch the test fail, you don't know if it tests
-the right thing. There are no exceptions. Violating the letter of these rules
-IS violating the spirit.
+**The Iron Law:** If *nobody* watched the test fail, you don't know if it tests
+the right thing. The failure must have been observed, with evidence. Almost
+always that observer is you, this session — see "Inherited red" for the single
+narrow case where a prior session already banked the observation. Violating the
+letter of these rules IS violating the spirit.
 
 ## When to Use
 
@@ -121,7 +123,8 @@ also test implementation details instead of behavior, making them brittle.
 Before declaring implementation complete, verify ALL of these:
 
 - [ ] Every piece of production code has a test that was written FIRST
-- [ ] Every test was observed FAILING before the code was written
+- [ ] Every test was observed FAILING before the code was written — by this
+      session, or (resume only) banked by the prior session per "Inherited red"
 - [ ] Every test was observed PASSING after the code was written
 - [ ] All tests pass right now (run them, don't assume)
 - [ ] No production code exists without a corresponding test
@@ -146,6 +149,39 @@ Can't check all boxes? You skipped TDD. Start over from the first unchecked item
 - **Can't figure out how to test it:** The code is too coupled. This is a design signal. Simplify the interface. Use dependency injection. Make it testable.
 - **Bug found:** Write a failing test that reproduces the bug. Then fix it through the TDD cycle. The test proves the fix and prevents regression. NEVER fix bugs without a test.
 - **Hard to test in current framework:** Extract the logic into a testable unit. If the framework makes testing impossible, discuss with your human partner.
+
+## Inherited red — the one place VERIFY-FAIL is already banked
+
+This is NOT a way to skip the red-confirm. It is the recognition that on a
+resumed cycle, the red-confirm may have *already happened*, in the session that
+wrote the test — and re-watching it adds no information, only a full-suite run
+that the 2026-07-15 resume profile counted as 2.5× the test runs of a bare agent.
+
+The carve-out applies **only** when ALL of these hold (`trust_inherited_red`,
+default `true`; set `false` to always re-confirm):
+
+1. **This session resumed the cycle** (`manifest.py resume` produced the brief).
+   A first-session build is never inherited red — you write the test, you watch
+   it fail, always.
+2. **The prior session's evidence records the test as written-and-observed-failing** —
+   the plan/manifest names it, and the test file exists in the tree. Its red was
+   observed and banked by the session that wrote it; that is the observer the
+   Iron Law requires.
+3. **The test is for the SAME behavior you are now implementing** — not a new
+   assertion you are adding this session.
+
+When all three hold: you may go straight to GREEN — write the minimal code, then
+**VERIFY PASS** (run the test, watch it pass). You still confirm green; you skip
+only the re-run whose sole purpose was to re-witness a failure already witnessed.
+
+**Fall back to the full RED → VERIFY-FAIL cycle the moment any condition breaks:**
+the named test is absent from the tree, or it is unexpectedly *green* before you
+write code (a green inherited test is exactly the "testing something that already
+works / testing the wrong thing" trap — investigate it, do not trust it), or you
+find yourself adding a new assertion (that is a new RED, and it is yours to
+watch). A test THIS session authors always goes through the full cycle. When in
+doubt, re-confirm — the re-run is cheap insurance against building on a test that
+never actually failed.
 
 ## Waiver Process
 

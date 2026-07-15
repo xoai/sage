@@ -8,13 +8,13 @@
 | **Method** | live headless probes, instrumented hook, actor attribution |
 | **Verified** | 2026-07-12 |
 | **Platform version** | Claude Code 2.1.207 |
-| **Expires** | release 1.4 (C15) |
-| **Probed by** | P3-T1, resolving C14 / R95 **[V]** |
+| **Expires** | release 1.4 |
+| **Probed by** | live probe, resolving a design assumption flagged as unverified |
 
 ## The claim under test
 
-ADR-10 builds subagent execution on an assumption the spec flagged **[V]** and
-C14 made a hard constraint:
+Sage's subagent execution is built on an assumption the design flagged as
+unverified and made a hard constraint:
 
 > Do Claude Code's PreToolUse hooks fire for tool calls made **inside** a Task
 > subagent — and does an exit-2 veto actually **block** them?
@@ -58,7 +58,7 @@ Write :: notes/by-sub.md      ← the SUBAGENT's call
 
 **PreToolUse fires for subagent tool calls.**
 
-### Half 2 — does exit 2 actually *block* one? (R95's scenario, exactly)
+### Half 2 — does exit 2 actually *block* one?
 
 A TDD gate: block any edit under `src/` while no test exists. A subagent is told
 to add `multiply(a, b)` to `src/calc.py`. There is no test suite. This is
@@ -82,17 +82,17 @@ landed, and there would be no test file at all.
 
 The block's stderr also propagated back up to the main agent's final result —
 so an orchestrator can *see* that its implementer was gated, which is what the
-Phase-3 ledger needs in order to record it.
+subagent-execution ledger needs in order to record it.
 
-## Consequence for ADR-10
+## Consequence for subagent execution
 
 **The design proceeds as written.** The normative variant is the one where hooks
 hold inside the loop. Per-task Gate 4/5 runs from the orchestrator remain in the
 design as belt-and-braces, not as the primary enforcement — they now catch a
 *lying implementer* (one that reports DONE without doing the work), which is a
-different failure than an *unpoliced* one, and R106 covers it.
+different failure than an *unpoliced* one, and the containment check covers it.
 
-The alternative variant C14 pre-authorized — "orchestrator-enforced, and the
+The alternative variant the design pre-authorized — "orchestrator-enforced, and the
 truth table must state that in-subagent enforcement is absent" — is **not**
 needed and is not adopted.
 
@@ -122,7 +122,7 @@ Recorded because each one would have been publishable, and each was wrong.
    a shell variable *and* fed a Python heredoc on `stdin`, so `json.loads` parsed
    the Python source, threw, and the hook failed open. The run reported "the gate
    did NOT hold inside the subagent" — a false negative that would have flipped
-   ADR-10 to its fallback variant and put a permanent, untrue line in the
+   the subagent-execution design to its fallback variant and put a permanent, untrue line in the
    enforcement truth table. It was caught only by self-testing the hook against a
    synthetic payload before trusting it. **Test the instrument before you trust
    the measurement.**
@@ -135,7 +135,7 @@ entire subagent quality story would evaporate while every one of our tests
 continued to pass — because our tests do not run a real subagent under a real
 hook.
 
-Phase 4 (R109) therefore wires this probe in as a level-2 conformance check for
+The conformance harness therefore wires this probe in as a level-2 check for
 `pre-tool-veto`. If the behavior changes, conformance goes red, the truth table
 regenerates, and subagent mode's enforcement claim is withdrawn rather than
 quietly falsified.

@@ -1,10 +1,15 @@
 #!/usr/bin/env bash
 # sage-hallucination-check.sh — Deterministic checks for Gate 4
 # Verifies imports resolve, referenced files exist, and no phantom APIs are used.
-# Usage: bash sage/core/gates/scripts/sage-hallucination-check.sh [file-or-dir] [project-root]
+# Usage: bash sage/core/gates/scripts/sage-hallucination-check.sh [--quiet] [file-or-dir] [project-root]
 #
 # Exit contract (ADR-1):
 #   0 = verified pass   1 = verified fail   2 = unverifiable (nothing to check)
+#
+# --quiet (context diet, profile 2026-07-15): drop the section banners. The
+# truthful counters ("Checked N imports, M missing") STAY even when quiet —
+# they are what proves the gate examined something rather than passing
+# vacuously, and a FAIL/UNVERIFIABLE is never trimmed.
 #
 # Source analysis runs in one embedded python3 block rather than in a
 # `grep -oP … | while read` pipeline. Two reasons, both of which produced
@@ -16,21 +21,30 @@
 
 set -uo pipefail
 
-TARGET="${1:-.}"
-ROOT="${2:-.}"
+QUIET=false
+_pos=()
+for _arg in "$@"; do
+  case "$_arg" in
+    --quiet) QUIET=true ;;
+    *) _pos+=("$_arg") ;;
+  esac
+done
+TARGET="${_pos[0]:-.}"
+ROOT="${_pos[1]:-.}"
 PASS=true
 WARNINGS=0
 
-log() { echo "$1"; }
+log()  { echo "$1"; }                        # always printed
+vlog() { [ "$QUIET" = true ] || echo "$1"; }  # decorative — dropped when quiet
 warn() { log "⚠️  $1"; WARNINGS=$((WARNINGS + 1)); }
 fail() { log "❌ $1"; PASS=false; }
 
-log "═══ Sage Gate 4: Hallucination Check ═══"
-log "Target: $TARGET"
-log ""
+vlog "═══ Sage Gate 4: Hallucination Check ═══"
+vlog "Target: $TARGET"
+vlog ""
 
 if ! command -v python3 >/dev/null 2>&1; then
-  log "═══ Gate 4 Result ═══"
+  vlog "═══ Gate 4 Result ═══"
   log "⚠️ UNVERIFIABLE — python3 is required to analyze source files"
   exit 2
 fi
@@ -55,7 +69,7 @@ fi
 # file. bash 4+ and every other shell handle it; bash 3.2 (macOS /bin/bash)
 # does not. Keep the heredoc at statement level.
 PY_ANALYZER=$(mktemp "${TMPDIR:-/tmp}/sage-gate4-XXXXXX") || {
-  log "═══ Gate 4 Result ═══"
+  vlog "═══ Gate 4 Result ═══"
   log "⚠️ UNVERIFIABLE — could not create a temporary file"
   exit 2
 }
@@ -266,7 +280,7 @@ ANALYSIS=$(python3 "$PY_ANALYZER" "$TARGET" "$ROOT")
 ANALYSIS_RC=$?
 
 if [ "$ANALYSIS_RC" -ne 0 ]; then
-  log "═══ Gate 4 Result ═══"
+  vlog "═══ Gate 4 Result ═══"
   log "⚠️ UNVERIFIABLE — source analysis failed (python3 exited $ANALYSIS_RC)"
   exit 2
 fi
@@ -299,7 +313,7 @@ while IFS=$'\t' read -r kind a b; do
 done <<< "$ANALYSIS"
 
 # ── Step 1: Check file references exist ──
-log "── File reference check ──"
+vlog "── File reference check ──"
 
 if [ -n "$MISSING_LINES" ]; then
   while IFS='|' read -r spec file; do
@@ -308,19 +322,20 @@ if [ -n "$MISSING_LINES" ]; then
   done <<< "$MISSING_LINES"
 fi
 
+# Counters stay even when quiet — they prove the gate checked something.
 if [ "$CHECKED_IMPORTS" -eq 0 ]; then
   log "  No relative imports to check"
 else
   log "  Checked $CHECKED_IMPORTS imports, $MISSING_IMPORTS missing"
 fi
 
-log ""
+vlog ""
 
 # ── Step 2: Check for phantom packages ──
-log "── Package existence check ──"
+vlog "── Package existence check ──"
 
 if [ "$PKG_MANIFEST" = "-" ]; then
-  log "  No package.json — skipping package check"
+  vlog "  No package.json — skipping package check"
 else
   if [ -n "$PHANTOM_LINES" ]; then
     while IFS='|' read -r pkg file; do
@@ -335,7 +350,7 @@ else
   fi
 fi
 
-log ""
+vlog ""
 
 # ── Step 3: Toolchain check ──
 #
@@ -345,7 +360,7 @@ log ""
 # trivia in a gate advertised as universal, offering nothing to Python, Go or
 # Flutter projects. Framework-specific pattern checks belong in that
 # framework's skill, not here.
-log "── Toolchain check ──"
+vlog "── Toolchain check ──"
 
 TOOLCHAIN_RAN=false
 TOOLCHAIN_ARGV=()
@@ -387,20 +402,20 @@ if [ ${#TOOLCHAIN_ARGV[@]} -gt 0 ]; then
     fail "$TOOLCHAIN_NAME reported $ERRORS error line(s)"
     printf '%s\n' "$TYPE_OUTPUT" | grep -e "error" | head -5
   else
-    log "  ✅ $TOOLCHAIN_NAME reports no errors"
+    vlog "  ✅ $TOOLCHAIN_NAME reports no errors"
   fi
 elif [ -z "$TOOLCHAIN_NAME" ] && [ "$PY_FILES" -eq 0 ] && [ ! -f "$ROOT/tsconfig.json" ]; then
-  log "  No type-checker configured for this project — skipping type check"
+  vlog "  No type-checker configured for this project — skipping type check"
 fi
 
-log ""
+vlog ""
 
 # ── Result ──
 #
 # Exit 2 when the gate examined nothing: no type-checker ran AND no JS/TS file
 # was parsed for imports. "Passed" and "couldn't check" must not share an exit
 # code — that equivalence is what let this gate fail open.
-log "═══ Gate 4 Result ═══"
+vlog "═══ Gate 4 Result ═══"
 if [ "$PASS" = false ]; then
   log "❌ FAIL — Hallucinated imports or APIs detected"
   exit 1
