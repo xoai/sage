@@ -60,18 +60,23 @@ the same prompts matched Sage on both — and did it for a fraction of the money
 
 | | sage | bare | spend, sage:bare |
 |---|---|---|---|
-| **Resume an interrupted cycle** | 3/3 | 3/3 | **~9×** |
+| **Resume an interrupted cycle** | 3/3 | 3/3 | **a few times** |
 | **Honour a constraint stated 2 contexts ago** | 3/3 | 3/3 | ~2.2× |
 
-**Sage gets there. It costs roughly 9× as much to get there.**
+**Sage gets there, and pays a few times a bare agent's cost to get there.** A fresh
+same-model run (N=3) puts the resume ratio around **4×** — but it is noisy: each arm
+swings ~±30% run to run, so read it as "a few times more," not a precise multiple.
+What survives the noise is that Sage's cost sits reliably above bare's for the same
+result (the cheapest Sage run still cost more than the priciest bare run).
 
 The resume scenario's first published number was **2/3**, and it was wrong — the runs
 were being starved by a per-session budget cap, and a truncated run grades identically
 to a broken one. Given a cap it does not hit, Sage resumes the interrupted cycle
-correctly every time. What it cannot do is resume it *cheaply*: a bare agent, handed
-the same files, does the same work for **about a ninth of the spend** — the rest is
-Sage's process. Under an equal, tight budget the ceremony is what runs out of budget
-first.
+correctly every time. What it cannot do is resume it *cheaply*: a bare agent does the
+same work for a fraction of the cost, the rest being Sage's ceremony. (That gap was
+first published as ~9×; the v1.3.5 close-out levers roughly halved Sage's resume cost,
+and a fresh measurement lands near 4×. The number is noisy, so we quote a range, not
+a point.)
 
 The memory scenario is the more instructive of the two. Sage's memory system
 *worked* — the run is instrumented, and session 1 provably wrote the constraint to
@@ -83,16 +88,16 @@ else.** Where a rule is a hook, it holds (test-first, 3/3 vs 0/3; the spec gate;
 degradation record). Where a rule is a paragraph — including, now, the long-horizon
 story — a frontier model was going to do the right thing anyway, or wasn't, and the
 paragraph didn't change that. The cost is known: ~1.6× context on short tasks, and
-roughly **9× the dollars** on multi-session work.
+**several times the dollars** (~4×, noisy) on multi-session work.
 
 **How to read the cost figures.** Costs were measured by API metering — the only
 thing the eval harness can meter — and are published as sage:bare **ratios**, because
 the ratio is what transfers across billing models. Most people run Sage inside an
 agent harness (Claude Code) on a subscription, where the same consumption surfaces as
 usage-limit quota and wall-clock time, never as a bill: ~1.6× context on short tasks
-and ~9× on multi-session work describe how much more of your quota and your time Sage
-spends, whatever the pricing. Absolute spend stays with the raw results in
-`develop/evals/`.
+and several times (~4×) on multi-session work describe how much more of your quota and
+your time Sage spends, whatever the pricing. Absolute spend stays with the raw results
+in `develop/evals/`.
 
 The lesson we'd offer, having measured our own framework and not much liked the
 first answer: **if a rule matters, make it code. If you can't, don't claim it.**
@@ -207,11 +212,12 @@ resumes a cycle that was interrupted mid-plan.
 | | resumed correctly | spend |
 |---|---|---|
 | **bare agent**, same files, same prompt | 3/3 | 1× |
-| **Sage** | 3/3 | **~9×** |
+| **Sage** | 3/3 | **a few times** |
 
-**Sage gets there, and it pays about 9× to do it.** (Costs are published as ratios —
-see [the note above](#what-we-measured). On a subscription, the 9× arrives as quota
-and time, not money.)
+**Sage gets there, and pays a few times a bare agent's cost to do it** — a fresh
+same-model N=3 lands near **4×**, noisy enough (~±30% per arm) that we quote a range,
+not a point. (Costs are ratios — see [the note above](#what-we-measured); on a
+subscription they arrive as quota and time, not money.)
 
 This number was published as **2/3** first, and that was wrong. The runs were hitting a
 per-session budget cap and being cut off mid-cycle — and *a truncated run grades
@@ -233,12 +239,12 @@ source is written — it fires *because* the agent wrote code, and the firing **
 evidence. Manifest coherence went **2/3 → 3/3**; the manifest has not lied since.
 
 **And Sage still does not win this scenario.** It matches bare on correctness and
-loses on price by roughly an order of magnitude. That is the honest state of the
-long-horizon claim: the *bridge* is sound now; the *bill* is not.
+loses on price by several times over. That is the honest state of the long-horizon
+claim: the *bridge* is sound now; the *bill* is smaller than it was but still real.
 
 **The bill is now itemised, and the levers are built.** Profiling the resume
-session (`develop/evals/profile_session.py`) resolved the ~9× into **4.1× the API
-calls × 2.1× the context per call**, compounding — and located ~24% of it in the
+session (`develop/evals/profile_session.py`) resolved the pre-lever ~9× into **4.1×
+the API calls × 2.1× the context per call**, compounding — and located ~24% of it in the
 adversarial gate sub-agents re-running from scratch. Sage now runs a leaner
 **close-out economy** on a *resumed* cycle (a first-session build is unchanged):
 one combined gate review instead of a dispatch per gate, batched bookkeeping, and
@@ -249,9 +255,11 @@ final full-suite verification, and at least one independent whole-change review
 never get leaner — the balance is *rigor front-loaded on the session that does the
 design, not re-purchased by the session that finishes the delta.* The levers were
 **re-measured before shipping** (v1.3.5): the first-session scenarios and the resume
-scenario both still pass 3/3 with the levers default-on — no behaviour lost. **No
-cheaper number is claimed**, though: the cost *reduction* is not yet quantified (that
-needs a controlled before/after), so no new ratio is published.
+scenario both still pass 3/3 with the levers default-on — no behaviour lost. And the
+cost did come down: a fresh same-model run puts the resume ratio near **4×**, roughly
+half the pre-lever ~9×. The measurement is noisy (~±30% per arm), so read that as
+"roughly halved, now a few times bare," not a precise new ratio — a tight number would
+need a larger controlled before/after.
 
 **One failure mode from the early batches was real, and v1.3.4 closes it.** In one
 under-budget run (its resume spent less than a third of its session budget — it

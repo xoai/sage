@@ -12,13 +12,15 @@ resumed a cycle and is finishing a small delta, unchanged on a first-session bui
 that does the design. The principle: rigor is front-loaded on the session that does
 the work, banked, and not re-purchased by the session that finishes.
 
-**Re-measured — no behaviour loss; no cost delta claimed.** Because the levers
+**Re-measured — no behaviour loss, and the bill came down.** Because the levers
 touch reliability-sensitive paths, they were re-run before shipping (N=3,
 deterministic graders, levers default-on): the covering first-session scenarios
 hold **3/3** and the resume-fidelity scenario holds **3/3** — pass-rate parity with
-the prior baseline, the failure mode absent. What is **not** claimed is a discount:
-the cost *reduction* is not yet quantified (that needs a controlled before/after),
-so no new sage:bare ratio is published here.
+the prior baseline, the failure mode absent. And the cost dropped: a fresh same-model
+run puts a Sage resume near **4×** a bare agent's cost, **roughly half the pre-lever
+~9×** (which was measured then but does not replicate now). The ratio is noisy (~±30%
+per arm between batches), so it ships as "roughly halved, ~4×, a range not a point" —
+a precise new sage:bare ratio would need a larger controlled before/after.
 
 - **One combined gate review, not the whole ceremony again** (`gate_review`,
   default `combined`) — the largest lever (~24% of the resume session's spend was
