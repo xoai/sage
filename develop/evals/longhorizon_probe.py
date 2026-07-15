@@ -91,10 +91,20 @@ def prompt_retrieval() -> str:
 
 
 def call_model(prompt: str, model: str, budget: float) -> tuple[str, float]:
-    """One non-interactive, no-tools query. Prompt via stdin (histories are far
-    too big for a command-line argument)."""
+    """One non-interactive query that produces TEXT only — it asks for a line of
+    code as an answer, it does not execute anything.
+
+    So this deliberately does NOT use `--permission-mode bypassPermissions` (which
+    the eval driver needs because that agent really edits files). Disabling the
+    tool-approval gate for an autonomous loop that has no reason to touch a tool is
+    unnecessary risk. Instead we deny the tools outright: nothing can be called, so
+    nothing can prompt, so nothing can hang — and the gate stays on.
+
+    Prompt goes via stdin (histories are far too big for a command-line argument)."""
     cmd = ["claude", "-p", "--output-format", "json",
-           "--permission-mode", "bypassPermissions", "--max-budget-usd", str(budget)]
+           "--disallowedTools",
+           "Bash Edit Write NotebookEdit Task WebFetch WebSearch Read Glob Grep",
+           "--max-budget-usd", str(budget)]
     if model:
         cmd += ["--model", model]
     proc = subprocess.run(cmd, input=prompt, capture_output=True, text=True, timeout=600)
