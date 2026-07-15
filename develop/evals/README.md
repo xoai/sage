@@ -65,6 +65,30 @@ that crossover is the memory layer's whole case — confirm it with a real
 multi-session run before publishing. It is a fast **screen**, not a verdict:
 the padding is synthetic and retrieval here is a perfect-recall upper bound.
 
+#### First sweeps (2026-07-15) — no recall crossover found
+
+Two screens, both pointing the same way:
+
+| model | window | reread recall | only failure |
+|---|---|---|---|
+| haiku | 200k | perfect to 150k (2/2 every size) | the 200k context wall — an over-window API error, *not* the model forgetting |
+| opus-4-8[1m] | ~1M | perfect to **600k** (2/2 every size) | none reached (stopped at 600k) |
+
+**The model does not forget as history grows — it recalls a buried constraint
+right up to the point the log physically won't fit.** There is no recall regime,
+on either model, where retrieval beats rereading. The memory layer's only real
+edge is **cost**: a fresh 600k-token reread cost ~$8 vs retrieval's ~$0.03 (~600×).
+But two things shrink even that — prompt caching discounts a *stable* log's reread
+~19× (the second 600k read was $0.42, not $8), and a bare agent need not reread
+the *whole* log. So the honest read: **the memory ceremony is a cost/capacity tool
+for very large histories, not a reliability feature** — and the L-series ran at a
+few thousand tokens, three orders of magnitude short of where it would matter.
+
+Cost of learning this: **$0.73 (haiku) + $16 (frontier), ~15 min each** — versus
+the 30-session run it replaces. Caveats stand (synthetic padding, perfect-retrieval
+upper bound, single needle, opus not pushed to its ~1M wall); confirm on a real
+multi-session run before any of it goes in a public doc.
+
 ## How a run works
 
 1. The scenario's fixture is copied to a temp dir and `git init`-ed with a seed
