@@ -9,9 +9,20 @@ session 2, `profile_session.py`) then re-aimed the next cuts — and flipped the
 plan: the combined review is now only ~11% (the v1.3.5 lever worked), while
 **bookkeeping ballooned to ~29%** because `batch_bookkeeping` is a prose
 instruction that the model doesn't follow (8 incremental manifest/decisions/plan
-edits per resume session). Two clean levers land now; the bookkeeping fix is
-scoped for a mechanical solution (a prose rule that doesn't hold has to become
-code — the same lesson, again).
+edits per resume session). Two clean levers landed first; the bookkeeping fix is
+now mechanical (below) — a prose rule that doesn't hold has to become code, the
+same lesson, again.
+
+- **Bookkeeping is ONE command now** — `manifest.py close-out` applies the whole
+  close-out write in a single pass: replaces the manifest's context summary /
+  next step / open questions, prepends decisions (Rule 7), checks plan
+  checkboxes, sets phase/status — where the model was making 8 separate
+  incremental edits (~29% of the resume session, each re-paying ~100k context).
+  And the machine now owns another derivable field: **`updated:` is stamped by
+  every advance/sync/close-out write** (fail-soft for manifests without the
+  field), so the model never spends a call maintaining it. Body prose that
+  quotes a field is never rewritten — the same frontmatter-only rule as
+  `gate_state`. 12 new tests (close-out semantics + the stamp).
 
 - **Skip memory on resume close-out** (`resume_memory`, default `skip`) — ~7% of
   the resume session. L2 measured memory's value at this horizon as null (a bare

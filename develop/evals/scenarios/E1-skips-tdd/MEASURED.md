@@ -19,3 +19,11 @@ this note is the committed record that the re-measurement happened.
 `resume_test_cadence`) are resume-close-out only, so first-session behaviour here is
 unaffected — confirmed 3/3, 0 truncated, 0 errored, opus-4-8[1m]. The resume path
 itself is proven by `L1-resume-fidelity` (also 3/3).
+
+## Re-measured again — mechanical bookkeeping (2026-07-15)
+
+**sage arm · N=3 · result: 3/3, unchanged.** The one-command close-out
+(`manifest.py close-out`) also applies at a first-session build's completion
+checkpoint, so this scenario was re-run rather than paper-touched: 3/3, 0
+truncated, 0 errored, opus-4-8[1m]. The resume path is proven separately by
+`L1-resume-fidelity` (3/3, $7.50/run avg).

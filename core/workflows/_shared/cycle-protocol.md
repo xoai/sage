@@ -127,14 +127,27 @@ resumed:
    re-runs. Deterministic script gates (spec-check, hallucination, verify) still
    run, `--quiet`. See `quality-gates.workflow.md` § "Resume close-out".
 
-2. **Batch the bookkeeping** (`batch_bookkeeping`, default `true`). Defer
-   memory writes and prose checkpoints to the close-out checkpoint rather than
-   emitting them per task — at ~95k tokens of context per call, a prose-only
-   per-task checkpoint is real money for no state that the manifest and git
-   evidence don't already carry. The manifest bridge is still written at every
-   `[N]`/context-budget break (§ Session-break contract) — that is not
-   bookkeeping, it is the bridge, and it is never batched away. `gate_state` is
-   still mechanical (the sync hook), so batching prose costs no coherence.
+2. **The bookkeeping write is ONE command** (`batch_bookkeeping`, default
+   `true`). The post-lever profile caught the prose version of this rule not
+   holding: 8 incremental manifest/decisions/plan edits per resume session, each
+   re-paying ~100k tokens of context (~29% of the session). So the close-out
+   bookkeeping is now a command — compose your judgment once and apply it in one
+   pass:
+
+   ```bash
+   python3 sage/runtime/tools/manifest.py close-out <manifest.md> \
+     --summary "..." --next-step "..." \
+     --decision "..." --complete-task N --complete-task M \
+     [--phase X] [--status Y] [--open-questions "..."]
+   ```
+
+   Do NOT hand-edit manifest.md, decisions.md, or plan.md incrementally during a
+   resume close-out — every field the machine can derive is already mechanical
+   (`gate_state` via the sync hook, and `updated:` is stamped by every
+   advance/sync/close-out write; never set it by hand). The manifest bridge at an
+   `[N]`/context-budget break is still written immediately (§ Session-break
+   contract — use `close-out` for it too: one command, one pass) — that is the
+   bridge, never batched away.
 
 3. **Trust inherited red** (`trust_inherited_red`, default `true`). When the
    prior session's evidence already records a test as written-and-observed-failing

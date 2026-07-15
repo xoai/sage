@@ -55,6 +55,7 @@ Python 3.8+, stdlib only.
 from __future__ import annotations
 
 import argparse
+import datetime
 import pathlib
 import re
 import subprocess
@@ -146,6 +147,44 @@ def write_gate_state(text: str, new_state: str) -> str:
     return text.replace(fm, new_fm, 1)
 
 
+def write_field(text: str, name: str, value: str) -> str:
+    """Replace a top-level `name:` field INSIDE the frontmatter only (same rule as
+    write_gate_state — body prose that quotes the field must not be rewritten).
+    Raises Problem if the field is absent: silently appending a field the template
+    doesn't carry is how two spellings of the same fact start to coexist."""
+    fm, _ = split_frontmatter(text)
+    if fm is None:
+        raise Problem("manifest has no frontmatter")
+    pat = re.compile(r"^(?P<indent>[ \t]*)%s\s*:[^\n]*$" % re.escape(name), re.M)
+    if not pat.search(fm):
+        raise Problem(f"manifest frontmatter has no `{name}:` field")
+    new_fm = pat.sub(lambda m: f"{m.group('indent')}{name}: {value}", fm, count=1)
+    return text.replace(fm, new_fm, 1)
+
+
+def stamp_updated(text: str) -> str:
+    """Refresh `updated:` — a mechanical fact (something changed just now), so the
+    machine owns it. Fail-soft: a manifest without the field is left unchanged
+    rather than grown a new one."""
+    try:
+        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+        return write_field(text, "updated", now)
+    except Problem:
+        return text
+
+
+def replace_section(text: str, heading: str, body: str) -> str:
+    """Replace the content of a `## {heading}` section (up to the next `## ` or
+    EOF), or append the section if the manifest doesn't have it yet. The heading
+    line itself is preserved/created verbatim."""
+    pat = re.compile(
+        r"(^##\s+%s\s*\n)(.*?)(?=^##\s|\Z)" % re.escape(heading), re.M | re.S)
+    new_block = r"\g<1>" + "\n" + body.rstrip("\n").replace("\\", "\\\\") + "\n\n"
+    if pat.search(text):
+        return pat.sub(new_block, text, count=1)
+    return text.rstrip("\n") + f"\n\n## {heading}\n\n{body.rstrip(chr(10))}\n"
+
+
 def is_source(rel: str) -> bool:
     """Is this path the user's implementation, as opposed to Sage's bookkeeping?
 
@@ -221,7 +260,10 @@ def advance(manifest_path: pathlib.Path, wrote: str) -> tuple:
     if state not in ADVANCEABLE_FROM:
         return state, None                    # already building+, or pre-spec (a violation)
 
-    manifest_path.write_text(write_gate_state(text, DERIVABLE_CEILING),
+    # updated: is stamped in the same write — a mechanical fact (the cycle just
+    # changed), and every field the machine owns is one the model no longer
+    # spends an API call maintaining.
+    manifest_path.write_text(stamp_updated(write_gate_state(text, DERIVABLE_CEILING)),
                              encoding="utf-8")
     return state, DERIVABLE_CEILING
 
@@ -290,7 +332,10 @@ def sync(manifest_path: pathlib.Path, root: pathlib.Path) -> tuple:
     if not implementation_has_begun(root, manifest_path):
         return state, None
 
-    manifest_path.write_text(write_gate_state(text, DERIVABLE_CEILING),
+    # updated: is stamped in the same write — a mechanical fact (the cycle just
+    # changed), and every field the machine owns is one the model no longer
+    # spends an API call maintaining.
+    manifest_path.write_text(stamp_updated(write_gate_state(text, DERIVABLE_CEILING)),
                              encoding="utf-8")
     return state, DERIVABLE_CEILING
 
@@ -335,8 +380,10 @@ CLOSE-OUT ECONOMY (you resumed — finish the delta, do not re-buy banked rigor)
   - Gates: run the deterministic script gates (--quiet) per remaining task, then
     ONE combined adversarial review over the whole cycle diff — not a dispatch
     per gate, not a re-review of tasks a prior session already reviewed.
-  - Bookkeeping: batch memory/prose to the close-out checkpoint (the manifest
-    bridge at a session break is NOT batched).
+  - Bookkeeping: ONE command at the close-out checkpoint — `manifest.py
+    close-out <manifest> --summary ... --decision ... --complete-task N` — never
+    incremental hand-edits of manifest/decisions/plan (updated: and gate_state
+    are machine-owned). The session-break bridge uses the same command.
   - Inherited red: a test the plan/manifest records as already-failing, still in
     the tree, is not re-run just to re-witness it — write the code, confirm green.
   - Memory: skip the memory search/store — the brief already carries the context
@@ -593,6 +640,86 @@ def check(manifests, root: pathlib.Path) -> int:
     return 0
 
 
+# close-out — the ONE bookkeeping write a resume close-out makes.
+#
+# The 2026-07-15 post-lever profile found bookkeeping at ~29% of the resume
+# session: 8 incremental edits to manifest.md/decisions.md/plan.md, each a
+# separate API call re-paying ~100k tokens of context. `batch_bookkeeping` asked
+# the model, in prose, to defer those writes — and the model didn't. Same lesson
+# as gate_state and the task ledger: if a rule matters, make it code.
+#
+# So the close-out write is a command. The model composes its judgment ONCE
+# (summary, next step, decisions, which tasks completed) and this applies all of
+# it in one pass — one call instead of eight. What stays the model's: the words.
+# What stops being the model's: the ceremony of applying them file by file.
+
+def close_out(manifest: pathlib.Path, summary=None, next_step=None,
+              decisions=(), complete_tasks=(), open_questions=None,
+              status=None, phase=None) -> int:
+    text = manifest.read_text(encoding="utf-8", errors="replace")
+    cycle_dir = manifest.parent
+    wrote = []
+
+    if summary:
+        text = replace_section(text, "Context summary", summary)
+        wrote.append("context summary")
+    if open_questions is not None:
+        text = replace_section(text, "Open questions",
+                               open_questions or "(none)")
+        wrote.append("open questions")
+    if next_step:
+        new_text, n = re.subn(r"^(\*\*Next step:\*\*).*$",
+                              r"\g<1> " + next_step.replace("\\", "\\\\"),
+                              text, count=1, flags=re.M)
+        if n:
+            text = new_text
+            wrote.append("next step")
+        else:
+            print("note: no `**Next step:**` line found — skipped")
+    if phase:
+        text = write_field(text, "phase", phase)
+        wrote.append(f"phase={phase}")
+    if status:
+        text = write_field(text, "status", status)
+        wrote.append(f"status={status}")
+    text = stamp_updated(text)
+    manifest.write_text(text, encoding="utf-8")
+
+    if decisions:
+        dpath = cycle_dir / "decisions.md"
+        today = datetime.datetime.now().strftime("%Y-%m-%d")
+        entries = "\n".join(f"### {today} — {d}\n" for d in decisions)
+        old = dpath.read_text(encoding="utf-8", errors="replace") if dpath.is_file() else ""
+        # Prepend below a `# ` title line if one exists (Rule 7: prepend).
+        m = re.match(r"(\A#[^\n]*\n+)", old)
+        head, rest = (m.group(1), old[m.end():]) if m else ("", old)
+        dpath.write_text(head + entries + "\n" + rest, encoding="utf-8")
+        wrote.append(f"{len(decisions)} decision(s)")
+
+    if complete_tasks:
+        plan = cycle_dir / "plan.md"
+        if not plan.is_file():
+            raise Problem(f"--complete-task given but {plan} does not exist")
+        ptext = plan.read_text(encoding="utf-8", errors="replace")
+        missed = []
+        for n in complete_tasks:
+            new_ptext, count = re.subn(
+                r"^(\s*-\s*)\[ \](\s*\*{0,2}Task\s+%d\b)" % n,
+                r"\g<1>[x]\g<2>", ptext, count=1, flags=re.M)
+            if count:
+                ptext = new_ptext
+            else:
+                missed.append(n)
+        plan.write_text(ptext, encoding="utf-8")
+        wrote.append(f"checked task(s) {','.join(str(n) for n in complete_tasks if n not in missed)}")
+        for n in missed:
+            print(f"note: Task {n} not found unchecked in plan.md — skipped")
+
+    print("close-out: wrote " + (", ".join(wrote) if wrote else "nothing (no args)")
+          + f" · updated: stamped · 1 pass")
+    return 0
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 def find_manifests(root: pathlib.Path) -> list:
     work = root / ".sage" / "work"
@@ -622,6 +749,22 @@ def main(argv=None) -> int:
                    help="a specific cycle's manifest (default: select automatically)")
     r.add_argument("--repo-root", type=pathlib.Path, default=pathlib.Path.cwd())
 
+    co = sub.add_parser(
+        "close-out",
+        help="apply the close-out bookkeeping in ONE pass (manifest prose, "
+             "decisions, plan checkboxes) instead of incremental edits")
+    co.add_argument("manifest", type=pathlib.Path)
+    co.add_argument("--summary", help="replaces the ## Context summary section")
+    co.add_argument("--next-step", help="rewrites the **Next step:** line")
+    co.add_argument("--open-questions",
+                    help="replaces ## Open questions ('' means none)")
+    co.add_argument("--decision", action="append", default=[],
+                    help="prepend an entry to the cycle's decisions.md (repeatable)")
+    co.add_argument("--complete-task", action="append", type=int, default=[],
+                    metavar="N", help="check Task N's box in plan.md (repeatable)")
+    co.add_argument("--phase", help="set frontmatter phase")
+    co.add_argument("--status", help="set frontmatter status")
+
     args = p.parse_args(argv)
 
     try:
@@ -639,6 +782,14 @@ def main(argv=None) -> int:
 
         if args.cmd == "resume":
             return resume(args.repo_root.resolve(), args.manifest)
+
+        if args.cmd == "close-out":
+            return close_out(args.manifest, summary=args.summary,
+                             next_step=args.next_step,
+                             decisions=args.decision,
+                             complete_tasks=args.complete_task,
+                             open_questions=args.open_questions,
+                             status=args.status, phase=args.phase)
 
         manifests = args.manifest or find_manifests(args.repo_root.resolve())
         if not manifests:
