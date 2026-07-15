@@ -341,5 +341,118 @@ class ResumeTest(unittest.TestCase):
         self.assertTrue(M.is_source("src/config.py"))
 
 
+def a_manifest_with_body(gate_state="building") -> str:
+    """A manifest with the sections close-out writes, plus an updated: field."""
+    return (
+        "---\n"
+        'cycle_id: "20260715-close-out"\n'
+        "workflow: build\n"
+        "phase: implement\n"
+        "status: in-progress\n"
+        "gate_state: %s\n"
+        "updated: 2026-07-01 00:00\n"
+        "---\n\n"
+        "# Cycle: Close-out\n\n"
+        "## State\n\n"
+        "**Current phase:** implement\n"
+        "**Next step:** finish Task 3\n\n"
+        "## Context summary\n\n"
+        "Old summary that should be replaced.\n"
+        "The body quotes `status: in-progress` and `updated: 2026-07-01 00:00`.\n\n"
+        "## Open questions\n\n"
+        "- old question\n" % gate_state
+    )
+
+
+class CloseOutTest(unittest.TestCase):
+    """The bookkeeping write is ONE command now. The 2026-07-15 profile found the
+    model making 8 incremental manifest/decisions/plan edits per resume session
+    (~29% of its cost) — batch_bookkeeping asked it to stop, in prose, and it
+    didn't. Same lesson as gate_state: make it code."""
+
+    def setUp(self):
+        self.d = pathlib.Path(tempfile.mkdtemp(prefix="manifest-closeout-"))
+        self.addCleanup(shutil.rmtree, self.d, ignore_errors=True)
+        self.m = self.d / "manifest.md"
+        self.m.write_text(a_manifest_with_body())
+
+    def test_one_pass_writes_summary_next_step_and_stamps_updated(self):
+        M.close_out(self.m, summary="New summary from the close-out.",
+                    next_step="present the completion checkpoint")
+        text = self.m.read_text()
+        self.assertIn("New summary from the close-out.", text)
+        self.assertNotIn("Old summary that should be replaced.", text)
+        self.assertIn("**Next step:** present the completion checkpoint", text)
+        fm, _ = M.split_frontmatter(text)
+        self.assertNotIn("updated: 2026-07-01 00:00", fm,
+                         "updated: must be stamped by the machine")
+
+    def test_body_prose_quoting_fields_is_not_rewritten(self):
+        """Same rule as write_gate_state: the body's narration is the agent's."""
+        M.close_out(self.m, status="paused")
+        text = self.m.read_text()
+        self.assertIn("The body quotes `status: in-progress`", text)
+        fm, _ = M.split_frontmatter(text)
+        self.assertIn("status: paused", fm)
+
+    def test_decisions_prepend_below_title(self):
+        (self.d / "decisions.md").write_text("# Decisions\n\n### 2026-07-01 — Old\n")
+        M.close_out(self.m, decisions=["D-9: retry helper computes, caller waits"])
+        dtext = (self.d / "decisions.md").read_text()
+        self.assertTrue(dtext.startswith("# Decisions\n"))
+        self.assertLess(dtext.index("D-9"), dtext.index("Old"),
+                        "new decision must be PREPENDED (Rule 7)")
+
+    def test_decisions_file_created_when_absent(self):
+        M.close_out(self.m, decisions=["D-1: first"])
+        self.assertIn("D-1: first", (self.d / "decisions.md").read_text())
+
+    def test_plan_checkbox_bulk_check(self):
+        (self.d / "plan.md").write_text(
+            "# Plan\n\n- [x] **Task 1:** done before\n"
+            "- [ ] **Task 2:** middle\n- [ ] **Task 3:** last\n")
+        M.close_out(self.m, complete_tasks=[2, 3])
+        ptext = (self.d / "plan.md").read_text()
+        self.assertIn("- [x] **Task 2:**", ptext)
+        self.assertIn("- [x] **Task 3:**", ptext)
+
+    def test_missing_task_is_a_note_not_a_crash(self):
+        (self.d / "plan.md").write_text("# Plan\n\n- [ ] **Task 1:** only\n")
+        rc = M.close_out(self.m, complete_tasks=[1, 7])
+        self.assertEqual(rc, 0)
+        self.assertIn("- [x] **Task 1:**", (self.d / "plan.md").read_text())
+
+    def test_replace_section_appends_when_absent(self):
+        out = M.replace_section("# T\n\n## Other\n\nx\n", "Handoff guidance", "take over")
+        self.assertIn("## Handoff guidance", out)
+        self.assertIn("take over", out)
+
+    def test_write_field_refuses_an_absent_field(self):
+        with self.assertRaises(M.Problem):
+            M.write_field(a_manifest(), "no_such_field", "x")
+
+
+class UpdatedStampTest(unittest.TestCase):
+    """advance/sync own updated: now — one less field the model maintains."""
+
+    def setUp(self):
+        self.d = pathlib.Path(tempfile.mkdtemp(prefix="manifest-stamp-"))
+        self.addCleanup(shutil.rmtree, self.d, ignore_errors=True)
+        self.m = self.d / "manifest.md"
+
+    def test_advance_stamps_updated_when_field_exists(self):
+        self.m.write_text(a_manifest_with_body(gate_state="plan-approved"))
+        old, new = M.advance(self.m, "src/config.py")
+        self.assertEqual(new, "building")
+        fm, _ = M.split_frontmatter(self.m.read_text())
+        self.assertNotIn("updated: 2026-07-01 00:00", fm)
+
+    def test_advance_is_fail_soft_without_the_field(self):
+        """A pre-template manifest without updated: must still advance."""
+        self.m.write_text(a_manifest("plan-approved"))
+        old, new = M.advance(self.m, "src/config.py")
+        self.assertEqual(new, "building")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

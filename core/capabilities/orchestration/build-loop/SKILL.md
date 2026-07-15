@@ -157,12 +157,20 @@ Say "pause" to stop.
 
 **Batch the bookkeeping** (`batch_bookkeeping`, default `true`): defer memory
 writes and non-essential prose to the completion/session-break checkpoint rather
-than emitting them per task. `gate_state` is mechanical (the sync hook) and plan
-checkboxes update in bulk at completion — so a per-task prose checkpoint carries
-no state git and the manifest don't already have, and at ~95k tokens of context
-per call it is not free. Keep the one-line progress note above; batch the rest.
+than emitting them per task — and when that checkpoint arrives, apply ALL of it
+with **one command**, not incremental edits:
+
+```bash
+python3 sage/runtime/tools/manifest.py close-out <manifest.md> \
+  --summary "..." --next-step "..." --decision "..." --complete-task N
+```
+
+`gate_state` and `updated:` are mechanical (the sync hook and every
+advance/sync/close-out write own them — never hand-edit either). Keep the
+one-line progress note above; everything else waits for the close-out command.
 The manifest bridge at an `[N]`/context-budget break is NOT bookkeeping and is
-never batched (`cycle-protocol.md` § Session-break contract).
+never deferred (`cycle-protocol.md` § Session-break contract) — write it with
+the same one command.
 
 **On a resume close-out, two more of the economy's levers apply here** (see
 `cycle-protocol.md` § Resume close-out economy): with `resume_memory: skip`

@@ -471,18 +471,26 @@ all live there; do not restate them here. (No git repository or no
 initiative branch → omit [M].)
 
 **On approval — checkpoint state (Rule 7):**
-1. Walk through plan.md and check completed tasks in bulk
+1. **Apply the bookkeeping in ONE pass** — compose the summary, decisions, and
+   completed-task list, then:
+   ```bash
+   python3 sage/runtime/tools/manifest.py close-out .sage/work/[initiative]/manifest.md \
+     --summary "..." --next-step "..." --decision "completion: ..." \
+     --complete-task 1 --complete-task 2 ... --phase complete
+   ```
+   Do not hand-edit manifest.md/decisions.md/plan.md incrementally — `updated:`
+   and `gate_state` are machine-owned, and the command checks the plan boxes and
+   prepends the decision for you (cycle-protocol.md § Resume close-out economy).
 2. Update plan.md frontmatter: `status: completed`
-3. Prepend completion summary to the initiative's decisions.md
-4. Write `handoff` field in plan.md frontmatter with key decisions,
+3. Write `handoff` field in plan.md frontmatter with key decisions,
    open questions, and risks for the next agent
-5. Store key findings in memory if sage-memory available — **except on a resume
+4. Store key findings in memory if sage-memory available — **except on a resume
    close-out with `resume_memory: skip` (default)**, where this is skipped: L2
    measured memory's value at this horizon as null (cycle-protocol.md § Resume
    close-out economy). First-session builds always store.
-6. **Wiring check:** Verify all new components are connected — imports
+5. **Wiring check:** Verify all new components are connected — imports
    wired, routes registered, handlers hooked up, config entries added.
-7. **Ontology update (if sage-memory available):** For significant new
+6. **Ontology update (if sage-memory available):** For significant new
    structure (new module, service, API endpoint, major component), create
    ontology entities and link them to existing graph. Skip for small
    changes within existing modules — only update when the codebase's
