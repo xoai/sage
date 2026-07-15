@@ -79,6 +79,8 @@ Details: `core/workflows/_shared/cycle-protocol.md` § "Resume close-out economy
 | `gate_review` | `combined` | Judgment gates 1–3 reach an independent verdict via ONE adversarial reviewer instead of a dispatch per gate. | `per-gate` (a reviewer per gate) or `off` (self-review) |
 | `batch_bookkeeping` | `true` | Memory writes and prose checkpoints deferred to the checkpoint, not emitted per task. The manifest bridge is never batched. | `false` |
 | `trust_inherited_red` | `true` | On resume, a test the prior session already recorded as written-and-failing is not re-run just to re-witness the failure. Never applies to a test this session writes. | `false` |
+| `resume_memory` | `skip` | On resume close-out, skip the memory search/store — the brief already carries the context and L2 measured its value at this horizon as null. | `keep` (the bet that memory compounds over dozens of sessions) |
+| `resume_test_cadence` | `lean` | On resume close-out, run the targeted test per step and the full suite ONCE at close-out, not per task. The closing full-suite run is never skipped. | `full` (whole suite at every step) |
 
 What these never touch: the deterministic script gates (they always run, and are
 the evidence base), the final full-suite verification, at least one independent
@@ -88,4 +90,5 @@ small delta.
 
 When a user asks to "make Sage cheaper on resume" / "reduce the resume cost", these
 are the levers; when they want "maximum rigor regardless of cost", set
-`gate_review: per-gate`, `batch_bookkeeping: false`, `trust_inherited_red: false`.
+`gate_review: per-gate`, `batch_bookkeeping: false`, `trust_inherited_red: false`,
+`resume_memory: keep`, `resume_test_cadence: full`.

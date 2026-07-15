@@ -6,7 +6,7 @@ description: >
   production code, implementing features, fixing bugs, refactoring, or when
   the user says "write code", "implement", "fix this", or "add a feature".
   Code written before its test is deleted.
-version: "1.1.0"
+version: "1.2.0"
 modes: [fix, build, architect]
 ---
 
@@ -70,6 +70,14 @@ Rules:
 
 Run ALL tests. The new test must pass. All existing tests must still pass.
 If any test fails, fix it before proceeding. Never leave tests red.
+
+**Lean cadence on resume** (`resume_test_cadence`, default `lean`): on a resume
+close-out only, run the **targeted** test(s) for the code you just wrote here,
+not the whole suite — the whole suite runs **once** at the close-out verification
+(Gate 5), which is where a mid-batch regression is caught. Set
+`resume_test_cadence: full`, or on any first-session build, to run ALL tests at
+every GREEN as above. The closing full-suite run is never skipped. See
+cycle-protocol.md § Resume close-out economy.
 
 ### Phase 3: REFACTOR — Clean Up
 

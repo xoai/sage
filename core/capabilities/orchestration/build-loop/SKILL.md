@@ -6,7 +6,7 @@ description: >
   dispatches implementation, validates, updates progress, and continues. Use
   after a plan is approved and the user says "go", "start building", "execute
   the plan", or "implement the feature".
-version: "1.1.0"
+version: "1.2.0"
 modes: [build, architect]
 ---
 
@@ -163,6 +163,13 @@ no state git and the manifest don't already have, and at ~95k tokens of context
 per call it is not free. Keep the one-line progress note above; batch the rest.
 The manifest bridge at an `[N]`/context-budget break is NOT bookkeeping and is
 never batched (`cycle-protocol.md` § Session-break contract).
+
+**On a resume close-out, two more of the economy's levers apply here** (see
+`cycle-protocol.md` § Resume close-out economy): with `resume_memory: skip`
+(default) the memory store/search is skipped — the brief already carries the
+context and L2 measured its value at this horizon as null; and with
+`resume_test_cadence: lean` (default) each step's GREEN runs the targeted test,
+with the full suite run once at close-out (Gate 5) rather than per task.
 
 For tasks marked `[P]` (parallelizable), note: "Tasks [N] and [M] can run
 in parallel. Running sequentially on this platform." (On Tier 1, dispatch both.)

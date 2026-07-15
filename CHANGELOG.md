@@ -2,6 +2,38 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [Unreleased] — resume close-out economy, round 2
+
+The v1.3.5 levers cut the resume bill ~in half. A **post-lever profile** (L1
+session 2, `profile_session.py`) then re-aimed the next cuts — and flipped the
+plan: the combined review is now only ~11% (the v1.3.5 lever worked), while
+**bookkeeping ballooned to ~29%** because `batch_bookkeeping` is a prose
+instruction that the model doesn't follow (8 incremental manifest/decisions/plan
+edits per resume session). Two clean levers land now; the bookkeeping fix is
+scoped for a mechanical solution (a prose rule that doesn't hold has to become
+code — the same lesson, again).
+
+- **Skip memory on resume close-out** (`resume_memory`, default `skip`) — ~7% of
+  the resume session. L2 measured memory's value at this horizon as null (a bare
+  agent rereading its log reached the same answer for a third of the price), and
+  the long-horizon probe found rereading recalls perfectly until the log exceeds
+  the context window (~1M tokens on the models Sage runs). So a resumed session
+  skips the memory search (the generated brief already carries the context) and
+  the close-out store. `resume_memory: keep` restores it — the bet that memory
+  *compounds* over dozens of sessions (the untested regime). First-session builds
+  always use memory.
+- **Lean test cadence on resume close-out** (`resume_test_cadence`, default
+  `lean`) — ~10% of the resume session. The loop re-ran the whole suite at every
+  step; on resume it now runs the *targeted* test per step and the **full suite
+  once** at the close-out verification (Gate 5). The closing full-suite proof is
+  never trimmed — a mid-batch regression is caught there. `resume_test_cadence:
+  full` restores per-step full runs.
+
+Config-gated, safe defaults, resume-close-out only; first-session builds unchanged.
+Like the v1.3.5 levers, these touch reliability-sensitive paths, so **merge is
+gated on an L1 re-measure** (no cost delta or release claimed until it holds 3/3).
+The mechanical-bookkeeping fix is scoped separately (dev docs) and not built here.
+
 ## [1.3.5] — the resume bill, itemised and trimmed
 
 v1.3.4 made the resume *bridge* sound. The *bill* was still ~9× a bare agent, and
