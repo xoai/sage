@@ -89,11 +89,12 @@ scenarios finally test it: a fresh context resumes work another context started.
 
 | | sage | bare | delta |
 |---|---|---|---|
-| Resume an interrupted cycle | 3/3 | 3/3 | same result, **~9× the spend** |
+| Resume an interrupted cycle | 3/3 | 3/3 | same result, **a few times the spend** |
 | Honour a constraint stated 2 contexts ago | 3/3 | 3/3 | same result, ~2.2× the spend |
 
-**Sage ties both, and pays 2–9× for it. On this evidence the long-horizon claim is
-not that Sage resumes *better* — it is that it resumes *reliably*, and expensively.**
+**Sage ties both, and pays several times over for it (roughly 2–4×). On this evidence
+the long-horizon claim is not that Sage resumes *better* — it is that it resumes
+*reliably*, and expensively.**
 
 ### Resume fidelity
 
@@ -132,15 +133,17 @@ Re-measured after the fixes: **3/3 on two different models, N=3 valid runs each*
 with the failure mode absent from every transcript. No pass-rate or cost delta is
 claimed — the fix buys determinism, not a discount.
 
-**And the bill is still the bill.** A Sage resume costs roughly **9× a bare
-agent's**. Profiling resolved that into ~4× the API calls at ~2× the context per
-call, and cost-reduction levers now trim the redundant re-work a resuming session
-does (a single consolidated review instead of one per gate, batched bookkeeping,
-and not re-confirming a test a prior session already recorded as failing). Those
-change behaviour, so before shipping (v1.3.5) they were re-measured: the covering
+**And the bill is smaller than the headline, but still real.** The **9× was measured
+pre-lever, and it does not replicate.** A fresh same-model run (N=3) puts a Sage resume
+near **4×** a bare agent's cost — roughly half the pre-lever figure, after the v1.3.5
+close-out levers (a single consolidated review instead of one per gate, batched
+bookkeeping, and not re-confirming a test a prior session already recorded as failing).
+Those change behaviour, so before shipping they were re-measured: the covering
 first-session scenarios and the resume scenario both hold **3/3** with the levers
-default-on — no reliability lost. The cost *reduction* itself is not yet quantified,
-so no cheaper sage:bare ratio is published here.
+default-on — no reliability lost. The ratio is noisy: each arm swings ~±30% between
+batches (the bare arm alone, on identical code), so treat "~4×, roughly halved" as a
+range, not a point — a tight number needs a larger controlled before/after. What
+survives the noise: Sage's cost band sits reliably above bare's for the same result.
 
 ### Memory recall — a null result
 
