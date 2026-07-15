@@ -137,8 +137,10 @@ agent's**. Profiling resolved that into ~4× the API calls at ~2× the context p
 call, and cost-reduction levers now trim the redundant re-work a resuming session
 does (a single consolidated review instead of one per gate, batched bookkeeping,
 and not re-confirming a test a prior session already recorded as failing). Those
-change behaviour, so no cheaper number is published until the scenario is
-re-measured to confirm no reliability is lost.
+change behaviour, so before shipping (v1.3.5) they were re-measured: the covering
+first-session scenarios and the resume scenario both hold **3/3** with the levers
+default-on — no reliability lost. The cost *reduction* itself is not yet quantified,
+so no cheaper sage:bare ratio is published here.
 
 ### Memory recall — a null result
 

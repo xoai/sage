@@ -247,9 +247,11 @@ config knob with a safe default (`gate_review`, `batch_bookkeeping`,
 `trust_inherited_red`; see `/configure`). The deterministic script gates, the
 final full-suite verification, and at least one independent whole-change review
 never get leaner — the balance is *rigor front-loaded on the session that does the
-design, not re-purchased by the session that finishes the delta.* **No cheaper
-number is claimed yet**: the levers change behavior, and the cost is being
-re-measured by re-running the resume scenario before any new ratio is published.
+design, not re-purchased by the session that finishes the delta.* The levers were
+**re-measured before shipping** (v1.3.5): the first-session scenarios and the resume
+scenario both still pass 3/3 with the levers default-on — no behaviour lost. **No
+cheaper number is claimed**, though: the cost *reduction* is not yet quantified (that
+needs a controlled before/after), so no new ratio is published.
 
 **One failure mode from the early batches was real, and v1.3.4 closes it.** In one
 under-budget run (its resume spent less than a third of its session budget — it
