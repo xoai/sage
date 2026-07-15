@@ -12,3 +12,10 @@ proven separately by `L1-resume-fidelity` (also 3/3).
 
 Raw results regenerate on demand under `develop/evals/results/` (gitignored);
 this note is the committed record that the re-measurement happened.
+
+## Re-measured again — round-2 levers (2026-07-15)
+
+**sage arm · N=3 · result: 3/3, unchanged.** The round-2 levers (`resume_memory`,
+`resume_test_cadence`) are resume-close-out only, so first-session behaviour here is
+unaffected — confirmed 3/3, 0 truncated, 0 errored, opus-4-8[1m]. The resume path
+itself is proven by `L1-resume-fidelity` (also 3/3).
