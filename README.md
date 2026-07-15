@@ -20,89 +20,33 @@ Built for product and engineering teams, open to any domain.
 
 ## What we measured
 
-Sage's central claim has always been that agents behave better under it. Since
-v1.2.0 that claim is measured instead of asserted, and **the honest answer is
-narrower than this README used to imply.**
+Since v1.2.0, Sage's claims are measured, not asserted: `develop/evals/` runs
+adversarial scenarios twice — once in a Sage project, once in a bare one — with
+deterministic graders and no LLM judge. Three findings matter:
 
-`develop/evals/` runs eight adversarial scenarios twice — once in a Sage project,
-once in a bare one — and grades the result deterministically.
+**1. Where Sage wins, it wins because something is mechanical.** Under "it's just
+one number" pressure, a bare frontier agent ships the change untested **0/3**;
+Sage's hook blocks the edit until a test exists — **3/3**. The spec gate and the
+degradation record hold the same way. These are code, not instructions.
 
-**Most of what Sage claimed, a frontier model already does on its own.** It refused
-to hardcode the secret it was handed, ran the tests instead of believing a user who
-claimed they passed, declined to tidy a file it wasn't asked to tidy, and caught the
-package that doesn't exist — all with no Sage at all. Those failure modes were real
-when Sage was designed. Mostly they aren't anymore, and on four of the five
-scenarios that ran in both conditions there is **no measurable difference**, at
-**1.6× the input tokens** (down from 1.9× at v1.2.1, after the v1.3.0 context diet).
+**2. Where a rule is only prose, a frontier model ties it.** Refusing a handed-over
+API key, distrusting "the tests passed", scope discipline, phantom packages — the
+bare agent now does all of that on its own, and Sage measures **no difference** at
+**~1.6× the input tokens**.
 
-**Where Sage does win, it wins because something is mechanical.** The exception is
-test-first, and it is instructive: at v1.2.0 it was prose, and it failed 0/3. Since
-v1.2.1 it is a hook, and it passes 3/3 while a bare agent still fails 0/3. That is the whole
-thesis in one row — not "the framework says to write tests", but "the edit does not
-go through until you have".
+**3. Multi-session work: Sage resumes reliably, and pays for it.** Resuming an
+interrupted cycle and honouring a constraint from two contexts ago: both **3/3 in
+both conditions** — a tie on correctness, at **a few times the cost** (resume ~4×,
+noisy; roughly halved from ~9× by the v1.3.5 close-out levers, with further cuts
+in progress).
 
-| | measured (sage) | bare |
-|---|---|---|
-| Test-first on a "it's just one number" change | ✅ **3/3** — a hook blocks the edit until a test exists | ❌ **0/3** |
-| Spec-gate hook blocks a pre-spec edit | ✅ 3/3 — and the agent recovers by writing the spec, 3/3 | n/a |
-| A degraded run is recorded in `decisions.md` | ✅ 3/3 — a hook writes it | n/a |
-| Gate scripts' three-state exit contract | ✅ tested; "unverifiable" is never a pass | — |
-| Routing to the right workflow | ✅ 3/3 | n/a |
+The honest summary: **Sage's benefit is whatever it has made mechanical.** Costs
+are published as sage:bare ratios because ratios transfer across billing models —
+on a subscription they arrive as quota and time, not a bill.
 
-Every one of those is **code**. Every claim that rested on prose — including, at
-v1.2.0, test-first and loud degradation — was measured and found false, and then
-either made mechanical or withdrawn.
+> If a rule matters, make it code. If you can't, don't claim it.
 
-**And the part Sage is probably actually for — long multi-session work — is measured
-now too, for the first time.** It did not go the way we wanted. Across two
-multi-session scenarios (N=3, both conditions), a bare agent given the same files and
-the same prompts matched Sage on both — and did it for a fraction of the money:
-
-| | sage | bare | spend, sage:bare |
-|---|---|---|---|
-| **Resume an interrupted cycle** | 3/3 | 3/3 | **a few times** |
-| **Honour a constraint stated 2 contexts ago** | 3/3 | 3/3 | ~2.2× |
-
-**Sage gets there, and pays a few times a bare agent's cost to get there.** A fresh
-same-model run (N=3) puts the resume ratio around **4×** — but it is noisy: each arm
-swings ~±30% run to run, so read it as "a few times more," not a precise multiple.
-What survives the noise is that Sage's cost sits reliably above bare's for the same
-result (the cheapest Sage run still cost more than the priciest bare run).
-
-The resume scenario's first published number was **2/3**, and it was wrong — the runs
-were being starved by a per-session budget cap, and a truncated run grades identically
-to a broken one. Given a cap it does not hit, Sage resumes the interrupted cycle
-correctly every time. What it cannot do is resume it *cheaply*: a bare agent does the
-same work for a fraction of the cost, the rest being Sage's ceremony. (That gap was
-first published as ~9×; the v1.3.5 close-out levers roughly halved Sage's resume cost,
-and a fresh measurement lands near 4×. The number is noisy, so we quote a range, not
-a point.)
-
-The memory scenario is the more instructive of the two. Sage's memory system
-*worked* — the run is instrumented, and session 1 provably wrote the constraint to
-it. It just didn't **matter**: the bare agent reread its own session log off the disk
-and got the same answer for a third of the price. Retrieval did not beat rereading.
-
-So, precisely: Sage's benefit is **whatever it has made mechanical, and nothing
-else.** Where a rule is a hook, it holds (test-first, 3/3 vs 0/3; the spec gate; the
-degradation record). Where a rule is a paragraph — including, now, the long-horizon
-story — a frontier model was going to do the right thing anyway, or wasn't, and the
-paragraph didn't change that. The cost is known: ~1.6× context on short tasks, and
-**several times the dollars** (~4×, noisy) on multi-session work.
-
-**How to read the cost figures.** Costs were measured by API metering — the only
-thing the eval harness can meter — and are published as sage:bare **ratios**, because
-the ratio is what transfers across billing models. Most people run Sage inside an
-agent harness (Claude Code) on a subscription, where the same consumption surfaces as
-usage-limit quota and wall-clock time, never as a bill: ~1.6× context on short tasks
-and several times (~4×) on multi-session work describe how much more of your quota and
-your time Sage spends, whatever the pricing. Absolute spend stays with the raw results
-in `develop/evals/`.
-
-The lesson we'd offer, having measured our own framework and not much liked the
-first answer: **if a rule matters, make it code. If you can't, don't claim it.**
-
-Full result, method, and the bugs the eval found in *itself*:
+Full results, method, corrections, and the bugs the eval found in itself:
 **[docs/eval-baseline.md](docs/eval-baseline.md)**.
 
 ## Why Sage
@@ -156,128 +100,45 @@ wrote it, and check `decisions.md` yourself.
 
 ### Hybrid Loading
 
-Most frameworks dump all instructions into the context window and hope
-for the best. Sage loads in three layers.
+Most frameworks dump every instruction into the context window. Sage loads in
+three layers:
 
-The **eager layer** — 177 lines, ~2.1k tokens, in context on every turn —
-carries only what must be seen *before* the first token: the rule that sends
-the agent to a skill, the routing keywords, and each constitution principle
-next to the name of the hook that enforces it.
+- **Eager** — 177 lines (~2.1k tokens) on every turn: routing keywords, the rule
+  that sends the agent to a skill, and each principle next to the hook that
+  enforces it. Nothing else.
+- **On-demand** — seven system skills fetched only when the conversation matches
+  their description. A session that never asks about tiers never pays for tiers.
+- **Lazy** — capabilities (TDD, coding principles, build-loop) load when a
+  workflow step needs them.
 
-The **on-demand layer** — seven system skills, 568 lines total — carries
-everything else: routing depth, the memory guide, the checkpoint protocol, the
-gates explainer, tiers, the constitution's full text, the decision-log
-protocol. These are fetched when a description matches what the user actually
-said, so a session that never asks about tiers never pays for tiers. The total
-is not a per-turn cost; that is the entire point of it.
-
-The **lazy layer** (capabilities like TDD discipline, coding principles,
-build-loop orchestration) loads when a workflow step needs it.
-
-**v1.3.0 cut the eager layer from 398 lines to 177** — 4,433 tokens to 2,144,
-on every turn of every session. What moved out was, overwhelmingly, prose
-describing checks that a script already performs: sage-spec-gate blocks an edit
-before a spec exists whether or not the model read the paragraph promising it
-would. What is left names the mechanism instead of restating it.
-
-**And it was re-measured, not inferred.** v1.2.1 cost 1.9× a bare agent's input
-tokens; v1.3.0 costs **1.6×** (N=3, model-in-loop,
-[eval-baseline](docs/eval-baseline.md)). Short of the ≤1.5× target, and not
-rounded there. Crucially, the diet cost no behaviour: test-first still measures 3/3
-against a bare agent's 0/3 with the entire test-first prose block deleted — the
-hook was doing the work all along.
-
-That 177 is measured, not estimated — see
-[docs/context-budget.md](docs/context-budget.md), regenerated by
-`context_budget.py` and held in place by a CI budget that now also counts the
-on-demand skills and the generic platform's inlined instructions — so the diet
-cannot be won by moving cost somewhere nobody measures. This section used to
-claim "~200 lines" while the real file was 398. It had been wrong by a factor
-of two for a long time, because nothing counted it; context growth is the
-definitive slow leak.
-Now growth requires editing
-[budgets.yaml](develop/validators/budgets.yaml) in the same PR, where a
-reviewer sees the number change.
+The eager layer was cut 398 → 177 lines in v1.3.0 with **no behaviour lost**
+(test-first still measures 3/3 vs 0/3 with the entire test-first prose deleted —
+the hook was doing the work). Net input-token cost vs a bare agent: **~1.6×**,
+measured. The 177 is held by a CI budget so it cannot silently grow:
+[docs/context-budget.md](docs/context-budget.md).
 
 ### Session Resilience
 
-A cycle manifest captures state, context summary, decisions, open questions
-and handoff guidance at every checkpoint. Type `/continue` and Sage reads the
-manifest, routes to the correct workflow, and picks the work back up.
+A cycle manifest carries state, context, decisions, and handoff guidance across
+context windows. Type `/continue` and Sage resumes where the last session
+stopped — from a **generated brief** (`manifest.py resume`): computed cycle
+selection, git evidence, decisions in force, and the previous session's notes
+labelled *context, not orders*, with a stated authority order (live user >
+recorded decisions > manifest prose; evidence beats all). The state fields that
+can drift are machine-owned: a hook advances `gate_state` the moment source is
+written, and `manifest.py check` fails a manifest that contradicts its tree.
 
-**We finally measured this, and the result does not support the claim we used to
-make here.** The resume-fidelity scenario (N=3, both conditions): a fresh context
-resumes a cycle that was interrupted mid-plan.
+**Measured honestly:** a fresh context resumes an interrupted cycle **3/3** —
+and so does a bare agent handed the same files. Sage's edge here is
+*determinism* (the failure modes we found — a stale manifest, a dead session's
+hedge outranking the live user — are mechanically closed), not correctness. The
+cost of the ceremony was ~9× a bare agent; the close-out economy levers
+(`gate_review: combined`, batched one-command bookkeeping, inherited-red,
+skip-memory, lean test cadence — all config knobs, see `/configure`) have
+brought a resume to **a few times** bare's cost, re-measured at every step with
+no behaviour lost.
 
-| | resumed correctly | spend |
-|---|---|---|
-| **bare agent**, same files, same prompt | 3/3 | 1× |
-| **Sage** | 3/3 | **a few times** |
-
-**Sage gets there, and pays a few times a bare agent's cost to do it** — a fresh
-same-model N=3 lands near **4×**, noisy enough (~±30% per arm) that we quote a range,
-not a point. (Costs are ratios — see [the note above](#what-we-measured); on a
-subscription they arrive as quota and time, not money.)
-
-This number was published as **2/3** first, and that was wrong. The runs were hitting a
-per-session budget cap and being cut off mid-cycle — and *a truncated run grades
-identically to a broken one*, which is the same mistake that once made subagent mode
-look broken when it had merely run out of money. Given a cap it does not hit, Sage
-resumes the interrupted cycle correctly every time.
-
-What it cannot do is resume it cheaply. The ceremony is the cost, and under an equal,
-tight budget the ceremony is what runs out of money first.
-
-**The worst of it is fixed.** In one run, Sage's manifest read `gate_state:
-plan-approved` — *"no tasks started"* — with all three tasks implemented and
-committed. A session resuming from that manifest would have redone the work. The
-cause was the one this project keeps rediscovering: `cycle-protocol.md` **asked** the
-model to advance the field, in prose, and three runs produced three different answers.
-
-It is generated now (v1.3.2). A PostToolUse hook advances the manifest the moment
-source is written — it fires *because* the agent wrote code, and the firing **is** the
-evidence. Manifest coherence went **2/3 → 3/3**; the manifest has not lied since.
-
-**And Sage still does not win this scenario.** It matches bare on correctness and
-loses on price by several times over. That is the honest state of the long-horizon
-claim: the *bridge* is sound now; the *bill* is smaller than it was but still real.
-
-**The bill is now itemised, and the levers are built.** Profiling the resume
-session (`develop/evals/profile_session.py`) resolved the pre-lever ~9× into **4.1×
-the API calls × 2.1× the context per call**, compounding — and located ~24% of it in the
-adversarial gate sub-agents re-running from scratch. Sage now runs a leaner
-**close-out economy** on a *resumed* cycle (a first-session build is unchanged):
-one combined gate review instead of a dispatch per gate, batched bookkeeping, and
-no re-confirming a test the prior session already recorded as failing — each a
-config knob with a safe default (`gate_review`, `batch_bookkeeping`,
-`trust_inherited_red`; see `/configure`). The deterministic script gates, the
-final full-suite verification, and at least one independent whole-change review
-never get leaner — the balance is *rigor front-loaded on the session that does the
-design, not re-purchased by the session that finishes the delta.* The levers were
-**re-measured before shipping** (v1.3.5): the first-session scenarios and the resume
-scenario both still pass 3/3 with the levers default-on — no behaviour lost. And the
-cost did come down: a fresh same-model run puts the resume ratio near **4×**, roughly
-half the pre-lever ~9×. The measurement is noisy (~±30% per arm), so read that as
-"roughly halved, now a few times bare," not a precise new ratio — a tight number would
-need a larger controlled before/after.
-
-**One failure mode from the early batches was real, and v1.3.4 closes it.** In one
-under-budget run (its resume spent less than a third of its session budget — it
-stopped by *choice*),
-session 1 hedged — "Task 3 is blocked, needs the user's call" — and session 2
-inherited that hedge as law, refusing to finish under an explicit "keep going" while
-the recorded decision had already sanctioned the exact implementation shape it
-declined to pick. The dead session outranked the live user. Now: the resume brief is
-**generated** (`manifest.py resume` — selection, evidence, decisions, and the
-manifest body labeled *context, not orders*), the **authority order** is stated and
-printed with every brief (live user > recorded decisions > manifest prose; evidence
-beats all), and a `blocked` cycle must name its question or `manifest.py check`
-fails it. Re-measured: **3/3 on opus-4-8 and 3/3 on fable-5** (N=3 valid runs each),
-the failure mode absent from all six transcripts, per-run cost unchanged within
-noise. The fix buys determinism, not a discount.
-
-Numbers: [docs/eval-baseline.md](docs/eval-baseline.md). The fix:
-[docs/plans/manifest-state-is-prose.md](docs/plans/manifest-state-is-prose.md).
+Numbers and the full story: [docs/eval-baseline.md](docs/eval-baseline.md).
 
 ### Memory That Compounds
 
