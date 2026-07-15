@@ -339,8 +339,13 @@ CLOSE-OUT ECONOMY (you resumed — finish the delta, do not re-buy banked rigor)
     bridge at a session break is NOT batched).
   - Inherited red: a test the plan/manifest records as already-failing, still in
     the tree, is not re-run just to re-witness it — write the code, confirm green.
+  - Memory: skip the memory search/store — the brief already carries the context
+    and its value at this horizon is measured null (resume_memory: skip).
+  - Tests: run the targeted test per step; the FULL suite runs once at close-out
+    (Gate 5), not per task (resume_test_cadence: lean).
   Config overrides: gate_review (combined|per-gate|off), batch_bookkeeping,
-  trust_inherited_red. Full rule: cycle-protocol.md § Resume close-out economy."""
+  trust_inherited_red, resume_memory (skip|keep), resume_test_cadence (lean|full).
+  Full rule: cycle-protocol.md § Resume close-out economy."""
 
 
 def _read(path: pathlib.Path) -> str:

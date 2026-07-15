@@ -13,3 +13,13 @@ resumes the interrupted cycle correctly in all three runs — precondition met
 Runs were clean: 0 truncated, 0 errored; the 3 `interrupted` flags are the
 by-design session-1 cutoff. Matches the corrected baseline (3/3). No cheaper cost
 ratio is published from this run — pass-rate parity is the claim, not a discount.
+
+## Re-measured again — round-2 levers (2026-07-15)
+
+**sage arm · N=3 · result: 3/3, no resume fidelity lost.** The two round-2 levers —
+`resume_memory: skip` and `resume_test_cadence: lean` — engaged without breaking the
+resume: session 2 recovers and finishes correctly in all three runs, 0 truncated, 0
+errored, on opus-4-8[1m]. Cost dropped further ($11.29 → **$8.13/run**), so unlike
+`batch_bookkeeping`, these prose levers appear to hold — but that cost delta is
+noisy (N=3, cross-batch) and no tightened ratio is published from it. Pass-rate
+parity is the merge gate; the cost reduction is a signal, not a claim.

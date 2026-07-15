@@ -476,7 +476,10 @@ initiative branch → omit [M].)
 3. Prepend completion summary to the initiative's decisions.md
 4. Write `handoff` field in plan.md frontmatter with key decisions,
    open questions, and risks for the next agent
-5. Store key findings in memory if sage-memory available
+5. Store key findings in memory if sage-memory available — **except on a resume
+   close-out with `resume_memory: skip` (default)**, where this is skipped: L2
+   measured memory's value at this horizon as null (cycle-protocol.md § Resume
+   close-out economy). First-session builds always store.
 6. **Wiring check:** Verify all new components are connected — imports
    wired, routes registered, handlers hooked up, config entries added.
 7. **Ontology update (if sage-memory available):** For significant new
@@ -484,6 +487,7 @@ initiative branch → omit [M].)
    ontology entities and link them to existing graph. Skip for small
    changes within existing modules — only update when the codebase's
    *navigable structure* changed. Search ontology first to avoid dupes.
+   (Also skipped on a resume close-out under `resume_memory: skip`.)
 
 **Next steps (Zone 3):**
 

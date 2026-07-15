@@ -468,6 +468,8 @@ gates:
 gate_review: combined       # combined (default) | per-gate | off — how judgment gates 1-3 reach an independent verdict
 batch_bookkeeping: true     # defer memory/prose to the checkpoint; the manifest bridge is never batched
 trust_inherited_red: true   # on resume, skip re-confirming a test the prior session already recorded failing
+resume_memory: skip         # skip | keep — on resume, skip memory search/store (value measured null at this horizon, L2)
+resume_test_cadence: lean   # lean | full — on resume, targeted tests per step + full suite once at close-out
 
 # Extensions
 packs:

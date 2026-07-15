@@ -807,11 +807,12 @@ surfaces:
     path: runtime/plugin-overlay/skills/configure/SKILL.md
     kind: overlay-skill
     uncovered: >
-      Plugin-only configuration skill; no scenario installs the plugin. v1.3.5
-      added documentation of the close-out economy config knobs (gate_review,
-      batch_bookkeeping, trust_inherited_red) — prose only; the knobs' behavior
-      is measured through the workflows/capabilities they gate (E1/E4/E5/E8 and
-      L1-resume-fidelity, all re-measured 3/3), not through this doc.
+      Plugin-only configuration skill; no scenario installs the plugin. Documents
+      the close-out economy config knobs (gate_review, batch_bookkeeping,
+      trust_inherited_red, and the round-2 resume_memory / resume_test_cadence) —
+      prose only; the knobs' behavior is measured through the workflows/capabilities
+      they gate (E1/E4/E5/E8 and L1-resume-fidelity, all re-measured 3/3), not
+      through this doc.
 
   overlay-skill-continue:
     path: runtime/plugin-overlay/skills/continue/SKILL.md

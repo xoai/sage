@@ -146,6 +146,26 @@ resumed:
    there), and if the "failing" test is absent or unexpectedly green, fall back to
    the full cycle. See `tdd/SKILL.md` § "Inherited red".
 
+4. **Skip memory on resume close-out** (`resume_memory`, default `skip`). The
+   2026-07-15 post-lever profile put memory + tool-search at ~7% of the resume
+   session, and L2 measured its value at this horizon as **null** — a bare agent
+   rereading its own log reached the same answer for a third of the price, and the
+   long-horizon probe found rereading recalls perfectly until the log exceeds the
+   context window (~1M tokens on the models Sage runs). So the resume session does
+   NOT search memory for context the generated brief already carries, and does NOT
+   store findings at close-out. Set `resume_memory: keep` to restore both — the bet
+   a project makes when it believes memory *compounds* over dozens of sessions (the
+   untested regime). First-session builds always use memory.
+
+5. **Lean test cadence on resume** (`resume_test_cadence`, default `lean`). The
+   profile put test-runs at ~10% of the resume session — the loop re-runs the whole
+   suite at every step. On resume close-out, run the **targeted** test for the step
+   you are on (GREEN confirms the code you just wrote), and run the **full suite
+   once** at the close-out verification (Gate 5) — not a full-suite re-run per task.
+   The closing full-suite proof is never trimmed: a regression introduced mid-batch
+   is caught there. Set `resume_test_cadence: full` to re-run the whole suite at
+   every step. First-session builds keep the full per-step cadence.
+
 **What never gets leaner, on resume or otherwise:** the deterministic script
 gates (they are cheap and they are the evidence base); the final full-suite
 verification (batching trims intermediate re-runs, never the closing proof); the
@@ -155,8 +175,9 @@ The balance is *rigor front-loaded on the session that does the design, banked,
 and not re-purchased by the session that finishes a small delta.*
 
 First-session builds keep the full per-task loop below. `gate_review: per-gate`,
-`batch_bookkeeping: false`, `trust_inherited_red: false` each restore the old
-behavior for a project that wants it.
+`batch_bookkeeping: false`, `trust_inherited_red: false`, `resume_memory: keep`,
+and `resume_test_cadence: full` each restore the old behavior for a project that
+wants it.
 
 ## Phase announcements
 
