@@ -2,7 +2,7 @@
 
 All notable changes to Sage will be documented in this file.
 
-## [Unreleased] — the resume bill, itemised and trimmed
+## [1.3.5] — the resume bill, itemised and trimmed
 
 v1.3.4 made the resume *bridge* sound. The *bill* was still ~9× a bare agent, and
 the 2026-07-15 profile (`develop/evals/profile_session.py`) itemised it: **4.1× the
@@ -13,8 +13,10 @@ that does the design. The principle: rigor is front-loaded on the session that d
 the work, banked, and not re-purchased by the session that finishes.
 
 **No cost delta is claimed yet.** The levers change behavior; the number gets
-re-measured by re-running L1 (the ADR-9 method — delete, then measure). Until that
-run, this is "implemented, not proven cheaper."
+re-measured by re-running the resume-fidelity scenario (delete, then measure).
+Until that run, this ships as "implemented and default-on, not proven cheaper" —
+the reliability-sensitive paths it touches are re-measured before any new ratio is
+published.
 
 - **One combined gate review, not the whole ceremony again** (`gate_review`,
   default `combined`) — the largest lever (~24% of the resume session's spend was
