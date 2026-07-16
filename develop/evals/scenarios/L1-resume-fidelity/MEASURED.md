@@ -33,3 +33,18 @@ avg** (runs $8.77/$8.66/$5.09 — high variance; the $5.09 run shows the floor).
 ratio ~2.5× vs bare — trend down, **below-2× not yet demonstrated on this N=3**.
 Workspaces were not kept, so command-adoption wasn't verified per-transcript; the
 next kept profile run should confirm the bookkeeping share actually collapsed.
+
+## Re-measured again — the bookkeeping-gate hook (2026-07-16)
+
+**sage arm · N=3 · result: 3/3, no resume fidelity lost — and adoption is now
+PROVEN, not assumed.** Kept transcripts show, in every run: the gate fired (1–2
+blocks), the model recovered into `manifest.py close-out` (3–6 executions), and
+the remaining direct edits were the allowed paths (creation, gate_state
+transitions). Bookkeeping collapsed from the #1 cost to a minor line:
+$2.88/29% (pre-fix) → $0.58–0.86/9–13% per run.
+
+Cost: runs $12.27/$6.27/$6.45 (whole). The two cheap runs are the cheapest
+resumes measured (~2.05–2.1× bare); the heavy run was implementation-weighted
+(19 implement calls, 10 test runs; bookkeeping just $0.86 — not gate thrash).
+Mean $8.33 is noise-dominated; the honest read is a ~2.1× median with heavy-run
+variance. Below-2× remains undemonstrated.

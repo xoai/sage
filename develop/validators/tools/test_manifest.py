@@ -427,6 +427,19 @@ class CloseOutTest(unittest.TestCase):
         self.assertIn("## Handoff guidance", out)
         self.assertIn("take over", out)
 
+    def test_blocked_on_can_be_set_in_the_same_pass(self):
+        """The bookkeeping gate redirects hand-edits to close-out — so close-out
+        must be able to record a blocker, or the gate would trap the one write
+        `check` requires (status: blocked needs blocked_on:)."""
+        self.m.write_text(a_manifest_with_body().replace(
+            "status: in-progress", "status: in-progress\nblocked_on: \"\""))
+        M.close_out(self.m, status="blocked",
+                    blocked_on="ship or defer the retry helper — user's call")
+        text = self.m.read_text()
+        fm, _ = M.split_frontmatter(text)
+        self.assertIn("status: blocked", fm)
+        self.assertIn("ship or defer the retry helper", fm)
+
     def test_write_field_refuses_an_absent_field(self):
         with self.assertRaises(M.Problem):
             M.write_field(a_manifest(), "no_such_field", "x")
