@@ -2,7 +2,7 @@
 
 All notable changes to Sage will be documented in this file.
 
-## [Unreleased] — resume close-out economy, round 2
+## [1.3.6] — resume close-out economy, round 2: the gate
 
 The v1.3.5 levers cut the resume bill ~in half. A **post-lever profile** (L1
 session 2, `profile_session.py`) then re-aimed the next cuts — and flipped the
