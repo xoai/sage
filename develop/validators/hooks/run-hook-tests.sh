@@ -818,6 +818,67 @@ assert V12 "test evidence from ANOTHER session is stale — yesterday's green su
   '{"tool_name":"Bash","session_id":"s-1","tool_input":{"command":"git commit -m ok"}}' \
   --exit 2 --stderr "run the tests" --hook "$VG"
 
+# ── sage-config-gate: an agent cannot disable its own enforcement ───────────
+# The 2026-07-17 opencode probe found the hole: blocked from editing source, the
+# agent edited .sage/config.yaml → hard_enforcement:false → every gate off. This
+# is the regression test, because a hole without one comes back.
+echo ""
+echo "sage-config-gate — the meta-gate"
+CG="$REPO_ROOT/runtime/platforms/claude-code/hooks/sage-config-gate.sh"
+
+mk_enforced() {  # a project with hard_enforcement: true and given extra lines
+  local d; d="$(new_project)"
+  { printf 'sage-version: "1.3.8"\nhard_enforcement: true\n'; [ -n "${1:-}" ] && printf '%s\n' "$1"; } > "$d/.sage/config.yaml"
+  echo "$d"
+}
+
+P="$(mk_enforced)"
+assert C1 "THE HOLE: Edit flipping hard_enforcement true→false is blocked" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/config.yaml","old_string":"hard_enforcement: true","new_string":"hard_enforcement: false"}}' \
+  --exit 2 --stderr "disable its own" --hook "$CG"
+
+P="$(mk_enforced)"
+assert C2 "a Write that rewrites the whole config with enforcement off is blocked" "$P" \
+  '{"tool_name":"Write","tool_input":{"file_path":".sage/config.yaml","content":"sage-version: \"1.3.8\"\nhard_enforcement: false\n"}}' \
+  --exit 2 --stderr "enforcement" --hook "$CG"
+
+P="$(mk_enforced)"
+assert C3 "DELETING the hard_enforcement line (→ default off) is blocked" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/config.yaml","old_string":"hard_enforcement: true\n","new_string":""}}' \
+  --exit 2 --stderr "enforcement" --hook "$CG"
+
+P="$(mk_enforced)"
+assert C4 "adding a secrets_gate: false opt-out is blocked (sub-gate off while master on)" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/config.yaml","old_string":"hard_enforcement: true","new_string":"hard_enforcement: true\nsecrets_gate: false"}}' \
+  --exit 2 --stderr "enforcement" --hook "$CG"
+
+P="$(mk_enforced)"
+assert C5 "a NON-reducing config edit (adding an unrelated setting) is allowed" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/config.yaml","old_string":"hard_enforcement: true","new_string":"hard_enforcement: true\nlog_level: debug"}}' \
+  --exit 0 --hook "$CG"
+
+# Turning enforcement ON (or a project that never had it) is never our business.
+P="$(new_project)"; set_config "$P" "hard_enforcement: false"
+assert C6 "enforcement already OFF → the guard is dormant (off→on must stay possible)" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/config.yaml","old_string":"hard_enforcement: false","new_string":"hard_enforcement: true"}}' \
+  --exit 0 --hook "$CG"
+
+P="$(mk_enforced)"
+assert C7 "editing a NORMAL source file is none of this gate's business" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"src/app.py","new_string":"x=1"}}' \
+  --exit 0 --hook "$CG"
+
+# A redirect that writes the switch off — the Bash evasion path.
+P="$(mk_enforced)"
+assert C8 "the Bash evasion (a redirect writing the switch off) is blocked" "$P" \
+  '{"tool_name":"Bash","tool_input":{"command":"echo \"hard_enforcement: false\" > .sage/config.yaml"}}' \
+  --exit 2 --stderr "enforcement" --hook "$CG"
+
+P="$(mk_enforced)"
+assert C9 "READING the config in Bash (grep) is not a write — allowed" "$P" \
+  '{"tool_name":"Bash","tool_input":{"command":"grep hard_enforcement .sage/config.yaml"}}' \
+  --exit 0 --hook "$CG"
+
 echo ""
 echo "═══ Summary ═══"
 printf '  pass %d · fail %d · xfail %d · xpass %d\n' "$N_PASS" "$N_FAIL" "$N_XFAIL" "$N_XPASS"
