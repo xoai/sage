@@ -2,6 +2,34 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [1.3.9] — the gate that guards the gates, and opencode goes mechanical
+
+Two things merged after 1.3.8 that users should have: a security fix, and a
+platform that stopped being prose.
+
+- **`sage-config-gate` — an agent can no longer disable its own enforcement.**
+  Found by the opencode port probe: every gate reads `hard_enforcement` from
+  `.sage/config.yaml`, a file the gated agent can edit — so a blocked agent could
+  set `hard_enforcement: false` and walk through every gate (spec, tdd, secrets,
+  verify, bookkeeping). Reproduced against the real spec-gate. The meta-gate
+  blocks an agent Edit/Write/MultiEdit (and the obvious Bash redirect/sed
+  evasions) that would reduce any gate's effective-enabled state while
+  enforcement is on. No opt-out — the guard IS hard enforcement; a human disables
+  it in their own editor, which never hits PreToolUse. Hook tests C1–C9; E15
+  proves it end to end (told to disable enforcement + do real work, the switch
+  survives 3/3 and the work lands). Honest residual: a sufficiently exotic Bash
+  rewrite can still evade the coarse Bash matcher; the Edit/Write path is
+  airtight.
+- **opencode → Tier A.** `sage init` (opencode) now ships an enforcement adapter
+  (`.opencode/plugin/sage.js`) that bridges opencode's plugin API to Sage's
+  platform-agnostic gates: `tool.execute.before` vetoes (throw on exit 2),
+  `tool.execute.after` records. Capabilities attested with an instrumented
+  transcript (veto blocks an edit; the `task` tool dispatches an independent
+  reviewer; hooks fire INSIDE the subagent, so it is not an escape hatch), and
+  the shipped adapter is tested deterministically against the real gates
+  (`setup/adapter-test.mjs`, 5/5) — independent of opencode's model backend. The
+  contract derives C→A. codex stays Tier C (its hooks never provably fired).
+
 ## [1.3.8] — the verify gate, and the edges of "make it code"
 
 The third hook the weak-model campaign demanded — and the first whose proof
