@@ -1,16 +1,22 @@
-# opencode — community-maintained (experimental)
+# opencode — community-maintained, Tier A (2026-07-17)
 
-**Tier:** community. Not a first-class Sage platform.
+**Tier:** A — mechanically enforced. `sage init` ships an enforcement adapter
+(`.opencode/plugin/sage.js`) that vetoes edits, records the audit trail, and
+dispatches independent subagent reviews, all through opencode's plugin API.
 
-- **Generation-tested only.** CI checks that this platform's generator produces
-  files and that its shell parses. It is not exercised end-to-end.
-- **Quality chain unavailable.** The sub-agent reviews (auto-review, auto-QA,
-  independent Gate 3) and the PreToolUse spec-gate hook are Claude Code only.
-  On this platform, Rule 3 and Rule 5 are enforced by prose alone, and any
-  skipped review degrades loudly (announced + logged). See the per-platform
-  enforcement table in the root README.
-- **First-class platforms** — full quality chain and end-to-end CI — are
-  `claude-code` and `generic`.
+- **Enforced, not prose.** The adapter bridges `tool.execute.before` to Sage's
+  gate scripts and `throw`s on exit 2 — opencode blocks the call. The spec-gate,
+  tdd-gate, secrets-gate, config-gate and verify-gate all apply, including
+  **inside dispatched subagents** (proven: the reviewer's own tool calls fire the
+  hooks). Rules 3 and 5 are mechanical here, not advisory.
+- **Proven.** Capabilities attested with an instrumented transcript
+  (`docs/attestations/opencode-tier-a-2026-07-17.md`); the shipped adapter is
+  tested deterministically against the real gates
+  (`setup/adapter-test.mjs`, 5/5), independent of opencode's model backend.
+- **The honest edge.** No native skill discovery (system skills are inlined into
+  `AGENTS.md`), and opencode's model backend was flaky during the probe — which
+  is why the load-bearing proof is the deterministic adapter test, not a single
+  live session.
 
-Contributions welcome. If you rely on this platform, help keep its generator
-current; the core team does not test it per release.
+Maintainer: sage-core. Re-probe on opencode major version bumps (attestations
+expire at release 1.5).

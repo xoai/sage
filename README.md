@@ -855,7 +855,7 @@ spec-gate hook) and end-to-end CI:
 | antigravity *(community)* | **C** | — | — | — | — | ✅ | [2026-07-12](develop/conformance/reports/antigravity-2026-07-12.md) |
 | codex *(community)* | **C** | — | — | — | — | ✅ | [2026-07-12](develop/conformance/reports/codex-2026-07-12.md) |
 | gemini-cli *(community)* | **C** | — | — | — | — | ✅ | [2026-07-12](develop/conformance/reports/gemini-cli-2026-07-12.md) |
-| opencode *(community)* | **C** | — | — | — | — | ✅ | [2026-07-12](develop/conformance/reports/opencode-2026-07-12.md) |
+| opencode *(community)* | **A** | 📝 | 📝 | 📝 | — | ✅ | [2026-07-12](develop/conformance/reports/opencode-2026-07-12.md) |
 
 ✅ checked · 📝 attested (evidence + expiry) · — not available
 
