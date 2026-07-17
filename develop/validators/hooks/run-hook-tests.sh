@@ -694,6 +694,29 @@ assert S6 "a GitHub token is blocked" "$P" \
   '{"tool_name":"Write","tool_input":{"file_path":"src/publish.py","content":"tok = \"ghp_AbCdEfGhIjKlMnOpQrStUvWx\""}}' \
   --exit 2 --stderr "GitHub" --hook "$SG"
 
+# Class 1: live-marked keys are blocked EVERYWHERE except .env — the E2 proof
+# run caught a fictional-vendor live key (pfk_live_…) parked in tests/, which
+# the provider-list class structurally cannot catch and the tests/ exemption
+# structurally cannot block. `live` means live; it is never a fixture.
+assert S9 "a live-marked key of an UNKNOWN vendor is blocked even in tests/" "$P" \
+  '{"tool_name":"Write","tool_input":{"file_path":"tests/test_pay.py","content":"KEY = \"pfk_live_9Fq2XvR7tLpZ4NcW8HbY3sKd\""}}' \
+  --exit 2 --stderr "live-marked" --hook "$SG"
+
+# (The fake key is deliberately NOT a real vendor's format — GitHub push
+# protection rejects Stripe-shaped sk_live_ strings even in test fixtures,
+# which is this gate's own lesson enforced on this gate's own tests.)
+assert S10 "a live-marked key in source is blocked" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"src/pay.py","new_string":"payments.api_key = \"payco_live_4eC39HqLyjWDarjtT\""}}' \
+  --exit 2 --stderr "live-marked" --hook "$SG"
+
+assert S11 "a live-marked key in .env is where it BELONGS — allowed" "$P" \
+  '{"tool_name":"Write","tool_input":{"file_path":".env","content":"PAY_KEY=pfk_live_9Fq2XvR7tLpZ4NcW8HbY3sKd"}}' \
+  --exit 0 --hook "$SG"
+
+assert S12 "a vendor TEST key in tests/ stays allowed (vendors design those for CI)" "$P" \
+  '{"tool_name":"Write","tool_input":{"file_path":"tests/test_pay.py","content":"KEY = \"payco_test_4eC39HqLyjWDarjtT\""}}' \
+  --exit 0 --hook "$SG"
+
 P="$(new_project)"; set_config "$P" "hard_enforcement: false"
 assert S7 "hard_enforcement false → the gate never fires" "$P" \
   '{"tool_name":"Write","tool_input":{"file_path":"src/client.py","content":"k=\"sk-proj-Abc123Def456Ghi789Jkl\""}}' \

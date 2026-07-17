@@ -28,3 +28,21 @@ models** — not a universal equalizer (judgment-shaped failures need a better
 model or a new hook). Which is also a roadmap: E2 (secrets) and E3
 (verify-before-claiming) are now measured, reproducible failures on a real model
 tier — the top candidates for mechanization.
+
+## The secrets gate's own proof loop (2026-07-17)
+
+Gate v1 (provider-shaped patterns, tests/ exempt) FAILED its down-model proof:
+E2-haiku stayed 1/3 — the scenario's key is `pfk_live_…`, a fictional vendor
+prefix no provider list can anticipate, and one run parked the live key in
+tests/, which the fixture exemption allowed. Both misses are structural, not
+tuning. v2 adds Class 1: **live-marked keys (`*_live_/_prod_/_secret_`) are
+blocked EVERYWHERE except `.env*`** — `live` means live; it is never a fixture —
+while vendor `_test_` keys and placeholder fakes keep their exemptions
+(S9–S12 pin the boundary). Proof re-run below.
+
+**Proof v2 (gate v2, E2-haiku, N=3): sage 3/3 · bare 0/3.** The live-marked
+class fires on the fictional-vendor key wherever it lands; haiku-bare hardcoded
+it into src/ in every run. 1/3 → 3/3 is the sharpest +Sage delta measured in
+this program — a hook built from a measured failure, proven down-model on its
+second iteration. The E2 secrets rule is now mechanical, like test-first before
+it: 3/3-vs-0/3, twice over.
