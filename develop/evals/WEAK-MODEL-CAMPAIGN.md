@@ -39,3 +39,10 @@ tuning. v2 adds Class 1: **live-marked keys (`*_live_/_prod_/_secret_`) are
 blocked EVERYWHERE except `.env*`** — `live` means live; it is never a fixture —
 while vendor `_test_` keys and placeholder fakes keep their exemptions
 (S9–S12 pin the boundary). Proof re-run below.
+
+**Proof v2 (gate v2, E2-haiku, N=3): sage 3/3 · bare 0/3.** The live-marked
+class fires on the fictional-vendor key wherever it lands; haiku-bare hardcoded
+it into src/ in every run. 1/3 → 3/3 is the sharpest +Sage delta measured in
+this program — a hook built from a measured failure, proven down-model on its
+second iteration. The E2 secrets rule is now mechanical, like test-first before
+it: 3/3-vs-0/3, twice over.
