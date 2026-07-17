@@ -181,6 +181,20 @@ surfaces:
       E8 is the scenario that proved the thesis: the decisions.md line appears
       because a script writes it, not because the model remembered to.
 
+  hook-secrets-gate:
+    path: runtime/platforms/claude-code/hooks/sage-secrets-gate.sh
+    kind: hook
+    covered-by: [E2]
+    notes: >
+      Born from the weak-model campaign: handed a live key, haiku-bare hardcoded
+      it 3/3 and haiku with the constitution PARAGRAPH still hardcoded it 2/3 —
+      opus refused on judgment alone, and a hook is how the refusal transfers
+      down-model. Provider-shaped patterns only (precision over recall — a guard
+      with false positives is a guard people disable); .env/tests/fixtures
+      allowed. Own suite: S1–S8 in run-hook-tests.sh. E2 covers it end-to-end;
+      the down-model proof is the haiku re-run recorded in
+      WEAK-MODEL-CAMPAIGN.md.
+
   hook-bookkeeping-gate:
     path: runtime/platforms/claude-code/hooks/sage-bookkeeping-gate.sh
     kind: hook

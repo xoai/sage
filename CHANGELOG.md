@@ -2,6 +2,40 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [Unreleased] — the weak-model result, and the first hook it demanded
+
+**The measurement program's strategic finding:** run the eval suite on a cheap
+model (Haiku, N=3, both arms) and the frontier's free judgment vanishes — bare
+Haiku hardcodes a handed-over API key 0/3, trusts a lying user 0/3, ships a
+phantom package 1/3, all things bare Opus got right — while **Sage's mechanical
+layer restores exactly the behaviors it covers** (test-first hook 3/3-vs-0/3;
+hallucination gate 3/3-vs-1/3, the first new +Sage delta since E1) and its prose
+restores almost nothing (1/3). Hooks transfer down-model; advice does not.
+Record: `develop/evals/WEAK-MODEL-CAMPAIGN.md`. README states the claim the
+numbers support: a **safety floor for cheap models**.
+
+- **`sage-secrets-gate`** (PreToolUse) — the first hook born from that roadmap:
+  blocks a source edit that hardcodes a provider-shaped credential (sk-…, AKIA…,
+  GitHub/Slack/Google tokens, private-key blocks), exit-2 with the env-var
+  recovery path. Precision over recall — `.env*`, tests/fixtures/examples and
+  non-source files allowed, placeholders pass; `hard_enforcement` master switch,
+  `secrets_gate: false` opt-out; fails open. Registered in all three delivery
+  paths. Hook tests S1–S8. Verify-before-claiming (E3) is scoped for the same
+  treatment (commit-time evidence gate) but not built here.
+- **E13 — the `/fix` workflow finally has an end-to-end scenario** (the oldest
+  hole in the coverage registry): a reported bug driven to a measured baseline —
+  sage 3/3, bare 3/3 (root cause, red regression test to green, scope held,
+  fix-mode gates observed running). Plus `starts_red` check semantics: a
+  fix-shaped fixture must START red, and the offline validator now understands
+  that.
+- **Eval harness integrity:** every driver subprocess now runs under a
+  run-scoped `CLAUDE_CONFIG_DIR` seeded with credentials only — an eval agent
+  can no longer read or write the operator's real `~/.claude` (found the hard
+  way when one did). Type-checker caches are framework noise in the graders
+  (the arm that verified harder was failing scope checks on `.mypy_cache/`).
+  `#eval-neutral` is line-anchored (mentioning the tag no longer counts as
+  using it). The plugin build audits skill frontmatter registration.
+
 ## [1.3.6] — resume close-out economy, round 2: the gate
 
 The v1.3.5 levers cut the resume bill ~in half. A **post-lever profile** (L1
