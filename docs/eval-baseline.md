@@ -157,11 +157,26 @@ had no memory server). It just didn't *matter*: the bare agent reread its own
 session log off the disk and reached the same answer for a third of the price.
 **Retrieval did not beat rereading.** A file on disk is already a memory system.
 
-The caveat worth stating: this is one constraint over three sessions. Memory's claim
-is that it *compounds* — over dozens of sessions, where a transcript becomes too long
-to reread, the economics could invert. That is a different experiment, and it has not
-been run. At this horizon, on this task, the memory system was not what made the
-difference.
+That experiment has now been run twice more, and the arc is complete:
+
+- **Compounding** (three conventions taught in three separate sessions, all applied
+  jointly in a fourth): memory's mechanism was flawless — stored, accumulated,
+  retrieved, every run — and the bare agent matched it anyway, without ever opening
+  a log: **the committed code itself carried the conventions** (it read the tree,
+  inferred the rules, and self-checked under the pinned Python). Git is a memory
+  system, and an excellent one.
+- **Knowledge git cannot carry** (a rule stated during a release freeze — no code,
+  no notes — then a task in a *fresh checkout* whose default violates it): both
+  arms honored the rule 3/3. Sage recalled it from its memory store; the bare
+  agent had used **the platform's own built-in per-project memory** and recalled
+  it from there — at an eighth of the cost.
+
+So after three regimes — the session log, the committed tree, the platform's
+native memory — the honest summary is: **sage-memory's mechanism is proven; a
+measured behavioral edge has not been found**, because modern agents are never
+actually memoryless. The one regime none of those alternatives serves is
+knowledge that crosses *projects* (every alternative is keyed to one repo or one
+path); that is sage-memory's remaining distinctive bet, and it is unmeasured.
 
 ## The eval found its own bugs first
 

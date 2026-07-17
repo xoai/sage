@@ -15,7 +15,7 @@ Built for product and engineering teams, open to any domain.
 - **Think first, build second** — a framing round challenges assumptions before solutioning begins, preventing the most expensive mistake: solving the wrong problem
 - **Focus over noise** — loads only what the task needs, producing sharper reasoning
 - **Mechanical where it counts** — hooks that block a source edit until a test exists and an edit before a spec exists, and gate scripts with a three-state exit contract. These are code, not instructions, and they hold: test-first measures **3/3 against a bare agent's 0/3**. The prose layers around them are advice, and advice is rationalizable — see [What we measured](#what-we-measured) for which is which
-- **Gets smarter over time** — self-learning, memory, and ontology compound into institutional knowledge of your codebase
+- **Persistent memory built in** — self-learning, project memory, and an entity ontology, wired up at init; the mechanism is measured (see below), the compounding bet is stated honestly
 - **Grows with its ecosystem** — 12 focused core skills plus installable packs (product/UX, pack-authoring, autoresearch), extensible with 90K+ community skills from skills.sh
 
 ## What we measured
@@ -140,22 +140,31 @@ no behaviour lost.
 
 Numbers and the full story: [docs/eval-baseline.md](docs/eval-baseline.md).
 
-### Memory That Compounds
+### Persistent Memory
 
 <p align="center">
   <img src="docs/assets/sage_memory.svg" alt="Sage Memory System — 3 skills, 1 MCP, compounding knowledge." width="600" />
 </p>
 
-Most agent frameworks are stateless. The agent that made a mistake
-yesterday makes it again today. Sage has three skills that build
-institutional memory — all backed by sage-memory MCP:
+Sage ships a persistent memory layer — three skills backed by the sage-memory
+MCP, wired up automatically by `sage init` (opt out with `--no-memory`):
 
-- **sage-self-learning** captures mistakes as WHEN/CHECK/BECAUSE prevention rules. Every session starts by searching past mistakes before doing anything.
-- **sage-memory** stores project knowledge as focused prose insights — how your auth works, why billing uses event sourcing, what conventions the team follows.
-- **sage-ontology** maps entity relationships — not just "billing exists" but "billing depends on payments, which triggers webhooks, which notify users." Touch one module, know the blast radius.
+- **sage-self-learning** captures mistakes as WHEN/CHECK/BECAUSE prevention rules.
+- **sage-memory** stores project knowledge as focused prose insights — conventions, decisions, gotchas.
+- **sage-ontology** maps entity relationships — touch one module, know the blast radius.
 
-Day 1, the agent knows nothing. Day 30, it knows your codebase's
-landmines, patterns, and conventions.
+**What's measured, honestly.** The mechanism is proven end-to-end: knowledge
+stored in one session is retrieved and applied sessions later, accumulates
+across sessions, and survives a fresh checkout — every mechanism check passes,
+through the exact stack `sage init` writes. What is *not* yet measured is an
+outcome a cheaper channel doesn't match: at every horizon we tested, a bare
+agent got the same answers from its own history — the session log, the
+committed code (git is a memory system), or the platform's built-in
+per-project memory. So memory ships as a **capability with a proven mechanism,
+not a measured behavioral edge** — its distinctive bet is knowledge that
+crosses *projects* (the one channel none of those alternatives serve), and
+that regime is still unmeasured. Numbers and method:
+[docs/eval-baseline.md](docs/eval-baseline.md).
 
 ## Get Started
 

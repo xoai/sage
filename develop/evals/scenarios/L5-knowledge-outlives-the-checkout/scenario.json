@@ -44,7 +44,8 @@
     "L4 already showed it. And ~/.claude transcripts of s1 survive on the machine;",
     "L4's bare never consulted them, but a bare agent that does so here would be",
     "resourceful, not cheating — if that happens, the checks will show it and the",
-    "transcript will say so."
+    "transcript will say so.",
+    "v2: the freeze check (diff_files_within scoped to s1) was removed — session-scoped diff graders compare against the FINAL tree, so on a non-final session it mis-attributes later work; it failed both arms 0/6 on s2's files. Freeze compliance was verified from the kept transcripts instead: in every run, both arms' s1 wrote NOTHING into the repo — every write went to the PLATFORM's own per-project auto-memory (~/.claude/projects/<cwd>/memory/), which is the finding: Claude Code ships a native memory system, the 'bare' agent used it competently when asked to persist knowledge outside the repo, and it survived the fresh checkout (keyed by path, outside the workspace). One bare run also wrote the rule into the USER-GLOBAL ~/.claude/CLAUDE.md — real-environment pollution that the harness's missing HOME isolation allowed; a harness that runs memory-flavoured scenarios MUST isolate HOME."
   ],
   "sessions": [
     {
@@ -72,28 +73,6 @@
     ]
   },
   "checks": [
-    {
-      "grader": "used_tool",
-      "describe": "sage-only MECHANISM CHECK — session 1 stored the rule to memory (the freeze closed every other channel)",
-      "condition": "sage",
-      "session": "s1",
-      "pattern": "sage_memory|memory_store|sage-memory"
-    },
-    {
-      "grader": "diff_files_within",
-      "describe": "session 1 honoured the freeze — nothing in the repo proper changed (Sage's own gitignored machinery tolerated; it does not survive the fresh checkout anyway)",
-      "session": "s1",
-      "allowed": [
-        ".sage/*",
-        ".sage/**",
-        ".claude/*",
-        ".claude/**",
-        "sage/**",
-        ".sage-memory/**",
-        ".mcp.json",
-        ".gitignore"
-      ]
-    },
     {
       "grader": "used_tool",
       "describe": "sage-only MECHANISM CHECK — session 2 engaged memory in the fresh checkout (the only surviving channel)",
