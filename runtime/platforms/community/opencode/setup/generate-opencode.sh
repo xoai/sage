@@ -252,6 +252,43 @@ AGENT_EOF
 echo "  ✓ sage-classifier.md"
 
 # ═══════════════════════════════════════════════════════════════
+# Enforcement adapter — the Tier-A port (attested 2026-07-17)
+# opencode's plugin API vetoes (tool.execute.before → throw), records
+# (tool.execute.after), and both fire inside dispatched subagents. This ships
+# the bridge from those hooks to Sage's platform-agnostic gate scripts.
+# ═══════════════════════════════════════════════════════════════
+echo ""
+echo "🛡  Installing enforcement adapter..."
+mkdir -p "$OC_DIR/plugin" "$OC_DIR/sage-hooks"
+
+# The gate scripts the adapter calls. They are platform-agnostic (they read
+# .sage/, not .claude/) — copied to a stable path so the adapter never depends
+# on where the framework is vendored.
+GATE_SRC="$SAGE_DIR/runtime/platforms/claude-code/hooks"
+GATE_CORE="$CORE/gates/scripts"
+for g in sage-spec-gate.sh sage-tdd-gate.sh sage-bookkeeping-gate.sh \
+         sage-secrets-gate.sh sage-config-gate.sh sage-verify-gate.sh \
+         sage-verify-tracker.sh sage-degradation-log.sh sage-manifest-sync.sh; do
+  if [ -f "$GATE_SRC/$g" ]; then
+    cp "$GATE_SRC/$g" "$OC_DIR/sage-hooks/$g" && chmod +x "$OC_DIR/sage-hooks/$g"
+  fi
+done
+# The gate scripts that delegate to core check-scripts need those too.
+for c in sage-verify.sh sage-spec-check.sh sage-hallucination-check.sh; do
+  [ -f "$GATE_CORE/$c" ] && cp "$GATE_CORE/$c" "$OC_DIR/sage-hooks/$c" && \
+    chmod +x "$OC_DIR/sage-hooks/$c"
+done
+
+# The adapter itself (static — resolves paths at runtime from the project root).
+if [ -f "$(dirname "$0")/sage-plugin.js" ]; then
+  cp "$(dirname "$0")/sage-plugin.js" "$OC_DIR/plugin/sage.js"
+  echo "  ✓ .opencode/plugin/sage.js  (veto + audit, incl. inside subagents)"
+  echo "  ✓ .opencode/sage-hooks/     (gate scripts)"
+else
+  echo "  ⚠ sage-plugin.js not found — enforcement adapter NOT installed"
+fi
+
+# ═══════════════════════════════════════════════════════════════
 # Project state — .sage/ initialization
 # ═══════════════════════════════════════════════════════════════
 echo ""
@@ -272,6 +309,8 @@ echo "Files written:"
 echo "  AGENTS.md                    (read by Opencode as system context)"
 echo "  .opencode/commands/          (markdown command definitions)"
 echo "  .opencode/agents/            (markdown sub-agent definitions)"
+echo "  .opencode/plugin/sage.js     (enforcement adapter — the Tier-A port)"
+echo "  .opencode/sage-hooks/        (gate scripts the adapter runs)"
 echo ""
 echo "Next steps:"
 echo "  - Run \`opencode\` to start a session"

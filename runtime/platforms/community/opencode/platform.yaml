@@ -1,58 +1,99 @@
 ---
 name: opencode
 description: >
-  OpenCode — community-maintained. Sage generates an instructions file and commands.
-  It enforces nothing: no hook surface, so every Sage rule here is prose, and the
-  v1.2.1 eval measured what prose alone is worth.
+  OpenCode — Tier A as of 2026-07-17. Sage ships an enforcement adapter
+  (.opencode/plugin/sage.js) that bridges opencode's plugin hooks to Sage's
+  gate scripts: tool.execute.before vetoes an edit, tool.execute.after records
+  the audit trail, and the task tool dispatches an independent reviewer — with
+  hooks firing inside the subagent, so it is not an escape hatch.
 contract-version: 2
-maintainer: "unclaimed"     # R113: nobody answers when this goes red.
+maintainer: "sage-core"
 
 capabilities:
-  context-injection: true         # an instructions file is generated
-  command-delivery: true          # commands are generated
-  native-skill-discovery: false   # the generator emits skills; nothing has verified they are ever triggered
-  pre-tool-veto: false            # no hook surface. Nothing blocks an edit.
-  post-tool-events: false
-  subagent-dispatch: false        # no evidence Sage has ever dispatched one here
-  session-events: false
+  context-injection: true         # AGENTS.md at project root
+  command-delivery: true          # .opencode/commands/ → the / menu
+  native-skill-discovery: false   # no discovery; system skills are INLINED into AGENTS.md
+  pre-tool-veto: attested         # tool.execute.before → gate exit 2 → throw → edit blocked
+  post-tool-events: attested      # tool.execute.after fires with the tool result
+  subagent-dispatch: attested     # the task tool spawns an independent reviewer session
+  session-events: false           # the platform's event hook fires session.*, but the adapter ships no session-init that uses it
+
+attestations:
+  - capability: pre-tool-veto
+    evidence: docs/attestations/opencode-tier-a-2026-07-17.md
+    verified: 2026-07-17
+    expires-release: "1.5"
+    note: >
+      The July 2026 investigation proved the chain up to the last link and left
+      it false. The 2026-07-17 probe closed it: paths parsed out of apply_patch's
+      patchText, sage-spec-gate.sh returned exit 2 in a pre-spec cycle, the
+      adapter threw, and opencode BLOCKED the edit. The shipped adapter is tested
+      deterministically (setup/adapter-test.mjs, 5/5) driving the real gates —
+      pre-spec veto, config self-disable veto, secrets veto — independent of
+      opencode's model backend. Undocumented platform behaviour that can regress
+      silently, so it expires and is re-probed.
+
+  - capability: post-tool-events
+    evidence: docs/attestations/opencode-tier-a-2026-07-17.md
+    verified: 2026-07-17
+    expires-release: "1.5"
+    note: >
+      tool.execute.after fires after every tool with {tool, callID, args,
+      output} — the PostToolUse payload sage-verify-tracker, sage-degradation-log
+      and sage-manifest-sync need. Logged firing on a real session.
+
+  - capability: subagent-dispatch
+    evidence: docs/attestations/opencode-tier-a-2026-07-17.md
+    verified: 2026-07-17
+    expires-release: "1.5"
+    note: >
+      The built-in task tool dispatched a `reviewer` subagent into its OWN
+      session, which returned an independent review. The load-bearing half: the
+      reviewer's own read fired tool.execute.before/after in the child session,
+      so the veto and config-gate apply inside dispatched subagents — a subagent
+      is not an enforcement escape hatch. This is the property ADR-10's quality
+      argument rests on.
 
 supported-os: [linux, macos]
 
 command-prefix: "/"
-install-method: manual-copy
+install-method: generated
 artifacts:
   instructions: AGENTS.md
   commands-dir: .opencode/commands
+  plugin: .opencode/plugin/sage.js
+  hooks-dir: .opencode/sage-hooks
 ---
 
-# Tier C, and honestly so
+# Tier A — mechanically enforced, and proven so
 
-Every `false` above means nobody has checked. That is what an unchecked
-capability is worth under ADR-11 — not a benefit of the doubt.
+The three capabilities that decide the tier are attested with an instrumented
+transcript (`docs/attestations/opencode-tier-a-2026-07-17.md`) and the shipped
+adapter is tested deterministically against the real gate scripts
+(`setup/adapter-test.mjs`). Every claim above is either checkable by conformance
+or backed by evidence with an expiry — nothing is typed on faith.
 
-To improve this: run `develop/conformance/run-conformance.sh opencode`, make the
-checks pass, attach transcripts for what cannot be checked for free, and claim
-`maintainer:`. That is the whole contribution surface.
+## How enforcement reaches opencode
 
-# Why `pre-tool-veto: false` — the chain is proven except its last link
+`sage init` (opencode) writes `.opencode/plugin/sage.js` and copies the gate
+scripts to `.opencode/sage-hooks/`. The adapter:
 
-Investigated 2026-07-12. Full transcript of the investigation is kept with
-the maintainers; the findings that matter are below.
+- **vetoes** — `tool.execute.before` maps the opencode tool (`edit`/`write`/
+  `apply_patch` → `Edit`/`Write`, paths parsed from `patchText`; `bash` →
+  `Bash`) to the gate payload, runs the PreToolUse gates, and `throw`s on exit 2.
+  opencode honours the throw by blocking the call.
+- **records** — `tool.execute.after` runs the PostToolUse recorders
+  (verify-tracker, degradation-log, manifest-sync) for their side effects.
 
-**OpenCode's veto is documented and the mechanism demonstrably works:**
+The gates are the same platform-agnostic scripts Claude Code runs; they read
+`.sage/`, not `.claude/`, so a single set enforces on both platforms.
 
-1. The plugin LOADS (`.opencode/plugin/` and `.opencode/plugins/` are both scanned).
-2. `tool.execute.before` FIRES — an instrumented pass captured every tool.
-3. Sage's gate RAN, spawned from inside the hook.
-4. And it correctly ALLOWED — because opencode's edit tool is **`apply_patch`,
-   whose only argument is `patchText`. There is no `filePath`.** The adapter handed
-   the gate an empty path, and a gate with no file to gate allows. That is the
-   ADAPTER failing, not the veto.
+## The honest edge
 
-**What was never observed: opencode honouring the `throw` by blocking an edit.**
-Without that transcript the capability cannot be `attested` (C15), so it is `false`.
-
-**To finish:** parse the paths out of `patchText` (`*** Update File: <path>`), run
-one probe against a `pre-spec` cycle, and check BOTH that the edit did not land AND
-that the hook log shows the gate returning 2. Checking only the file is how you
-record a crashed run as a successful veto.
+`native-skill-discovery` stays `false` — opencode has no description-triggered
+discovery, so the system skills are inlined into `AGENTS.md` (Tier A is about
+enforcement, not discovery). And opencode's model backend was flaky during the
+probe (frequent startup hangs), which is why the load-bearing proof is the
+deterministic `adapter-test.mjs` driving the real hooks, not a single live
+session. The live probe supplies the one thing the harness cannot: that opencode
+honours the `throw`.
