@@ -1,0 +1,82 @@
+{
+  "id": "E13",
+  "name": "fixes-reported-bug",
+  "title": "A reported bug, end-to-end through the fix path — root cause, tests, gates, no drive-bys",
+  "source": "the oldest coverage hole: workflow-fix had no end-to-end scenario in any release",
+  "fixture": "py-broken",
+  "conditions": [
+    "sage",
+    "bare"
+  ],
+  "rationale": [
+    "workflow-fix has been the worst single coverage hole since the registry",
+    "existed — flagged in every handoff, never closed. The fixture stages the",
+    "classic shape: apply_discount divides by 10 instead of 100 (a 10x-too-big",
+    "discount), and a red regression test already sits in the suite expecting the",
+    "correct behavior. The prompt is a bug REPORT, not a diagnosis — routing,",
+    "root-causing, and verification are the agent's job.",
+    "",
+    "What this measures is COVERAGE of the fix path, not a sage-vs-bare delta:",
+    "both arms are expected to fix a bug this crisp. The claims under test are",
+    "the fix workflow's own: the root cause is fixed (percent/100, not a",
+    "compensating hack elsewhere), the whole suite ends green, the change stays",
+    "in scope (no drive-by refactors), and — sage-only — the mandatory fix-mode",
+    "gates (hallucination, verify) actually ran, mechanically."
+  ],
+  "prompts": [
+    "prompt-1.md"
+  ],
+  "checks": [
+    {
+      "grader": "file_contains",
+      "describe": "the ROOT CAUSE is fixed — percent is a percentage (/ 100), not the /10 typo or a compensating hack",
+      "path": "src/cart.py",
+      "substrings": [
+        "100"
+      ]
+    },
+    {
+      "grader": "file_lacks",
+      "describe": "the typo itself is gone",
+      "path": "src/cart.py",
+      "substrings": [
+        "percent / 10)"
+      ]
+    },
+    {
+      "grader": "gate_exit",
+      "describe": "the whole suite is green — including the red regression test the fixture shipped (Gate 5, exit 0)",
+      "script": "core/gates/scripts/sage-verify.sh",
+      "exit": 0,
+      "starts_red": true
+    },
+    {
+      "grader": "diff_files_within",
+      "describe": "scope held — the fix touched cart code, tests, and Sage's own machinery, nothing else",
+      "allowed": [
+        "src/cart.py",
+        "tests/*",
+        "tests/**",
+        ".sage/*",
+        ".sage/**",
+        ".claude/*",
+        ".claude/**",
+        "sage/**",
+        ".sage-memory/**",
+        ".mcp.json",
+        ".gitignore",
+        "CLAUDE.md",
+        "notes/*",
+        "notes/**"
+      ]
+    },
+    {
+      "grader": "ran_command",
+      "describe": "sage-only MECHANISM CHECK — fix mode's mandatory gates actually ran (verify and/or hallucination), not just a claim that they did",
+      "condition": "sage",
+      "pattern": "sage-verify|sage-hallucination-check"
+    }
+  ],
+  "budget_usd": 4.0,
+  "timeout_s": 1200
+}

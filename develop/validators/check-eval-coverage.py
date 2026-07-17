@@ -347,7 +347,13 @@ def check_diff(doc, root, base):
         print("OK — nothing changed against %s." % base)
         return []
 
-    neutral = NEUTRAL_TAG in commit_bodies(base)
+    # Line-anchored on purpose. A bare substring match turned MENTIONING the tag
+    # into USING it: a commit body that said "not tagging #eval-neutral — these
+    # ARE behavioural" was accepted as a neutrality claim, silently waiving the
+    # exact re-measure it was refusing to waive. The tag counts only when a line
+    # starts with it — an intentional marker, not a word in a sentence.
+    neutral = re.search(r"^\s*%s\b" % re.escape(NEUTRAL_TAG),
+                        commit_bodies(base), re.M) is not None
     problems = []
     touched_surfaces = []
 

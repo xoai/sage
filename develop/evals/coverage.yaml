@@ -64,14 +64,13 @@ surfaces:
   workflow-fix:
     path: core/workflows/fix.workflow.md
     kind: workflow
-    uncovered: >
-      No scenario drives /fix end-to-end. E3 exercises verify-before-claiming
-      inside a fix-shaped task, but nothing grades fix's distinctive rule —
-      root cause confirmed BEFORE the fix, and the surgical/moderate/systemic
-      scoping that follows it. This is the largest single coverage hole in the
-      workflow set, and Step 4 now adds a second uncovered path: subagent
-      execution for Moderate+ fixes (surgical fixes stay inline by design — there
-      is no accumulated context to isolate across two files).
+    covered-by: [E13]
+    notes: >
+      The oldest hole in the registry, closed 2026-07-17. E13 drives a reported
+      bug end-to-end through the fix path: root cause (not a compensating hack),
+      the fixture's red regression test turned green (starts_red gate check),
+      scope held, and — sage-only — fix mode's mandatory gates observed actually
+      running. E3 still covers verify-before-claiming inside a fix shape.
 
   workflow-architect:
     path: core/workflows/architect.workflow.md

@@ -452,6 +452,37 @@ def make_workspace(scenario: Scenario, condition: str, root: pathlib.Path,
     return ws
 
 
+def isolated_claude_env(ws: pathlib.Path) -> dict:
+    """The env for a driver subprocess: the platform's config dir is RUN-SCOPED.
+
+    Found the hard way (L5): the harness inherited the developer's HOME, and an
+    eval agent — asked to persist a rule outside a frozen repo — resourcefully
+    wrote it into the developer's REAL user-global ~/.claude/CLAUDE.md, and read
+    the platform's per-project memory across eval runs. An eval that can write
+    the operator's actual config is not an eval, it is an incident.
+
+    So each RUN gets its own CLAUDE_CONFIG_DIR under the workspace parent,
+    seeded with ONLY the credentials file (auth must work; nothing else should
+    carry over — the operator's settings.json holds exactly the kind of ambient
+    default, like a model preference, that has already burned a baseline).
+    Sessions within one run share it, faithfully to a real machine that
+    persists between sessions; runs never see each other or the real HOME.
+    """
+    env = dict(os.environ)
+    cfg = ws.parent / "_claude_config"
+    if not cfg.is_dir():
+        cfg.mkdir(parents=True, exist_ok=True)
+        real = pathlib.Path(os.environ.get("CLAUDE_CONFIG_DIR")
+                            or pathlib.Path.home() / ".claude")
+        creds = real / ".credentials.json"
+        if creds.is_file():
+            shutil.copy2(creds, cfg / ".credentials.json")
+            os.chmod(cfg / ".credentials.json", 0o600)
+        # No credentials file is fine: ANTHROPIC_API_KEY (inherited) also works.
+    env["CLAUDE_CONFIG_DIR"] = str(cfg)
+    return env
+
+
 def apply_memory_home(ws: pathlib.Path) -> None:
     """Point the workspace's sage-memory server at a run-scoped store OUTSIDE
     the workspace, so a fresh_checkout session (git clean) does not destroy it.
@@ -633,7 +664,8 @@ class ClaudeCodeDriver(Driver):
 
             try:
                 proc = subprocess.run(cmd, cwd=str(ws), capture_output=True,
-                                      text=True, timeout=deadline)
+                                      text=True, timeout=deadline,
+                                      env=isolated_claude_env(ws))
             except subprocess.TimeoutExpired as exc:
                 if kill_after_s and i == len(prompts) - 1:
                     interrupted = True
@@ -1173,6 +1205,18 @@ def null_agent_check(scenario: Scenario, root: pathlib.Path) -> list:
         # A check that the fixture itself fails is not measuring the agent. It is
         # measuring the fixture, and it will fail no matter how well the agent does.
         for c, r in zip(applicable, results):
+            # A fix-shaped scenario stages a RED fixture on purpose — the agent's
+            # whole job is to turn this exact check green, which makes red-then-
+            # green the sharpest discriminator there is. `starts_red: true` says
+            # so explicitly, and inverts the precondition: such a check that is
+            # already GREEN on the untouched fixture measures nothing.
+            if c.get("starts_red"):
+                if c["grader"] in PRECONDITION_GRADERS and r["pass"]:
+                    problems.append(
+                        f"[{condition}] check {c['grader']!r} declares starts_red "
+                        f"but already passes on the untouched fixture — the bug "
+                        f"it exists to catch is not staged")
+                continue
             if r["pass"]:
                 continue
             if c["grader"] in PRECONDITION_GRADERS:
