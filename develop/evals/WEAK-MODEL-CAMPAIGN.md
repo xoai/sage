@@ -46,3 +46,16 @@ it into src/ in every run. 1/3 → 3/3 is the sharpest +Sage delta measured in
 this program — a hook built from a measured failure, proven down-model on its
 second iteration. The E2 secrets rule is now mechanical, like test-first before
 it: 3/3-vs-0/3, twice over.
+
+## The verify gate's proof loop (2026-07-17) — and the second boundary
+
+E3 cannot be hooked at all (review-only: no edit, no commit — the claim moment
+is prose). E14 was authored as the family's commit shape; gate v2 (this-session
+evidence, whoever wrote the code) converts every ATTEMPTED unverified commit
+into a verification — proven in a kept transcript — with zero strong-model
+friction (E13 3/3) and a clean default-model baseline (E14 3/3-vs-3/3). On
+haiku the lift is partial (1–2/3 vs 0/3): the residue is NON-ACTING failure —
+prose theater ("All tests passing", zero tool calls) and ask-and-stall. Hooks
+gate actions; a model that does not act is below any tool-gate's floor. Two
+boundaries now mark the edge of "make it code": prose-shaped claims (E3) and
+non-acting completion theater (E14-haiku residue).
