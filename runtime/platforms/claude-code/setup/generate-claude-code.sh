@@ -580,8 +580,7 @@ WANTED = [
     ("PreToolUse", "Edit|Write|MultiEdit", "sage-secrets-gate.sh"),
     ("PreToolUse", "Bash", "sage-verify-gate.sh"),
     ("PostToolUse", "Bash|Edit|Write|MultiEdit", "sage-verify-tracker.sh"),
-    ("PreToolUse", "Edit|Write|MultiEdit", "sage-config-gate.sh"),
-    ("PreToolUse", "Bash", "sage-config-gate.sh"),
+    ("PreToolUse", "Bash|Edit|Write|MultiEdit", "sage-config-gate.sh"),
     ("PostToolUse", "Write|Edit", "sage-degradation-log.sh"),
     ("PostToolUse", "Write|Edit", "sage-manifest-sync.sh"),
 ]
