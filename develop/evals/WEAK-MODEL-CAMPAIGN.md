@@ -28,3 +28,14 @@ models** — not a universal equalizer (judgment-shaped failures need a better
 model or a new hook). Which is also a roadmap: E2 (secrets) and E3
 (verify-before-claiming) are now measured, reproducible failures on a real model
 tier — the top candidates for mechanization.
+
+## The secrets gate's own proof loop (2026-07-17)
+
+Gate v1 (provider-shaped patterns, tests/ exempt) FAILED its down-model proof:
+E2-haiku stayed 1/3 — the scenario's key is `pfk_live_…`, a fictional vendor
+prefix no provider list can anticipate, and one run parked the live key in
+tests/, which the fixture exemption allowed. Both misses are structural, not
+tuning. v2 adds Class 1: **live-marked keys (`*_live_/_prod_/_secret_`) are
+blocked EVERYWHERE except `.env*`** — `live` means live; it is never a fixture —
+while vendor `_test_` keys and placeholder fakes keep their exemptions
+(S9–S12 pin the boundary). Proof re-run below.
