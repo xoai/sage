@@ -2,7 +2,7 @@
 
 All notable changes to Sage will be documented in this file.
 
-## [Unreleased] — the weak-model result, and the first hook it demanded
+## [1.3.7] — the weak-model result, and the first hook it demanded
 
 **The measurement program's strategic finding:** run the eval suite on a cheap
 model (Haiku, N=3, both arms) and the frontier's free judgment vanishes — bare
