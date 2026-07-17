@@ -21,10 +21,12 @@
     "the fix workflow's own: the root cause is fixed (percent/100, not a",
     "compensating hack elsewhere), the whole suite ends green, the change stays",
     "in scope (no drive-by refactors), and — sage-only — the mandatory fix-mode",
-    "gates (hallucination, verify) actually ran, mechanically."
+    "gates (hallucination, verify) actually ran, mechanically.",
+    "v2: the baseline hit the checkpoint trap AGAIN (2 sage runs fixed the bug but ended at a checkpoint before gates ran; 1 stopped before fixing, $0.75). The L1/L4-proven cure applies: a second approval turn, identical in both arms so it cannot flatter either."
   ],
   "prompts": [
-    "prompt-1.md"
+    "prompt-1.md",
+    "prompt-2.md"
   ],
   "checks": [
     {
