@@ -1,0 +1,168 @@
+{
+  "id": "L4",
+  "name": "memory-compounds",
+  "title": "Three conventions, three sessions apart — do they ALL survive into one implementation?",
+  "source": "the 'Memory That Compounds' README claim, measured at last",
+  "fixture": "py-service",
+  "conditions": [
+    "sage",
+    "bare"
+  ],
+  "rationale": [
+    "L2 measured ONE constraint over three sessions and got a null result: memory",
+    "worked mechanically and didn't matter — bare reread its own log for a third of",
+    "the price. The README's actual claim is stronger than L2 tested: knowledge",
+    "COMPOUNDS — many lessons, accumulated across sessions, jointly applied later.",
+    "This scenario is that claim, minimally: three independent conventions stated",
+    "in three separate sessions (3.8 typing; helpers-never-sleep; no bare",
+    "ValueError), then a fourth session implements retry support whose DEFAULT",
+    "idioms violate all three (list[float] annotations, time.sleep between",
+    "attempts, raise ValueError). Nothing is restated in session 4.",
+    "",
+    "Both arms may pass — a bare agent can reread its own session logs, and the",
+    "long-horizon probe says recall survives to the context window. That is the",
+    "honest comparison, unchanged from L2. What THIS scenario adds is the",
+    "compounding shape: a sage pass here is evidence that accumulation works",
+    "end-to-end through the real init-written stack (store x3, joint retrieval,",
+    "joint application); a sage FAILURE here while L2 passes would mean memory",
+    "degrades with count — the exact opposite of the README claim.",
+    "",
+    "The sleep landmine deliberately mirrors L1's D-002 (same fixture, same",
+    "convention shape): retry_call's default idiom IS time.sleep between attempts;",
+    "the informed design computes delays and lets the caller wait (sleeper",
+    "injection or schedule reuse). The graders read code with comments and string",
+    "literals blanked, so a test ASSERTING sleep-absence cannot fail the arm that",
+    "wrote it (the conscientiousness trap, fixed after the first L2 run).",
+    "v2 (post first run): first run was 0/3 both arms on instrument grounds — the retry_call/no-sleep pair created an API dilemma sage may have resolved by redesigning (then scored 'missing'), and type-validation via TypeError dodged the ValueError check. s4 now pins names+file while leaving the waiting design free; s3 bans TypeError from validation too. First run also violated the keep-workspaces-on-first-run rule; v2 runs kept.",
+    "v3: v2's kept transcripts convicted the INSTRUMENT on all three fronts. (a) The checkpoint trap — sage's s4 built spec+plan honoring every remembered convention, then stopped at [A] with nothing committed (the E5 lesson; L1 fixed it with a second turn, added here for both arms). (b) code_only was never set, so bare's docstring 'callers pass time.sleep' failed the sleep check — the conscientiousness trap, third appearance. (c) _introduced is file-level, and s3 already put 'ConfigError' in config.py, making the positive check unpassable; it now checks 'raise ConfigError'. Bare's v2 run1, for the record, honored ALL THREE conventions from its logs with an injected sleeper — the graders failed it anyway."
+  ],
+  "sessions": [
+    {
+      "name": "s1",
+      "prompts": [
+        "prompt-s1.md"
+      ]
+    },
+    {
+      "name": "s2",
+      "prompts": [
+        "prompt-s2.md"
+      ]
+    },
+    {
+      "name": "s3",
+      "prompts": [
+        "prompt-s3.md"
+      ]
+    },
+    {
+      "name": "s4",
+      "prompts": [
+        "prompt-s4.md",
+        "prompt-s4b.md"
+      ]
+    }
+  ],
+  "driver_args": {
+    "sage": [
+      "--strict-mcp-config",
+      "--mcp-config",
+      ".mcp.json"
+    ],
+    "bare": [
+      "--strict-mcp-config"
+    ]
+  },
+  "checks": [
+    {
+      "grader": "used_tool",
+      "describe": "sage-only MECHANISM CHECK — session 1 stored to memory (accumulation, first deposit)",
+      "condition": "sage",
+      "session": "s1",
+      "pattern": "sage_memory|memory_store|sage-memory"
+    },
+    {
+      "grader": "used_tool",
+      "describe": "sage-only MECHANISM CHECK — session 3 ALSO stored (accumulation, not a one-off; without this a single lucky store takes compounding's credit)",
+      "condition": "sage",
+      "session": "s3",
+      "pattern": "sage_memory|memory_store|sage-memory"
+    },
+    {
+      "grader": "used_tool",
+      "describe": "sage-only MECHANISM CHECK — session 4 engaged memory (retrieval side of the compound)",
+      "condition": "sage",
+      "session": "s4",
+      "pattern": "sage_memory|memory_search|sage-memory"
+    },
+    {
+      "grader": "diff_lacks",
+      "describe": "convention 1 held: no 3.9+ builtin generics or union syntax in session 4's new code",
+      "session": "s4",
+      "substrings": [
+        "list[",
+        "dict[",
+        "-> int | ",
+        "-> float | "
+      ],
+      "paths": [
+        "src/*.py"
+      ],
+      "code_only": true
+    },
+    {
+      "grader": "diff_lacks",
+      "describe": "convention 2 held: retry_call does not sleep in library code — the delay is computed, the caller waits (stated two sessions earlier, never restated)",
+      "session": "s4",
+      "substrings": [
+        "time.sleep"
+      ],
+      "paths": [
+        "src/*.py"
+      ],
+      "code_only": true
+    },
+    {
+      "grader": "diff_lacks",
+      "describe": "convention 3 held: no bare builtin exceptions from validation (stated one session earlier, never restated)",
+      "session": "s4",
+      "substrings": [
+        "raise ValueError",
+        "raise TypeError"
+      ],
+      "paths": [
+        "src/*.py"
+      ],
+      "code_only": true
+    },
+    {
+      "grader": "diff_contains",
+      "describe": "convention 3 held, positive half: validation raises the project's own exception family",
+      "session": "s4",
+      "substrings": [
+        "raise ConfigError"
+      ],
+      "paths": [
+        "src/*.py"
+      ],
+      "code_only": true
+    },
+    {
+      "grader": "file_contains",
+      "describe": "the actual work landed — both functions exist",
+      "path": "src/config.py",
+      "substrings": [
+        "def backoff_schedule",
+        "def retry_call"
+      ]
+    },
+    {
+      "grader": "gate_exit",
+      "describe": "the final tree is verifiably green (Gate 5, exit 0)",
+      "script": "core/gates/scripts/sage-verify.sh",
+      "exit": 0
+    }
+  ],
+  "budget_usd": 5.0,
+  "timeout_s": 1800
+}

@@ -79,6 +79,22 @@ class DriverErrorResultTest(unittest.TestCase):
         self.assertTrue(run["ok"])
         self.assertEqual(run["truncated"], "error_max_budget_usd")
 
+    def test_a_resumed_turn_error_after_prior_turn_work_is_truncation(self):
+        """L4 v3's driver bug, pinned: turn 2 (--resume) hit error_max_budget_usd
+        with 0 tokens in ITS OWN usage — after turn 1 of the same session did
+        real, committed work — and the session was voided as 'nothing ran',
+        discarding $6+ of gradeable workspace. SESSION tokens, not this turn's,
+        decide whether anything ran."""
+        turn1 = FakeProc([result_event()])
+        turn2 = FakeProc([result_event(
+            is_error=True, subtype="error_max_budget_usd", total_cost_usd=6.25,
+            usage={"input_tokens": 0, "output_tokens": 0}, result="")])
+        with mock.patch.object(RE.subprocess, "run", side_effect=[turn1, turn2]):
+            run = self.driver.run(self.d, ["go", "now finish"], self.out)
+        self.assertTrue(run["ok"], f"wrongly voided: {run.get('error')}")
+        self.assertEqual(run["truncated"], "error_max_budget_usd",
+                         "graded AND flagged — a truncated pass did the work")
+
     def test_a_clean_result_still_drives(self):
         run = self.drive([result_event()])
         self.assertTrue(run["ok"])

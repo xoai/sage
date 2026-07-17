@@ -138,6 +138,15 @@ class Session:
         self.dir = scenario_dir
         self.name = spec.get("name") or f"s{index + 1}"
         self.prompt_files = spec.get("prompts") or []
+        # This session finds the workspace AS A FRESH CHECKOUT would: tracked
+        # files restored, everything untracked/ignored removed (git clean -xdf).
+        # That severs every non-git channel — session artifacts, .sage/ state,
+        # the in-workspace memory store — which is the regime the long-horizon
+        # question actually turns on: L4 measured that committed CODE carries
+        # conventions perfectly well, so a memory system can only earn its keep
+        # on knowledge git cannot carry. The sage arm is re-initialized after
+        # the clean (a teammate's fresh clone runs `sage init` too).
+        self.fresh_checkout = bool(spec.get("fresh_checkout"))
         # "Kill after N turns" (R116). The agent completes turn N and then never
         # gets turn N+1 — the user closed the laptop. It is NOT a mid-turn SIGKILL:
         # turn N finishes, so any checkpoint the workflow writes at the end of a
@@ -231,6 +240,14 @@ class Scenario:
         # inherits it regardless of cwd — and the control would be measuring Sage
         # against Sage.
         self.driver_args = spec.get("driver_args", [])
+        # memory_home: "run" pins the sage arm's memory store OUTSIDE the
+        # workspace (in the run's temp parent, via SAGE_PROJECT_ROOT in the
+        # .mcp.json server env). Still run-isolated — never the developer's real
+        # ~/.sage-memory — but it survives a `fresh_checkout` session, which the
+        # default in-workspace .sage-memory/ does not. That pairing IS the
+        # fresh-clone experiment: git carries the code, memory_home carries the
+        # memories, and nothing else crosses.
+        self.memory_home = spec.get("memory_home")
 
     def args_for(self, condition: str) -> list:
         if isinstance(self.driver_args, dict):
@@ -415,6 +432,8 @@ def make_workspace(scenario: Scenario, condition: str, root: pathlib.Path,
         sage_init(ws)
         if mode in MODES:
             set_execution_mode(ws, mode)
+        if scenario.memory_home == "run":
+            apply_memory_home(ws)
 
     # Seeded after init, and committed, so a scenario starts from state the agent
     # did not create and the git history says so.
@@ -431,6 +450,40 @@ def make_workspace(scenario: Scenario, condition: str, root: pathlib.Path,
             "commit", "-q", "-m", "fixture: scenario setup")
 
     return ws
+
+
+def apply_memory_home(ws: pathlib.Path) -> None:
+    """Point the workspace's sage-memory server at a run-scoped store OUTSIDE
+    the workspace, so a fresh_checkout session (git clean) does not destroy it.
+    Rewrites only the sage-memory entry's env; the rest of .mcp.json survives."""
+    cfg_path = ws / ".mcp.json"
+    if not cfg_path.is_file():
+        return                       # bare arm, or init declined memory
+    home = ws.parent / f"{ws.name}-memory-home"
+    home.mkdir(exist_ok=True)
+    try:
+        cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+        server = cfg.get("mcpServers", {}).get("sage-memory")
+        if server is None:
+            return
+        server.setdefault("env", {})["SAGE_PROJECT_ROOT"] = str(home)
+        cfg_path.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+    except (ValueError, OSError) as exc:
+        raise EvalError(f"could not pin memory_home in {cfg_path}: {exc}")
+
+
+def fresh_checkout(ws: pathlib.Path, scenario: "Scenario", condition: str,
+                   mode: str = None) -> None:
+    """Reset the workspace to what a fresh clone carries: tracked files only.
+    Then re-initialize the sage arm, as a teammate's checkout would."""
+    git(ws, "checkout", "--", ".")
+    git(ws, "clean", "-xdf", "-q")
+    if condition == "sage":
+        sage_init(ws)
+        if mode in MODES:
+            set_execution_mode(ws, mode)
+        if scenario.memory_home == "run":
+            apply_memory_home(ws)
 
 
 def session_anchor(ws: pathlib.Path) -> dict:
@@ -655,7 +708,16 @@ class ClaudeCodeDriver(Driver):
                     # so num_turns is not evidence of work, and trusting it would let
                     # "nothing ran" masquerade as "ran and was cut off". A unit test
                     # caught exactly that.
-                    ran = input_tokens(usage) > 0
+                    #
+                    # SESSION tokens, not just this turn's. L4 v3 found the inverse
+                    # masquerade: a --resume continuation turn hit
+                    # error_max_budget_usd with 0 tokens in ITS OWN usage — after
+                    # turn 1 of the same session had done $5 of real, committed
+                    # work — and the session was voided as "nothing ran". A turn
+                    # that errors before reading anything is still a TRUNCATION of
+                    # a session that ran; only a session with no tokens ANYWHERE is
+                    # not evidence.
+                    ran = input_tokens(usage) > 0 or tok_in > 0
 
                     if ev.get("is_error") and not ran:
                         return snapshot(
@@ -735,6 +797,8 @@ def run_once(scenario: Scenario, condition: str, driver: Driver,
     run_start = session_anchor(ws)          # the whole-run baseline
 
     for sess in scenario.sessions:
+        if sess.fresh_checkout:
+            fresh_checkout(ws, scenario, condition, mode=mode)
         anchor = session_anchor(ws)
         out = ws.parent / f"{scenario.id}-{condition}-{sess.name}.jsonl"
         prompts = sess.prompts()

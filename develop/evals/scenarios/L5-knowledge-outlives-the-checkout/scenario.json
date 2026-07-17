@@ -1,0 +1,113 @@
+{
+  "id": "L5",
+  "name": "knowledge-outlives-the-checkout",
+  "title": "A rule git cannot carry, across a fresh checkout — the one regime where memory can win",
+  "source": "the L4 finding: committed code carries conventions; memory must earn its keep on knowledge git cannot carry",
+  "fixture": "py-service",
+  "conditions": [
+    "sage",
+    "bare"
+  ],
+  "memory_home": "run",
+  "rationale": [
+    "L2 and L4 both ended the same way: memory worked mechanically and a bare agent",
+    "tied it — L2's bare reread its logs; L4's bare never even needed the logs,",
+    "because the ACCUMULATED CODE carried every convention (it read src/, inferred",
+    "the exception family and the typing rule, and even ran pytest under 3.8).",
+    "Git is a memory system, and an excellent one. So the honest strong case for a",
+    "memory layer is knowledge git cannot carry: tribal, environmental, stated in",
+    "conversation and never committed.",
+    "",
+    "This scenario constructs exactly that. Session 1 is a RELEASE FREEZE: the",
+    "agent is told a rule born of a post-mortem (module name `utils` is banned —",
+    "a prod plugin-loader collision; new helper modules use a `support_` prefix)",
+    "and explicitly forbidden to write ANYTHING into the repo — no code, no notes.",
+    "The freeze is what closes the write-it-down-in-the-repo channel, which is a",
+    "legitimate channel and usually the right one; here it is unavailable, as it",
+    "is in real life whenever knowledge arrives away from the keyboard.",
+    "Session 2 runs in a FRESH CHECKOUT (fresh_checkout: true — tracked files",
+    "only, everything else gone, sage re-initialized as a teammate would) and is",
+    "asked to extract helpers into a new module, 'named whatever fits the",
+    "codebase's conventions'. The default name every agent reaches for is",
+    "utils.py. Nothing in the tree forbids it. Only the remembered rule does.",
+    "",
+    "The sage arm's memory store is pinned OUTSIDE the workspace (memory_home:",
+    "'run' — run-isolated, but it survives the fresh checkout, as a real user's",
+    "memory service would). The bare arm has nothing: no logs (fresh checkout, new",
+    "anchor state), no notes (the freeze forbade them), no code trace (none was",
+    "ever committed). If memory is ever going to beat 'just reread it', it is",
+    "here. A sage win + bare loss is the first measured evidence FOR the memory",
+    "layer; a tie either way says even this regime does not need it.",
+    "",
+    "Honest limits: the freeze is a constructed excuse to close the repo channel —",
+    "in unconstrained reality, 'commit the rule to CLAUDE.md' beats both arms and",
+    "L4 already showed it. And ~/.claude transcripts of s1 survive on the machine;",
+    "L4's bare never consulted them, but a bare agent that does so here would be",
+    "resourceful, not cheating — if that happens, the checks will show it and the",
+    "transcript will say so.",
+    "v2: the freeze check (diff_files_within scoped to s1) was removed — session-scoped diff graders compare against the FINAL tree, so on a non-final session it mis-attributes later work; it failed both arms 0/6 on s2's files. Freeze compliance was verified from the kept transcripts instead: in every run, both arms' s1 wrote NOTHING into the repo — every write went to the PLATFORM's own per-project auto-memory (~/.claude/projects/<cwd>/memory/), which is the finding: Claude Code ships a native memory system, the 'bare' agent used it competently when asked to persist knowledge outside the repo, and it survived the fresh checkout (keyed by path, outside the workspace). One bare run also wrote the rule into the USER-GLOBAL ~/.claude/CLAUDE.md — real-environment pollution that the harness's missing HOME isolation allowed; a harness that runs memory-flavoured scenarios MUST isolate HOME."
+  ],
+  "sessions": [
+    {
+      "name": "s1",
+      "prompts": [
+        "prompt-s1.md"
+      ]
+    },
+    {
+      "name": "s2",
+      "prompts": [
+        "prompt-s2.md"
+      ],
+      "fresh_checkout": true
+    }
+  ],
+  "driver_args": {
+    "sage": [
+      "--strict-mcp-config",
+      "--mcp-config",
+      ".mcp.json"
+    ],
+    "bare": [
+      "--strict-mcp-config"
+    ]
+  },
+  "checks": [
+    {
+      "grader": "used_tool",
+      "describe": "sage-only MECHANISM CHECK — session 2 engaged memory in the fresh checkout (the only surviving channel)",
+      "condition": "sage",
+      "session": "s2",
+      "pattern": "sage_memory|memory_search|sage-memory"
+    },
+    {
+      "grader": "file_absent",
+      "describe": "THE RULE: no src/utils.py — the banned default every agent reaches for",
+      "path": "src/utils.py"
+    },
+    {
+      "grader": "tree_contains",
+      "describe": "the extraction landed in a support_-prefixed module, per the never-committed rule",
+      "glob": "src/support_*.py",
+      "substrings": [
+        "def"
+      ]
+    },
+    {
+      "grader": "file_contains",
+      "describe": "the public API kept working — config.py still serves timeout_for",
+      "path": "src/config.py",
+      "substrings": [
+        "timeout_for"
+      ]
+    },
+    {
+      "grader": "gate_exit",
+      "describe": "the final tree is verifiably green (Gate 5, exit 0)",
+      "script": "core/gates/scripts/sage-verify.sh",
+      "exit": 0
+    }
+  ],
+  "budget_usd": 5.0,
+  "timeout_s": 1800
+}
