@@ -728,6 +728,67 @@ assert S8 "secrets_gate: false is a dedicated opt-out" "$P" \
   '{"tool_name":"Write","tool_input":{"file_path":"src/client.py","content":"k=\"sk-proj-Abc123Def456Ghi789Jkl\""}}' \
   --exit 0 --hook "$SG"
 
+# ── sage-verify-gate + tracker: verify before claiming, mechanically ────────
+# Measured why (weak-model campaign): told "the tests passed" by a wrong user,
+# haiku-bare trusts it 0/3 and haiku with the PARAGRAPH still failed 2/3. The
+# commit is where "done" becomes durable, so the commit demands the evidence.
+echo ""
+echo "sage-verify-gate — no commit without evidence"
+VG="$REPO_ROOT/runtime/platforms/claude-code/hooks/sage-verify-gate.sh"
+VT="$REPO_ROOT/runtime/platforms/claude-code/hooks/sage-verify-tracker.sh"
+COMMIT_JSON='{"tool_name":"Bash","tool_input":{"command":"git commit -m \"done\""}}'
+
+# V1 — the live chain: tracker records a source edit; the gate then blocks.
+P="$(new_project)"; set_config "$P" "hard_enforcement: true"
+( cd "$P" && printf '{"tool_name":"Edit","tool_input":{"file_path":"src/app.py","new_string":"x=1"}}' | bash "$VT" ) >/dev/null 2>&1
+assert V1 "source edited, no test run → commit is blocked with the run-the-tests path" "$P" \
+  "$COMMIT_JSON" --exit 2 --stderr "run the tests" --hook "$VG"
+
+# V2 — tests ran after the edit → allowed. Explicit state: deterministic.
+P="$(new_project)"; set_config "$P" "hard_enforcement: true"; mkdir -p "$P/.sage/tmp"
+printf 'last_source_edit=1000\nlast_test_run=2000\n' > "$P/.sage/tmp/verify-state"
+assert V2 "tests ran AFTER the last edit → commit allowed" "$P" \
+  "$COMMIT_JSON" --exit 0 --hook "$VG"
+
+# V3 — edited again after the tests → stale evidence, blocked.
+P="$(new_project)"; set_config "$P" "hard_enforcement: true"; mkdir -p "$P/.sage/tmp"
+printf 'last_source_edit=3000\nlast_test_run=2000\n' > "$P/.sage/tmp/verify-state"
+assert V3 "source edited AFTER the tests → evidence stale, blocked" "$P" \
+  "$COMMIT_JSON" --exit 2 --stderr "since the last test run" --hook "$VG"
+
+# V4 — verify-then-commit in one chained command IS the discipline.
+assert V4 "'pytest && git commit' chains are the discipline, not a violation" "$P" \
+  '{"tool_name":"Bash","tool_input":{"command":"python3 -m pytest -q && git commit -m ok"}}' \
+  --exit 0 --hook "$VG"
+
+# V5 — docs-only commit: staged changes touch no code file → allowed.
+P="$(new_project)"; set_config "$P" "hard_enforcement: true"; mkdir -p "$P/.sage/tmp"
+printf 'last_source_edit=3000\nlast_test_run=2000\n' > "$P/.sage/tmp/verify-state"
+( cd "$P" && git init -q && git -c user.email=t@t -c user.name=t add -A \
+    && git -c user.email=t@t -c user.name=t commit -qm seed \
+    && printf 'notes\n' > README.md && git add README.md ) >/dev/null 2>&1
+assert V5 "docs-only staged commit passes even with stale evidence" "$P" \
+  "$COMMIT_JSON" --exit 0 --hook "$VG"
+
+# V6 — no tracker state at all → an older install or a fresh session; fail open.
+P="$(new_project)"; set_config "$P" "hard_enforcement: true"
+assert V6 "no recorded evidence at all → fail open" "$P" \
+  "$COMMIT_JSON" --exit 0 --hook "$VG"
+
+P="$(new_project)"; set_config "$P" "hard_enforcement: false"; mkdir -p "$P/.sage/tmp"
+printf 'last_source_edit=3000\n' > "$P/.sage/tmp/verify-state"
+assert V7 "hard_enforcement false → the gate never fires" "$P" \
+  "$COMMIT_JSON" --exit 0 --hook "$VG"
+
+P="$(new_project)"
+printf 'sage-version: "1.1.11"\nhard_enforcement: true\nverify_gate: false\n' > "$P/.sage/config.yaml"
+mkdir -p "$P/.sage/tmp"; printf 'last_source_edit=3000\n' > "$P/.sage/tmp/verify-state"
+assert V8 "verify_gate: false is a dedicated opt-out" "$P" \
+  "$COMMIT_JSON" --exit 0 --hook "$VG"
+
+assert V9 "a non-commit command is none of this gate's business" "$P" \
+  '{"tool_name":"Bash","tool_input":{"command":"git status"}}' --exit 0 --hook "$VG"
+
 echo ""
 echo "═══ Summary ═══"
 printf '  pass %d · fail %d · xfail %d · xpass %d\n' "$N_PASS" "$N_FAIL" "$N_XFAIL" "$N_XPASS"
