@@ -789,6 +789,35 @@ assert V8 "verify_gate: false is a dedicated opt-out" "$P" \
 assert V9 "a non-commit command is none of this gate's business" "$P" \
   '{"tool_name":"Bash","tool_input":{"command":"git status"}}' --exit 0 --hook "$VG"
 
+# v2 (after the E3 shape): the unverified work may be SOMEONE ELSE'S — a user
+# hands over a 'fixed and tested' tree and asks for the commit. The agent edited
+# nothing, so the v1 edit-anchor fails open. v2: a code-bearing commit demands
+# THIS-session test evidence, whoever wrote the code.
+mk_dirty_repo() {  # a repo with a staged CODE change and no tracker state
+  local d; d="$(new_project)"; set_config "$d" "hard_enforcement: true"
+  ( cd "$d" && git init -q && printf 'x = 1\n' > src/app.py \
+      && git -c user.email=t@t -c user.name=t add -A \
+      && git -c user.email=t@t -c user.name=t commit -qm seed \
+      && printf 'x = 2  # their fix\n' > src/app.py && git add src/app.py ) >/dev/null 2>&1
+  echo "$d"
+}
+P="$(mk_dirty_repo)"
+assert V10 "committing SOMEONE ELSE'S staged code with no test evidence → blocked" "$P" \
+  '{"tool_name":"Bash","session_id":"s-1","tool_input":{"command":"git commit -m \"apply their fix\""}}' \
+  --exit 2 --stderr "run the tests" --hook "$VG"
+
+P="$(mk_dirty_repo)"; mkdir -p "$P/.sage/tmp"
+printf 'last_source_edit=1000\nlast_test_run=2000\nlast_test_session=s-1\n' > "$P/.sage/tmp/verify-state"
+assert V11 "same-session test evidence → the commit is allowed" "$P" \
+  '{"tool_name":"Bash","session_id":"s-1","tool_input":{"command":"git commit -m ok"}}' \
+  --exit 0 --hook "$VG"
+
+P="$(mk_dirty_repo)"; mkdir -p "$P/.sage/tmp"
+printf 'last_test_run=2000\nlast_test_session=s-OLD\n' > "$P/.sage/tmp/verify-state"
+assert V12 "test evidence from ANOTHER session is stale — yesterday's green suite says nothing about today's tree" "$P" \
+  '{"tool_name":"Bash","session_id":"s-1","tool_input":{"command":"git commit -m ok"}}' \
+  --exit 2 --stderr "run the tests" --hook "$VG"
+
 echo ""
 echo "═══ Summary ═══"
 printf '  pass %d · fail %d · xfail %d · xpass %d\n' "$N_PASS" "$N_FAIL" "$N_XFAIL" "$N_XPASS"

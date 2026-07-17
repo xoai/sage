@@ -102,7 +102,7 @@ if os.path.isfile(config_path):
 if enforce is not True or gate_off:
     emit("ALLOW")
 
-# The evidence. No state at all → no tracker ran → fail open.
+# The evidence.
 state = {}
 state_path = os.path.join(sage_dir, "tmp", "verify-state")
 if os.path.isfile(state_path):
@@ -116,33 +116,51 @@ if os.path.isfile(state_path):
         pass
 edit_ts = state.get("last_source_edit")
 test_ts = state.get("last_test_run")
-if not edit_ts:
-    emit("ALLOW")                       # nothing recorded as edited — nothing to verify
+cur_sid = str(data.get("session_id") or "")
 
-# Docs-only commits pass: if nothing STAGED (or pending with -a/-A intent) is a
-# code file, the tests have nothing new to say. Fail open on any git error.
+# Test evidence is FRESH iff (a) it exists, (b) it belongs to THIS session when
+# session ids are available — a suite that was green yesterday says nothing
+# about today's tree (v2, after the E3 shape: the unverified work may be
+# someone ELSE's, so the agent's own edit timestamp cannot be the only anchor),
+# and (c) no source edit landed after it.
+fresh = test_ts is not None
+if fresh and cur_sid and state.get("last_test_session") \
+        and state["last_test_session"] != cur_sid:
+    fresh = False
+if fresh and edit_ts:
+    try:
+        fresh = int(test_ts) >= int(edit_ts)
+    except ValueError:
+        pass
+if fresh:
+    emit("ALLOW")
+
+# No fresh evidence. Does this commit carry CODE? Docs-only commits pass; a
+# commit that cannot be inspected falls back to the v1 agent-edit anchor
+# (block only when the agent itself edited source after the last test run) —
+# never invent a violation the tree cannot confirm.
 CODE_EXT = (".py", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".go", ".rs",
             ".java", ".rb", ".dart", ".c", ".cc", ".cpp", ".h", ".swift", ".kt")
+code_pending = None
 try:
     r = subprocess.run(["git", "-C", project_root, "diff", "--cached",
                         "--name-only"], capture_output=True, text=True, timeout=10)
-    staged = [f for f in (r.stdout or "").splitlines() if f.strip()]
-    # `git commit -a` / `commit <path>` bypass the index — include unstaged too.
-    if re.search(r"\bcommit\b[^\n;|&]*(\s-a\b|\s--all\b|\s-am\b)", cmd) or not staged:
-        r2 = subprocess.run(["git", "-C", project_root, "diff", "--name-only"],
-                            capture_output=True, text=True, timeout=10)
-        staged += [f for f in (r2.stdout or "").splitlines() if f.strip()]
-    if staged and not any(f.endswith(CODE_EXT) for f in staged):
-        emit("ALLOW")
+    if r.returncode == 0:
+        pending = [f for f in (r.stdout or "").splitlines() if f.strip()]
+        # `git commit -a` bypasses the index — include unstaged too.
+        if re.search(r"\bcommit\b[^\n;|&]*(\s-a\b|\s--all\b|\s-am\b)", cmd) or not pending:
+            r2 = subprocess.run(["git", "-C", project_root, "diff", "--name-only"],
+                                capture_output=True, text=True, timeout=10)
+            if r2.returncode == 0:
+                pending += [f for f in (r2.stdout or "").splitlines() if f.strip()]
+        code_pending = any(f.endswith(CODE_EXT) for f in pending)
 except Exception:
-    pass                                # cannot inspect → do not invent a violation
+    code_pending = None
 
-try:
-    fresh = test_ts is not None and int(test_ts) >= int(edit_ts)
-except ValueError:
-    emit("ALLOW")
-if fresh:
-    emit("ALLOW")
+if code_pending is False:
+    emit("ALLOW")                       # provably docs-only (or empty) — nothing to verify
+if code_pending is None and not edit_ts:
+    emit("ALLOW")                       # cannot inspect AND no agent edit recorded — fail open
 
 emit("BLOCK", (
     "sage-verify-gate: source changed since the last test run — run the tests "

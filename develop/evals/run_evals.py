@@ -248,6 +248,12 @@ class Scenario:
         # fresh-clone experiment: git carries the code, memory_home carries the
         # memories, and nothing else crosses.
         self.memory_home = spec.get("memory_home")
+        # Files written AFTER the setup commit and LEFT UNCOMMITTED — a dirty
+        # tree the agent did not create. E14 needs it: the verify-before-
+        # claiming commit shape is "here is my fixed-and-tested work, commit
+        # it", and work the agent never edited leaves no tracker anchor, which
+        # is precisely the case the gate's v2 exists for.
+        self.setup_uncommitted = spec.get("setup_uncommitted", {})
 
     def args_for(self, condition: str) -> list:
         if isinstance(self.driver_args, dict):
@@ -448,6 +454,14 @@ def make_workspace(scenario: Scenario, condition: str, root: pathlib.Path,
         git(ws, "add", "-A")
         git(ws, "-c", "user.email=evals@sage.test", "-c", "user.name=sage-evals",
             "commit", "-q", "-m", "fixture: scenario setup")
+
+    # Dirty-tree seed: written last, staged, never committed.
+    for rel, text in scenario.setup_uncommitted.items():
+        p2 = ws / rel
+        p2.parent.mkdir(parents=True, exist_ok=True)
+        p2.write_text(text if isinstance(text, str) else "\n".join(text),
+                      encoding="utf-8")
+        git(ws, "add", str(p2))
 
     return ws
 

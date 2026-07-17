@@ -44,6 +44,7 @@ if not os.path.isdir(sage_dir):
 
 tool = data.get("tool_name") or ""
 tool_input = data.get("tool_input") or {}
+session_id = str(data.get("session_id") or "")
 
 CODE_EXT = (".py", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".go", ".rs",
             ".java", ".rb", ".dart", ".c", ".cc", ".cpp", ".h", ".swift", ".kt")
@@ -81,6 +82,8 @@ try:
                     k, _, v = line.strip().partition("=")
                     state[k] = v
     state[key] = str(int(time.time() * 1000))
+    if session_id:
+        state[key.replace("_run", "").replace("_edit", "") + "_session"] = session_id
     with open(state_path, "w", encoding="utf-8") as fh:
         for k, v in sorted(state.items()):
             fh.write(f"{k}={v}\n")
