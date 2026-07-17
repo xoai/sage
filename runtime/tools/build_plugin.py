@@ -109,6 +109,7 @@ FILE_MAP = {
     "hooks/scripts/sage-degradation-log.sh": "runtime/platforms/claude-code/hooks/sage-degradation-log.sh",
     "hooks/scripts/sage-manifest-sync.sh": "runtime/platforms/claude-code/hooks/sage-manifest-sync.sh",
     "hooks/scripts/sage-bookkeeping-gate.sh": "runtime/platforms/claude-code/hooks/sage-bookkeeping-gate.sh",
+    "hooks/scripts/sage-secrets-gate.sh": "runtime/platforms/claude-code/hooks/sage-secrets-gate.sh",
     # The manifest hook delegates here rather than inlining a second copy of the
     # state machine. A plugin-only project may have no vendored sage/, so the tool
     # ships with the plugin too.
@@ -435,7 +436,35 @@ def audit(tree: pathlib.Path) -> list:
                         if not (tree / rel).is_file():
                             problems.append(f"hooks.json registers {rel}, which does not ship")
 
-    # 6. Every input the build reads is tracked by git. Otherwise this build and
+    # 6. Every shipped skill can actually REGISTER. Claude Code discovers a skill
+    #    by its frontmatter; a SKILL.md whose `name:` disagrees with its directory
+    #    or whose description is empty is not rejected loudly — it just silently
+    #    never loads, which on the install path most users take looks exactly like
+    #    "Sage doesn't work". Same failure family as the stale router that shipped
+    #    for two releases.
+    for skill_dir in sorted((tree / "skills").iterdir()):
+        smd = skill_dir / "SKILL.md"
+        if not smd.is_file():
+            continue                      # rule 3 already reports missing SKILL.md
+        text = smd.read_text(encoding="utf-8", errors="replace")
+        m = re.match(r"\A---\r?\n(.*?)\r?\n---", text, re.S)
+        if not m:
+            problems.append(f"skills/{skill_dir.name}/SKILL.md has no frontmatter "
+                            f"— it will silently fail to register")
+            continue
+        fm = m.group(1)
+        nm = re.search(r"^name:\s*[\"']?([A-Za-z0-9_-]+)", fm, re.M)
+        if not nm or nm.group(1) != skill_dir.name:
+            problems.append(
+                f"skills/{skill_dir.name}: frontmatter name "
+                f"{nm.group(1) if nm else '(missing)'!r} does not match its "
+                f"directory — discovery will misfile or drop it")
+        if not re.search(r"^description:\s*\S", fm, re.M):
+            problems.append(
+                f"skills/{skill_dir.name}: empty or missing description — "
+                f"description-triggered discovery can never fire")
+
+    # 7. Every input the build reads is tracked by git. Otherwise this build and
     #    the one the release runner does are builds of two different trees.
     for f in untracked_inputs():
         problems.append(

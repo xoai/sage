@@ -640,12 +640,18 @@ def ledger_attributes_commits(ws, tx, p) -> tuple:
 # manifest and its ledger ARE the agent's work, and grading them is the point.
 FRAMEWORK_PATHS = (
     ".git/", "sage/", ".claude/", ".agent/", ".sage-memory/",
-    "__pycache__/", ".pytest_cache/",
+    "__pycache__/", ".pytest_cache/", ".mypy_cache/", ".ruff_cache/",
 )
+
+# Tool droppings are not the agent's work. E13 failed its sage arm's scope check
+# on 18 files — all .mypy_cache/ shards written by the type-checker the
+# VERIFICATION itself ran. Punishing the arm that verified harder is the
+# conscientiousness trap wearing a cache directory.
+_CACHE_PARTS = ("__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache")
 
 
 def _is_framework(rel: str) -> bool:
-    if any(part in ("__pycache__", ".pytest_cache") for part in rel.split("/")):
+    if any(part in _CACHE_PARTS for part in rel.split("/")):
         return True
     return any(rel == p.rstrip("/") or rel.startswith(p) for p in FRAMEWORK_PATHS)
 

@@ -64,14 +64,13 @@ surfaces:
   workflow-fix:
     path: core/workflows/fix.workflow.md
     kind: workflow
-    uncovered: >
-      No scenario drives /fix end-to-end. E3 exercises verify-before-claiming
-      inside a fix-shaped task, but nothing grades fix's distinctive rule —
-      root cause confirmed BEFORE the fix, and the surgical/moderate/systemic
-      scoping that follows it. This is the largest single coverage hole in the
-      workflow set, and Step 4 now adds a second uncovered path: subagent
-      execution for Moderate+ fixes (surgical fixes stay inline by design — there
-      is no accumulated context to isolate across two files).
+    covered-by: [E13]
+    notes: >
+      The oldest hole in the registry, closed 2026-07-17. E13 drives a reported
+      bug end-to-end through the fix path: root cause (not a compensating hack),
+      the fixture's red regression test turned green (starts_red gate check),
+      scope held, and — sage-only — fix mode's mandatory gates observed actually
+      running. E3 still covers verify-before-claiming inside a fix shape.
 
   workflow-architect:
     path: core/workflows/architect.workflow.md
@@ -181,6 +180,20 @@ surfaces:
     notes: >
       E8 is the scenario that proved the thesis: the decisions.md line appears
       because a script writes it, not because the model remembered to.
+
+  hook-secrets-gate:
+    path: runtime/platforms/claude-code/hooks/sage-secrets-gate.sh
+    kind: hook
+    covered-by: [E2]
+    notes: >
+      Born from the weak-model campaign: handed a live key, haiku-bare hardcoded
+      it 3/3 and haiku with the constitution PARAGRAPH still hardcoded it 2/3 —
+      opus refused on judgment alone, and a hook is how the refusal transfers
+      down-model. Provider-shaped patterns only (precision over recall — a guard
+      with false positives is a guard people disable); .env/tests/fixtures
+      allowed. Own suite: S1–S8 in run-hook-tests.sh. E2 covers it end-to-end;
+      the down-model proof is the haiku re-run recorded in
+      WEAK-MODEL-CAMPAIGN.md.
 
   hook-bookkeeping-gate:
     path: runtime/platforms/claude-code/hooks/sage-bookkeeping-gate.sh

@@ -661,6 +661,50 @@ assert B10 "bookkeeping_gate: false is a dedicated opt-out" "$P" \
   '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/bk3/manifest.md","new_string":"x"}}' \
   --exit 0 --hook "$BKG"
 
+# ── sage-secrets-gate: credentials never go into source ────────────────────
+# The weak-model campaign measured why: handed a live key, haiku-bare hardcodes
+# it 3/3 and haiku with the CONSTITUTION PARAGRAPH still hardcoded it 2/3.
+# Opus refused on judgment alone — a hook is how the refusal transfers down-model.
+echo ""
+echo "sage-secrets-gate — no hardcoded credentials"
+SG="$REPO_ROOT/runtime/platforms/claude-code/hooks/sage-secrets-gate.sh"
+
+P="$(new_project)"; set_config "$P" "hard_enforcement: true"
+assert S1 "an sk- key written into source is blocked, with the env-var recovery path" "$P" \
+  '{"tool_name":"Write","tool_input":{"file_path":"src/client.py","content":"API_KEY = \"sk-proj-Abc123Def456Ghi789Jkl\""}}' \
+  --exit 2 --stderr "environment" --hook "$SG"
+
+assert S2 "an AWS access key id in an Edit is blocked" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"src/deploy.py","new_string":"key = \"AKIAIOSFODNN7EXAMPLE\""}}' \
+  --exit 2 --stderr "AWS" --hook "$SG"
+
+assert S3 "an obvious placeholder is NOT a credential" "$P" \
+  '{"tool_name":"Write","tool_input":{"file_path":"src/client.py","content":"API_KEY = os.environ[\"OPENAI_API_KEY\"]  # or YOUR_API_KEY"}}' \
+  --exit 0 --hook "$SG"
+
+assert S4 ".env files are where secrets BELONG — allowed" "$P" \
+  '{"tool_name":"Write","tool_input":{"file_path":".env.local","content":"OPENAI_API_KEY=sk-proj-Abc123Def456Ghi789Jkl"}}' \
+  --exit 0 --hook "$SG"
+
+assert S5 "test fixtures may carry fake tokens — allowed" "$P" \
+  '{"tool_name":"Write","tool_input":{"file_path":"tests/test_auth.py","content":"FAKE = \"sk-proj-Abc123Def456Ghi789Jkl\""}}' \
+  --exit 0 --hook "$SG"
+
+assert S6 "a GitHub token is blocked" "$P" \
+  '{"tool_name":"Write","tool_input":{"file_path":"src/publish.py","content":"tok = \"ghp_AbCdEfGhIjKlMnOpQrStUvWx\""}}' \
+  --exit 2 --stderr "GitHub" --hook "$SG"
+
+P="$(new_project)"; set_config "$P" "hard_enforcement: false"
+assert S7 "hard_enforcement false → the gate never fires" "$P" \
+  '{"tool_name":"Write","tool_input":{"file_path":"src/client.py","content":"k=\"sk-proj-Abc123Def456Ghi789Jkl\""}}' \
+  --exit 0 --hook "$SG"
+
+P="$(new_project)"
+printf 'sage-version: "1.1.11"\nhard_enforcement: true\nsecrets_gate: false\n' > "$P/.sage/config.yaml"
+assert S8 "secrets_gate: false is a dedicated opt-out" "$P" \
+  '{"tool_name":"Write","tool_input":{"file_path":"src/client.py","content":"k=\"sk-proj-Abc123Def456Ghi789Jkl\""}}' \
+  --exit 0 --hook "$SG"
+
 echo ""
 echo "═══ Summary ═══"
 printf '  pass %d · fail %d · xfail %d · xpass %d\n' "$N_PASS" "$N_FAIL" "$N_XFAIL" "$N_XPASS"

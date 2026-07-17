@@ -95,6 +95,27 @@ class DriverErrorResultTest(unittest.TestCase):
         self.assertEqual(run["truncated"], "error_max_budget_usd",
                          "graded AND flagged — a truncated pass did the work")
 
+    def test_the_subprocess_never_sees_the_real_claude_config(self):
+        """L5's incident, pinned: the harness inherited the developer's HOME and
+        an eval agent wrote into the REAL ~/.claude/CLAUDE.md. Every driver
+        subprocess must get a run-scoped CLAUDE_CONFIG_DIR under the workspace
+        parent — auth seeded, nothing else shared."""
+        captured = {}
+
+        def spy(cmd, **kw):
+            captured.update(kw.get("env") or {})
+            return FakeProc([result_event()])
+
+        with mock.patch.object(RE.subprocess, "run", side_effect=spy):
+            self.driver.run(self.d, ["go"], self.out)
+        cfg = captured.get("CLAUDE_CONFIG_DIR", "")
+        self.assertTrue(cfg, "CLAUDE_CONFIG_DIR must be set for the subprocess")
+        self.assertTrue(cfg.startswith(str(self.d.parent)),
+                        f"config dir must be run-scoped, got: {cfg}")
+        self.assertNotEqual(pathlib.Path(cfg),
+                            pathlib.Path.home() / ".claude",
+                            "must never be the operator's real config dir")
+
     def test_a_clean_result_still_drives(self):
         run = self.drive([result_event()])
         self.assertTrue(run["ok"])

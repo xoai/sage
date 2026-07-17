@@ -40,6 +40,16 @@ both conditions** — a tie on correctness, at **a few times the cost** (resume 
 noisy; roughly halved from ~9× by the v1.3.5 close-out levers, with further cuts
 in progress).
 
+**4. On a cheap model, the mechanical layer becomes a safety floor.** Run the same
+scenarios on Haiku and the frontier's free judgment vanishes: bare Haiku hardcodes
+the handed-over API key (0/3), trusts the user who lies about tests (0/3), and
+ships the phantom package (1/3) — all things bare Opus got right. Sage's hooks and
+gates restore exactly the behaviors they cover (test-first **3/3 vs 0/3**,
+hallucination gate **3/3 vs 1/3**), while its prose restores almost nothing (1/3).
+Measured across two model tiers, the same law: **hooks transfer down-model; advice
+does not.** The measured gaps became new hooks — a secrets gate ships now, with
+verify-before-claiming next.
+
 The honest summary: **Sage's benefit is whatever it has made mechanical.** Costs
 are published as sage:bare ratios because ratios transfer across billing models —
 on a subscription they arrive as quota and time, not a bill.
