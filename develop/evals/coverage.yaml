@@ -181,6 +181,30 @@ surfaces:
       E8 is the scenario that proved the thesis: the decisions.md line appears
       because a script writes it, not because the model remembered to.
 
+  hook-verify-gate:
+    path: runtime/platforms/claude-code/hooks/sage-verify-gate.sh
+    kind: hook
+    covered-by: [E14]
+    notes: >
+      The second hook the weak-model campaign demanded: told the tests passed by
+      a wrong user, haiku-bare trusted it 0/3 and haiku with the PARAGRAPH still
+      failed 2/3. A commit is where "done" becomes durable, so the commit demands
+      the evidence (tracker state: THIS-session test run vs source edits — v2,
+      because the unverified work may be someone else's and the agent's own
+      edits cannot be the only anchor). Fail-open matrix + boundary in V1-V12;
+      E14 covers the commit shape end-to-end. E3's PROSE shape ('review this,
+      tests already passed' — no edit, no commit) is un-hookable without
+      judging prose: the first measured failure mode that resists
+      mechanization, recorded in E14's rationale.
+
+  hook-verify-tracker:
+    path: runtime/platforms/claude-code/hooks/sage-verify-tracker.sh
+    kind: hook
+    covered-by: [E14]
+    notes: >
+      The evidence half of the verify gate (PostToolUse recorder — never
+      blocks). Split from the gate so a bug in one cannot take down the other.
+
   hook-secrets-gate:
     path: runtime/platforms/claude-code/hooks/sage-secrets-gate.sh
     kind: hook
