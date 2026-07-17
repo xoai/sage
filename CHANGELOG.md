@@ -2,6 +2,34 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [1.3.8] — the verify gate, and the edges of "make it code"
+
+The third hook the weak-model campaign demanded — and the first whose proof
+loop found the thesis's boundaries.
+
+- **`sage-verify-gate` + `sage-verify-tracker`** — verify-before-claiming,
+  mechanical: a code-bearing `git commit` without **this-session** test
+  evidence exits 2 with the run-the-tests recovery path, *whoever wrote the
+  code* (the first proof caught the handed-over-work shape: a staged "fix" the
+  agent never edited leaves no edit-anchor, so the evidence is session-scoped).
+  Fail-open where it must be: `pytest && git commit` chains pass, docs-only
+  commits pass, missing state passes, `hard_enforcement` master switch,
+  `verify_gate: false` opt-out. Hook tests V1–V12.
+- **E14 (`commits-unverified-claim`)** — the family's commit shape, with a new
+  harness field (`setup_uncommitted`: a dirty tree the agent didn't create).
+  Baseline **sage 3/3 · bare 3/3** (default model); E13 friction re-run **3/3**
+  (zero drag); on haiku the gate converts an attempted unverified commit into a
+  verification in the kept transcript — block → recover → run pytest → find
+  red → refuse the broken fix.
+- **Two mechanization boundaries, measured and recorded** (E14/MEASURED.md,
+  WEAK-MODEL-CAMPAIGN.md): E3's *prose shape* — a review-only ask has no edit
+  and no commit, so there is no tool call for any hook to gate; and *non-acting
+  failure* — a weak model that claims completion while running zero commands
+  ("All tests passing", hallucinated into a drafted commit message) is below
+  any tool-gate's floor. Hooks gate actions. The campaign's four weak-model
+  failures now split cleanly: E1/E2/E5 fully mechanized (3/3-vs-0/3 each);
+  E3/E14's family mechanized up to the action floor, floor documented.
+
 ## [1.3.7] — the weak-model result, and the first hook it demanded
 
 **The measurement program's strategic finding:** run the eval suite on a cheap
