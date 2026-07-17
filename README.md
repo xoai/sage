@@ -12,43 +12,63 @@ Sage is a skills framework that makes AI agents think before they act,
 stay focused under complexity, and deliver outcomes you can trust.
 Built for product and engineering teams, open to any domain.
 
+**The measured claim:** run a cheap model under Sage and its hook-covered
+mistakes — shipping untested code, hardcoding secrets — stay at frontier-clean
+levels, because Sage's enforcement is *code*, not instructions, and code
+transfers down-model when judgment doesn't. Told to skip the test "just this
+once," a bare agent caves **0 for 0 at every tier tested** (Haiku, Sonnet, Opus);
+Sage's hook holds. Not asserted — [measured](#what-we-measured), and the claims
+we walked back are in the open.
+
+- **Mechanical where it counts** — hooks that block a source edit until a test exists, an edit before a spec exists, a hardcoded secret, and a commit before the tests run; gate scripts with a three-state exit contract. Code, not instructions — and the enforcement is self-protecting: an agent can't switch it off to get around it
 - **Think first, build second** — a framing round challenges assumptions before solutioning begins, preventing the most expensive mistake: solving the wrong problem
-- **Focus over noise** — loads only what the task needs, producing sharper reasoning
-- **Mechanical where it counts** — hooks that block a source edit until a test exists and an edit before a spec exists, and gate scripts with a three-state exit contract. These are code, not instructions, and they hold: test-first measures **3/3 against a bare agent's 0/3**. The prose layers around them are advice, and advice is rationalizable — see [What we measured](#what-we-measured) for which is which
-- **Persistent memory built in** — self-learning, project memory, and an entity ontology, wired up at init; the mechanism is measured (see below), the compounding bet is stated honestly
+- **Focus over noise** — three-layer loading pulls in only what the task needs (~1.5–2× a bare agent's input tokens), producing sharper reasoning
+- **Runs where you work** — Tier-A mechanical enforcement on Claude Code and opencode, with a graceful prose fallback everywhere else; each platform's tier is *derived* from capabilities that are checked or attested, never claimed
+- **Persistent memory built in** — self-learning, project memory, and an entity ontology, wired up at init; the mechanism is measured, the compounding bet is stated honestly
 - **Grows with its ecosystem** — 12 focused core skills plus installable packs (product/UX, pack-authoring, autoresearch), extensible with 90K+ community skills from skills.sh
 
 ## What we measured
 
 Since v1.2.0, Sage's claims are measured, not asserted: `develop/evals/` runs
 adversarial scenarios twice — once in a Sage project, once in a bare one — with
-deterministic graders and no LLM judge. Three findings matter:
+deterministic graders and no LLM judge. The load-bearing result, hardened across
+three model tiers (Haiku N=10, Sonnet N=5, Opus N=3):
 
-**1. Where Sage wins, it wins because something is mechanical.** Under "it's just
-one number" pressure, a bare frontier agent ships the change untested **0/3**;
-Sage's hook blocks the edit until a test exists — **3/3**. The spec gate and the
-degradation record hold the same way. These are code, not instructions.
+**1. Mechanical test-first beats model judgment at every tier.** Told "it's just
+one number, skip the test," a bare agent ships the untested change **0 for 0** —
+at Haiku (0/10), Sonnet (0/5), *and* Opus (0/3). This is not a capability gap
+that a better model outgrows; it is an incentive gap, and every model tested
+caves to it. Sage's TDD hook blocks the source edit until a test exists, and it
+holds at all three tiers. (On Haiku, Sage passes 8/10 — the hook guarantees a
+test *exists* before source, not that a weak model writes a *good* one; the two
+misses wrote tests that didn't assert the behavior. The discipline holds; test
+quality is the model's job.)
 
-**2. Where a rule is only prose, a frontier model ties it.** Refusing a handed-over
-API key, distrusting "the tests passed", scope discipline, phantom packages — the
-bare agent now does all of that on its own, and Sage measures **no difference** at
-**~1.6× the input tokens**.
+**2. The safety floor grows as the model gets cheaper.** Handed a live API key,
+a bare agent hardcodes it almost always on Haiku (1/10), sometimes on Sonnet
+(3/5), and never on Opus (3/3 clean). The secrets gate's value is largest exactly
+where the model is weakest — a genuine floor under cheap models. Run Sage on
+Haiku and the hook-covered failure modes stay at frontier-clean levels.
 
-**3. Multi-session work: Sage resumes reliably, and pays for it.** Resuming an
-interrupted cycle and honouring a constraint from two contexts ago: both **3/3 in
-both conditions** — a tie on correctness, at **a few times the cost** (resume ~4×,
-noisy; roughly halved from ~9× by the v1.3.5 close-out levers, with further cuts
-in progress).
+**3. Where a rule is only prose, a capable model ties it — and we say so.** On a
+frontier model, refusing the key, distrusting "the tests passed," scope
+discipline: the bare agent does all of it on its own, and Sage measures **no
+difference**. The phantom-package gate looked dramatic at N=3 (bare 1/3); at N=10
+it is 8/10, a minor cheap-model edge — hardening revised our own claim *down*,
+which is what hardening is for. Sage's benefit is whatever it has made
+mechanical; the prose layers are advice, and advice is rationalizable.
 
-**4. On a cheap model, the mechanical layer becomes a safety floor.** Run the same
-scenarios on Haiku and the frontier's free judgment vanishes: bare Haiku hardcodes
-the handed-over API key (0/3), trusts the user who lies about tests (0/3), and
-ships the phantom package (1/3) — all things bare Opus got right. Sage's hooks and
-gates restore exactly the behaviors they cover (test-first **3/3 vs 0/3**,
-hallucination gate **3/3 vs 1/3**), while its prose restores almost nothing (1/3).
-Measured across two model tiers, the same law: **hooks transfer down-model; advice
-does not.** The measured gaps became new hooks — a secrets gate ships now, with
-verify-before-claiming next.
+**4. Multi-session work: Sage resumes reliably, and pays for it.** Resuming an
+interrupted cycle and honouring a constraint from two contexts ago: **3/3 in both
+conditions** — a tie on correctness, at **a few times the cost** (resume ~4×,
+noisy; roughly halved from ~9× by the v1.3.5 close-out levers). The edge here is
+*determinism*, not correctness — the failure modes are mechanically closed.
+
+The one-line version: **run a cheap model under Sage and the hook-covered
+mistakes — untested edits, hardcoded secrets — stay at frontier level, because
+hooks transfer down-model and judgment doesn't.** Full numbers, all three tiers,
+and the claims we walked back:
+[develop/evals/HARDENED-FLOOR-2026-07-17.md](develop/evals/HARDENED-FLOOR-2026-07-17.md).
 
 The honest summary: **Sage's benefit is whatever it has made mechanical.** Costs
 are published as sage:bare ratios because ratios transfer across billing models —
