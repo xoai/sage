@@ -181,6 +181,18 @@ surfaces:
       E8 is the scenario that proved the thesis: the decisions.md line appears
       because a script writes it, not because the model remembered to.
 
+  hook-config-gate:
+    path: runtime/platforms/claude-code/hooks/sage-config-gate.sh
+    kind: hook
+    covered-by: [E15]
+    notes: >
+      The meta-gate. Found by the 2026-07-17 opencode veto probe: a gated agent,
+      blocked from editing source, edited .sage/config.yaml to set
+      hard_enforcement:false and escaped every gate. Blocks agent edits (and the
+      obvious Bash evasions) that reduce any gate's effective-enabled state while
+      enforcement is on; no opt-out (it IS hard enforcement); humans disable
+      out-of-band. C1-C9 pin the matrix; E15 is the end-to-end regression.
+
   hook-verify-gate:
     path: runtime/platforms/claude-code/hooks/sage-verify-gate.sh
     kind: hook

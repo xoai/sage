@@ -523,6 +523,7 @@ BOOKKEEPING_GATE_SRC="$CORE/../runtime/platforms/claude-code/hooks/sage-bookkeep
 SECRETS_GATE_SRC="$CORE/../runtime/platforms/claude-code/hooks/sage-secrets-gate.sh"
 VERIFY_GATE_SRC="$CORE/../runtime/platforms/claude-code/hooks/sage-verify-gate.sh"
 VERIFY_TRACKER_SRC="$CORE/../runtime/platforms/claude-code/hooks/sage-verify-tracker.sh"
+CONFIG_GATE_SRC="$CORE/../runtime/platforms/claude-code/hooks/sage-config-gate.sh"
 if [ -f "$SPEC_GATE_SRC" ]; then
   cp "$SPEC_GATE_SRC" "$CLAUDE_DIR/hooks/sage-spec-gate.sh"
   chmod +x "$CLAUDE_DIR/hooks/sage-spec-gate.sh"
@@ -554,6 +555,10 @@ if [ -f "$SPEC_GATE_SRC" ]; then
     cp "$VERIFY_TRACKER_SRC" "$CLAUDE_DIR/hooks/sage-verify-tracker.sh"
     chmod +x "$CLAUDE_DIR/hooks/sage-verify-tracker.sh"
   fi
+  if [ -f "$CONFIG_GATE_SRC" ]; then
+    cp "$CONFIG_GATE_SRC" "$CLAUDE_DIR/hooks/sage-config-gate.sh"
+    chmod +x "$CLAUDE_DIR/hooks/sage-config-gate.sh"
+  fi
 
   # Merge the hook into settings.json rather than overwriting, so the user's
   # own settings survive; idempotent so re-running never duplicates the entry.
@@ -575,6 +580,8 @@ WANTED = [
     ("PreToolUse", "Edit|Write|MultiEdit", "sage-secrets-gate.sh"),
     ("PreToolUse", "Bash", "sage-verify-gate.sh"),
     ("PostToolUse", "Bash|Edit|Write|MultiEdit", "sage-verify-tracker.sh"),
+    ("PreToolUse", "Edit|Write|MultiEdit", "sage-config-gate.sh"),
+    ("PreToolUse", "Bash", "sage-config-gate.sh"),
     ("PostToolUse", "Write|Edit", "sage-degradation-log.sh"),
     ("PostToolUse", "Write|Edit", "sage-manifest-sync.sh"),
 ]
