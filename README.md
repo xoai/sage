@@ -389,7 +389,7 @@ what it produces:
 
 | Flag | Effect |
 |------|--------|
-| `--quality-locked` | At each review checkpoint, loop review/revise until findings are clean (no Critical, no Major, only cosmetic Minor) or cap hit (10 iterations). Use when you want Sage to push for a clean output bar. |
+| `--quality-locked` | At each review checkpoint, loop review/revise until findings are clean (no Critical, no Major, only cosmetic Minor) or cap hit (10 iterations). Use when you want Sage to push for a clean output bar. Opt-in `review_loop: mode: v2` in `.sage/config.yaml` moves the loop's verdict into code: findings land in a machine-owned ledger, evidence-free criticals never block, and every CONTINUE/STOP is computed — see the `configure` skill's "Review loop" section. |
 | `--autonomous` | Skip user-facing elicitation. Agent makes brief/spec/plan decisions by reading memory, codebase patterns, constitution principles, and prior cycles. Every decision cites its source. Unconfident substantive decisions fall back to asking. Use when you want Sage to draft a recommended approach from your project's context. |
 
 ```bash
