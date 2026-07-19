@@ -294,8 +294,9 @@ handoff: |
      **If `quality_locked_mode` is active** (from flag-parser):
      Read `sage/core/capabilities/orchestration/quality-locked/SKILL.md`
      and run the review-revise loop instead of presenting findings to user.
-     Loop until clean bar (no Critical, Major, or substantive Minor) or
-     cap of 10 iterations. Log each iteration to manifest.
+     Loop until the checker's exit decision (v1: clean bar or cap 10,
+     logged to manifest; `review_loop: v2`: the ledger controller —
+     `review.py close-round` computes and records every verdict).
    If Task tool NOT available:
      Announce: "Task tool not available — skipping independent review."
 5. THEN proceed to Step 5.

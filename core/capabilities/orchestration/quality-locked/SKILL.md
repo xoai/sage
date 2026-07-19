@@ -6,7 +6,7 @@ description: >
   cosmetic Minor) or the iteration cap (10) is reached. Uses a
   deterministic Python checker for classification and decision logic;
   agent runs the actual review and revision steps.
-version: "2.0.0"
+version: "2.1.0"
 modes: [build, architect]
 type: process
 ---
@@ -224,6 +224,87 @@ Pass the existing array (or `[]` for first iteration) as
 - Stuck detection requires ≥3 prior iterations and matching counts >0.
 - The agent does not interpret findings — the classifier does. The
   agent's job is to RUN the sub-agent and APPLY the fixes.
+
+## Review Loop v2 (ledger mode)
+
+When `.sage/config.yaml` carries `review_loop:` with `mode: v2`, the loop
+above is REPLACED by the ledger loop. Everything else in this skill
+(activation points, fallback announcements, autonomous interaction) still
+applies. With `mode: v1` or no `review_loop:` block, ignore this section.
+
+What changes and why: the reviewer loses the verdict — findings are
+structured evidence, the decision is computed by
+`sage/runtime/tools/review.py` + `sage_flags.py` from ledger facts. A
+finding that cites nothing and demonstrates nothing is capped at
+substantive on intake and never blocks. Findings, once recorded, cannot
+be forgotten or silently re-raised.
+
+Per iteration (1..cap, default cap 5 — `review_loop.iteration_cap`):
+
+```
+1. Assemble the input packet (template in the review capability's
+   "Input packet (v2)" section) and dispatch the review sub-agent.
+
+2. Rounds >1 — Phase A first: for each open/not-fixed ledger entry the
+   sub-agent returns FIXED | NOT-FIXED | DISPUTED-STANDS with evidence.
+   Record it:
+     python3 sage/runtime/tools/review.py verify \
+       .sage/work/<slug>/review-ledger.json \
+       --iteration N --results-json '<Phase A JSON>'
+
+3. Phase B findings (the JSON array from the sub-agent output's fenced
+   block — prose outside it is not parsed) go through intake:
+     python3 sage/runtime/tools/review.py intake \
+       .sage/work/<slug>/review-ledger.json \
+       --iteration N --artifact <spec|plan|code|adr> \
+       --findings-file <saved findings JSON>
+   intake computes fingerprints, caps severities, dedups, and guards
+   re-litigation. Its normalization is not yours to re-litigate.
+
+4. Close the round — the verdict is computed, never reported:
+     python3 sage/runtime/tools/review.py close-round \
+       .sage/work/<slug>/review-ledger.json --iteration N
+
+5. Dispatch on `action`:
+   - CONTINUE:      run the fix round (fixer protocol in the review
+                    capability), increment, loop.
+   - STOP_CLEAN:    exit loop, continue the workflow.
+   - STOP_ADVISORY / STOP_CAP: close-round REFUSES to record until every
+                    open entry has a disposition. Present the remaining
+                    entries (`review.py report`) with the disposition
+                    menu below, record each choice via
+                    `review.py disposition`, then close-round again.
+   - ESCALATE:      render `review.py report`, present the escalation
+                    prompt. The controller does not spend past a stall.
+```
+
+Disposition menu (per remaining open entry, RR-7):
+
+```
+[F] Fix now — one more fix round for this finding (converts the stop
+    back into CONTINUE for it)
+[D] Defer — ticketed; requires a ticket/issue ref, witness test stays
+    red-marked in the suite
+[X] Reject — requires a reason, recorded; re-raising it later needs
+    the anchor to have actually changed
+```
+
+The exit record in decisions.md is written by `review.py close-round`
+itself — do not write it by hand. If any `review.py` command exits 1,
+STOP and surface the error verbatim: the ledger fails closed, and a
+broken ledger stops the loop loudly. Do not reconstruct ledger state by
+hand or continue the loop around it.
+
+The v1 sections above ("cap of 10", `quality_locked_history` in the
+manifest, `sage_flags.py check`) do not apply on the v2 path — history
+lives in the ledger's `history[]`, written by close-round.
+
+Model routing (`review_loop.review_model: cheap`, optional): the
+checklist perspective passes and Phase A verification MAY run on a
+cheap model, reserving the default model for one adjudication pass over
+the assembled findings — checklist-shaped work transfers down-model;
+open judgment does not. The cost delta is UNCLAIMED until measured:
+the knob exists, the number waits.
 
 ## Quality Criteria
 

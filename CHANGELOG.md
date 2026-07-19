@@ -31,6 +31,18 @@ All notable changes to Sage will be documented in this file.
     observed production history as a regression fixture in both directions:
     v2 terminates it at round 1 (STOP_ADVISORY); v1 must keep reproducing
     the pathology. Wired into fastcheck + CI.
+  - **Reviewer schema v2** in the four review capabilities
+    (auto-review, spec-review, quality-review, auto-qa) and the
+    quality-locked loop: with `mode: v2` the reviewer's output has no
+    verdict field ("you do not decide the loop; you report findings"),
+    findings are one parseable JSON block with anchor/claim/witness/
+    exit-criteria, witness-or-downgrade and the precision-not-volume
+    calibration text are verbatim in every prompt, rounds >1 run
+    two-phase (verify the ledger before hunting the delta), round 1
+    runs perspective passes with a trace matrix whose EMPTY cells are
+    findings (absence made observable), and the input packet is a
+    template, not improvisation. v1 prompt blocks are untouched and
+    remain the default path.
 
 ## [1.3.9] — the gate that guards the gates, and opencode goes mechanical
 

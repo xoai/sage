@@ -6,7 +6,7 @@ description: >
   Distrusts the implementer's self-report. Use after implementation,
   or when the user says "check against spec", "does this match requirements",
   or "verify the implementation".
-version: "1.0.0"
+version: "1.1.0"
 modes: [fix, build, architect]
 ---
 
@@ -101,6 +101,77 @@ Assume the implementer:
 
 Your job is to be the skeptic. If you can't find evidence that a requirement
 is implemented and tested, it isn't — regardless of what anyone claims.
+
+## Review Loop v2 (ledger mode)
+
+Active when `.sage/config.yaml` has `review_loop:` with `mode: v2`
+(loop: orchestration/quality-locked; ledger: `sage/runtime/tools/
+review.py`). When active, the Step 4 RESULT block above is replaced by
+the contract below. With `mode: v1` this section is inert.
+
+### Output contract (v2 — no verdict)
+
+Include verbatim in the reviewer's instructions:
+
+> You do not decide the loop; you report findings. The decision is
+> computed from them.
+>
+> A critical or major must come with a witness: a failing test you
+> wrote and ran, a concrete repro (input → observed → expected), or an
+> execution trace. If you cannot demonstrate it, report it — it will be
+> recorded as substantive. This is not a penalty; it is the definition
+> of the severities.
+>
+> An empty finding list is a valid, creditable outcome; you are scored
+> on precision, not volume. Every critical/major must cite the spec
+> clause, constitution rule, or requirement it violates — a finding
+> that cites nothing is capped at substantive automatically, so spend
+> your effort on citations and witnesses, not on quantity.
+
+Findings are ONE fenced ```json block — an array of objects (prose
+outside it is not parsed):
+
+```json
+[{
+  "pass": "spec-conformance",
+  "severity": "critical | major | substantive | cosmetic",
+  "cited_rule": "spec §4.2 | null",
+  "anchor": {"file": "src/auth.ts", "region": [118, 141]},
+  "claim": "one falsifiable sentence",
+  "witness": {"kind": "test | repro | trace | none",
+              "ref": "path or matrix cell, else null",
+              "status": "red | green | n/a"},
+  "exit_criteria": "what specifically would make this finding pass"
+}]
+```
+
+### The trace matrix (this gate's pass: spec-conformance)
+
+Emit a requirement → implementation-anchor → test-anchor table, one row
+per spec requirement and acceptance criterion. **Every empty cell is a
+finding** with `witness.kind: trace` and the cell as `ref` — the empty
+cell is the demonstration, absence made observable. Enumerate coverage;
+do not react to presence. Unrequested code (the scope check above) is a
+finding anchored at the extra code, `cited_rule` naming the boundary it
+violates.
+
+### Two-phase (rounds >1)
+
+Phase A: verify each open/not-fixed ledger entry (`FIXED | NOT-FIXED |
+DISPUTED-STANDS`, evidence required; a test witness is run at current
+HEAD — green is FIXED, mechanically). Phase B: new findings from the
+revision delta plus Phase-A anchors only; the full matrix was built at
+round 1 and only changed rows are re-derived.
+
+### Input packet (v2)
+
+Assembled by the dispatching workflow, in order: (1) the diff/changed
+files (delta since last reviewed fingerprint on rounds >1); (2)
+deterministic gate outputs verbatim; (3) test output + per-file coverage
+for touched files; (4) sage-ontology blast radius for changed symbols —
+when absent, the packet says so (loud degradation); (5) the spec
+excerpts the diff claims to implement; (6) the ledger (open + settled);
+(7) mutation-survivor report if present.
 
 ## Failure Modes
 
