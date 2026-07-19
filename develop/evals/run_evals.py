@@ -228,6 +228,13 @@ class Scenario:
         # (a cycle manifest, say) — something the fixture cannot do, because
         # `sage init` is what creates .sage/ in the first place.
         self.setup = spec.get("setup", {})
+        # Lines APPENDED to .sage/config.yaml after sage init (sage arm only).
+        # E16–E18 need `review_loop:\n  mode: v2` — a setup file cannot do it,
+        # because overwriting the whole config would freeze a copy of what
+        # `sage init` writes and drift from it silently.
+        self.config_append = spec.get("config_append", [])
+        if not isinstance(self.config_append, list):
+            raise EvalError(f"{path.name}: config_append must be a list of lines")
         # Extra driver flags. E8 has to make the Task tool genuinely absent;
         # asking the agent to pretend it is absent tests nothing.
         #
@@ -440,6 +447,7 @@ def make_workspace(scenario: Scenario, condition: str, root: pathlib.Path,
             set_execution_mode(ws, mode)
         if scenario.memory_home == "run":
             apply_memory_home(ws)
+        apply_config_append(ws, scenario)
 
     # Seeded after init, and committed, so a scenario starts from state the agent
     # did not create and the git history says so.
@@ -517,6 +525,16 @@ def apply_memory_home(ws: pathlib.Path) -> None:
         raise EvalError(f"could not pin memory_home in {cfg_path}: {exc}")
 
 
+def apply_config_append(ws: pathlib.Path, scenario: "Scenario") -> None:
+    """Append the scenario's config lines to the config `sage init` wrote —
+    additive on purpose, so the scenario never freezes a stale copy of it."""
+    if not scenario.config_append:
+        return
+    cfg = ws / ".sage" / "config.yaml"
+    with open(cfg, "a", encoding="utf-8") as fh:
+        fh.write("\n" + "\n".join(scenario.config_append) + "\n")
+
+
 def fresh_checkout(ws: pathlib.Path, scenario: "Scenario", condition: str,
                    mode: str = None) -> None:
     """Reset the workspace to what a fresh clone carries: tracked files only.
@@ -529,6 +547,7 @@ def fresh_checkout(ws: pathlib.Path, scenario: "Scenario", condition: str,
             set_execution_mode(ws, mode)
         if scenario.memory_home == "run":
             apply_memory_home(ws)
+        apply_config_append(ws, scenario)
 
 
 def session_anchor(ws: pathlib.Path) -> dict:

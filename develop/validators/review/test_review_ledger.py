@@ -308,6 +308,19 @@ class ConfigTest(LedgerCase):
                         "  mode: v9\n", encoding="utf-8")
         self.assertEqual(R.load_config(path)["mode"], "v2")
 
+    def test_last_block_wins(self):
+        # The eval driver's config_append adds a second review_loop: block
+        # after the init-written one — YAML duplicate-key convention.
+        path = self.root / ".sage" / "config.yaml"
+        path.write_text("review_loop:\n"
+                        "  mode: v1\n"
+                        "  iteration_cap: 5\n"
+                        "\n"
+                        "review_loop:\n"
+                        "  mode: v2\n", encoding="utf-8")
+        cfg = R.load_config(path)
+        self.assertEqual(cfg["mode"], "v2")
+
 
 if __name__ == "__main__":
     unittest.main()

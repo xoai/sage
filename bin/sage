@@ -545,6 +545,18 @@ hard_enforcement: true
 # Escape with `tier: tier1` on a manifest, or set this to false.
 tdd_enforcement: true
 command_prefix: $prefix_val
+# review_loop: v2 puts the review-revise verdict in code — reviewer findings
+# land in a machine-owned ledger (review.py) and every CONTINUE/STOP is
+# computed from it. Default v1 until the v2 flip criteria are measured; each
+# knob's v1-restoring value is noted beside it.
+review_loop:
+  mode: v1                  # v1 (default) | v2
+  major_budget: 0           # open majors tolerated at stop (v1: majors always block)
+  iteration_cap: 5          # v1 value: 10
+  escalate_after_stalls: 2  # non-improving rounds before ESCALATE (v1: 3 identical counts)
+  witness_capping: true     # false restores severity-as-reported
+  scope_check: true         # false restores v1 (no diff-scope check on fix commits)
+  review_model: inherit     # inherit | cheap (savings unclaimed until measured)
 # isolation: how delivery workflows isolate an initiative.
 #   branch   — (default) branch in place; one session at a time.
 #   worktree — a worktree per initiative; for parallel sessions.

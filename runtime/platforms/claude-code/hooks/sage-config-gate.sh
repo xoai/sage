@@ -85,12 +85,14 @@ def enabled(text, key):
 
 
 def review_mode(text):
-    """The review_loop: block's mode — v1 when absent (RR-8)."""
-    m = re.search(r"(?m)^review_loop:[ \t]*$((?:\n[ \t]+.*)*)", text or "")
-    if not m:
-        return "v1"
-    mm = re.search(r"(?mi)^[ \t]+mode[ \t]*:[ \t]*(\S+)", m.group(1))
-    return mm.group(1).lower() if mm else "v1"
+    """The review_loop: block's mode — v1 when absent (RR-8). The LAST
+    block wins, matching review.py's duplicate-key convention."""
+    blocks = re.findall(r"(?m)^review_loop:[ \t]*$((?:\n[ \t]+.*)*)", text or "")
+    for block in reversed(blocks):
+        mm = re.search(r"(?mi)^[ \t]+mode[ \t]*:[ \t]*(\S+)", block)
+        if mm:
+            return mm.group(1).lower()
+    return "v1"
 
 
 def witness_capping(text):

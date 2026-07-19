@@ -184,9 +184,12 @@ def load_config(config_path) -> dict:
         text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return cfg
-    m = _BLOCK_RE.search(text)
-    if not m:
+    matches = list(_BLOCK_RE.finditer(text))
+    if not matches:
         return cfg
+    # Last block wins (YAML duplicate-key convention) — an appended override
+    # (e.g. the eval driver's config_append) must beat the init-written block.
+    m = matches[-1]
     for line in text[m.end():].splitlines():
         if line.strip() and not line.startswith("  "):
             break                                   # dedent ends the block

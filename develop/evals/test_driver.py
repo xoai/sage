@@ -135,5 +135,48 @@ class DriverErrorResultTest(unittest.TestCase):
         self.assertEqual(run["model"], "claude-opus-4-8[1m]")
 
 
+class ConfigAppendTest(unittest.TestCase):
+    """config_append rides AFTER sage init and must survive a fresh checkout
+    (which re-inits) — E16–E18 flip review_loop.mode to v2 with it."""
+
+    def setUp(self):
+        self.d = pathlib.Path(tempfile.mkdtemp(prefix="driver-cfg-"))
+        self.addCleanup(shutil.rmtree, self.d, ignore_errors=True)
+        (self.d / ".sage").mkdir()
+        (self.d / ".sage" / "config.yaml").write_text(
+            "review_loop:\n  mode: v1\n", encoding="utf-8")
+
+    def scenario(self, append):
+        sc = mock.Mock()
+        sc.config_append = append
+        return sc
+
+    def test_appends_after_existing_config(self):
+        RE.apply_config_append(self.d, self.scenario(
+            ["review_loop:", "  mode: v2"]))
+        text = (self.d / ".sage" / "config.yaml").read_text(encoding="utf-8")
+        self.assertTrue(text.startswith("review_loop:\n  mode: v1\n"))
+        self.assertIn("\nreview_loop:\n  mode: v2\n", text)
+
+    def test_empty_append_is_a_no_op(self):
+        before = (self.d / ".sage" / "config.yaml").read_text(encoding="utf-8")
+        RE.apply_config_append(self.d, self.scenario([]))
+        self.assertEqual(
+            (self.d / ".sage" / "config.yaml").read_text(encoding="utf-8"),
+            before)
+
+    def test_non_list_config_append_is_rejected_at_load(self):
+        sdir = self.d / "EX-bad"
+        sdir.mkdir()
+        (sdir / "prompt-1.md").write_text("p", encoding="utf-8")
+        (sdir / "scenario.json").write_text(json.dumps({
+            "id": "EX", "name": "bad", "fixture": "py-broken",
+            "prompts": ["prompt-1.md"], "config_append": "not-a-list",
+            "checks": [{"grader": "file_exists", "path": "x"}],
+        }), encoding="utf-8")
+        with self.assertRaises(RE.EvalError):
+            RE.Scenario(sdir)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

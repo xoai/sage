@@ -621,12 +621,17 @@ surfaces:
     notes: >
       Only the ABSENCE path is graded: E8 removes the Task tool and asserts the
       skip is declared loudly. Nothing grades an auto-review that actually runs.
+      The v2 output contract (no verdict, witness-or-downgrade, calibration
+      block) is pinned deterministically by
+      develop/validators/review/test_review_schema.py.
 
   capability-auto-qa:
     path: core/capabilities/review/auto-qa/SKILL.md
     kind: capability
     covered-by: [E8]
-    notes: "As with auto-review: E8 grades the loud skip, not the running review."
+    notes: >
+      As with auto-review: E8 grades the loud skip, not the running review.
+      The v2 output contract is pinned by test_review_schema.py.
 
   capability-implement:
     path: core/capabilities/execution/implement/SKILL.md
@@ -654,12 +659,18 @@ surfaces:
       is its first real test: a violation that is only visible against the SPEC —
       the code is short, readable, and does what the task said. Judged as code it
       is fine; judged against the packet's spec excerpt it is Critical. That
-      difference is the entire product.
+      difference is the entire product. The v2 output contract (trace matrix,
+      no verdict) is pinned by test_review_schema.py.
 
   capability-quality-review:
     path: core/capabilities/review/quality-review/SKILL.md
     kind: capability
-    uncovered: "Gate 3's reviewer persona. Judgment-only gate, no script, no scenario."
+    covered-by: [E16]
+    notes: >
+      E16 drives the v2 contract (perspective passes, JSON findings, no
+      verdict) end-to-end through the ledger loop; test_review_schema.py pins
+      the contract text deterministically. The v1 persona remains
+      judgment-only with no scenario of its own.
 
   capability-flag-parser:
     path: core/capabilities/orchestration/flag-parser/SKILL.md
@@ -675,7 +686,13 @@ surfaces:
   capability-quality-locked:
     path: core/capabilities/orchestration/quality-locked/SKILL.md
     kind: capability
-    uncovered: "The review/revise cap. Unit-tested via sage_flags.py; no scenario."
+    covered-by: [E16, E17, E18]
+    notes: >
+      The v2 ledger loop and its fixer protocol: E16 convergence, E17 the
+      re-litigation guard under a live model, E18 fix-scope honesty. The v1
+      cap stays unit-tested via sage_flags.py (test_sage_flags.py) with no
+      scenario of its own; the controller table is pinned by R1–R6 in
+      develop/validators/review/test_review_controller.py.
 
   capability-autonomous:
     path: core/capabilities/orchestration/autonomous/SKILL.md
@@ -919,3 +936,26 @@ surfaces:
       An OVERRIDE of skills/sage-memory/ — a second copy of the memory skill,
       shipped only to plugin users. Two copies of a skill is the pattern that
       produced the navigator drift; this one is now at least visible.
+
+  # ── Review-loop tools (behavior-bearing runtime tools, named in DISCOVERY) ──
+
+  tool-review-ledger:
+    path: runtime/tools/review.py
+    kind: tool
+    covered-by: [E16, E17, E18]
+    notes: >
+      The findings ledger: intake normalization (capping, dedup, the
+      re-litigation guard), verify, dispositions, close-round, check-diff.
+      Deterministic floor: develop/validators/review/ (test_review_ledger,
+      test_review_checkdiff, test_review_schema, and the calibration scorer
+      self-test). E16–E18 are the live-model layer on top.
+
+  tool-review-controller:
+    path: runtime/tools/sage_flags.py
+    kind: tool
+    covered-by: [E16]
+    notes: >
+      Flag parsing + the quality-locked decision logic, v1 and v2. The RR-6
+      table is pinned by R1–R6 (test_review_controller.py, including the
+      field-report replay in both directions); the v1 path stays byte-identical
+      under test_sage_flags.py. E16 exercises the v2 controller end-to-end.

@@ -45,6 +45,20 @@ All notable changes to Sage will be documented in this file.
     (suite + gate output) is recorded in the ledger so the next round's
     Phase A verifies facts already on file. `scope_check: false`
     restores v1.
+  - **Verification layer**: a calibration fixture with planted defects
+    (`develop/evals/fixtures/py-calibration` + answer key and
+    deterministic scorer in `develop/validators/review/calibration/` —
+    recall/precision/absence/decoy thresholds per RR-27, scorer
+    self-test in fastcheck); schema-conformance tests pinning the v2
+    prompt contracts (no verdict channel, verbatim texts, pass
+    vocabulary, canned-transcript round-trip through intake); eval
+    scenarios **E16** (loop convergence over the calibration fixture),
+    **E17** (ledger amnesia — the re-litigation guard under a live
+    model), **E18** (fixer scope honesty), with a `review_loop` grader
+    and a `config_append` driver key; coverage.yaml rows for the review
+    tools and capabilities — no uncovered IOUs for new surfaces. The
+    default flip to v2 waits on the RR-28 numbers (E16–18 N=3 majority +
+    calibration thresholds) and ships as its own commit citing them.
   - **Reviewer schema v2** in the four review capabilities
     (auto-review, spec-review, quality-review, auto-qa) and the
     quality-locked loop: with `mode: v2` the reviewer's output has no
