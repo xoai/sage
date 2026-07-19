@@ -64,9 +64,15 @@ def matches_plant(finding, plant) -> bool:
 
 
 def matches_absence(finding, absence) -> bool:
+    # An absence counts when it was made OBSERVABLE — an empty matrix cell
+    # (kind trace, or a matrix pass) or an actual demonstration (a written
+    # failing test / repro observing the missing behavior). The first
+    # measured run punished reviewers who wrote a real red test for the
+    # absence instead of a trace cell; a demonstration outranks a cell,
+    # it must never score below one.
     kind = (finding.get("witness") or {}).get("kind")
     in_matrix_pass = finding.get("pass") in ("completeness", "spec-conformance")
-    if kind != "trace" and not in_matrix_pass:
+    if kind not in ("trace", "test", "repro") and not in_matrix_pass:
         return False
     return any(k in claim_of(finding) for k in absence["keywords"])
 
