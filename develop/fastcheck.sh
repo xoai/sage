@@ -46,6 +46,7 @@ CHECKS=(
   "manifest tests         :: python3 develop/validators/tools/test_manifest.py"
   "review controller tests :: python3 develop/validators/review/test_review_controller.py"
   "review ledger tests    :: python3 develop/validators/review/test_review_ledger.py"
+  "review check-diff tests :: python3 develop/validators/review/test_review_checkdiff.py"
   "driver tests           :: python3 develop/evals/test_driver.py"
   "grader tests           :: python3 develop/evals/test_graders.py"
   "gate regression tests  :: bash develop/validators/gates/run-gate-tests.sh"

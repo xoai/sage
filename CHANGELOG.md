@@ -31,6 +31,20 @@ All notable changes to Sage will be documented in this file.
     observed production history as a regression fixture in both directions:
     v2 terminates it at round 1 (STOP_ADVISORY); v1 must keep reproducing
     the pathology. Wired into fastcheck + CI.
+  - **Fixer protocol** (v2 path): witness-first — materialize the
+    finding's witness red at HEAD before touching code, or bounce it to
+    the controller as disputed with the run output; one finding, one
+    commit, carrying `Sage-Fix/Cause/Change/Risk/Collateral/License`
+    trailers (bisectable by construction); `review.py check-diff`
+    verifies every fix commit's changed lines fall within anchor ∪
+    declared collateral ∪ witness path — an out-of-scope hunk exits 1
+    AND lands in the ledger as a self-witnessing machine finding, and a
+    modified non-witness test without a `Sage-License` trailer exits 1
+    (correctness is amended through the spec, never redefined in the
+    diff). Witness tests are permanent regression tests; round evidence
+    (suite + gate output) is recorded in the ledger so the next round's
+    Phase A verifies facts already on file. `scope_check: false`
+    restores v1.
   - **Reviewer schema v2** in the four review capabilities
     (auto-review, spec-review, quality-review, auto-qa) and the
     quality-locked loop: with `mode: v2` the reviewer's output has no

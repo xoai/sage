@@ -289,6 +289,63 @@ Disposition menu (per remaining open entry, RR-7):
     the anchor to have actually changed
 ```
 
+### Fix round (v2) — witness-first, one finding one commit
+
+On CONTINUE, fix open findings in severity order. Per finding:
+
+1. **Materialize the witness before touching code.** `witness.kind:
+   test` — run it, confirm red at HEAD. `repro`/`trace` — write the
+   test that encodes it at `tests/review/<F-id>.*`, run it red, then
+   `review.py attach-witness <F-id> --ref <path>`. A trace-kind finding
+   from an empty matrix cell — the witness IS the missing test: write
+   it (red or green as the code warrants; an empty test cell over green
+   code is still a fix). If the witness cannot be reproduced at HEAD:
+   `review.py verify <ledger> --iteration N --cannot-reproduce <F-id>
+   --evidence "<run output>"` — bounced to the controller, never
+   silently skipped. (The tdd-gate already blocks a source edit without
+   a test in scope; witness-first is that rule's loop-shaped
+   application.)
+2. **Collateral safety (advisory):** when the packet's blast radius
+   shows a neighbor of the fix with no covering test, pin current
+   behavior with 1–3 asserts first (`tests/review/<F-id>-sentinel.*`).
+   You cannot avoid breaking what nothing observes; sentinels are the
+   cheapest observer.
+3. **Fix, then commit — ONE commit per finding** (cluster only findings
+   sharing an anchor), with trailers:
+
+   ```
+   Sage-Fix: F-003
+   Sage-Cause: <why the defect existed — one line>
+   Sage-Change: <what the fix does — one line>
+   Sage-Risk: <what could regress — one line>
+   Sage-Collateral: src/session.ts:88-95 (why)   # if any
+   Sage-License: spec §4.2                        # if behavior changes
+   ```
+
+   Cause/Change/Risk is the three-line fix plan — the
+   misunderstood-finding tripwire — recorded where bisect finds it.
+   Because commits map 1:1 to findings, a regression later bisects to a
+   single Sage-Fix trailer.
+4. **Scope check** (controller step, per fix commit):
+   `review.py check-diff <ledger> --finding <F-id> --commit <sha>`.
+   Out-of-scope hunks exit 1 and land in the ledger as a machine
+   finding witnessed by the hunk itself. A modified non-witness test
+   without `Sage-License` also exits 1 — correctness is amended through
+   the spec with approval, never redefined in the diff; if the spec is
+   silent, raise a spec finding and pause the code fix behind its
+   disposition. `review_loop.scope_check: false` restores v1.
+5. **Per commit:** run the finding's witness + targeted tests for
+   touched files. **Per round close:** full suite + deterministic gates
+   on the fixed HEAD — the closing proof, never trimmed — and record it:
+   `review.py close-round ... --suite-evidence "<summary>"
+   --gates-evidence "<exits>"`, so the next Phase A verifies against
+   facts already on file.
+
+Witness tests are permanent: they land with the fix, run in the suite
+thereafter, and are never deleted on STOP — a deferred finding's
+witness stays red-marked (`xfail`/`todo` per runner idiom) as the
+ticket's executable form.
+
 The exit record in decisions.md is written by `review.py close-round`
 itself — do not write it by hand. If any `review.py` command exits 1,
 STOP and surface the error verbatim: the ledger fails closed, and a

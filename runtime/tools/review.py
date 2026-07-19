@@ -32,7 +32,9 @@ Usage:
                       [--kind test|repro|trace] [--status red|green|n/a]
     review.py disposition <ledger.json> F-003 --action defer|reject|fix-now \\
                       [--reason TEXT] [--ticket REF]
-    review.py close-round <ledger.json> --iteration N
+    review.py close-round <ledger.json> --iteration N \\
+                      [--suite-evidence TEXT] [--gates-evidence TEXT]
+    review.py check-diff  <ledger.json> --finding F-003 --commit SHA
     review.py report  <ledger.json>
 
 The ledger lives at .sage/work/<slug>/review-ledger.json, one per cycle,
@@ -116,7 +118,7 @@ def load_ledger(path: pathlib.Path) -> dict:
 
 def new_ledger(slug: str) -> dict:
     return {"version": LEDGER_VERSION, "slug": slug, "findings": [],
-            "history": [], "rounds": [], "next_id": 1}
+            "history": [], "next_id": 1}
 
 
 def save_ledger(path: pathlib.Path, data: dict) -> None:
@@ -448,7 +450,8 @@ def open_entries(ledger: dict) -> list:
     return [e for e in ledger["findings"] if e["status"] in OPEN_STATUSES]
 
 
-def close_round(ledger_path: pathlib.Path, iteration: int, config: dict) -> dict:
+def close_round(ledger_path: pathlib.Path, iteration: int, config: dict,
+                suite_evidence=None, gates_evidence=None) -> dict:
     ledger = load_ledger(ledger_path)
     sf = _load_sage_flags()
     decision = sf.decide({}, iteration, [],
@@ -466,9 +469,15 @@ def close_round(ledger_path: pathlib.Path, iteration: int, config: dict) -> dict
             + ", ".join(decision["dispositions_required"])
             + " — run `review.py disposition` per entry, then close-round again")
 
-    ledger["history"].append({"iteration": iteration,
-                              "counts": decision["counts"],
-                              "result": action})
+    record = {"iteration": iteration, "counts": decision["counts"],
+              "result": action}
+    # RR-26 — round evidence on file, so the next Phase A verifies against
+    # facts already purchased instead of re-running them.
+    if suite_evidence:
+        record["suite_evidence"] = suite_evidence
+    if gates_evidence:
+        record["gates_evidence"] = gates_evidence
+    ledger["history"].append(record)
 
     # Seal the round: pending defer/reject settlements become status now
     # that the verdict they were counted under is on the record.
@@ -516,6 +525,176 @@ def _write_exit_record(ledger_path: pathlib.Path, ledger: dict,
         # The verdict stands even if the log write fails; say so loudly.
         print(f"✗ could not write exit record to {decisions}: {exc}",
               file=sys.stderr)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# check-diff — the fix stays inside the finding's scope (RR-21/23/24)
+# ═══════════════════════════════════════════════════════════════════════
+
+TRAILER_KEYS = ("Fix", "Cause", "Change", "Risk", "Collateral", "License")
+REQUIRED_TRAILERS = ("Fix", "Cause", "Change", "Risk")
+_TRAILER_RE = re.compile(r"^Sage-([A-Za-z]+):\s*(.+?)\s*$", re.MULTILINE)
+_COLLATERAL_RE = re.compile(r"^(\S+?)(?::(\d+)-(\d+))?(?:\s|$)")
+_HUNK_RE = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
+_TEST_PATH_RE = re.compile(r"(^|/)tests?/|(^|/)__tests__/|\.(test|spec)\.|_test\.")
+
+
+def parse_trailers(message: str) -> dict:
+    """Sage-* trailers from a commit message. Repeated keys accumulate
+    (Sage-Collateral may appear once per collateral file)."""
+    out = {}
+    for m in _TRAILER_RE.finditer(message or ""):
+        key, value = m.group(1), m.group(2)
+        if key in TRAILER_KEYS:
+            out.setdefault(key, []).append(value)
+    return out
+
+
+def parse_hunks(diff_text: str) -> list:
+    """[(file, old_start, old_count, new_start, new_count)] from a
+    --unified=0 diff. File paths are the post-image (b/) side."""
+    hunks, current = [], None
+    for line in (diff_text or "").splitlines():
+        if line.startswith("diff --git "):
+            parts = line.split()
+            current = parts[-1][2:] if parts[-1].startswith("b/") else parts[-1]
+        elif line.startswith("+++ b/"):
+            current = line[6:]
+        m = _HUNK_RE.match(line)
+        if m and current:
+            hunks.append((current,
+                          int(m.group(1)), int(m.group(2) or "1"),
+                          int(m.group(3)), int(m.group(4) or "1")))
+    return hunks
+
+
+def _git(repo_root: pathlib.Path, *args) -> str:
+    import subprocess
+    proc = subprocess.run(["git"] + list(args), cwd=str(repo_root),
+                          capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise Problem("git %s failed: %s" % (" ".join(args),
+                                             proc.stderr.strip() or "?"))
+    return proc.stdout
+
+
+def is_test_path(path: str) -> bool:
+    return bool(_TEST_PATH_RE.search(path))
+
+
+def check_diff(ledger_path: pathlib.Path, finding_id: str, commit: str,
+               repo_root: pathlib.Path, config: dict, iteration=None) -> dict:
+    """RR-23/24. Changed lines must fall within the finding's anchor region
+    ∪ declared Sage-Collateral ∪ the witness-test path. Out-of-scope hunks
+    and a modified non-witness test without a Sage-License trailer exit 1;
+    the scope violation also lands in the ledger as a machine finding —
+    self-witnessing, so the next round cannot miss it. Malformed trailers
+    are advisory: a finding, not a block."""
+    if not config.get("scope_check", True):
+        return {"skipped": "scope_check: false (v1 behavior)", "in_scope": True,
+                "license_ok": True, "violations": [], "trailer_findings": []}
+
+    ledger = load_ledger(ledger_path)
+    entry = find_entry(ledger, finding_id)
+    anchor = entry["anchor"]
+    witness_ref = (entry.get("witness") or {}).get("ref")
+    if iteration is None:
+        iteration = len(ledger.get("history", [])) + 1
+
+    message = _git(repo_root, "show", "-s", "--format=%B", commit)
+    trailers = parse_trailers(message)
+    hunks = parse_hunks(_git(repo_root, "show", "--unified=0", "--format=",
+                             "--no-color", commit))
+
+    # RR-21 — trailer shape, advisory severity.
+    trailer_findings = []
+    missing = [k for k in REQUIRED_TRAILERS if k not in trailers]
+    if missing:
+        trailer_findings.append("commit %s is missing trailer(s): %s"
+                                % (commit[:12],
+                                   ", ".join("Sage-" + k for k in missing)))
+    if trailers.get("Fix") and trailers["Fix"][0].split()[0] != finding_id:
+        trailer_findings.append("commit %s Sage-Fix names %s, not %s"
+                                % (commit[:12], trailers["Fix"][0], finding_id))
+
+    collateral = []
+    for value in trailers.get("Collateral", []):
+        m = _COLLATERAL_RE.match(value)
+        if m:
+            collateral.append((m.group(1),
+                               int(m.group(2)) if m.group(2) else None,
+                               int(m.group(3)) if m.group(3) else None))
+
+    def in_collateral(path, old_start, old_end):
+        for cpath, cstart, cend in collateral:
+            if path == cpath and (cstart is None
+                                  or (old_start >= cstart and old_end <= cend)):
+                return True
+        return False
+
+    def is_witness_path(path):
+        return (witness_ref and path == witness_ref) or \
+            path.startswith("tests/review/" + finding_id)
+
+    violations, license_needed = [], []
+    a_start, a_end = int(anchor["region"][0]), int(anchor["region"][1])
+    for path, old_start, old_count, new_start, new_count in hunks:
+        old_end = old_start + max(old_count, 1) - 1
+        if path.startswith(".sage/"):
+            continue                           # bookkeeping is machine-owned
+        if is_witness_path(path):
+            continue
+        if is_test_path(path):
+            license_needed.append(path)        # RR-24: needs Sage-License
+            continue
+        if path == anchor["file"]:
+            if old_count == 0:                 # pure insertion at point old_start
+                if a_start - 1 <= old_start <= a_end:
+                    continue
+            elif old_start >= a_start and old_end <= a_end:
+                continue
+        if in_collateral(path, old_start, old_end):
+            continue
+        violations.append({"file": path,
+                           "region": [max(new_start, 1),
+                                      max(new_start + max(new_count, 1) - 1, 1)],
+                           "old_region": [old_start, old_end]})
+
+    license_ok = not license_needed or "License" in trailers
+
+    # RR-23 — the out-of-scope hunk becomes next round's intake, witnessed
+    # by the hunk itself. Trailer problems ride along at advisory severity.
+    machine = []
+    for v in violations:
+        machine.append({
+            "pass": "regression-surface", "severity": "major",
+            "cited_rule": None,
+            "anchor": {"file": v["file"], "region": v["region"]},
+            "claim": ("fix commit %s for %s touched %s:%d-%d, outside the "
+                      "finding's anchor ∪ collateral ∪ witness scope"
+                      % (commit[:12], finding_id, v["file"],
+                         v["region"][0], v["region"][1])),
+            "witness": {"kind": "repro",
+                        "ref": "git show %s -- %s" % (commit[:12], v["file"]),
+                        "status": "n/a"},
+            "exit_criteria": "the change is reverted, licensed as collateral, "
+                             "or raised as its own finding"})
+    for text in trailer_findings:
+        machine.append({
+            "pass": "regression-surface", "severity": "substantive",
+            "cited_rule": None,
+            "anchor": {"file": anchor["file"], "region": [a_start, a_end]},
+            "claim": text,
+            "witness": {"kind": "repro",
+                        "ref": "git show -s --format=%%B " + commit[:12],
+                        "status": "n/a"},
+            "exit_criteria": "commit trailers follow the RR-21 contract"})
+    if machine:
+        intake(ledger_path, machine, iteration, "code", repo_root, config)
+
+    return {"in_scope": not violations, "license_ok": license_ok,
+            "violations": violations, "trailer_findings": trailer_findings,
+            "license_needed": license_needed}
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -620,6 +799,15 @@ def main(argv=None) -> int:
     c = add("close-round", "compute the round verdict from ledger facts")
     c.add_argument("--iteration", type=int, required=True)
     c.add_argument("--config", default=None)
+    c.add_argument("--suite-evidence", default=None)
+    c.add_argument("--gates-evidence", default=None)
+
+    k = add("check-diff", "a fix commit stays inside its finding's scope")
+    k.add_argument("--finding", required=True)
+    k.add_argument("--commit", required=True)
+    k.add_argument("--iteration", type=int, default=None)
+    k.add_argument("--repo-root", type=pathlib.Path, default=None)
+    k.add_argument("--config", default=None)
 
     add("report", "render the ledger for a human")
 
@@ -654,7 +842,17 @@ def main(argv=None) -> int:
             print(f"✓ {args.finding_id} → {args.action}")
         elif args.cmd == "close-round":
             config = _resolve_config(args, args.ledger)
-            print(json.dumps(close_round(args.ledger, args.iteration, config)))
+            print(json.dumps(close_round(args.ledger, args.iteration, config,
+                                         args.suite_evidence,
+                                         args.gates_evidence)))
+        elif args.cmd == "check-diff":
+            config = _resolve_config(args, args.ledger)
+            root = args.repo_root or repo_root_of(args.ledger)
+            result = check_diff(args.ledger, args.finding, args.commit,
+                                root, config, args.iteration)
+            print(json.dumps(result))
+            if not result["in_scope"] or not result["license_ok"]:
+                return 1
         elif args.cmd == "report":
             print(report(args.ledger))
     except (Problem, OSError) as exc:
