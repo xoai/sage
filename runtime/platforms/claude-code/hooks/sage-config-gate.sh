@@ -5,7 +5,9 @@
 # Blocks a gated agent from turning OFF its own enforcement. While
 # `hard_enforcement: true`, an agent Edit/Write to .sage/config.yaml that would
 # reduce any gate's effective-enabled state (flip hard_enforcement true→false,
-# add a *_gate: false opt-out, remove tdd_enforcement: true) exits 2. Also
+# add a *_gate: false opt-out, remove tdd_enforcement: true; with the v2
+# review loop active, flip review_loop mode v2→v1 or witness_capping
+# true→false — an agent must not soften its own review floor) exits 2. Also
 # catches the obvious Bash evasions (a redirect/sed/tee that writes the switch
 # off). Exit 2; the reason says humans disable enforcement out-of-band.
 #
@@ -82,10 +84,31 @@ def enabled(text, key):
     return v is not False                      # opt-out: default on
 
 
+def review_mode(text):
+    """The review_loop: block's mode — v1 when absent (RR-8)."""
+    m = re.search(r"(?m)^review_loop:[ \t]*$((?:\n[ \t]+.*)*)", text or "")
+    if not m:
+        return "v1"
+    mm = re.search(r"(?mi)^[ \t]+mode[ \t]*:[ \t]*(\S+)", m.group(1))
+    return mm.group(1).lower() if mm else "v1"
+
+
+def witness_capping(text):
+    return read_flag(text, "witness_capping") is not False   # default on
+
+
 def weaker(before, after):
     """after reduces enforcement vs before, for any key."""
     for key in (MASTER,) + OPT_OUT + OPT_IN:
         if enabled(before, key) and not enabled(after, key):
+            return True
+    # The review floor (RR-8): while the v2 review loop is active, its mode
+    # and witness capping are enforcement — mode v2→v1 or capping true→false
+    # is an agent softening its own review floor.
+    if review_mode(before) == "v2":
+        if review_mode(after) != "v2":
+            return True
+        if witness_capping(before) and not witness_capping(after):
             return True
     return False
 
@@ -163,7 +186,9 @@ if tool == "Bash":
     turns_off = re.search(
         r"(?:%s|secrets_gate|verify_gate)\s*:?\s*false" % re.escape(MASTER),
         cmd, re.I)
-    if names_config and writes and turns_off:
+    review_off = review_mode(current) == "v2" and re.search(
+        r"witness_capping\s*:?\s*false|mode\s*:?\s*v1", cmd, re.I)
+    if names_config and writes and (turns_off or review_off):
         emit("BLOCK", BLOCK_MSG)
     emit("ALLOW")
 

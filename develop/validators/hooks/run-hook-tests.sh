@@ -879,6 +879,35 @@ assert C9 "READING the config in Bash (grep) is not a write — allowed" "$P" \
   '{"tool_name":"Bash","tool_input":{"command":"grep hard_enforcement .sage/config.yaml"}}' \
   --exit 0 --hook "$CG"
 
+# The review floor (RR-8): with the v2 review loop active, review_loop.mode and
+# witness_capping are enforcement keys — an agent must not soften its own
+# review floor. Dormant on v1 projects.
+mk_v2_review() {
+  mk_enforced 'review_loop:
+  mode: v2
+  witness_capping: true'
+}
+
+P="$(mk_v2_review)"
+assert C10 "review_loop mode v2→v1 while enforced is blocked (the review floor)" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/config.yaml","old_string":"  mode: v2","new_string":"  mode: v1"}}' \
+  --exit 2 --stderr "enforcement" --hook "$CG"
+
+P="$(mk_v2_review)"
+assert C11 "witness_capping true→false while the v2 loop is active is blocked" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/config.yaml","old_string":"  witness_capping: true","new_string":"  witness_capping: false"}}' \
+  --exit 2 --stderr "enforcement" --hook "$CG"
+
+P="$(mk_v2_review)"
+assert C12 "tuning a NON-floor review knob (iteration_cap) is allowed" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/config.yaml","old_string":"  mode: v2","new_string":"  mode: v2\n  iteration_cap: 3"}}' \
+  --exit 0 --hook "$CG"
+
+P="$(mk_enforced)"
+assert C13 "on a v1 project the review floor is dormant (adding v2 config is allowed)" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/config.yaml","old_string":"hard_enforcement: true","new_string":"hard_enforcement: true\nreview_loop:\n  mode: v2"}}' \
+  --exit 0 --hook "$CG"
+
 echo ""
 echo "═══ Summary ═══"
 printf '  pass %d · fail %d · xfail %d · xpass %d\n' "$N_PASS" "$N_FAIL" "$N_XFAIL" "$N_XPASS"

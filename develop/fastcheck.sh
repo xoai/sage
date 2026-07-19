@@ -44,6 +44,8 @@ CHECKS=(
   "eval coverage registry :: python3 develop/validators/check-eval-coverage.py --check"
   "eval scenarios offline :: python3 develop/evals/run_evals.py --offline-check"
   "manifest tests         :: python3 develop/validators/tools/test_manifest.py"
+  "review controller tests :: python3 develop/validators/review/test_review_controller.py"
+  "review ledger tests    :: python3 develop/validators/review/test_review_ledger.py"
   "driver tests           :: python3 develop/evals/test_driver.py"
   "grader tests           :: python3 develop/evals/test_graders.py"
   "gate regression tests  :: bash develop/validators/gates/run-gate-tests.sh"

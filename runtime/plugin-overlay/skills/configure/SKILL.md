@@ -92,3 +92,25 @@ When a user asks to "make Sage cheaper on resume" / "reduce the resume cost", th
 are the levers; when they want "maximum rigor regardless of cost", set
 `gate_review: per-gate`, `batch_bookkeeping: false`, `trust_inherited_red: false`,
 `resume_memory: keep`, `resume_test_cadence: full`.
+
+## Review loop — the `review_loop:` block
+
+Opt-in v2 puts the review-revise verdict in code: reviewer findings land in a
+machine-owned ledger (`runtime/tools/review.py`, at
+`.sage/work/<slug>/review-ledger.json`) and `sage_flags.py` computes every
+CONTINUE/ESCALATE/STOP from ledger facts. Findings that cite nothing and
+demonstrate nothing are capped at substantive and never block.
+
+| Key | Default | Effect | Restore v1 behavior |
+|---|---|---|---|
+| `mode` | `v1` | `v2` activates the ledger loop; the reviewer loses the verdict. | `v1` (the whole block below is then inert) |
+| `major_budget` | `0` | Open majors tolerated at stop. | n/a (v1 majors always block) |
+| `iteration_cap` | `5` | Hard round cap; at cap every open entry needs a disposition. | v1 value: `10` |
+| `escalate_after_stalls` | `2` | Consecutive non-improving rounds before ESCALATE. | v1: 3 identical counts |
+| `witness_capping` | `true` | Uncited + unwitnessed critical/major stored as substantive. | `false` (severity as reported) |
+| `scope_check` | `true` | Fix commits checked against the finding's anchor scope. | `false` |
+| `review_model` | `inherit` | `cheap` routes checklist passes down-model — savings **unclaimed** until measured. | `inherit` |
+
+While `hard_enforcement: true` and `mode: v2`, the config-gate treats
+`mode` and `witness_capping` as enforcement keys: an agent cannot soften
+its own review floor (a human edits the file outside the agent).

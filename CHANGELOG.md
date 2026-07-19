@@ -2,6 +2,36 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [Unreleased]
+
+- **Review loop v2 — the verdict moves from the reviewer to code.** A field
+  report showed the review-revise loop running to its cap on findings that
+  never block: 7 iterations, zero criticals throughout, majors churning
+  non-monotonically, and a REVISE issued on a 0-critical/0-major round.
+  v2 ships behind `review_loop: mode: v2` (**default stays v1** until the
+  flip criteria are measured):
+  - `runtime/tools/review.py` — a machine-owned findings ledger per cycle
+    (`.sage/work/<slug>/review-ledger.json`): `intake` normalizes findings
+    mechanically (severity capping: an uncited, unwitnessed critical/major
+    is stored substantive — opinions never block; dedup by anchor
+    fingerprint + claim; a re-litigation guard that makes fingerprint drift
+    the only license to re-raise a settled finding), `verify` records
+    Phase-A verdicts with evidence, `disposition`/`close-round` make every
+    exit a decision — the tool writes the decisions.md exit line itself.
+    Fail-closed: bookkeeping, not a hook.
+  - `sage_flags.py decide()` grows an optional ledger parameter — the RR-6
+    decision table (CONTINUE/ESCALATE/STOP_CAP/STOP_ADVISORY/STOP_CLEAN,
+    weight 8·critical + 3·major + 1·substantive) with stall detection that
+    escalates the field log's major climb at round 4, not round 7. Without
+    a ledger, v1 behavior is byte-identical (R6).
+  - `sage-config-gate` now protects the review floor: with enforcement on
+    and `mode: v2`, an agent edit flipping mode back to v1 or turning off
+    `witness_capping` exits 2 (hook tests C10–C13).
+  - Deterministic tests R1–R6 in `develop/validators/review/` pin the
+    observed production history as a regression fixture in both directions:
+    v2 terminates it at round 1 (STOP_ADVISORY); v1 must keep reproducing
+    the pathology. Wired into fastcheck + CI.
+
 ## [1.3.9] — the gate that guards the gates, and opencode goes mechanical
 
 Two things merged after 1.3.8 that users should have: a security fix, and a
