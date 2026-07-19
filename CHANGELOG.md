@@ -4,6 +4,32 @@ All notable changes to Sage will be documented in this file.
 
 ## [Unreleased]
 
+- **`review_loop: v2` is now the default.** The RR-28 flip criteria were
+  measured and held (2026-07-20, claude-opus-4-8[1m] pinned, N=3):
+  - **E16 loop convergence 2/3** — both clean runs converged
+    CONTINUE→STOP_ADVISORY in 2 rounds with monotone open-weight,
+    trailed fix commits, witnesses on disk, tool-written exit records;
+    the third run was budget-truncated mid-loop (the E9 shape), not a
+    controller failure.
+  - **E17 ledger amnesia 3/3** (+1 smoke) — the settled decoy was never
+    re-raised over its unchanged fingerprint; discovery of genuinely new
+    defects continued.
+  - **E18 fixer scope 2/3** — no silent out-of-scope merge; the failing
+    run was the instrument punishing RR-20 compliance (fixed, recorded).
+  - **Calibration 3/3 perfect** — recall 1.0 and precision 1.0 on the
+    planted criticals+majors, both absent requirements caught, decoy
+    never re-raised (thresholds 0.8 / 0.7 / 2/2 / none).
+  - **No regression on the covering scenarios**: E8 3/3, E10 3/3 on the
+    untouched v1 path, matching their baselines.
+  What is claimed: convergence and termination, per the numbers above.
+  What is NOT claimed: any cost saving — `review_model: cheap` and the
+  packet remain unmeasured. Fresh `sage init` writes `mode: v2`; an
+  absent block now reads v2; **existing projects are pinned to
+  `mode: v1` by `sage update`** (the hard_enforcement precedent — no
+  surprise semantics mid-initiative) and opt in by deleting the pin.
+  The config-gate reads an absent block as v2 on the Edit path, so
+  deleting the block is not an enforcement escape (hook tests C13–C15).
+
 - **Review loop v2 — the verdict moves from the reviewer to code.** A field
   report showed the review-revise loop running to its cap on findings that
   never block: 7 iterations, zero criticals throughout, majors churning

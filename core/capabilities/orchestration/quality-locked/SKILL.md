@@ -227,10 +227,11 @@ Pass the existing array (or `[]` for first iteration) as
 
 ## Review Loop v2 (ledger mode)
 
-When `.sage/config.yaml` carries `review_loop:` with `mode: v2`, the loop
-above is REPLACED by the ledger loop. Everything else in this skill
-(activation points, fallback announcements, autonomous interaction) still
-applies. With `mode: v1` or no `review_loop:` block, ignore this section.
+The ledger loop is the DEFAULT: it REPLACES the v1 loop above unless
+`.sage/config.yaml` carries `review_loop:` with `mode: v1` (the explicit
+pin `sage update` writes into pre-flip projects). Everything else in
+this skill (activation points, fallback announcements, autonomous
+interaction) still applies on both paths.
 
 What changes and why: the reviewer loses the verdict — findings are
 structured evidence, the decision is computed by

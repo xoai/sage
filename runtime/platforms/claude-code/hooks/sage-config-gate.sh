@@ -84,15 +84,19 @@ def enabled(text, key):
     return v is not False                      # opt-out: default on
 
 
-def review_mode(text):
-    """The review_loop: block's mode — v1 when absent (RR-8). The LAST
-    block wins, matching review.py's duplicate-key convention."""
+def review_mode(text, absent="v2"):
+    """The review_loop: block's mode. The LAST block wins, matching
+    review.py's duplicate-key convention. Since the RR-28 flip, an ABSENT
+    block means v2 on the Edit/Write path (deleting the block is not an
+    escape); the coarse Bash matcher passes absent="v1" and only guards
+    explicitly-v2 configs — consistent with its obvious-evasions-only
+    remit."""
     blocks = re.findall(r"(?m)^review_loop:[ \t]*$((?:\n[ \t]+.*)*)", text or "")
     for block in reversed(blocks):
         mm = re.search(r"(?mi)^[ \t]+mode[ \t]*:[ \t]*(\S+)", block)
         if mm:
             return mm.group(1).lower()
-    return "v1"
+    return absent
 
 
 def witness_capping(text):
@@ -188,7 +192,7 @@ if tool == "Bash":
     turns_off = re.search(
         r"(?:%s|secrets_gate|verify_gate)\s*:?\s*false" % re.escape(MASTER),
         cmd, re.I)
-    review_off = review_mode(current) == "v2" and re.search(
+    review_off = review_mode(current, absent="v1") == "v2" and re.search(
         r"witness_capping\s*:?\s*false|mode\s*:?\s*v1", cmd, re.I)
     if names_config and writes and (turns_off or review_off):
         emit("BLOCK", BLOCK_MSG)

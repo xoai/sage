@@ -282,7 +282,7 @@ class FailClosedTest(LedgerCase):
 class ConfigTest(LedgerCase):
     def test_defaults_without_config(self):
         cfg = R.load_config(None)
-        self.assertEqual(cfg["mode"], "v1")
+        self.assertEqual(cfg["mode"], "v2")     # the RR-28 flip, 2026-07-20
         self.assertEqual(cfg["iteration_cap"], 5)
         self.assertTrue(cfg["witness_capping"])
 

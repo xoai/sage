@@ -155,9 +155,12 @@ def repo_root_of(ledger_path: pathlib.Path) -> pathlib.Path:
 # ═══════════════════════════════════════════════════════════════════════
 
 # Every knob's v1-restoring value, documented beside it (the 1.3.5 lever
-# pattern). `mode: v1` restores the whole pre-ledger loop at once.
+# pattern). `mode: v1` restores the whole pre-ledger loop at once. v2 is
+# the default since the RR-28 flip criteria were measured and held
+# (2026-07-20: E16–18 N=3 majority, calibration recall/precision 1.0,
+# E8/E10 regression 3/3); `sage update` pins pre-existing projects to v1.
 CONFIG_DEFAULTS = {
-    "mode": "v1",                # v1 restores: reviewer-owned verdict loop
+    "mode": "v2",                # v1 restores: reviewer-owned verdict loop
     "major_budget": 0,           # v1 n/a (majors always blocked)
     "iteration_cap": 5,          # v1 value: 10
     "escalate_after_stalls": 2,  # v1: 3 identical critical+major counts

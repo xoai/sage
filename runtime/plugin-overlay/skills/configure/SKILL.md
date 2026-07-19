@@ -95,15 +95,18 @@ are the levers; when they want "maximum rigor regardless of cost", set
 
 ## Review loop — the `review_loop:` block
 
-Opt-in v2 puts the review-revise verdict in code: reviewer findings land in a
-machine-owned ledger (`runtime/tools/review.py`, at
-`.sage/work/<slug>/review-ledger.json`) and `sage_flags.py` computes every
+v2 — the default since the flip criteria were measured (E16–18 N=3,
+calibration recall/precision 1.0) — puts the review-revise verdict in code:
+reviewer findings land in a machine-owned ledger (`runtime/tools/review.py`,
+at `.sage/work/<slug>/review-ledger.json`) and `sage_flags.py` computes every
 CONTINUE/ESCALATE/STOP from ledger facts. Findings that cite nothing and
-demonstrate nothing are capped at substantive and never block.
+demonstrate nothing are capped at substantive and never block. Projects
+initialized before the flip are pinned to `mode: v1` by `sage update`
+(nothing changes mid-initiative); delete the pin or set `v2` to opt in.
 
 | Key | Default | Effect | Restore v1 behavior |
 |---|---|---|---|
-| `mode` | `v1` | `v2` activates the ledger loop; the reviewer loses the verdict. | `v1` (the whole block below is then inert) |
+| `mode` | `v2` | The ledger loop; the reviewer loses the verdict. | `v1` (the whole block below is then inert) |
 | `major_budget` | `0` | Open majors tolerated at stop. | n/a (v1 majors always block) |
 | `iteration_cap` | `5` | Hard round cap; at cap every open entry needs a disposition. | v1 value: `10` |
 | `escalate_after_stalls` | `2` | Consecutive non-improving rounds before ESCALATE. | v1: 3 identical counts |

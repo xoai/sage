@@ -454,7 +454,7 @@ Be concise. No generic praise. No padding. Just findings.
 
 ## Review Loop v2 (ledger mode)
 
-Active when `.sage/config.yaml` has `review_loop:` with `mode: v2`
+Active by DEFAULT (an absent `review_loop:` block means `mode: v2`)
 (see orchestration/quality-locked for the loop; the ledger tool is
 `sage/runtime/tools/review.py`). When active, REPLACE each sub-agent
 prompt's CLASSIFY + FORMAT block above with the v2 output contract

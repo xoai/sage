@@ -104,7 +104,7 @@ is implemented and tested, it isn't — regardless of what anyone claims.
 
 ## Review Loop v2 (ledger mode)
 
-Active when `.sage/config.yaml` has `review_loop:` with `mode: v2`
+Active by DEFAULT (an absent `review_loop:` block means `mode: v2`)
 (loop: orchestration/quality-locked; ledger: `sage/runtime/tools/
 review.py`). When active, the Step 4 RESULT block above is replaced by
 the contract below. With `mode: v1` this section is inert.

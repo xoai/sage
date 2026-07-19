@@ -203,7 +203,7 @@ MUST appear; self-review is the fallback, not a choice.
 
 ## Review Loop v2 (ledger mode)
 
-Active when `.sage/config.yaml` has `review_loop:` with `mode: v2`
+Active by DEFAULT (an absent `review_loop:` block means `mode: v2`)
 (loop: orchestration/quality-locked; ledger: `sage/runtime/tools/
 review.py`). When active, the sub-agent prompt's CLASSIFY + FORMAT
 block above is replaced by the contract below and the 5 dimensions by

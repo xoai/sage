@@ -473,9 +473,11 @@ resume_test_cadence: lean   # lean | full — on resume, targeted tests per step
 
 # Review loop — v2 puts the verdict in code: reviewer findings land in a
 # machine-owned ledger (review.py) and sage_flags.py computes every
-# CONTINUE/STOP from it. Each knob's v1-restoring value is noted beside it.
+# CONTINUE/STOP from it. v2 is the default (RR-28 numbers held: E16–18
+# N=3, calibration recall/precision 1.0); each knob's v1-restoring value
+# is noted beside it.
 review_loop:
-  mode: v1                  # v1 (default) | v2 — v1 restores the reviewer-owned verdict loop
+  mode: v2                  # v2 (default) | v1 restores the reviewer-owned verdict loop
   major_budget: 0           # open majors tolerated at stop (v1: n/a — majors always block)
   iteration_cap: 5          # v1 value: 10
   escalate_after_stalls: 2  # consecutive non-improving rounds before ESCALATE (v1: 3 identical counts)

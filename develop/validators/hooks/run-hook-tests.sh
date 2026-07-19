@@ -904,8 +904,19 @@ assert C12 "tuning a NON-floor review knob (iteration_cap) is allowed" "$P" \
   --exit 0 --hook "$CG"
 
 P="$(mk_enforced)"
-assert C13 "on a v1 project the review floor is dormant (adding v2 config is allowed)" "$P" \
+assert C13 "writing the v2 default explicitly (absent → v2 since the flip) is not a change — allowed" "$P" \
   '{"tool_name":"Edit","tool_input":{"file_path":".sage/config.yaml","old_string":"hard_enforcement: true","new_string":"hard_enforcement: true\nreview_loop:\n  mode: v2"}}' \
+  --exit 0 --hook "$CG"
+
+P="$(mk_enforced)"
+assert C14 "an ABSENT block reads v2 since the flip — an agent adding mode: v1 is softening the floor, blocked" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/config.yaml","old_string":"hard_enforcement: true","new_string":"hard_enforcement: true\nreview_loop:\n  mode: v1"}}' \
+  --exit 2 --stderr "enforcement" --hook "$CG"
+
+P="$(mk_enforced 'review_loop:
+  mode: v1')"
+assert C15 "an EXPLICIT v1 pin (the sage-update migration) stays editable — the floor guards v2, not v1" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/config.yaml","old_string":"  mode: v1","new_string":"  mode: v1\n  iteration_cap: 8"}}' \
   --exit 0 --hook "$CG"
 
 echo ""
