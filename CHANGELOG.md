@@ -2,7 +2,7 @@
 
 All notable changes to Sage will be documented in this file.
 
-## [Unreleased]
+## [1.3.10] — review loop v2: the verdict moves from the reviewer to code
 
 - **`review_loop: v2` is now the default.** The RR-28 flip criteria were
   measured and held (2026-07-20, claude-opus-4-8[1m] pinned, N=3):
