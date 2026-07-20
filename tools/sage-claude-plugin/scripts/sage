@@ -1,0 +1,2149 @@
+#!/usr/bin/env bash
+# ═══════════════════════════════════════════════════════════════
+# Sage CLI
+#
+# Usage:
+#   sage new <name>     Create a new project with Sage
+#   sage init           Add Sage to the current directory
+#   sage update         Regenerate platform files
+#   sage upgrade        Update Sage to the latest version
+#   sage help           Show available commands
+# ═══════════════════════════════════════════════════════════════
+set -euo pipefail
+
+# bash 3.2 compatibility (macOS /bin/bash): under `set -u`, expanding an
+# empty array via "${arr[@]}" aborts as an unbound variable (fixed in
+# bash 4.4+). Any array that can be empty MUST be expanded with the
+# empty-safe form  ${arr[@]+"${arr[@]}"}  instead. See CONTRIBUTING.md.
+
+# ── Colors ──
+BOLD='\033[1m'
+GREEN='\033[32m'
+YELLOW='\033[33m'
+CYAN='\033[36m'
+RED='\033[31m'
+DIM='\033[2m'
+RESET='\033[0m'
+
+# ── Rich output helpers ──
+SAGE_START_TIME=""
+STEP_START_TIME=""
+
+# macOS date doesn't support %N — outputs literal "N" instead of failing
+_sage_now() {
+  local t
+  # BSD date emits "<seconds>N" rather than erroring; the lines below strip the
+  # N and detect the missing nanoseconds by length.
+  # portability-ok: handled explicitly, see above
+  t=$(date +%s%N 2>/dev/null || date +%s)
+  # Strip non-digits (macOS outputs "1774343489N")
+  t="${t//[!0-9]/}"
+  # If length <= 10, it's seconds only — no nanosecond support
+  if [ ${#t} -le 10 ]; then
+    echo "${t}000000000"
+  else
+    echo "$t"
+  fi
+}
+
+timer_start() { SAGE_START_TIME=$(_sage_now); }
+step_start()  { STEP_START_TIME=$(_sage_now); }
+
+elapsed_ms() {
+  local now start
+  now=$(_sage_now)
+  start="${1:-$STEP_START_TIME}"
+  echo $(( (now - start) / 1000000 ))
+}
+
+fmt_time() {
+  local ms="$1"
+  if [ "$ms" -lt 1000 ]; then
+    echo "${ms}ms"
+  else
+    local s=$((ms / 1000))
+    local rem=$((ms % 1000 / 100))
+    echo "${s}.${rem}s"
+  fi
+}
+
+section() {
+  echo ""
+  echo -e "  ${BOLD}┌─ $1${RESET}"
+}
+
+section_end() {
+  echo -e "  ${BOLD}│${RESET}"
+}
+
+step_ok() {
+  local ms
+  ms=$(elapsed_ms "$STEP_START_TIME")
+  local time_str
+  time_str=$(fmt_time "$ms")
+  printf "  │  ${GREEN}✓${RESET} %-42s ${DIM}%s${RESET}\n" "$1" "$time_str"
+  step_start
+}
+
+step_ok_notimed() {
+  echo -e "  │  ${GREEN}✓${RESET} $1"
+}
+
+step_warn() {
+  echo -e "  │  ${YELLOW}⚠${RESET} $1"
+}
+
+step_fail() {
+  echo -e "  │  ${RED}✗${RESET} $1"
+}
+
+step_info() {
+  echo -e "  │  ${CYAN}↻${RESET} $1"
+}
+
+sage_complete() {
+  local total_ms
+  total_ms=$(elapsed_ms "$SAGE_START_TIME")
+  local time_str
+  time_str=$(fmt_time "$total_ms")
+  echo -e "  ${BOLD}└─ Complete${RESET}  ${DIM}${time_str} total${RESET}"
+  echo ""
+}
+
+spin() {
+  local pid=$1 msg="${2:-Working...}"
+  # Non-interactive: just wait silently
+  if [ ! -t 1 ]; then
+    wait "$pid" 2>/dev/null
+    return $?
+  fi
+  local chars='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+  while kill -0 "$pid" 2>/dev/null; do
+    for i in $(seq 0 $((${#chars} - 1))); do
+      kill -0 "$pid" 2>/dev/null || break
+      printf "\r  ${DIM}${chars:$i:1} %s${RESET}" "$msg"
+      sleep 0.08
+    done
+  done
+  printf "\r                                                       \r"
+  wait "$pid" 2>/dev/null
+  return $?
+}
+
+# ── Resolve framework source ──
+# Priority: 1) SAGE_HOME env  2) ~/.sage/framework  3) script's own directory
+resolve_framework() {
+  # SAGE_FRAMEWORK is always resolved to a PHYSICAL path (pwd -P,
+  # symlinks dereferenced). This matters because copy_framework does
+  # `cp -a "$SAGE_FRAMEWORK" "$target/sage"`: if SAGE_FRAMEWORK were a
+  # symlink, `cp -a` would copy the LINK, making $target/sage a symlink
+  # back to the real framework — and prune_framework_copy's
+  # `rm -rf "$target/sage/.git"` would then delete the real repo's
+  # history through that link. Resolving to a physical path here makes
+  # the copy a true directory copy.
+
+  # Global install
+  if [ -n "${SAGE_HOME:-}" ] && [ -d "$SAGE_HOME/framework/core" ]; then
+    SAGE_FRAMEWORK="$(cd "$SAGE_HOME/framework" && pwd -P)"
+    return
+  fi
+
+  if [ -d "$HOME/.sage/framework/core" ]; then
+    SAGE_FRAMEWORK="$(cd "$HOME/.sage/framework" && pwd -P)"
+    return
+  fi
+
+  # Local — script lives in bin/ inside the framework
+  local script_dir
+  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  local parent_dir="$(dirname "$script_dir")"
+
+  if [ -d "$parent_dir/core" ] && [ -d "$parent_dir/skills" ]; then
+    SAGE_FRAMEWORK="$parent_dir"
+    return
+  fi
+
+  echo -e "${RED}❌ Cannot find Sage framework.${RESET}"
+  echo ""
+  echo "  Install Sage first:"
+  echo "    curl -fsSL https://raw.githubusercontent.com/xoai/sage/main/install.sh | bash"
+  exit 1
+}
+
+resolve_framework
+
+# ── Version ──
+# The root VERSION file is the single source of truth (ADR-2). Everything else
+# — plugin manifests, generated .sage/config.yaml, CHANGELOG's top entry — is
+# derived from it and checked for drift by runtime/tools/release.py --check.
+#
+# Not derived from git tags: `sage init` prunes .git from the vendored copy, so
+# a tag lookup would fail exactly where projects need to know their version.
+# Named SAGE_FRAMEWORK_VERSION, not SAGE_VERSION: install.sh reads $SAGE_VERSION
+# from the environment as "the release tag to pin". Reusing the name here would
+# clobber a user's `SAGE_VERSION=v1.2.0 sage upgrade` with the version they are
+# already running.
+SAGE_FRAMEWORK_VERSION="unknown"
+if [ -f "$SAGE_FRAMEWORK/VERSION" ]; then
+  SAGE_FRAMEWORK_VERSION=$(tr -d ' \t\n\r' < "$SAGE_FRAMEWORK/VERSION")
+fi
+
+sage_version() {
+  echo "$SAGE_FRAMEWORK_VERSION"
+}
+
+# ═══════════════════════════════════════════════════════════════
+# SHARED FUNCTIONS
+# ═══════════════════════════════════════════════════════════════
+
+prune_framework_copy() {
+  local sage_dir="$1"
+  # Safety: never `rm -rf` through a symlink. If $sage_dir is a
+  # symlink, "$sage_dir/.git" resolves into the link TARGET — which
+  # would delete a real repository's history, not a throwaway copy.
+  # resolve_framework() now hands back a physical path so the copy is
+  # always a real directory; this guard is defence-in-depth on the
+  # destructive operation itself.
+  if [ -L "$sage_dir" ]; then
+    echo -e "  ${YELLOW}⚠${RESET} Skipped pruning '$sage_dir' — it is a symlink, not a copy" >&2
+    return 0
+  fi
+
+  # Allowlist vendoring (ADR-6/§16): a project needs only the runtime — core/,
+  # skills/, runtime/, bin/, LICENSE, VERSION. Everything else the repo carries
+  # is framework-dev material (docs/, develop/, tools/, marketing SVGs,
+  # CHANGELOG, the repo README, .claude-plugin/, install.sh, RELEASING/
+  # CONTRIBUTING, VCS/OS litter) and is not shipped into user projects. This
+  # drops the per-project footprint from ~5.4 MB to well under 1.5 MB.
+  local keep=" core skills runtime bin LICENSE VERSION "
+  local entry name
+  for entry in "$sage_dir"/* "$sage_dir"/.[!.]*; do
+    [ -e "$entry" ] || continue
+    name=$(basename "$entry")
+    case "$keep" in
+      *" $name "*) : ;;              # keep
+      *) rm -rf "$entry" ;;          # prune
+    esac
+  done
+
+  # Dev-side pieces that live under the vendored runtime/ but are only used to
+  # build/release the framework, never at project runtime.
+  rm -f "$sage_dir/runtime/tools/release.py" "$sage_dir/runtime/tools/build_plugin.py"
+  rm -rf "$sage_dir/runtime/plugin-overlay"
+
+  # A short pointer README so the vendored dir isn't opaque.
+  local vendored_version="unknown"
+  [ -f "$sage_dir/VERSION" ] && vendored_version="$(tr -d ' \t\n\r' < "$sage_dir/VERSION")"
+  cat > "$sage_dir/README.md" <<EOF
+# Sage (vendored runtime)
+
+Vendored Sage ${vendored_version} runtime for this project: \`core/\`, \`skills/\`,
+\`runtime/\`, \`bin/\`. This is a generated copy — do not edit it by hand.
+
+- Framework source and docs: https://github.com/xoai/sage
+- Regenerate platform files: \`sage update\`
+EOF
+}
+
+ask_choice() {
+  local prompt="$1"
+  shift
+  local options=("$@")
+  local count=${#options[@]}
+
+  echo "" >&2
+  echo -e "  ${BOLD}$prompt${RESET}" >&2
+  echo "" >&2
+  for i in "${!options[@]}"; do
+    echo "    $((i + 1))) ${options[$i]}" >&2
+  done
+  echo "" >&2
+  printf "  Choice [1-$count]: " >&2
+  read -r choice
+
+  if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt "$count" ]; then
+    choice=1
+  fi
+  echo "$choice"
+}
+
+select_platform() {
+  local target="$1"
+  PLATFORM=""
+  PLATFORMS=()  # additive list — multiple platforms can coexist
+
+  # Auto-detect from existing files
+  local has_agent=false has_claude=false has_codex=false has_opencode=false has_gemini=false
+  [ -d "$target/.agent" ] && has_agent=true
+  [ -d "$target/.claude" ] && has_claude=true
+  [ -d "$target/.codex" ] && has_codex=true
+  [ -d "$target/.opencode" ] && has_opencode=true
+  [ -d "$target/.gemini" ] && has_gemini=true
+  # GEMINI.md alone is ambiguous (Antigravity vs Gemini CLI); only count it
+  # toward Antigravity if .agent/ also exists (or if .gemini/ doesn't exist).
+  if [ -f "$target/GEMINI.md" ] && [ "$has_gemini" = false ]; then
+    has_agent=true
+  fi
+
+  # AGENTS.md alone is ambiguous (Codex vs Opencode). If neither .codex/ nor
+  # .opencode/ exists, ask once. Only triggers when no other platform is
+  # clearly detected, to avoid interrupting auto-detection flows.
+  local agents_alone=false
+  if [ -f "$target/AGENTS.md" ] && [ "$has_codex" = false ] && [ "$has_opencode" = false ]; then
+    agents_alone=true
+  fi
+  if [ "$agents_alone" = true ] && [ "$has_claude" = false ] && [ "$has_agent" = false ] && [ "$has_gemini" = false ] && [ -z "${PLATFORM_FLAG:-}" ] && [ -t 0 ]; then
+    echo ""
+    echo "  AGENTS.md exists, but no .codex/ or .opencode/ directory."
+    echo "  Which platform is using this AGENTS.md?"
+    echo "    [1] Codex (OpenAI)"
+    echo "    [2] Opencode"
+    echo "    [3] Both"
+    printf "  > "
+    read -r choice
+    case "$choice" in
+      1) has_codex=true ;;
+      2) has_opencode=true ;;
+      3) has_codex=true; has_opencode=true ;;
+    esac
+  fi
+  # Check if CLAUDE.md is Sage-generated
+  if [ -f "$target/CLAUDE.md" ] && head -1 "$target/CLAUDE.md" | grep -q "Sage"; then
+    has_claude=true
+  fi
+
+  # Build the additive PLATFORMS list
+  [ "$has_claude" = true ] && PLATFORMS+=("claude-code")
+  [ "$has_agent" = true ] && PLATFORMS+=("antigravity")
+  [ "$has_codex" = true ] && PLATFORMS+=("codex")
+  [ "$has_opencode" = true ] && PLATFORMS+=("opencode")
+  [ "$has_gemini" = true ] && PLATFORMS+=("gemini-cli")
+
+  # Honor --platform flag (one or more, space- or comma-separated)
+  if [ -n "${PLATFORM_FLAG:-}" ]; then
+    PLATFORMS=()
+    IFS=', ' read -ra FLAG_LIST <<< "$PLATFORM_FLAG"
+    # Empty-safe expansion — a separators-only flag value (e.g.
+    # `--platform ","`) yields an empty FLAG_LIST; bash 3.2 aborts.
+    for p in ${FLAG_LIST[@]+"${FLAG_LIST[@]}"}; do
+      case "$p" in
+        claude-code|generic|antigravity|codex|opencode|gemini-cli)
+          PLATFORMS+=("$p")
+          ;;
+        both)
+          PLATFORMS+=("claude-code" "antigravity")
+          ;;
+        all)
+          PLATFORMS=("claude-code" "antigravity" "codex" "opencode" "gemini-cli")
+          ;;
+        *)
+          echo -e "  ${YELLOW}Unknown platform: $p (supported: claude-code, antigravity, codex, opencode, gemini-cli)${RESET}"
+          ;;
+      esac
+    done
+  fi
+
+  # If we detected something, use it; report and return
+  if [ ${#PLATFORMS[@]} -gt 0 ]; then
+    PLATFORM=$(printf '%s\n' ${PLATFORMS[@]+"${PLATFORMS[@]}"} | tr '\n' '+' | sed 's/+$//')
+    echo -e "  ${GREEN}Platforms:${RESET} ${PLATFORMS[*]+"${PLATFORMS[*]}"}"
+    return
+  fi
+
+  # Nothing detected and no flag — ask interactively
+  if [ -t 0 ]; then
+    local choice
+    # Two-line choice for readability (5+ platforms now)
+    echo ""
+    echo "  Which platform are you using? Pick one:"
+    echo "    [1] Claude Code           (first-class — full quality chain)"
+    echo "    [2] Antigravity (Google)  (community — experimental)"
+    echo "    [3] Codex (OpenAI)        (community — experimental)"
+    echo "    [4] Opencode              (community — experimental)"
+    echo "    [5] Gemini CLI            (community — experimental)"
+    echo "    [6] Multiple — install for all"
+    printf "  > "
+    read -r choice
+    case "$choice" in
+      2) PLATFORMS=("antigravity") ;;
+      3) PLATFORMS=("codex") ;;
+      4) PLATFORMS=("opencode") ;;
+      5) PLATFORMS=("gemini-cli") ;;
+      6) PLATFORMS=("claude-code" "antigravity" "codex" "opencode" "gemini-cli") ;;
+      *) PLATFORMS=("claude-code") ;;
+    esac
+    PLATFORM=$(printf '%s\n' ${PLATFORMS[@]+"${PLATFORMS[@]}"} | tr '\n' '+' | sed 's/+$//')
+  else
+    PLATFORMS=("claude-code")
+    PLATFORM="claude-code"
+  fi
+}
+
+detect_stack() {
+  local target="$1"
+  DETECTED_STACK=""
+
+  if [ -f "$target/package.json" ]; then
+    local pkg="$target/package.json"
+    grep -q '"next"' "$pkg" 2>/dev/null && DETECTED_STACK="$DETECTED_STACK next"
+    grep -q '"react"' "$pkg" 2>/dev/null && DETECTED_STACK="$DETECTED_STACK react"
+    grep -q '"vue"' "$pkg" 2>/dev/null && DETECTED_STACK="$DETECTED_STACK vue"
+    grep -q '"svelte"' "$pkg" 2>/dev/null && DETECTED_STACK="$DETECTED_STACK svelte"
+    grep -q '"react-native"' "$pkg" 2>/dev/null && DETECTED_STACK="$DETECTED_STACK react-native"
+    grep -q '"@supabase"' "$pkg" 2>/dev/null && DETECTED_STACK="$DETECTED_STACK supabase"
+    grep -q '"firebase"' "$pkg" 2>/dev/null && DETECTED_STACK="$DETECTED_STACK firebase"
+    grep -q '"express"\|"fastify"\|"hono"' "$pkg" 2>/dev/null && DETECTED_STACK="$DETECTED_STACK node-api"
+  fi
+  [ -f "$target/pubspec.yaml" ] && DETECTED_STACK="$DETECTED_STACK flutter"
+  [ -f "$target/requirements.txt" ] || [ -f "$target/pyproject.toml" ] && DETECTED_STACK="$DETECTED_STACK python"
+  [ -f "$target/go.mod" ] && DETECTED_STACK="$DETECTED_STACK go"
+  [ -f "$target/Cargo.toml" ] && DETECTED_STACK="$DETECTED_STACK rust"
+
+  DETECTED_STACK=$(echo "$DETECTED_STACK" | xargs)
+
+  if [ -z "$DETECTED_STACK" ]; then
+    echo -e "  ${DIM}No stack detected${RESET}"
+  else
+    echo -e "  ${GREEN}Stack:${RESET} $DETECTED_STACK"
+  fi
+}
+
+copy_framework() {
+  local target="$1"
+  if [ -d "$target/sage" ]; then
+    echo -e "  ${GREEN}✓${RESET} sage/ already present"
+  else
+    cp -a "$SAGE_FRAMEWORK" "$target/sage" &
+    spin $! "Copying framework..."
+    prune_framework_copy "$target/sage"
+    echo -e "  ${GREEN}✓${RESET} sage/ copied to project"
+  fi
+}
+
+select_preset() {
+  local target="$1"
+  SELECTED_PRESET=""
+
+  # Check for --preset flag (set by CLI parser)
+  if [ -n "${PRESET_FLAG:-}" ]; then
+    case "$PRESET_FLAG" in
+      base|startup|enterprise|opensource|none)
+        SELECTED_PRESET="$PRESET_FLAG"
+        echo -e "  ${GREEN}Preset:${RESET} $SELECTED_PRESET"
+        return
+        ;;
+      *)
+        echo -e "  ${YELLOW}Unknown preset: $PRESET_FLAG. Using base.${RESET}"
+        SELECTED_PRESET="base"
+        return
+        ;;
+    esac
+  fi
+
+  # Check if constitution already exists (re-init)
+  if [ -f "$target/.sage/constitution.md" ]; then
+    local existing
+    existing=$(sed -n '/^extends:/s/^extends: *//p' "$target/.sage/constitution.md" 2>/dev/null)
+    if [ -n "$existing" ]; then
+      SELECTED_PRESET="$existing"
+      echo -e "  ${GREEN}Preset:${RESET} $existing (from existing constitution)"
+      return
+    fi
+  fi
+
+  # Ask interactively
+  if [ -t 0 ]; then
+    local choice
+    choice=$(ask_choice "Select a constitution preset:" \
+      "base — universal engineering principles (default)" \
+      "startup — ship fast, monolith first, one way to do things" \
+      "enterprise — auth everywhere, audit trails, postmortems" \
+      "opensource — docs mirror code, semver contract, contributor-friendly" \
+      "none — base only, no preset")
+    case "$choice" in
+      2) SELECTED_PRESET="startup" ;;
+      3) SELECTED_PRESET="enterprise" ;;
+      4) SELECTED_PRESET="opensource" ;;
+      5) SELECTED_PRESET="base" ;;
+      *) SELECTED_PRESET="base" ;;
+    esac
+  else
+    SELECTED_PRESET="base"
+  fi
+  echo -e "  ${GREEN}Preset:${RESET} $SELECTED_PRESET"
+}
+
+apply_prefix_config() {
+  local config="$1/.sage/config.yaml"
+  [ -f "$config" ] || return 0
+  local prefix_val="false"
+  [ "$PREFIX_FLAG" = "true" ] && prefix_val="true"
+  if grep -q 'command_prefix:' "$config" 2>/dev/null; then
+    sed -i.bak "s/^command_prefix:.*$/command_prefix: $prefix_val/" "$config" && rm -f "${config}.bak"
+  else
+    echo "command_prefix: $prefix_val" >> "$config"
+  fi
+}
+
+# read_isolation <project-root> — echo the isolation mode.
+# Allowlist-normalised: an absent key, empty value, or any unknown
+# value resolves to "branch" (the safe sequential default). Same
+# discipline as the task-class/stakes readers in run-role.sh.
+read_isolation() {
+  local config="$1/.sage/config.yaml"
+  local val=""
+  [ -f "$config" ] && val=$(grep '^isolation:' "$config" 2>/dev/null | head -1 | sed 's/^isolation:[[:space:]]*//; s/[[:space:]]*#.*$//; s/[[:space:]]*$//')
+  case "$val" in
+    branch|worktree) echo "$val" ;;
+    *) echo "branch" ;;
+  esac
+}
+
+create_sage_state() {
+  local target="$1"
+  local project_name
+  project_name=$(basename "$target")
+
+  if [ -d "$target/.sage" ]; then
+    # Still apply prefix flag to existing config
+    [ "$PREFIX_FLAG" = "true" ] && apply_prefix_config "$target"
+    echo -e "  ${GREEN}✓${RESET} .sage/ preserved (existing state)"
+    return
+  fi
+
+  local sage_dir="$target/.sage"
+  mkdir -p "$sage_dir/work" "$sage_dir/docs" "$sage_dir/gates/scripts"
+
+  local prefix_val="false"
+  [ "$PREFIX_FLAG" = "true" ] && prefix_val="true"
+
+  # Format PLATFORMS array as YAML list
+  local platforms_yaml="[]"
+  if [ -n "${PLATFORMS+set}" ] && [ ${#PLATFORMS[@]} -gt 0 ]; then
+    platforms_yaml="[$(printf '"%s", ' ${PLATFORMS[@]+"${PLATFORMS[@]}"} | sed 's/, $//')]"
+  fi
+
+  cat > "$sage_dir/config.yaml" << YAML
+sage-version: "$SAGE_FRAMEWORK_VERSION"
+project-name: "$project_name"
+detected-stack: [$DETECTED_STACK]
+platforms: $platforms_yaml
+auto_review: true
+auto_qa: true
+independent_gate3: true
+# hard_enforcement: the Claude Code spec-gate hook blocks edits to source files
+# while a Standard+ cycle is pre-spec (Rule 3), and blocks marking a cycle
+# complete before its gates pass (Rule 5). New projects default ON. Set false to
+# disable, or set tier: tier1 on a manifest to exempt one trivial cycle.
+hard_enforcement: true
+# tdd_enforcement: the TDD gate blocks an edit to a source file when no test has
+# been written for it (constitution principle 1, "tests before code"). It allows the
+# edit the moment a test file is dirty or untracked, or the last commit touched a
+# test. New projects default ON, because the rule was measured and it did not hold:
+# asked to change one constant under pressure the agent wrote no test in 3 runs of 3,
+# with the tdd skill loaded. A rule the model can talk itself out of is not a rule.
+# Escape with `tier: tier1` on a manifest, or set this to false.
+tdd_enforcement: true
+command_prefix: $prefix_val
+# review_loop: v2 puts the review-revise verdict in code — reviewer findings
+# land in a machine-owned ledger (review.py) and every CONTINUE/STOP is
+# computed from it. v2 is the default since the RR-28 numbers held
+# (E16–18 N=3, calibration recall/precision 1.0); each knob's v1-restoring
+# value is noted beside it.
+review_loop:
+  mode: v2                  # v2 (default) | v1 restores the classic loop
+  major_budget: 0           # open majors tolerated at stop (v1: majors always block)
+  iteration_cap: 5          # v1 value: 10
+  escalate_after_stalls: 2  # non-improving rounds before ESCALATE (v1: 3 identical counts)
+  witness_capping: true     # false restores severity-as-reported
+  scope_check: true         # false restores v1 (no diff-scope check on fix commits)
+  review_model: inherit     # inherit | cheap (savings unclaimed until measured)
+# isolation: how delivery workflows isolate an initiative.
+#   branch   — (default) branch in place; one session at a time.
+#   worktree — a worktree per initiative; for parallel sessions.
+isolation: branch
+# worktree_copy / worktree_harvest: which gitignored paths (relative to the repo
+# root) \`sage worktree\` seeds INTO a new worktree, and which \`sage worktree
+# remove\` harvests BACK to the main checkout. Tracked paths are skipped (git
+# already carries them). A trailing /* in worktree_harvest harvests each child
+# independently (per-initiative). Platform runtime (.claude/CLAUDE.md, etc.) is
+# always seeded from your platforms: list. Edit these to match your project's
+# gitignored state (e.g. add .sage/decisions.md to harvest).
+worktree_copy: [.sage/config.yaml, .sage/constitution.md, .sage/gates, .sage/agents.toml, .sage/prompts, .sage/scripts, .mcp.json]
+worktree_harvest: [.sage/work/*]
+YAML
+
+  cat > "$sage_dir/decisions.md" << MD
+# Decisions
+
+Shared log for significant decisions and context.
+Both the AI agent and human collaborators write here.
+
+- [$(date +%Y-%m-%d)] Sage initialized for $project_name
+MD
+
+  cat > "$sage_dir/conventions.md" << MD
+# Project Conventions
+
+Discovered by Sage on $(date +%Y-%m-%d).
+The codebase-scan capability will enrich this on first run.
+MD
+
+  # Gate scripts
+  for script in "$SAGE_FRAMEWORK/core/gates/scripts/"*.sh; do
+    [ -f "$script" ] || continue
+    cp "$script" "$sage_dir/gates/scripts/"
+    chmod +x "$sage_dir/gates/scripts/$(basename "$script")"
+  done
+
+  # Gate activation config
+  local gate_config="$SAGE_FRAMEWORK/core/gates/_config/gate-modes.yaml"
+  if [ -f "$gate_config" ]; then
+    cp "$gate_config" "$sage_dir/gates/gate-modes.yaml"
+  fi
+
+  # Constitution
+  if [ -n "${SELECTED_PRESET:-}" ] && [ "$SELECTED_PRESET" != "base" ] && [ "$SELECTED_PRESET" != "none" ]; then
+    cat > "$sage_dir/constitution.md" << CONSTMD
+---
+name: "$project_name"
+extends: $SELECTED_PRESET
+---
+
+## Project Additions
+
+(Add project-specific principles here)
+CONSTMD
+  fi
+
+  echo -e "  ${GREEN}✓${RESET} .sage/ initialized"
+}
+
+# ═══════════════════════════════════════════════════════════════
+# sage-memory integration hook
+#
+# Called from sage_init, sage_new, and sage_update after run_generators.
+# Two sequential calls to runtime/tools/memory_sync.py:
+#   1. migrate-legacy — backs up pre-v1.1.7 .claude/skills/{memory,
+#      ontology,self-learning}/ once (gated on memory.legacy_migrated
+#      marker in .sage/config.yaml).
+#   2. sync — overlays wheel-canonical SKILL.md via `sage-memory
+#      install-skills` if the package is installed and not in prefix
+#      mode.
+#
+# Best-effort: failures never abort sage's primary operation. Helper
+# itself returns 0 in all expected paths (no-op when sage-memory absent).
+# ═══════════════════════════════════════════════════════════════
+sage_memory_sync_hook() {
+  local target="$1"
+  local ms_script="$SAGE_FRAMEWORK/runtime/tools/memory_sync.py"
+
+  [ -f "$ms_script" ] || return 0
+  command -v python3 >/dev/null 2>&1 || return 0
+
+  python3 "$ms_script" migrate-legacy "$target" "$target" || true
+  python3 "$ms_script" sync "$SAGE_FRAMEWORK" "$target" --yes || true
+}
+
+run_generators() {
+  local target="$1"
+  local sage_path="$target/sage"
+  [ -d "$sage_path" ] || sage_path="$SAGE_FRAMEWORK"
+
+  # If PLATFORMS array is set, iterate; otherwise fall back to legacy PLATFORM string
+  local platforms_to_run=()
+  if [ -n "${PLATFORMS+set}" ] && [ ${#PLATFORMS[@]} -gt 0 ]; then
+    platforms_to_run=(${PLATFORMS[@]+"${PLATFORMS[@]}"})
+  else
+    case "$PLATFORM" in
+      both)        platforms_to_run=("claude-code" "antigravity") ;;
+      claude-code) platforms_to_run=("claude-code") ;;
+      generic)     platforms_to_run=("generic") ;;
+      antigravity) platforms_to_run=("antigravity") ;;
+      codex)       platforms_to_run=("codex") ;;
+      opencode)    platforms_to_run=("opencode") ;;
+      gemini-cli)  platforms_to_run=("gemini-cli") ;;
+      *)           platforms_to_run=("claude-code") ;;
+    esac
+  fi
+
+  for p in ${platforms_to_run[@]+"${platforms_to_run[@]}"}; do
+    # First-class platforms live at platforms/<p>/; community (experimental)
+    # ones moved to platforms/community/<p>/ (P3-T13). Resolve either.
+    local script="$sage_path/runtime/platforms/$p/setup/generate-$p.sh"
+    [ -f "$script" ] || script="$sage_path/runtime/platforms/community/$p/setup/generate-$p.sh"
+    if [ -f "$script" ]; then
+      echo ""
+      case "$script" in
+        */community/*) echo -e "  ${YELLOW}⚠ $p is community-maintained (experimental) — generation only, no quality chain.${RESET}" ;;
+      esac
+      bash "$script" "$target"
+    else
+      echo -e "  ${YELLOW}⚠ Generator not found: $script${RESET}"
+    fi
+  done
+}
+
+print_success() {
+  local target="$1"
+  local project_name
+  project_name=$(basename "$target")
+
+  # Constitution info
+  local preset_info="base"
+  [ -n "${SELECTED_PRESET:-}" ] && [ "$SELECTED_PRESET" != "base" ] && preset_info="$SELECTED_PRESET"
+
+  sage_complete
+
+  # Command prefix display
+  local p=""
+  [ "$PREFIX_FLAG" = "true" ] && p="sage:"
+
+  echo -e "  ${BOLD}Get started:${RESET}"
+  echo ""
+
+  # Build a per-platform instructions list from PLATFORMS array
+  local plats_arr=()
+  if [ -n "${PLATFORMS+set}" ] && [ ${#PLATFORMS[@]} -gt 0 ]; then
+    plats_arr=(${PLATFORMS[@]+"${PLATFORMS[@]}"})
+  else
+    # Fall back to legacy PLATFORM string
+    case "$PLATFORM" in
+      both) plats_arr=("claude-code" "antigravity") ;;
+      *)    plats_arr=("$PLATFORM") ;;
+    esac
+  fi
+
+  local step=1
+  for plat in ${plats_arr[@]+"${plats_arr[@]}"}; do
+    case "$plat" in
+      claude-code)
+        echo "    $step. Claude Code: open the project — slash commands are in .claude/commands/"
+        ;;
+      antigravity)
+        echo "    $step. Antigravity: open the project — Sage is wired via .agent/"
+        ;;
+      codex)
+        echo "    $step. Codex: run \`codex\` — AGENTS.md is loaded as system prompt"
+        ;;
+      opencode)
+        echo "    $step. Opencode: run \`opencode\` — commands in .opencode/commands/, agents in .opencode/agents/"
+        ;;
+      gemini-cli)
+        echo "    $step. Gemini CLI: run \`gemini\` — TOML commands in .gemini/commands/"
+        ;;
+    esac
+    step=$((step + 1))
+  done
+  echo ""
+  echo -e "    Type ${BOLD}/sage${RESET} (or \`@sage\` in Opencode) and describe what you want."
+  echo ""
+  echo -e "  ${DIM}Commands: /${p}build  /${p}fix  /${p}architect  /${p}status  /${p}review  /${p}learn${RESET}"
+
+  # Check for sage-memory
+  local has_memory=false
+  if [ -f "$HOME/.claude.json" ] && grep -q "sage-memory" "$HOME/.claude.json" 2>/dev/null; then
+    has_memory=true
+  fi
+  if [ -f "$target/.claude.json" ] && grep -q "sage-memory" "$target/.claude.json" 2>/dev/null; then
+    has_memory=true
+  fi
+
+  if [ "$has_memory" = false ]; then
+    echo ""
+    echo -e "  ${DIM}Enable persistent memory:  sage setup memory${RESET}"
+  fi
+
+  echo ""
+}
+
+# ═══════════════════════════════════════════════════════════════
+# COMMAND: new <name>
+# ═══════════════════════════════════════════════════════════════
+sage_new() {
+  local name="${1:-}"
+
+  echo ""
+  echo -e "  ${BOLD}Sage — New Project${RESET}"
+  echo ""
+
+  if [ -z "$name" ]; then
+    printf "  Project name: " >&2
+    read -r name
+    if [ -z "$name" ]; then
+      echo -e "  ${RED}❌ Project name is required.${RESET}"
+      exit 1
+    fi
+  fi
+
+  if [[ "$name" =~ [\ /\\] ]]; then
+    echo -e "  ${RED}❌ Project name cannot contain spaces or slashes.${RESET}"
+    exit 1
+  fi
+
+  if [ -d "$name" ]; then
+    echo -e "  ${RED}❌ Directory '$name' already exists.${RESET}"
+    echo "  Use 'sage init' inside it instead."
+    exit 1
+  fi
+
+  echo -e "  Creating ${CYAN}$name${RESET}..."
+  timer_start
+  step_start
+
+  mkdir -p "$name"
+  local target
+  target="$(cd "$name" && pwd)"
+
+  copy_framework "$target"
+
+  # Git init
+  if [ ! -d "$target/.git" ]; then
+    (cd "$target" && git init -q 2>/dev/null) || true
+    echo -e "  ${GREEN}✓${RESET} Git initialized"
+  fi
+
+  detect_stack "$target"
+  select_platform "$target"
+  select_preset "$target"
+  create_sage_state "$target"
+  run_generators "$target"
+  sage_memory_sync_hook "$target"
+  print_success "$target"
+}
+
+# ═══════════════════════════════════════════════════════════════
+# COMMAND: init
+# ═══════════════════════════════════════════════════════════════
+sage_init() {
+  local target
+  target="$(pwd)"
+
+  # Safety: don't init inside sage/ framework itself
+  if [ -f "$target/core/registry.yaml" ] && [ -d "$target/core/capabilities" ]; then
+    echo ""
+    echo -e "  ${RED}❌ You're inside the Sage framework directory.${RESET}"
+    echo ""
+    echo "  Run from your project directory instead:"
+    echo "    cd /path/to/your/project"
+    echo "    sage init"
+    exit 1
+  fi
+
+  echo ""
+  echo -e "  ${BOLD}Sage — Initialize Project${RESET}"
+  echo ""
+  echo -e "  Project: ${CYAN}$(basename "$target")${RESET}"
+  echo -e "  Path:    ${DIM}$target${RESET}"
+  timer_start
+  step_start
+
+  # Check if already initialized
+  if [ -d "$target/.sage" ] && [ -d "$target/sage" ]; then
+    echo -e "  ${YELLOW}Sage is already initialized in this project.${RESET}"
+    echo ""
+    echo "  To regenerate platform files: sage update"
+    echo "  To start over: remove .sage/ and sage/ first"
+    echo ""
+    printf "  Reinstall anyway? [y/N]: "
+    read -r confirm
+    if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
+      echo "  Cancelled."
+      exit 0
+    fi
+    echo ""
+  fi
+
+  copy_framework "$target"
+  detect_stack "$target"
+  select_platform "$target"
+  select_preset "$target"
+  create_sage_state "$target"
+  run_generators "$target"
+  sage_memory_sync_hook "$target"
+
+  # sage-memory is a built-in capability — wire it up seamlessly (idempotent,
+  # never overwrites other MCP servers). Opt out with `sage init --no-memory`.
+  if [ "${NO_MEMORY_FLAG:-}" != "true" ]; then
+    echo ""
+    echo -e "  ${BOLD}Memory${RESET}"
+    _sage_memory_install "$target" 0 || true
+  fi
+
+  print_success "$target"
+}
+
+# ═══════════════════════════════════════════════════════════════
+# COMMAND: update
+# ═══════════════════════════════════════════════════════════════
+sage_update() {
+  local target
+  target="$(pwd)"
+
+  if [ ! -d "$target/.sage" ]; then
+    echo ""
+    echo -e "  ${RED}❌ No Sage project found here.${RESET}"
+    echo "  Run this from a directory with .sage/"
+    echo "  Or run 'sage init' to set up Sage first."
+    exit 1
+  fi
+
+  echo ""
+  echo -e "  ${BOLD}Sage — Update Project${RESET}"
+  echo ""
+  echo -e "  Project: ${CYAN}$(basename "$target")${RESET}"
+  timer_start
+  step_start
+
+  # Detect platforms — first try persisted config, then file/dir detection
+  PLATFORM=""
+  PLATFORMS=()
+
+  # Read persisted platforms: list from .sage/config.yaml if present.
+  # Note: under `set -euo pipefail`, a failing grep inside $(...) with a
+  # bare assignment (not `local var=...`) triggers errexit and silently
+  # exits the script. Use `|| true` to keep the script running when the
+  # `platforms:` line is absent (pre-v1.1.3 projects).
+  local config_file="$target/.sage/config.yaml"
+  if [ -f "$config_file" ]; then
+    local persisted
+    persisted=$(grep '^platforms:' "$config_file" 2>/dev/null | sed 's/^platforms: *\[//;s/\]$//;s/"//g;s/,/ /g' || true)
+    if [ -n "$persisted" ]; then
+      for p in $persisted; do
+        PLATFORMS+=("$p")
+      done
+    fi
+  fi
+
+  # If config didn't list any, fall back to detection
+  if [ ${#PLATFORMS[@]} -eq 0 ]; then
+    select_platform "$target"
+  fi
+
+  # Honor --platform flag override even on update
+  if [ -n "${PLATFORM_FLAG:-}" ]; then
+    PLATFORMS=()
+    IFS=', ' read -ra FLAG_LIST <<< "$PLATFORM_FLAG"
+    # Empty-safe expansion (see select_platform — same bash 3.2 guard).
+    for p in ${FLAG_LIST[@]+"${FLAG_LIST[@]}"}; do
+      case "$p" in
+        claude-code|generic|antigravity|codex|opencode|gemini-cli)
+          PLATFORMS+=("$p") ;;
+        all)
+          PLATFORMS=("claude-code" "antigravity" "codex" "opencode" "gemini-cli")
+          break ;;
+      esac
+    done
+  fi
+
+  PLATFORM=$(printf '%s\n' ${PLATFORMS[@]+"${PLATFORMS[@]}"} | tr '\n' '+' | sed 's/+$//')
+  echo -e "  ${GREEN}Platforms:${RESET} ${PLATFORMS[*]+"${PLATFORMS[*]}"}"
+
+  # Detect community skills before updating
+  local community_skills=""
+  if [ -f "$target/sage/skills/skills.json" ]; then
+    community_skills=$(python3 -c "
+import json, sys
+try:
+  d = json.load(open('$target/sage/skills/skills.json'))
+  cs = [k for k, v in d.get('skills', {}).items() if v.get('source') != 'built-in']
+  print(' '.join(cs))
+except: pass
+" 2>/dev/null)
+  fi
+
+  # Show what will happen
+  echo ""
+  echo "  This will:"
+  if [ -d "$target/sage" ]; then
+    echo -e "    ${CYAN}↻${RESET} Update sage/ framework to latest version"
+  fi
+  if [ "$PLATFORM" = "antigravity" ] || [ "$PLATFORM" = "both" ]; then
+    echo -e "    ${CYAN}↻${RESET} Regenerate GEMINI.md and .agent/"
+  fi
+  if [ "$PLATFORM" = "claude-code" ] || [ "$PLATFORM" = "both" ]; then
+    echo -e "    ${CYAN}↻${RESET} Regenerate CLAUDE.md and .claude/commands/"
+  fi
+  echo -e "    ${GREEN}✓${RESET} Preserve .sage/ project state (untouched)"
+  if [ -n "$community_skills" ]; then
+    echo -e "    ${GREEN}✓${RESET} Preserve community skills: $community_skills"
+  fi
+
+  echo ""
+  if [ -t 0 ]; then
+    printf "  [A] Proceed  |  [C] Cancel: "
+    read -r confirm
+    if [ "$confirm" != "A" ] && [ "$confirm" != "a" ] && [ "$confirm" != "" ]; then
+      echo "  Cancelled."
+      echo ""
+      return
+    fi
+  fi
+
+  echo ""
+
+  # Backup community skills
+  local backup_dir=""
+  if [ -n "$community_skills" ]; then
+    backup_dir=$(mktemp -d)
+    for skill_name in $community_skills; do
+      if [ -d "$target/sage/skills/$skill_name" ]; then
+        cp -a "$target/sage/skills/$skill_name" "$backup_dir/"
+      fi
+    done
+    # Back up the RECORDS, not just the files. `sage update` replaces sage/ wholesale,
+    # which destroys skills.json — and the restore below used to invent a replacement:
+    # every surviving skill was re-registered as `source: community, added: today`.
+    #
+    # That is a fabricated record. A skill installed from a pack came from a pack, not
+    # from the community catalog, and it was added when it was added. `sage update`
+    # was overwriting a true provenance record with a false one, on every run, and the
+    # `added` date with today's. Nothing noticed because nothing read it back.
+    if [ -f "$target/sage/skills/skills.json" ]; then
+      cp -a "$target/sage/skills/skills.json" "$backup_dir/skills.json.orig"
+    fi
+  fi
+
+  # Update sage/ framework
+  if [ -d "$target/sage" ]; then
+    rm -rf "$target/sage"
+    cp -a "$SAGE_FRAMEWORK" "$target/sage" &
+    spin $! "Updating framework..."
+    prune_framework_copy "$target/sage"
+    echo -e "  ${GREEN}✓${RESET} sage/ updated"
+  fi
+
+  # Restore community skills
+  if [ -n "$community_skills" ] && [ -n "$backup_dir" ]; then
+    for skill_name in $community_skills; do
+      if [ -d "$backup_dir/$skill_name" ]; then
+        cp -a "$backup_dir/$skill_name" "$target/sage/skills/"
+      fi
+    done
+
+    # Re-register the restored skills — with their ORIGINAL records where we have
+    # them. Only a skill we have never seen before gets 'community', and that is a
+    # guess we are entitled to make; rewriting a known provenance is not.
+    python3 -c "
+import json
+target = '$target'
+orig_path = '$backup_dir/skills.json.orig'
+today = '$(date +%Y-%m-%d)'
+
+try:
+  with open(target + '/sage/skills/skills.json') as f:
+    d = json.load(f)
+except (OSError, ValueError):
+  d = {'skills': {}}
+
+try:
+  with open(orig_path) as f:
+    orig = (json.load(f) or {}).get('skills', {})
+except (OSError, ValueError):
+  orig = {}
+
+skills = d.setdefault('skills', {})
+for s in '$community_skills'.split():
+  if s in skills:
+    continue
+  # The record the user actually had, verbatim: source, version, added, the lot.
+  # Falling back to 'community' only when there is nothing to preserve.
+  skills[s] = orig.get(s) or {'source': 'community', 'added': today}
+
+try:
+  with open(target + '/sage/skills/skills.json', 'w') as f:
+    json.dump(d, f, indent=2)
+except OSError:
+  pass
+" 2>/dev/null
+
+    # Only now. The re-register step above reads skills.json.orig out of it, and an
+    # earlier `rm -rf` here is exactly the bug that would have restored the files and
+    # then thrown away the records that say where they came from.
+    rm -rf "$backup_dir"
+
+    echo -e "  ${GREEN}✓${RESET} Skills preserved (with their provenance): $community_skills"
+  fi
+
+  # Apply --prefix flag if provided
+  [ "$PREFIX_FLAG" = "true" ] && apply_prefix_config "$target"
+
+  # Regenerate platform files
+  DETECTED_STACK=""
+  detect_stack "$target"
+  export SAGE_UPDATE_MODE=true
+  run_generators "$target"
+  unset SAGE_UPDATE_MODE
+
+  # ── Migration: clean stale patterns from previous versions ──
+  local migrated=0
+  local migration_notes=""
+
+  # Remove tasks-total/tasks-done from plan frontmatter
+  for plan in "$target"/.sage/work/*/plan.md; do
+    [ -f "$plan" ] || continue
+    if grep -q "tasks-total\|tasks-done" "$plan" 2>/dev/null; then
+      sed -i.bak '/^tasks-total:/d; /^tasks-done:/d' "$plan"
+      rm -f "${plan}.bak"
+      migrated=$((migrated + 1))
+    fi
+  done
+  [ "$migrated" -gt 0 ] && migration_notes="${migration_notes}\n  ${CYAN}↻${RESET} Migrated $migrated plan file(s) (removed stale task count fields)"
+
+  # Migrate journal.md → decisions.md
+  if [ -f "$target/.sage/journal.md" ] && [ ! -f "$target/.sage/decisions.md" ]; then
+    # Strip artifact index table, keep change log entries
+    sed -n '/^## Change Log/,$ p' "$target/.sage/journal.md" | sed '1d' > /tmp/sage-journal-entries.tmp 2>/dev/null
+    cat > "$target/.sage/decisions.md" << DECMD
+# Decisions
+
+Shared log for significant decisions and context.
+Both the AI agent and human collaborators write here.
+
+$(cat /tmp/sage-journal-entries.tmp 2>/dev/null)
+DECMD
+    rm -f /tmp/sage-journal-entries.tmp
+    migration_notes="${migration_notes}\n  ${CYAN}↻${RESET} Migrated journal.md → decisions.md (artifact table removed, change log preserved)"
+  fi
+
+  # Create decisions.md if neither journal nor decisions exist
+  if [ ! -f "$target/.sage/decisions.md" ]; then
+    cat > "$target/.sage/decisions.md" << DECMD
+# Decisions
+
+Shared log for significant decisions and context.
+Both the AI agent and human collaborators write here.
+
+- [$(date +%Y-%m-%d)] Sage updated to v${SAGE_FRAMEWORK_VERSION}
+DECMD
+    migration_notes="${migration_notes}\n  ${GREEN}✓${RESET} decisions.md created"
+  fi
+
+  # ── Migration: backfill platforms: into pre-v1.1.3 config.yaml ──
+  # The `platforms:` key was added in v1.1.3. Projects initialised
+  # before that have a config.yaml with no such key, which leaves
+  # platform metadata incomplete (sage's Python tools and this very
+  # function then fall back to filesystem detection on every run).
+  # Append one, derived from the platforms resolved for this run.
+  # Appending only when the key is absent is the idempotency guard —
+  # a later `sage update` finds the key via `grep '^platforms:'` and
+  # skips. PLATFORMS uses the empty-safe expansion (CONTRIBUTING.md).
+  if [ -f "$config_file" ] && ! grep -q '^platforms:' "$config_file" 2>/dev/null; then
+    local platforms_yaml
+    platforms_yaml="[$(printf '"%s", ' ${PLATFORMS[@]+"${PLATFORMS[@]}"} | sed 's/, $//')]"
+    echo "platforms: $platforms_yaml" >> "$config_file"
+    migration_notes="${migration_notes}\n  ${GREEN}✓${RESET} Backfilled platforms: ${platforms_yaml} into config.yaml"
+  fi
+
+  # ── Migration: add hard_enforcement to existing projects (default OFF, R27) ──
+  # The Claude Code spec-gate hook is now installed on every update, but turning
+  # it ON silently under an established workflow would surprise-block someone
+  # mid-task. So existing projects default hard_enforcement: false and are told
+  # how to opt in; only fresh `sage init` defaults true. Appending only when the
+  # key is absent is the idempotency guard (a later update finds it and skips).
+  if [ -f "$config_file" ] && ! grep -q '^hard_enforcement:' "$config_file" 2>/dev/null; then
+    echo "hard_enforcement: false" >> "$config_file"
+    migration_notes="${migration_notes}\n  ${GREEN}✓${RESET} Installed the spec-gate hook (hard_enforcement: false — OFF).\n     To enforce spec-before-code, set hard_enforcement: true in .sage/config.yaml"
+  fi
+
+  # ── Migration: pin existing projects to review_loop v1 (same R27 logic) ──
+  # The v2 ledger loop is the default for fresh `sage init`, but switching an
+  # established project's review semantics silently mid-initiative would be the
+  # same surprise hard_enforcement avoided. Existing configs without the block
+  # get an explicit v1 pin and are told how to opt in. Absent-key grep is the
+  # idempotency guard.
+  if [ -f "$config_file" ] && ! grep -q '^review_loop:' "$config_file" 2>/dev/null; then
+    printf 'review_loop:\n  mode: v1\n' >> "$config_file"
+    migration_notes="${migration_notes}\n  ${GREEN}✓${RESET} Pinned review_loop: mode: v1 (your current loop, unchanged).\n     For the ledger loop (computed verdicts, evidence-capped findings), set mode: v2"
+  fi
+
+  # ── Deprecation notice: PM/UX skills moved to the sage-product pack (R54) ──
+  # If this project's .sage/ artifacts show prior use of a moved skill, point
+  # the user at the pack that now provides it. Grep is fail-soft (|| true).
+  local moved_hits=""
+  moved_hits=$(grep -rlE 'jtbd|ux-audit|ux-evaluate|ux-review|opportunity-map|prd-|user-interview' \
+                 "$target/.sage/docs" "$target/.sage/work" 2>/dev/null | head -1 || true)
+  if [ -n "$moved_hits" ]; then
+    migration_notes="${migration_notes}\n  ${YELLOW}↻${RESET} PM/UX skills moved to a pack. If you use them, install it:\n     sage add xoai/sage-product --all"
+  fi
+
+  # ── Migration: packs installed from a local packs/ checkout (R127) ──
+  #
+  # Before v1.3.2 a pack installed from `sage add ./packs/<name>`, and skills.json
+  # recorded the ABSOLUTE PATH of the checkout it came from. Those skills are now
+  # orphaned: `packs/` in the Sage repo is a pointer README, so that path installs
+  # nothing and re-running the command fails. Worse, the recorded source is a path on
+  # ONE developer's machine — it cannot be reproduced by anyone else, and there is no
+  # version and no checksum in it.
+  #
+  # Detect it and say what to do. `.sage/packs.lock` (v1.3.2+) is what a reinstall
+  # writes instead: source, resolved tag, and the sha256 that was actually verified.
+  local skills_json="$target/sage/skills/skills.json"
+  if [ -f "$skills_json" ] && grep -q '"source": *"[^"]*/packs/' "$skills_json" 2>/dev/null; then
+    migration_notes="${migration_notes}\n  ${YELLOW}↻${RESET} Some skills were installed from a local ${DIM}packs/${RESET} checkout, which no longer exists."
+    migration_notes="${migration_notes}\n     The packs live in their own repos now. Reinstall to get a verified, pinned copy:"
+    migration_notes="${migration_notes}\n       sage add xoai/sage-product --all"
+    migration_notes="${migration_notes}\n       sage add xoai/sage-pack-authoring --all"
+    migration_notes="${migration_notes}\n     ${DIM}The reinstall records source + version + sha256 in .sage/packs.lock;${RESET}"
+    migration_notes="${migration_notes}\n     ${DIM}the old skills.json entry recorded a path on one machine.${RESET}"
+  fi
+
+  # ── Migration: relocate vendored templates develop/ → core/ (R42) ──
+  # Framework templates moved to core/templates in Phase 3. A normal `sage
+  # update` already replaced sage/ wholesale (so sage/core/templates/ is present
+  # and sage/develop/templates/ is gone). This handles an out-of-band vendored
+  # copy left in the old layout. Idempotent: fires only when the old directory
+  # exists and the new one does not. .sage/ project-override templates are left
+  # in place — sage-scaffold resolves the legacy path as a fallback.
+  if [ -d "$target/sage/develop/templates" ] && [ ! -d "$target/sage/core/templates" ]; then
+    mkdir -p "$target/sage/core"
+    mv "$target/sage/develop/templates" "$target/sage/core/templates"
+    migration_notes="${migration_notes}\n  ${CYAN}↻${RESET} Relocated vendored templates → sage/core/templates/"
+  fi
+
+  if [ -n "$migration_notes" ]; then
+    echo ""
+    echo -e "$migration_notes"
+  fi
+
+  echo ""
+  echo -e "  ${GREEN}✓${RESET} Platform files regenerated"
+  echo -e "  ${GREEN}✓${RESET} .sage/ state preserved"
+
+  # ── sage-memory integration (no-op unless installed) ──
+  # Helper detects sage-memory and (a) backs up pre-v1.1.7 legacy skill
+  # directories one-time, (b) overlays wheel-canonical sage-memory /
+  # sage-ontology / sage-self-learning skills via `sage-memory
+  # install-skills`. User-owned skill prose under .sage/prompts/ is never
+  # touched. See .sage/work/20260519-sage-memory-integration/spec.md.
+  sage_memory_sync_hook "$target"
+
+  # ── Multi-Agent refresh (no-op unless installed) ──
+  # Check for multi_agent.enabled in .sage/config.yaml. If present, refresh
+  # framework-owned files (scripts, command files, sub-agents) from the
+  # template. User-owned files (.sage/agents.toml, .sage/prompts/*) are
+  # never touched.
+  if [ -f "$config_file" ] && grep -A2 '^multi_agent:' "$config_file" 2>/dev/null | grep -q 'enabled: true'; then
+    local ma_script="$SAGE_FRAMEWORK/runtime/tools/multi_agent_setup.py"
+    if [ -f "$ma_script" ] && command -v python3 >/dev/null 2>&1; then
+      # --yes preserves user-edited framework files. Pass --force on
+      # SAGE_UPDATE_FORCE_MULTI_AGENT_REPLACE=1 for CI-style headless updates.
+      local ma_flags=("--yes")
+      if [ "${SAGE_UPDATE_FORCE_MULTI_AGENT_REPLACE:-}" = "1" ]; then
+        ma_flags+=("--force")
+      fi
+      python3 "$ma_script" refresh "$SAGE_FRAMEWORK" "$target" ${ma_flags[@]+"${ma_flags[@]}"} || \
+        echo -e "  ${YELLOW}⚠ Multi-agent refresh exited non-zero${RESET}"
+    fi
+  fi
+
+  sage_complete
+}
+
+# ═══════════════════════════════════════════════════════════════
+# COMMAND: upgrade
+# ═══════════════════════════════════════════════════════════════
+# Newest `vX.Y.Z` tag, compared numerically. `sort -V` is GNU-only and BSD
+# sort's -V is recent; python3 is already a dependency.
+_sage_latest_tag() {
+  git -C "$1" tag --list 'v*' 2>/dev/null | python3 -c '
+import re, sys
+tags = [t.strip() for t in sys.stdin if re.match(r"^v[0-9]+\.[0-9]+\.[0-9]+$", t.strip())]
+if not tags:
+    sys.exit(1)
+best = max(tuple(int(p) for p in t[1:].split(".")) for t in tags)
+print("v" + ".".join(str(p) for p in best))
+' 2>/dev/null
+}
+
+# Print the CHANGELOG sections strictly between two versions (old, new].
+_sage_changelog_delta() {
+  local changelog="$1" from="$2" to="$3"
+  [ -f "$changelog" ] || return 0
+  python3 - "$changelog" "$from" "$to" <<'PY' 2>/dev/null || true
+import pathlib, re, sys
+
+path, old, new = sys.argv[1], sys.argv[2], sys.argv[3]
+
+
+def key(v):
+    try:
+        return tuple(int(p) for p in v.split("."))
+    except ValueError:
+        return None
+
+
+old_k, new_k = key(old), key(new)
+text = pathlib.Path(path).read_text(errors="replace")
+sections = re.findall(r"^##\s*\[([0-9]+\.[0-9]+\.[0-9]+)\][^\n]*", text, re.M)
+
+shown = [v for v in sections
+         if key(v) and (old_k is None or key(v) > old_k) and (new_k is None or key(v) <= new_k)]
+for v in shown:
+    m = re.search(r"^##\s*\[%s\][^\n]*" % re.escape(v), text, re.M)
+    print("    " + m.group(0).lstrip("# ").strip())
+PY
+}
+
+sage_upgrade() {
+  local sage_home="${SAGE_HOME:-$HOME/.sage}"
+  local framework="$sage_home/framework"
+  local channel="stable"
+
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --channel=*) channel="${1#--channel=}"; shift ;;
+      --channel)   channel="${2:-}"; shift 2 ;;
+      *)           shift ;;
+    esac
+  done
+
+  echo ""
+  echo -e "  ${BOLD}Sage — Upgrade Framework${RESET}"
+  echo ""
+
+  if [ ! -d "$framework" ]; then
+    echo -e "  ${RED}❌ Sage not installed globally.${RESET}"
+    echo "  Install first:"
+    echo "    curl -fsSL https://raw.githubusercontent.com/xoai/sage/main/install.sh | bash"
+    exit 1
+  fi
+
+  # Read the version from the tree we are about to upgrade. $SAGE_FRAMEWORK_VERSION
+  # comes from $SAGE_FRAMEWORK, which may be a project's vendored copy rather than
+  # the global install — `sage update` owns those, not `sage upgrade`.
+  local old_version="unknown"
+  [ -f "$framework/VERSION" ] && old_version="$(tr -d ' \t\n\r' < "$framework/VERSION")"
+
+  if [ -d "$framework/.git" ]; then
+    if [ "$channel" = "main" ]; then
+      # The development channel: whatever is on main right now. No tag, no
+      # checksum, no review — the state install.sh used to give everyone.
+      echo -e "  ${YELLOW}⚠️  Development channel — tracking 'main'.${RESET}"
+      echo -e "  ${DIM}Unreleased, unverified code. Use 'sage upgrade' for the latest release.${RESET}"
+      echo ""
+      if (cd "$framework" && git checkout --quiet main 2>/dev/null && git pull --ff-only --quiet 2>/dev/null); then
+        echo -e "  ${GREEN}✓${RESET} Sage updated to the tip of main"
+      else
+        echo -e "  ${RED}❌ Could not pull main.${RESET}"
+        echo "  The framework may have local changes: cd $framework && git status"
+        exit 1
+      fi
+    else
+      if ! (cd "$framework" && git fetch --tags --quiet 2>/dev/null); then
+        echo -e "  ${RED}❌ Could not fetch release tags.${RESET}"
+        echo "  Check your network, or upgrade the development channel:"
+        echo "    sage upgrade --channel main"
+        exit 1
+      fi
+
+      local tag
+      tag="$(_sage_latest_tag "$framework")"
+      if [ -z "$tag" ]; then
+        echo -e "  ${YELLOW}No release tags found.${RESET}"
+        echo "  This checkout has no vX.Y.Z tags. Upgrade the development channel:"
+        echo "    sage upgrade --channel main"
+        exit 1
+      fi
+
+      if [ "${tag#v}" = "$old_version" ]; then
+        echo -e "  ${GREEN}✓${RESET} Already on the latest release ($tag)"
+        echo ""
+        return 0
+      fi
+
+      # Checkout, not pull: releases are tags, and a tag is the only thing that
+      # has been through the release workflow's checks.
+      if ! (cd "$framework" && git checkout --quiet "$tag" 2>/dev/null); then
+        echo -e "  ${RED}❌ Could not check out $tag.${RESET}"
+        echo "  The framework may have local changes: cd $framework && git status"
+        exit 1
+      fi
+      echo -e "  ${GREEN}✓${RESET} Sage upgraded: ${old_version} → ${tag#v}"
+      echo ""
+      echo "  Changes:"
+      _sage_changelog_delta "$framework/CHANGELOG.md" "$old_version" "${tag#v}"
+    fi
+  else
+    # Tarball install: re-run the vendored installer in remote mode, so it
+    # downloads and SHA-256-verifies the new release rather than copying itself.
+    local installer="$framework/install.sh"
+    if [ ! -f "$installer" ]; then
+      echo "  Sage was installed from a local copy, and no installer is vendored."
+      echo ""
+      echo "  Upgrade with:"
+      echo "    curl -fsSL https://raw.githubusercontent.com/xoai/sage/main/install.sh | bash"
+      echo ""
+      return 0
+    fi
+
+    echo "  Tarball install — re-downloading and verifying the latest release..."
+    echo ""
+    if SAGE_FORCE_REMOTE=1 bash "$installer"; then
+      local new_version="unknown"
+      [ -f "$framework/VERSION" ] && new_version="$(tr -d ' \t\n\r' < "$framework/VERSION")"
+      if [ "$new_version" != "$old_version" ]; then
+        echo "  Changes:"
+        _sage_changelog_delta "$framework/CHANGELOG.md" "$old_version" "$new_version"
+      fi
+    else
+      echo ""
+      echo -e "  ${RED}❌ Upgrade failed — your existing Sage is untouched.${RESET}"
+      exit 1
+    fi
+  fi
+
+  echo ""
+  echo "  Run 'sage update' in your projects to regenerate platform files."
+
+  # ── sage-memory sibling upgrade (no-op unless installed) ──
+  # The helper detects sage-memory, compares vs PyPI latest, and
+  # prompts to upgrade if a newer version is available. Sage upgrade
+  # itself never fails because of memory-sync side effects.
+  local ms_script="$sage_home/framework/runtime/tools/memory_sync.py"
+  if [ -f "$ms_script" ] && command -v python3 >/dev/null 2>&1; then
+    python3 "$ms_script" upgrade "$sage_home/framework" || true
+  fi
+
+  echo ""
+}
+
+# ═══════════════════════════════════════════════════════════════
+# SKILL MANAGEMENT (delegates to Python)
+# ═══════════════════════════════════════════════════════════════
+
+require_python() {
+  if ! command -v python3 &>/dev/null; then
+    echo ""
+    echo -e "  ${RED}Skill management requires Python 3.8+${RESET}"
+    echo "  Install Python: https://www.python.org/downloads/"
+    exit 1
+  fi
+}
+
+skill_manager() {
+  require_python
+  local manager="$SAGE_FRAMEWORK/runtime/tools/skill_manager.py"
+  if [ ! -f "$manager" ]; then
+    echo -e "  ${RED}❌ skill_manager.py not found at $manager${RESET}"
+    exit 1
+  fi
+  python3 "$manager" "$@"
+}
+
+sage_find() {
+  skill_manager find "$@"
+}
+
+sage_add() {
+  skill_manager add "$@"
+}
+
+sage_remove() {
+  skill_manager remove "$@"
+}
+
+sage_skills() {
+  skill_manager list "$@"
+}
+
+# ═══════════════════════════════════════════════════════════════
+# COMMAND: setup
+# ═══════════════════════════════════════════════════════════════
+sage_setup() {
+  local component="${1:-}"
+  shift 2>/dev/null || true
+
+  case "$component" in
+    memory)      sage_setup_memory "$@" ;;
+    multi-agent) sage_setup_multi_agent "$@" ;;
+    "")
+      echo ""
+      echo -e "  ${BOLD}Sage — Setup${RESET}"
+      echo ""
+      echo "  Usage:"
+      echo "    sage setup memory               Configure persistent memory (sage-memory MCP)"
+      echo "    sage setup multi-agent          Install the cross-model build cycle"
+      echo "    sage setup multi-agent --remove Uninstall it"
+      echo ""
+      return
+      ;;
+    *)
+      echo ""
+      echo -e "  ${RED}Unknown setup target: $component${RESET}"
+      echo "  Try: sage setup memory  |  sage setup multi-agent"
+      echo ""
+      return 1
+      ;;
+  esac
+}
+
+# Ensure a .gitignore in <target> contains <pattern> (idempotent).
+_ensure_gitignore() {
+  local target="$1" pat="$2" gi="$1/.gitignore"
+  [ -f "$gi" ] || : > "$gi"
+  grep -qxF "$pat" "$gi" 2>/dev/null && return 0
+  # keep the user's last rule intact — add a newline first if the file lacks one
+  if [ -s "$gi" ] && [ -n "$(tail -c1 "$gi" 2>/dev/null)" ]; then printf '\n' >> "$gi"; fi
+  printf '%s\n' "$pat" >> "$gi"
+}
+
+# Idempotently add the sage-memory server to an MCP config JSON file.
+#   rc 0 = already present / created / merged (config is good)
+#   rc 2 = could not safely auto-edit (caller should print the manual snippet)
+# Never overwrites an existing file's other servers; a structural merge into an
+# existing file needs jq (a hand-rolled JSON edit would risk corrupting it).
+_mcp_add_sage_memory() {
+  local cfg="$1"
+  if [ -f "$cfg" ] && grep -q '"sage-memory"' "$cfg" 2>/dev/null; then
+    return 0   # already configured — idempotent no-op
+  fi
+  if [ ! -f "$cfg" ]; then
+    mkdir -p "$(dirname "$cfg")" 2>/dev/null || true
+    cat > "$cfg" <<'JSON'
+{
+  "mcpServers": {
+    "sage-memory": {
+      "command": "uvx",
+      "args": ["--refresh", "sage-memory"]
+    }
+  }
+}
+JSON
+    return 0
+  fi
+  # File exists but has no sage-memory entry → structural merge (preserve the rest).
+  if command -v jq >/dev/null 2>&1; then
+    local tmp; tmp="$(mktemp)"
+    if jq '.mcpServers["sage-memory"] = {"command":"uvx","args":["--refresh","sage-memory"]}' \
+         "$cfg" >"$tmp" 2>/dev/null && [ -s "$tmp" ]; then
+      cat "$tmp" > "$cfg"; rm -f "$tmp"; return 0
+    fi
+    rm -f "$tmp"
+  fi
+  return 2   # no jq, or malformed JSON — don't risk it
+}
+
+# Configure sage-memory for the project at <target>. Idempotent and
+# non-destructive. quiet=1 suppresses the per-config success line (used by init).
+# Returns 2 if any platform needs a manual snippet (caller may print it).
+_sage_memory_install() {
+  local target="$1" quiet="${2:-0}"
+  local platforms
+  platforms=$( { grep '^platforms:' "$target/.sage/config.yaml" 2>/dev/null || true; } \
+    | sed 's/^platforms:[[:space:]]*\[//; s/\]//; s/"//g; s/,/ /g')
+  [ -z "$platforms" ] && platforms="claude-code"
+
+  # The SQLite store must never be committed (it's a binary the server manages).
+  _ensure_gitignore "$target" ".sage-memory/"
+
+  local p cfg need_manual=0
+  for p in $platforms; do
+    case "$p" in
+      claude-code) cfg="$target/.mcp.json" ;;
+      cursor)      cfg="$target/.cursor/mcp.json" ;;
+      *)           cfg="" ;;   # other platforms: no safe auto-merge → manual
+    esac
+    if [ -z "$cfg" ]; then need_manual=1; continue; fi
+    if _mcp_add_sage_memory "$cfg"; then
+      [ "$quiet" = 1 ] || echo -e "  ${GREEN}✓${RESET} sage-memory ready in ${cfg#"$target"/}"
+    else
+      need_manual=1
+    fi
+  done
+
+  if ! command -v uvx >/dev/null 2>&1 && ! command -v uv >/dev/null 2>&1; then
+    echo -e "  ${YELLOW}⚠${RESET} uv not found — the memory server needs it:"
+    echo -e "      ${DIM}curl -LsSf https://astral.sh/uv/install.sh | sh${RESET}"
+  fi
+  [ "$need_manual" = 1 ] && return 2
+  return 0
+}
+
+sage_setup_memory() {
+  echo ""
+  echo -e "  ${BOLD}Sage — Setup Memory${RESET}"
+  echo ""
+  echo "  sage-memory gives your AI agent persistent knowledge across sessions —"
+  echo "  architecture decisions, conventions, debugging insights, project patterns."
+  echo ""
+
+  if _sage_memory_install "$(pwd)" 0; then
+    echo ""
+    echo -e "  ${BOLD}Restart your IDE${RESET} to load the server. That's it — Sage searches"
+    echo "  and stores knowledge automatically as you work."
+  else
+    # A platform without a safe auto-merge (or no jq) — show the manual snippet.
+    echo -e "  Add this to your MCP client config, then restart your IDE:"
+    echo ""
+    echo '    "sage-memory": {'
+    echo '      "command": "uvx",'
+    echo '      "args": ["--refresh", "sage-memory"]'
+    echo '    }'
+  fi
+  echo ""
+  echo -e "  ${DIM}--refresh keeps the server current each launch; \`sage upgrade\`${RESET}"
+  echo -e "  ${DIM}prompts when a newer package is on PyPI. More: https://github.com/xoai/sage-memory${RESET}"
+  echo ""
+}
+
+# ═══════════════════════════════════════════════════════════════
+# COMMAND: setup multi-agent
+#
+# Installs the optional cross-model build cycle into the current
+# project. Delegates to runtime/tools/multi_agent_setup.py which
+# handles pre-flight, file copy, settings.json merge, config.yaml
+# update, and CLAUDE.md augmentation.
+#
+# Flags:
+#   --remove   uninstall (preserves user-edited files in a backup dir)
+#   --yes      bypass prompts (CI / scripts)
+#   --force    overwrite locally-modified framework files
+# ═══════════════════════════════════════════════════════════════
+sage_setup_multi_agent() {
+  require_python
+
+  # Python 3.11+ is required (tomllib). Surface a clear message early.
+  if ! python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' 2>/dev/null; then
+    echo ""
+    echo -e "  ${RED}Multi-agent requires Python 3.11+ (for tomllib).${RESET}"
+    echo "  Detected: $(python3 --version 2>&1)"
+    echo ""
+    return 5
+  fi
+
+  local target
+  target="$(pwd)"
+
+  local subcommand="install"
+  local pass_args=()
+  for arg in "$@"; do
+    case "$arg" in
+      --remove)  subcommand="remove" ;;
+      --refresh) subcommand="refresh" ;;
+      --status)  subcommand="status" ;;
+      *)         pass_args+=("$arg") ;;
+    esac
+  done
+
+  echo ""
+  case "$subcommand" in
+    install) echo -e "  ${BOLD}Sage — Setup Multi-Agent${RESET}" ;;
+    remove)  echo -e "  ${BOLD}Sage — Remove Multi-Agent${RESET}" ;;
+    refresh) echo -e "  ${BOLD}Sage — Refresh Multi-Agent${RESET}" ;;
+    status)  echo -e "  ${BOLD}Sage — Multi-Agent Status${RESET}" ;;
+  esac
+
+  local script="$SAGE_FRAMEWORK/runtime/tools/multi_agent_setup.py"
+  if [ ! -f "$script" ]; then
+    echo ""
+    echo -e "  ${RED}❌ multi_agent_setup.py not found at $script${RESET}"
+    echo "  Try: sage upgrade"
+    return 1
+  fi
+
+  # Empty-safe array expansion (macOS /bin/bash 3.2 aborts on
+  # "${arr[@]}" when the array is empty under `set -u`). See CONTRIBUTING.
+  python3 "$script" "$subcommand" "$SAGE_FRAMEWORK" "$target" ${pass_args[@]+"${pass_args[@]}"}
+}
+
+# ═══════════════════════════════════════════════════════════════
+# COMMAND: learn
+# ═══════════════════════════════════════════════════════════════
+sage_learn() {
+  local target="${1:-.}"
+
+  echo ""
+  echo -e "  ${BOLD}Sage — Learn${RESET}"
+  echo ""
+
+  # Check if we're in a Sage project
+  if [ ! -d "sage/skills" ] && [ ! -d ".sage" ]; then
+    echo -e "  ${RED}❌ No Sage project found here.${RESET}"
+    echo "  Run this from a Sage project directory."
+    exit 1
+  fi
+
+  if [ "$target" = "." ]; then
+    echo -e "  ${CYAN}Broad scan:${RESET} learning the whole project"
+  else
+    if [ ! -e "$target" ]; then
+      echo -e "  ${RED}❌ Target not found: $target${RESET}"
+      exit 1
+    fi
+    echo -e "  ${CYAN}Deep dive:${RESET} $target"
+  fi
+
+  echo ""
+  echo "  This command works inside your AI agent (Claude Code, Antigravity)."
+  echo "  Open this project in your IDE, then tell the agent:"
+  echo ""
+
+  if [ "$target" = "." ]; then
+    echo -e "    ${BOLD}\"Learn this project. Do a broad scan and store${RESET}"
+    echo -e "    ${BOLD} what you learn in memory.\"${RESET}"
+  else
+    echo -e "    ${BOLD}\"Learn $target. Do a deep dive and store${RESET}"
+    echo -e "    ${BOLD} what you learn in memory.\"${RESET}"
+  fi
+
+  echo ""
+  echo "  The agent will follow the memory skill\'s learn workflow:"
+  echo "    1. Scan structure and key files"
+  echo "    2. Identify patterns, conventions, architecture"
+  echo "    3. Store focused memories in sage-memory"
+  echo "    4. Generate knowledge report → .sage/docs/memory-{name}.md"
+  echo ""
+  echo -e "  ${DIM}Requires sage-memory MCP server. Setup: https://github.com/xoai/sage-memory${RESET}"
+  echo ""
+}
+
+# ═══════════════════════════════════════════════════════════════
+# COMMAND: help
+# ═══════════════════════════════════════════════════════════════
+sage_help() {
+  echo ""
+  echo -e "${BOLD}Sage${RESET} v${SAGE_FRAMEWORK_VERSION} — An intelligent skills framework for AI agents"
+  echo ""
+  echo "Project commands:"
+  echo "  sage new <n>                  Create a new project with Sage"
+  echo "  sage init [--prefix] [--no-memory]  Add Sage to the current directory"
+  echo "  sage update                      Regenerate platform files"
+  echo "  sage upgrade [--channel main]    Update Sage to the latest release"
+  echo "  sage version                     Print the installed framework version"
+  echo "  sage learn [path]                Learn a codebase or module"
+  echo "  sage setup memory                (Re)configure persistent memory"
+  echo "  sage setup multi-agent [--remove]  Install cross-model build cycle (optional)"
+  echo ""
+  echo "Skill management (powered by skills.sh):"
+  echo "  sage find <query>                Search skills.sh catalog"
+  echo "  sage add <source>                Install skills from owner/repo, URL, or path"
+  echo "  sage add <owner>/<repo>@<tag>    Install a pack pinned to a release tag"
+  echo "  sage add <source> --skill <n>    Install a specific skill from a repo"
+  echo "  sage add <source> --all          Install all skills from a repo"
+  echo "  sage remove <skill>              Remove a skill from project"
+  echo "  sage skills                      List installed skills"
+  echo "  sage update [target]             Update community skills"
+  echo ""
+  echo "  sage help                        Show this help"
+  echo ""
+  echo "Flags:"
+  echo "  --prefix                         Namespace commands as sage:build, sage:fix, etc."
+  echo "  --preset <name>                  Set constitution preset (base|startup|enterprise|opensource)"
+  echo "  --platform <list>                Comma-separated platforms (claude-code|antigravity|codex|opencode|gemini-cli|all)"
+  echo ""
+  echo "Examples:"
+  echo "  sage new my-app                  # Create project with Sage"
+  echo "  sage init --prefix               # Add Sage with sage: prefixed commands"
+  echo "  sage learn                       # Broad scan of whole project"
+  echo "  sage learn src/billing/          # Deep dive into a module"
+  echo "  sage find react                  # Search skills.sh for React skills"
+  echo "  sage add vercel-labs/agent-skills               # Browse + pick skills"
+  echo "  sage add vercel-labs/agent-skills --skill react  # Install specific skill"
+  echo "  sage add xoai/sage-product@v1.3.1 --all         # A pack, pinned + verified"
+  echo "  sage add ./my-local-skills                      # Install from local path"
+  echo ""
+}
+
+# ═══════════════════════════════════════════════════════════════
+# COMMAND: worktree
+# ═══════════════════════════════════════════════════════════════
+# Front door for parallel sessions: create an isolated worktree
+# (branch + directory) so a second Claude session runs without
+# clobbering the first. Branches isolate history; worktrees isolate
+# the working tree — which is what simultaneous sessions need.
+
+# Resolve the default branch (git-discipline's documented chain).
+_wt_default_branch() {
+  local d
+  d=$( { git symbolic-ref --quiet refs/remotes/origin/HEAD 2>/dev/null || true; } | sed 's|^refs/remotes/origin/||')
+  if [ -n "$d" ] && git show-ref --verify --quiet "refs/heads/$d"; then echo "$d"; return; fi
+  d=$(git config --get init.defaultBranch 2>/dev/null)
+  if [ -n "$d" ] && git show-ref --verify --quiet "refs/heads/$d"; then echo "$d"; return; fi
+  for d in main master; do
+    git show-ref --verify --quiet "refs/heads/$d" && { echo "$d"; return; }
+  done
+  # Last resort: the current branch. The capability says never to
+  # SILENTLY use it — so emit a notice (stderr; stdout is captured).
+  local cur; cur=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+  echo "  Note: no default branch resolved; basing on current branch '$cur'. Pass --from to override." >&2
+  echo "$cur"
+}
+
+# Copy one gitignored runtime path into the worktree (cp -R, never
+# symlink — WSL drvfs has no POSIX symlinks). Skips tracked paths
+# (git already carried them) and absent paths.
+# Read a list-valued key from a checkout's .sage/config.yaml. Supports BOTH
+# flow style (`key: [a, b, c]`) and block style (`key:` then `  - a` lines).
+# Echoes space-separated tokens. Distinguishes three cases:
+#   - key absent              → the passed defaults
+#   - key present, empty list → empty (an intentional "copy/harvest nothing")
+#   - key present, malformed  → defaults, with a stderr warning (never a garbage
+#                               token — that previously caused silent data loss)
+_wt_config_list() {
+  local root="$1" key="$2"; shift 2
+  local cfg="$root/.sage/config.yaml"
+  if [ ! -f "$cfg" ] || ! grep -qE "^${key}:([[:space:]]|\$)" "$cfg" 2>/dev/null; then
+    printf '%s' "$*"; return 0                       # key absent → defaults
+  fi
+  local line val
+  line=$(grep -E "^${key}:" "$cfg" 2>/dev/null | head -1 || true)
+  val=${line#*:}
+  val=$(printf '%s' "$val" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' || true)
+  case "$val" in
+    \[*)                                             # flow-style [ ... ] (maybe [])
+      printf '%s' "$val" | sed 's/^\[//; s/\]//; s/"//g; s/,/ /g' \
+        | tr -s '[:space:]' ' ' | sed 's/^ //; s/ $//' || true
+      return 0 ;;
+    "")                                              # block-style "- item" lines (maybe none)
+      awk -v k="^${key}:[[:space:]]*\$" '
+        $0 ~ k { grab=1; next }
+        grab && /^[[:space:]]+-[[:space:]]*/ {
+          sub(/^[[:space:]]+-[[:space:]]*/, ""); gsub(/"/, ""); sub(/[[:space:]]*$/, "");
+          printf "%s ", $0; next
+        }
+        grab { exit }
+      ' "$cfg" 2>/dev/null | sed 's/ *$//' || true
+      return 0 ;;
+    *)                                               # scalar / malformed → defaults (loud)
+      echo "  worktree config '$key' is not a list ([...] or block form) — using defaults." >&2
+      printf '%s' "$*"; return 0 ;;
+  esac
+}
+
+WT_COPIED=0
+_wt_copy_ignored() {
+  local src_root="$1" dst_root="$2" path="$3"
+  [ -e "$src_root/$path" ] || return 0
+  git -C "$src_root" check-ignore -q "$path" 2>/dev/null || return 0   # tracked → skip
+  local parent; parent=$(dirname "$path")
+  mkdir -p "$dst_root/$parent"
+  cp -R "$src_root/$path" "$dst_root/$parent/"
+  WT_COPIED=$((WT_COPIED + 1))
+}
+
+# Copy one path from the worktree back into the main checkout. Skip ONLY paths
+# git already carries to main via merge — i.e. TRACKED paths. Gitignored AND
+# untracked-not-ignored paths both need harvesting (neither travels with a
+# merge). A name already present in main is preserved (never overwritten): the
+# copy lands at <name>--harvested, or --harvested-2, -3… so a prior un-reconciled
+# harvest is never clobbered. Updates HARVEST_N / COLLIDE_N.
+HARVEST_N=0; COLLIDE_N=0; SAME_N=0
+_wt_harvest_one() {
+  local src="$1" dst="$2" main_root="$3" rel="$4"
+  [ -e "$src" ] || return 0
+  if git -C "$main_root" ls-files --error-unmatch -- "$rel" >/dev/null 2>&1; then
+    return 0   # tracked in main → git carries it via merge; nothing to harvest
+  fi
+  mkdir -p "$(dirname "$dst")"
+  if [ -e "$dst" ]; then
+    # Already present in main. If byte-identical, there is genuinely nothing to
+    # harvest — skip silently (no pointless --harvested copy). Only when the
+    # worktree's copy DIFFERS do we keep it for reconciliation, and never clobber
+    # a prior un-reconciled harvest.
+    if diff -rq "$src" "$dst" >/dev/null 2>&1; then
+      SAME_N=$((SAME_N + 1)); return 0
+    fi
+    local h="${dst}--harvested" n=2
+    while [ -e "$h" ]; do h="${dst}--harvested-${n}"; n=$((n + 1)); done
+    cp -R "$src" "$h"
+    COLLIDE_N=$((COLLIDE_N + 1))
+    echo -e "  ${YELLOW}⚠${RESET} $rel differs from the main checkout — harvested to $(basename "$h") (reconcile manually)."
+  else
+    cp -R "$src" "$dst"
+    HARVEST_N=$((HARVEST_N + 1))
+  fi
+}
+
+# Harvest the configured gitignored state from a worktree back into the main
+# checkout before removal. Because .sage/ is gitignored, `git worktree remove`
+# deletes it without warning and a merge never carries it (untracked) — so these
+# docs would otherwise be lost with the worktree. The path list is
+# `worktree_harvest` in config (default `.sage/work/*`); a trailing /* harvests
+# each child independently (per-initiative). No-op for tracked paths.
+_wt_harvest_work() {
+  local wt_dir="$1" main_root="$2"
+  local entries; entries=$(_wt_config_list "$main_root" worktree_harvest ".sage/work/*")
+  HARVEST_N=0; COLLIDE_N=0; SAME_N=0
+  local entry base child name entries_arr
+  # Split on spaces with globbing OFF: a literal `.sage/work/*` entry must reach
+  # the per-child case below, NOT be expanded here against the current directory
+  # (which is the main checkout — that would harvest main's own dirs and miss the
+  # worktree's new ones). The per-child glob inside the loop runs with globbing on.
+  set -f; entries_arr=( $entries ); set +f
+  for entry in ${entries_arr[@]+"${entries_arr[@]}"}; do
+    case "$entry" in
+      */\*)                                   # per-child: harvest each entry under <base>
+        base="${entry%/\*}"
+        [ -d "$wt_dir/$base" ] || continue
+        # Both globs so dot-children (e.g. .gitignore) are not silently missed;
+        # nullglob is not set, so an unmatched glob stays literal and the -e guard skips it.
+        for child in "$wt_dir/$base"/* "$wt_dir/$base"/.[!.]*; do
+          [ -e "$child" ] || continue
+          name=$(basename "$child")
+          _wt_harvest_one "$child" "$main_root/$base/$name" "$main_root" "$base/$name"
+        done ;;
+      *)                                      # whole path harvested as a unit
+        _wt_harvest_one "$wt_dir/$entry" "$main_root/$entry" "$main_root" "$entry" ;;
+    esac
+  done
+  if [ "$HARVEST_N" -gt 0 ] || [ "$COLLIDE_N" -gt 0 ] || [ "$SAME_N" -gt 0 ]; then
+    echo -e "  ${GREEN}✓${RESET} Harvested $HARVEST_N new path(s) into the main checkout$( [ "$SAME_N" -gt 0 ] && echo "; ${SAME_N} already current")$( [ "$COLLIDE_N" -gt 0 ] && echo "; ${COLLIDE_N} differ — kept as --harvested for reconciliation")."
+  else
+    echo -e "  ${DIM}Nothing to harvest (no gitignored worktree_harvest paths present).${RESET}"
+  fi
+}
+
+# `sage worktree remove <slug|dir> [--force]` — harvest then remove.
+_wt_remove() {
+  local target="" force="false"
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --force) force="true"; shift ;;
+      -*)      echo -e "  ${RED}Unknown option: $1${RESET}"; exit 2 ;;
+      *)       target="$1"; shift ;;
+    esac
+  done
+  [ -n "$target" ] || { echo -e "  ${RED}Usage: sage worktree remove <slug|dir> [--force]${RESET}"; exit 2; }
+  git rev-parse --git-dir >/dev/null 2>&1 || { echo -e "  ${RED}Not a git repository.${RESET}"; exit 2; }
+
+  # Main checkout = the first worktree git lists.
+  local main_root
+  main_root=$(git worktree list --porcelain | awk '/^worktree /{print $2; exit}')
+
+  # Resolve the target worktree directory: an existing dir, else a slug matched
+  # against the worktree list (path ending in -<slug> with optional -N suffix).
+  local wt_dir=""
+  if [ -d "$target" ]; then
+    wt_dir=$(cd "$target" && pwd -P)
+  else
+    # Match by basename suffix LITERALLY (case-glob, so $target is never a regex —
+    # no metacharacter injection). Prefer an exact `-<slug>` suffix; only fall
+    # back to the `-<slug>-N` collision variants when there is no exact match, so
+    # a bare slug still resolves when an `-N` sibling exists.
+    local exact="" suffixed="" p bn chosen count
+    while IFS= read -r p; do
+      [ -n "$p" ] || continue
+      bn=$(basename "$p")
+      case "$bn" in
+        *-"$target")        exact="${exact}${p}"$'\n' ;;
+        *-"$target"-*[0-9]) suffixed="${suffixed}${p}"$'\n' ;;
+      esac
+    done <<EOF
+$(git worktree list --porcelain | awk '/^worktree /{print $2}')
+EOF
+    if [ -n "$exact" ]; then chosen="$exact"; else chosen="$suffixed"; fi
+    count=$(printf '%s' "$chosen" | grep -c . || true)
+    if [ "${count:-0}" -eq 1 ]; then
+      wt_dir=$(cd "$(printf '%s' "$chosen" | head -1)" && pwd -P)
+    elif [ "${count:-0}" -eq 0 ]; then
+      echo -e "  ${RED}No worktree matches '$target'. Pass the directory path, or see 'sage worktree list'.${RESET}"; exit 2
+    else
+      echo -e "  ${RED}'$target' matches multiple worktrees — pass the exact path:${RESET}"
+      printf '    %s\n' $chosen; exit 2
+    fi
+  fi
+
+  # Guards: never the main checkout; never the directory we are standing in.
+  if [ "$wt_dir" = "$(cd "$main_root" && pwd -P)" ]; then
+    echo -e "  ${RED}Refusing to remove the main checkout.${RESET}"; exit 2
+  fi
+  local here; here=$(pwd -P)
+  case "$here" in
+    "$wt_dir"|"$wt_dir"/*)
+      echo -e "  ${RED}You are inside $wt_dir.${RESET} Run this from the main checkout so the directory can be removed."
+      exit 2 ;;
+  esac
+
+  echo -e "  ${BOLD}Sage — Worktree remove${RESET}"
+  echo -e "  Dir: ${DIM}$wt_dir${RESET}"
+
+  # 1) Harvest gitignored docs back first — so they survive the removal.
+  _wt_harvest_work "$wt_dir" "$main_root"
+
+  # 2) Remove the worktree. Without --force, git still refuses for modified or
+  #    untracked TRACKED files — that safety is intact (only ignored .sage/ is
+  #    treated as disposable, which we have already harvested).
+  local fflag=""; [ "$force" = "true" ] && fflag="--force"
+  if git worktree remove $fflag "$wt_dir"; then
+    echo -e "  ${GREEN}✓${RESET} Removed worktree."
+    git worktree prune >/dev/null 2>&1 || true
+  else
+    echo -e "  ${YELLOW}Worktree not removed${RESET} (uncommitted tracked changes?). Your docs are already harvested; re-run with --force to remove anyway."
+    exit 3
+  fi
+}
+
+sage_worktree() {
+  local sub="${1:-}"
+  case "$sub" in
+    list)
+      git rev-parse --git-dir >/dev/null 2>&1 || { echo -e "  ${RED}Not a git repository.${RESET}"; exit 2; }
+      git worktree list
+      return ;;
+    prune)
+      git rev-parse --git-dir >/dev/null 2>&1 || { echo -e "  ${RED}Not a git repository.${RESET}"; exit 2; }
+      git worktree prune -v
+      echo -e "  ${DIM}Worktrees with uncommitted changes are never auto-removed — use 'sage worktree remove' (harvests .sage/work first) or 'git worktree remove'.${RESET}"
+      return ;;
+    remove)
+      shift
+      _wt_remove "$@"
+      return ;;
+    ""|-*)
+      echo -e "  ${RED}Usage: sage worktree <slug> [--from <base>] [--prefix feat|fix|arch] [--launch]${RESET}"
+      echo -e "         sage worktree remove <slug|dir> [--force]"
+      echo -e "         sage worktree list | prune"
+      exit 2 ;;
+  esac
+
+  # ── Create flow ──
+  local slug="$sub"; shift
+  local from="" prefix="feat" launch="false"
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --from)   from="${2:-}"; shift 2 ;;
+      --prefix) prefix="${2:-feat}"; shift 2 ;;
+      --launch) launch="true"; shift ;;
+      *)        echo -e "  ${RED}Unknown option: $1${RESET}"; exit 2 ;;
+    esac
+  done
+  case "$prefix" in feat|fix|arch) ;; *) echo -e "  ${RED}--prefix must be feat|fix|arch${RESET}"; exit 2 ;; esac
+
+  git rev-parse --git-dir >/dev/null 2>&1 || {
+    echo -e "  ${RED}Not a git repository — worktrees need git.${RESET}"; exit 2; }
+
+  local root base branch dir repo
+  root=$(git rev-parse --show-toplevel)
+  repo=$(basename "$root")
+  base="${from:-$(_wt_default_branch)}"
+  git rev-parse --verify --quiet "$base" >/dev/null 2>&1 || {
+    echo -e "  ${RED}Base ref not found: $base${RESET}"; exit 2; }
+
+  # Branch name with collision suffix (git-discipline SKILL.md:55).
+  branch="$prefix/$slug"
+  local n=2
+  while git show-ref --verify --quiet "refs/heads/$branch"; do branch="$prefix/$slug-$n"; n=$((n+1)); done
+
+  # Target dir with collision suffix; never delete an existing dir
+  # (git-discipline SKILL.md:190).
+  dir="$(dirname "$root")/$repo-$slug"
+  n=2
+  while [ -e "$dir" ]; do dir="$(dirname "$root")/$repo-$slug-$n"; n=$((n+1)); done
+
+  echo -e "  ${BOLD}Sage — Worktree${RESET}"
+  echo -e "  Branch: ${CYAN}$branch${RESET}  from ${DIM}$base${RESET}"
+  echo -e "  Dir:    ${DIM}$dir${RESET}"
+
+  if ! git worktree add -b "$branch" "$dir" "$base"; then
+    echo -e "  ${RED}git worktree add failed (see above).${RESET}"
+    [ -e "$dir" ] && git worktree remove --force "$dir" 2>/dev/null
+    exit 3
+  fi
+
+  # ── Runtime copy (two-worlds): seed gitignored runtime into the worktree ──
+  # `worktree_copy` (config) controls the .sage/* set; _wt_copy_ignored self-skips
+  # any path that is tracked (git already carried it) or absent, so this no-ops
+  # cleanly in the tracked world. The multi-agent runtime (.sage/agents.toml,
+  # prompts, scripts — present only after `sage setup multi-agent`) is in the
+  # default set so a /build-x dispatcher works in the worktree (spec W2.3.6).
+  WT_COPIED=0
+  local cpath cpaths_arr
+  # Split with globbing off so a configured path is never expanded against the
+  # main checkout (each path is copied verbatim by _wt_copy_ignored).
+  set -f
+  cpaths_arr=( $(_wt_config_list "$root" worktree_copy \
+      ".sage/config.yaml" ".sage/constitution.md" ".sage/gates" \
+      ".sage/agents.toml" ".sage/prompts" ".sage/scripts" ".mcp.json") )
+  set +f
+  for cpath in ${cpaths_arr[@]+"${cpaths_arr[@]}"}; do
+    _wt_copy_ignored "$root" "$dir" "$cpath"
+  done
+  # Platform dir(s) + instructions file(s) are always seeded (per platforms:);
+  # without them the harness can't load in the worktree. Each self-skips if tracked.
+  local plats; plats=$( { grep '^platforms:' "$root/.sage/config.yaml" 2>/dev/null || true; } | sed 's/^platforms:[[:space:]]*\[//; s/\]//; s/"//g; s/,/ /g')
+  [ -z "$plats" ] && plats="claude-code"
+  local p
+  for p in $plats; do
+    case "$p" in
+      claude-code) _wt_copy_ignored "$root" "$dir" ".claude"; _wt_copy_ignored "$root" "$dir" "CLAUDE.md" ;;
+      antigravity) _wt_copy_ignored "$root" "$dir" ".agent" ;;
+      codex)       _wt_copy_ignored "$root" "$dir" ".codex"; _wt_copy_ignored "$root" "$dir" "AGENTS.md" ;;
+      opencode)    _wt_copy_ignored "$root" "$dir" ".opencode" ;;
+      gemini-cli)  _wt_copy_ignored "$root" "$dir" ".gemini"; _wt_copy_ignored "$root" "$dir" "GEMINI.md" ;;
+    esac
+  done
+  [ "$WT_COPIED" -gt 0 ] && echo -e "  ${GREEN}✓${RESET} Copied $WT_COPIED gitignored runtime path(s) into the worktree."
+
+  echo ""
+  echo -e "  ${BOLD}Open an isolated session there:${RESET}"
+  echo -e "    cd \"$dir\" && claude"
+  echo ""
+
+  if [ "$launch" = "true" ]; then
+    cd "$dir" || exit 3
+    command -v claude >/dev/null 2>&1 || { echo -e "  ${YELLOW}claude not on PATH — run 'claude' here to start the session.${RESET}"; exit 0; }
+    exec claude
+  fi
+}
+
+# ═══════════════════════════════════════════════════════════════
+# MAIN
+# ═══════════════════════════════════════════════════════════════
+COMMAND="${1:-}"
+shift 2>/dev/null || true
+
+# Preserve raw args for subcommands that own their own flag parsing
+# (e.g. `worktree --prefix fix`), before the global flag loop below
+# consumes shared flags like --prefix.
+WORKTREE_ARGS=("$@")
+
+# Parse flags from remaining args
+PRESET_FLAG=""
+PREFIX_FLAG=""
+PLATFORM_FLAG=""
+NO_MEMORY_FLAG=""
+REMAINING_ARGS=()
+NEXT_IS=""
+for arg in "$@"; do
+  if [ -n "$NEXT_IS" ]; then
+    case "$NEXT_IS" in
+      preset)   PRESET_FLAG="$arg" ;;
+      platform) PLATFORM_FLAG="$arg" ;;
+    esac
+    NEXT_IS=""
+    continue
+  fi
+  case "$arg" in
+    --preset=*)   PRESET_FLAG="${arg#--preset=}" ;;
+    --preset)     NEXT_IS="preset" ;;
+    --platform=*) PLATFORM_FLAG="${arg#--platform=}" ;;
+    --platform)   NEXT_IS="platform" ;;
+    --prefix)     PREFIX_FLAG="true" ;;
+    --no-memory)  NO_MEMORY_FLAG="true" ;;
+    *)            REMAINING_ARGS+=("$arg") ;;
+  esac
+done
+set -- ${REMAINING_ARGS[@]+"${REMAINING_ARGS[@]}"}
+
+case "$COMMAND" in
+  new)              sage_new "$@" ;;
+  init)             sage_init ;;
+  update)           sage_update ;;
+  upgrade)          sage_upgrade "$@" ;;
+  learn)            sage_learn "$@" ;;
+  worktree)         sage_worktree ${WORKTREE_ARGS[@]+"${WORKTREE_ARGS[@]}"} ;;
+  setup)            sage_setup "$@" ;;
+  find)             sage_find "$@" ;;
+  add)              sage_add "$@" ;;
+  remove)           sage_remove "$@" ;;
+  skills)           sage_skills "$@" ;;
+  version|--version|-v) sage_version ;;
+  help|--help|-h)   sage_help ;;
+  "")               sage_help ;;
+  *)
+    echo -e "${RED}Unknown command: $COMMAND${RESET}"
+    sage_help
+    exit 1
+    ;;
+esac
