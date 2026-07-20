@@ -21,6 +21,11 @@ Subcommands (JSON to stdout):
   classify --review-output TEXT
       Classify review findings into {critical, major, substantive, cosmetic}.
 
+decide() also carries the review-loop v2 controller: called with a ledger
+(see runtime/tools/review.py) it computes CONTINUE / ESCALATE / STOP_CAP /
+STOP_ADVISORY / STOP_CLEAN from ledger facts instead of classified prose.
+Without a ledger it is byte-identical to the v1 behavior above.
+
 Python 3.8+, stdlib only.
 """
 from __future__ import annotations
@@ -209,6 +214,105 @@ def classify(review_output):
 ITERATION_CAP = 10
 STUCK_THRESHOLD = 3  # consecutive iterations with the same critical+major count
 
+# ── Review-loop v2 controller (RR-5/RR-6) ──────────────────────────────
+# When decide() is handed a ledger, counts come from ledger entries, not
+# from regex over reviewer prose, and the verdict is computed from the
+# decision table below. Without a ledger, v1 behavior is byte-identical.
+
+SEVERITY_WEIGHT = {"critical": 8, "major": 3, "substantive": 1, "cosmetic": 0}
+OPEN_STATUSES = ("open", "not-fixed")
+V2_DEFAULTS = {"major_budget": 0, "iteration_cap": 5, "escalate_after_stalls": 2}
+
+
+def _open_counts(findings):
+    counts = {"critical": 0, "major": 0, "substantive": 0, "cosmetic": 0}
+    for entry in findings:
+        if entry.get("status") in OPEN_STATUSES:
+            counts[entry["severity"]] += 1
+    return counts
+
+
+def weight(counts):
+    """8·critical + 3·major + 1·substantive + 0·cosmetic — open entries
+    only, post-capping. Substantive findings register (a stalled loop full
+    of them is visible) but never drive CONTINUE."""
+    return sum(SEVERITY_WEIGHT[k] * counts.get(k, 0) for k in SEVERITY_WEIGHT)
+
+
+def _trailing_stalls(history_weights, current_weight):
+    """Count the trailing rounds whose weight failed to improve on the
+    round before. The field log's 1→2→3 major climb is two trailing
+    stalls: escalation fires at round 4, not round 7."""
+    seq = list(history_weights) + [current_weight]
+    stalls = 0
+    for i in range(len(seq) - 1, 0, -1):
+        if seq[i] >= seq[i - 1]:
+            stalls += 1
+        else:
+            break
+    return stalls
+
+
+def _is_pending_settlement(entry):
+    """A defer/reject disposition recorded but not yet applied by
+    close-round. Such an entry is decided — it must not drive another
+    round — but it stays visible in the reported counts until the round
+    that seals it."""
+    d = entry.get("disposition")
+    return isinstance(d, dict) and d.get("action") in ("defer", "reject")
+
+
+def _decide_v2(iteration, ledger):
+    """RR-6 decision table. Evaluation order makes every row reachable:
+    an explicit fix-now buys its round; a stall or the cap preempts
+    CONTINUE (the controller does not spend past either); only then do
+    blocking findings drive another round.
+
+    Verdicts: CONTINUE | ESCALATE | STOP_CAP | STOP_ADVISORY | STOP_CLEAN.
+    """
+    cfg = dict(V2_DEFAULTS)
+    for key in V2_DEFAULTS:
+        value = (ledger.get("config") or {}).get(key)
+        if isinstance(value, int) and not isinstance(value, bool):
+            cfg[key] = value
+    findings = ledger.get("findings", [])
+    open_entries = [f for f in findings if f.get("status") in OPEN_STATUSES]
+    blocking = [f for f in open_entries if not _is_pending_settlement(f)]
+    counts = _open_counts(findings)
+    blocking_counts = _open_counts(blocking)
+    current_weight = weight(blocking_counts)
+    history = ledger.get("history", [])
+    stalls = _trailing_stalls([weight(h.get("counts", {})) for h in history],
+                              current_weight)
+    fix_now = [f["id"] for f in blocking if f.get("disposition") == "fix-now"]
+
+    if not open_entries:
+        action = "STOP_CLEAN"
+    elif fix_now:
+        action = "CONTINUE"                        # a human bought this round
+    elif stalls >= cfg["escalate_after_stalls"]:
+        action = "ESCALATE"
+    elif iteration >= cfg["iteration_cap"]:
+        action = "STOP_CAP"
+    elif blocking_counts["critical"] > 0:
+        action = "CONTINUE"
+    elif blocking_counts["major"] > cfg["major_budget"]:
+        action = "CONTINUE"
+    else:
+        action = "STOP_ADVISORY"                   # substantive/cosmetic only
+
+    return {
+        "counts": counts,
+        "weight": current_weight,
+        "open_ids": [f["id"] for f in open_entries],
+        "fix_now": fix_now,
+        "dispositions_required": [f["id"] for f in open_entries
+                                  if not f.get("disposition")],
+        "stalled": stalls >= cfg["escalate_after_stalls"],
+        "cap_reached": iteration >= cfg["iteration_cap"],
+        "action": action,
+    }
+
 
 def is_clean(counts):
     """Clean bar: zero Critical, zero Major, zero substantive Minor.
@@ -228,8 +332,16 @@ def is_stuck(history):
     return len(set(sums)) == 1 and sums[0] > 0
 
 
-def decide(counts, iteration, history):
-    """Decision precedence: PASS > CAP_REACHED > ESCALATE > REVISE."""
+def decide(counts, iteration, history, ledger=None):
+    """v1 (no ledger): precedence PASS > CAP_REACHED > ESCALATE > REVISE,
+    counts classified from reviewer prose. Byte-identical to the pre-v2
+    behavior for every existing caller.
+
+    v2 (ledger given): the RR-6 table over ledger facts — counts and
+    history arguments are ignored; the ledger is the single source of
+    truth (`classify()` is retired on this path)."""
+    if ledger is not None:
+        return _decide_v2(iteration, ledger)
     if is_clean(counts):
         action, cap, stuck = "PASS", False, False
     elif iteration >= ITERATION_CAP:

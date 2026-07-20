@@ -255,7 +255,8 @@ On resume close-out:
    assembling), and one dispatch is the cost the profile targeted.
 3. **If that reviewer finds something**, fix it and **re-review only the fix**,
    not the whole suite again (the quality-locked cap in `sage_flags.py` governs
-   the loop). Do not spawn a fresh "re-verify gates on fixed HEAD" pass — the
+   the loop; with `review_loop: v2` the ledger controller does). Do not spawn a
+   fresh "re-verify gates on fixed HEAD" pass — the
    script gates re-run over the fix and the reviewer re-reads the fix; that is
    the re-verification.
 

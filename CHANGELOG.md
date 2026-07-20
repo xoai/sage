@@ -2,6 +2,102 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [1.3.10] — review loop v2: the verdict moves from the reviewer to code
+
+- **`review_loop: v2` is now the default.** The RR-28 flip criteria were
+  measured and held (2026-07-20, claude-opus-4-8[1m] pinned, N=3):
+  - **E16 loop convergence 2/3** — both clean runs converged
+    CONTINUE→STOP_ADVISORY in 2 rounds with monotone open-weight,
+    trailed fix commits, witnesses on disk, tool-written exit records;
+    the third run was budget-truncated mid-loop (the E9 shape), not a
+    controller failure.
+  - **E17 ledger amnesia 3/3** (+1 smoke) — the settled decoy was never
+    re-raised over its unchanged fingerprint; discovery of genuinely new
+    defects continued.
+  - **E18 fixer scope 2/3** — no silent out-of-scope merge; the failing
+    run was the instrument punishing RR-20 compliance (fixed, recorded).
+  - **Calibration 3/3 perfect** — recall 1.0 and precision 1.0 on the
+    planted criticals+majors, both absent requirements caught, decoy
+    never re-raised (thresholds 0.8 / 0.7 / 2/2 / none).
+  - **No regression on the covering scenarios**: E8 3/3, E10 3/3 on the
+    untouched v1 path, matching their baselines.
+  What is claimed: convergence and termination, per the numbers above.
+  What is NOT claimed: any cost saving — `review_model: cheap` and the
+  packet remain unmeasured. Fresh `sage init` writes `mode: v2`; an
+  absent block now reads v2; **existing projects are pinned to
+  `mode: v1` by `sage update`** (the hard_enforcement precedent — no
+  surprise semantics mid-initiative) and opt in by deleting the pin.
+  The config-gate reads an absent block as v2 on the Edit path, so
+  deleting the block is not an enforcement escape (hook tests C13–C15).
+
+- **Review loop v2 — the verdict moves from the reviewer to code.** A field
+  report showed the review-revise loop running to its cap on findings that
+  never block: 7 iterations, zero criticals throughout, majors churning
+  non-monotonically, and a REVISE issued on a 0-critical/0-major round.
+  v2 ships behind `review_loop: mode: v2` (**default stays v1** until the
+  flip criteria are measured):
+  - `runtime/tools/review.py` — a machine-owned findings ledger per cycle
+    (`.sage/work/<slug>/review-ledger.json`): `intake` normalizes findings
+    mechanically (severity capping: an uncited, unwitnessed critical/major
+    is stored substantive — opinions never block; dedup by anchor
+    fingerprint + claim; a re-litigation guard that makes fingerprint drift
+    the only license to re-raise a settled finding), `verify` records
+    Phase-A verdicts with evidence, `disposition`/`close-round` make every
+    exit a decision — the tool writes the decisions.md exit line itself.
+    Fail-closed: bookkeeping, not a hook.
+  - `sage_flags.py decide()` grows an optional ledger parameter — the RR-6
+    decision table (CONTINUE/ESCALATE/STOP_CAP/STOP_ADVISORY/STOP_CLEAN,
+    weight 8·critical + 3·major + 1·substantive) with stall detection that
+    escalates the field log's major climb at round 4, not round 7. Without
+    a ledger, v1 behavior is byte-identical (R6).
+  - `sage-config-gate` now protects the review floor: with enforcement on
+    and `mode: v2`, an agent edit flipping mode back to v1 or turning off
+    `witness_capping` exits 2 (hook tests C10–C13).
+  - Deterministic tests R1–R6 in `develop/validators/review/` pin the
+    observed production history as a regression fixture in both directions:
+    v2 terminates it at round 1 (STOP_ADVISORY); v1 must keep reproducing
+    the pathology. Wired into fastcheck + CI.
+  - **Fixer protocol** (v2 path): witness-first — materialize the
+    finding's witness red at HEAD before touching code, or bounce it to
+    the controller as disputed with the run output; one finding, one
+    commit, carrying `Sage-Fix/Cause/Change/Risk/Collateral/License`
+    trailers (bisectable by construction); `review.py check-diff`
+    verifies every fix commit's changed lines fall within anchor ∪
+    declared collateral ∪ witness path — an out-of-scope hunk exits 1
+    AND lands in the ledger as a self-witnessing machine finding, and a
+    modified non-witness test without a `Sage-License` trailer exits 1
+    (correctness is amended through the spec, never redefined in the
+    diff). Witness tests are permanent regression tests; round evidence
+    (suite + gate output) is recorded in the ledger so the next round's
+    Phase A verifies facts already on file. `scope_check: false`
+    restores v1.
+  - **Verification layer**: a calibration fixture with planted defects
+    (`develop/evals/fixtures/py-calibration` + answer key and
+    deterministic scorer in `develop/validators/review/calibration/` —
+    recall/precision/absence/decoy thresholds per RR-27, scorer
+    self-test in fastcheck); schema-conformance tests pinning the v2
+    prompt contracts (no verdict channel, verbatim texts, pass
+    vocabulary, canned-transcript round-trip through intake); eval
+    scenarios **E16** (loop convergence over the calibration fixture),
+    **E17** (ledger amnesia — the re-litigation guard under a live
+    model), **E18** (fixer scope honesty), with a `review_loop` grader
+    and a `config_append` driver key; coverage.yaml rows for the review
+    tools and capabilities — no uncovered IOUs for new surfaces. The
+    default flip to v2 waits on the RR-28 numbers (E16–18 N=3 majority +
+    calibration thresholds) and ships as its own commit citing them.
+  - **Reviewer schema v2** in the four review capabilities
+    (auto-review, spec-review, quality-review, auto-qa) and the
+    quality-locked loop: with `mode: v2` the reviewer's output has no
+    verdict field ("you do not decide the loop; you report findings"),
+    findings are one parseable JSON block with anchor/claim/witness/
+    exit-criteria, witness-or-downgrade and the precision-not-volume
+    calibration text are verbatim in every prompt, rounds >1 run
+    two-phase (verify the ledger before hunting the delta), round 1
+    runs perspective passes with a trace matrix whose EMPTY cells are
+    findings (absence made observable), and the input packet is a
+    template, not improvisation. v1 prompt blocks are untouched and
+    remain the default path.
+
 ## [1.3.9] — the gate that guards the gates, and opencode goes mechanical
 
 Two things merged after 1.3.8 that users should have: a security fix, and a

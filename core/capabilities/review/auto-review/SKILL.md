@@ -5,7 +5,7 @@ description: >
   checkpoint, or asks for an independent review before implementation begins.
   Applies to Standard and Comprehensive scopes with the Task tool available;
   Lightweight tasks skip.
-version: "1.2.0"
+version: "1.3.0"
 modes: [build, architect, fix]
 skill_type: discipline
 compliance_marker: "⚡ Running spec review (sub-agent)..."
@@ -452,6 +452,93 @@ MINOR-cosmetic: [list or "None"]
 Be concise. No generic praise. No padding. Just findings.
 ```
 
+## Review Loop v2 (ledger mode)
+
+Active by DEFAULT (an absent `review_loop:` block means `mode: v2`)
+(see orchestration/quality-locked for the loop; the ledger tool is
+`sage/runtime/tools/review.py`). When active, REPLACE each sub-agent
+prompt's CLASSIFY + FORMAT block above with the v2 output contract
+below, and append the packet, passes, and calibration text. With
+`mode: v1` this section is inert.
+
+### Output contract (v2 — no verdict)
+
+Include verbatim in every sub-agent prompt:
+
+> You do not decide the loop; you report findings. The decision is
+> computed from them.
+>
+> A critical or major must come with a witness: a failing test you
+> wrote and ran, a concrete repro (input → observed → expected), or an
+> execution trace. If you cannot demonstrate it, report it — it will be
+> recorded as substantive. This is not a penalty; it is the definition
+> of the severities.
+>
+> An empty finding list is a valid, creditable outcome; you are scored
+> on precision, not volume. Every critical/major must cite the spec
+> clause, constitution rule, or requirement it violates — a finding
+> that cites nothing is capped at substantive automatically, so spend
+> your effort on citations and witnesses, not on quantity.
+
+Findings are ONE fenced ```json block: an array of objects, one per
+finding. Prose outside the block is permitted for reasoning but is not
+parsed.
+
+```json
+[{
+  "pass": "testability | completeness | consistency | risk-concentration",
+  "severity": "critical | major | substantive | cosmetic",
+  "cited_rule": "spec §4.2 | constitution:api.3 | null",
+  "anchor": {"file": ".sage/work/<slug>/spec.md", "region": [118, 141]},
+  "claim": "one falsifiable sentence",
+  "witness": {"kind": "test | repro | trace | none",
+              "ref": "path or matrix cell, else null",
+              "status": "red | green | n/a"},
+  "exit_criteria": "what specifically would make this finding pass"
+}]
+```
+
+### Perspective passes (round 1, spec/plan/ADR)
+
+Sequential checklist passes in one dispatch; tag each finding's `pass`:
+
+1. **testability** — for each clause, write the test you would write.
+   A clause where you can't is a finding.
+2. **completeness** — the trace matrix: emit a requirement →
+   implementation-anchor → test-anchor table, one row per criterion.
+   EVERY empty cell is a finding with `witness.kind: trace` — the empty
+   cell is the demonstration, absence made observable.
+3. **consistency** — do intent, boundaries, and acceptance criteria
+   agree with each other and with the framing?
+4. **risk-concentration** (plan only) — are risky tasks front-loaded,
+   or buried where failure is discovered last?
+
+### Two-phase protocol (rounds >1)
+
+- **Phase A — verify before you hunt.** For each open/not-fixed ledger
+  entry: `FIXED | NOT-FIXED | DISPUTED-STANDS` with a one-line factual
+  check against the anchor region (for `witness.kind: test`, the
+  witness run at current HEAD — green is FIXED, mechanically).
+- **Phase B — new findings, scoped** to the revision delta plus Phase-A
+  anchors. The whole-artifact pass happened at round 1; do not
+  re-purchase it. Contradicting a settled entry requires the artifact
+  to have changed since settlement — intake checks the fingerprint.
+
+### Input packet (v2)
+
+The dispatching workflow assembles, in this order — no improvisation:
+
+1. The artifact; on rounds >1, plus the delta since the last reviewed
+   fingerprint.
+2. Deterministic gate outputs verbatim (spec-check, hallucination,
+   verify — already run).
+3. The framing entry and spec/plan excerpts the artifact claims to
+   implement.
+4. The ledger (open + settled entries) — Phase A's worklist.
+5. Optional: sage-ontology blast radius for changed areas. When
+   ontology is absent, say so in the packet — loud degradation, never
+   silent.
+
 ## Failure Modes
 
 - **Task tool not available:** Do NOT self-review (it shares the author's blind
@@ -461,6 +548,8 @@ Be concise. No generic praise. No padding. Just findings.
 - **Sub-agent times out:** Skip with note. Do NOT block workflow.
 - **Sub-agent returns malformed output:** Present raw output to user
   with a note: "Review format was unexpected. Please interpret."
+  (v2: malformed means `review.py intake` rejected it — surface the
+  tool's error, do not hand-repair the JSON.)
 - **Config says disabled:** Show one-line note, skip.
 - **User always picks [P] Proceed:** That's fine. The findings are
   still in decisions.md for /reflect to learn from.

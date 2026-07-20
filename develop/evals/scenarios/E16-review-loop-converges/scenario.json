@@ -1,0 +1,52 @@
+{
+  "id": "E16",
+  "name": "review-loop-converges",
+  "title": "The v2 review loop over the calibration fixture: converge, don't churn (E-REV-1)",
+  "source": "the field report — 7 iterations, zero criticals, majors churning 3→1→2→3→0→1→1, REVISE on a 0/0 round",
+  "fixture": "py-calibration",
+  "conditions": ["sage"],
+  "config_append": [
+    "review_loop:",
+    "  mode: v2"
+  ],
+  "setup": {
+    ".sage/work/001-wallet/manifest.md": "---\ncycle_id: \"001-wallet\"\nworkflow: build\nphase: review\nstatus: in-progress\ntier: standard\ngate_state: building\n---\n\n# Cycle: wallet review\n"
+  },
+  "rationale": [
+    "E-REV-1 (40-§3). The calibration fixture carries planted defects the",
+    "loop must find and fix, plus quality noise it must NOT spin on. The",
+    "measured claim is termination behavior: history[] ≤ 3 rounds with",
+    "monotone open-weight, every fix commit trailed, witnesses on disk,",
+    "and the exit record written by the tool. Recall/precision of round-1",
+    "findings are scored separately by",
+    "develop/validators/review/calibration/score_calibration.py (RR-27).",
+    "sage-only: the ledger loop IS the subject; bare has no ledger."
+  ],
+  "prompts": ["prompt-1.md"],
+  "checks": [
+    {
+      "grader": "review_loop",
+      "describe": "the loop converged: ≤3 rounds, monotone open-weight, exit record written by the tool, trailed fix commits, witnesses on disk",
+      "path": ".sage/work/001-wallet/review-ledger.json",
+      "max_rounds": 3,
+      "monotone_open_weight": true,
+      "exit_record": true,
+      "trailers": true,
+      "min_fix_commits": 1,
+      "witnesses_exist": true
+    },
+    {
+      "grader": "ran_command",
+      "describe": "the verdicts came from the tool, not the reviewer",
+      "pattern": "review\\.py (intake|close-round)"
+    },
+    {
+      "grader": "file_lacks",
+      "describe": "no fourth round — the field pathology stays dead",
+      "path": ".sage/work/001-wallet/review-ledger.json",
+      "substrings": ["\"iteration\": 4"]
+    }
+  ],
+  "budget_usd": 6.0,
+  "timeout_s": 1800
+}

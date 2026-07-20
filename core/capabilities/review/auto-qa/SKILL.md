@@ -6,7 +6,7 @@ description: >
   "QA this", "check the implementation", or "verify it matches the spec".
   Applies to Standard and Comprehensive scopes with the Task tool available;
   Lightweight tasks skip.
-version: "1.2.0"
+version: "1.3.0"
 modes: [build, architect, fix]
 skill_type: discipline
 compliance_marker: "⚡ Running implementation QA (sub-agent)..."
@@ -252,6 +252,72 @@ MUST appear — it is not the agent's discretion.
 | "The implementation is straightforward." | Straightforward code still has integration gaps, missing handlers, and boundary holes. | Simplicity is not a skip condition. |
 | "The tests all pass." | Passing tests don't mean the *right* things were tested against the spec's criteria. | Green tests do not substitute for independent verification. |
 | "I already checked this during implementation." | Self-check shares the author's blind spots — it is not independent. | Independent context is the point; your own check doesn't count. |
+
+## Review Loop v2 (ledger mode)
+
+Active by DEFAULT (an absent `review_loop:` block means `mode: v2`)
+(loop: orchestration/quality-locked; ledger: `sage/runtime/tools/
+review.py`). When active, the sub-agent prompt's CLASSIFY + FORMAT
+block above is replaced by the contract below. With `mode: v1` this
+section is inert.
+
+### Output contract (v2 — no verdict)
+
+Include verbatim in the sub-agent prompt:
+
+> You do not decide the loop; you report findings. The decision is
+> computed from them.
+>
+> A critical or major must come with a witness: a failing test you
+> wrote and ran, a concrete repro (input → observed → expected), or an
+> execution trace. If you cannot demonstrate it, report it — it will be
+> recorded as substantive. This is not a penalty; it is the definition
+> of the severities.
+>
+> An empty finding list is a valid, creditable outcome; you are scored
+> on precision, not volume. Every critical/major must cite the spec
+> clause, constitution rule, or requirement it violates — a finding
+> that cites nothing is capped at substantive automatically, so spend
+> your effort on citations and witnesses, not on quantity.
+
+Findings are ONE fenced ```json block — an array of objects (prose
+outside it is not parsed):
+
+```json
+[{
+  "pass": "spec-conformance | state-and-flow | regression-surface",
+  "severity": "critical | major | substantive | cosmetic",
+  "cited_rule": "spec §4.2 | null",
+  "anchor": {"file": "src/cart.py", "region": [12, 30]},
+  "claim": "one falsifiable sentence",
+  "witness": {"kind": "test | repro | trace | none",
+              "ref": "path or matrix cell, else null",
+              "status": "red | green | n/a"},
+  "exit_criteria": "what specifically would make this finding pass"
+}]
+```
+
+### This gate's passes
+
+Gate 8 is the semantic pass, so its checks map to: **spec-conformance**
+— the trace matrix over the spec's acceptance criteria (criterion →
+implementation-anchor → test-anchor; every empty cell is a finding with
+`witness.kind: trace`, the empty cell being the demonstration);
+**state-and-flow** — missing error handling, unguarded mutations,
+async without loading/error states; **regression-surface** — interface
+mismatches between changed modules, blast-radius neighbors without
+covering tests.
+
+### Two-phase (rounds >1) and packet
+
+Phase A verifies each open/not-fixed ledger entry with evidence before
+Phase B hunts the revision delta. The packet (assembled by the
+quality-gates workflow, in order): changed files + delta, gate outputs
+verbatim, test output + coverage for touched files, ontology blast
+radius (absent → said loudly), spec/plan excerpts, the ledger, mutation
+report if present. The fix-and-recheck flow above is superseded on the
+v2 path: CONTINUE/STOP comes from `review.py close-round`, not from a
+2-recheck counter.
 
 ## Failure Modes
 

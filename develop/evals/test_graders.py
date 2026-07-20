@@ -1179,5 +1179,83 @@ class ExecutionModeTest(unittest.TestCase):
         self.assertFalse(v[("E1", "sage", "subagents")]["verdict"])
 
 
+class ReviewLoopGraderTest(unittest.TestCase):
+    """Both directions, per the header rule: a lenient review_loop grader
+    would convert 'the loop churned' into 'v2 converges'."""
+
+    def setUp(self):
+        self.ws = pathlib.Path(tempfile.mkdtemp(prefix="grader-rl-"))
+        self.addCleanup(shutil.rmtree, self.ws, ignore_errors=True)
+        (self.ws / ".sage" / "work" / "s").mkdir(parents=True)
+
+    def ledger(self, findings=(), history=()):
+        p = self.ws / ".sage" / "work" / "s" / "review-ledger.json"
+        p.write_text(__import__("json").dumps(
+            {"findings": list(findings), "history": list(history)}))
+        return ".sage/work/s/review-ledger.json"
+
+    def check(self, **params):
+        params.setdefault("path", ".sage/work/s/review-ledger.json")
+        ok, detail = G.review_loop(self.ws, G.Transcript([], []), params)
+        return ok, detail
+
+    def hist(self, *majors):
+        return [{"iteration": i + 1,
+                 "counts": {"critical": 0, "major": m, "substantive": 0,
+                            "cosmetic": 0},
+                 "result": "CONTINUE"} for i, m in enumerate(majors)]
+
+    def test_converged_ledger_passes(self):
+        self.ledger(history=self.hist(2, 1))
+        ok, detail = self.check(max_rounds=3, monotone_open_weight=True)
+        self.assertTrue(ok, detail)
+
+    def test_too_many_rounds_fails(self):
+        self.ledger(history=self.hist(2, 2, 2, 2))
+        ok, detail = self.check(max_rounds=3)
+        self.assertFalse(ok)
+        self.assertIn("4 rounds", detail)
+
+    def test_weight_climb_fails_monotone(self):
+        self.ledger(history=self.hist(1, 3))
+        ok, detail = self.check(monotone_open_weight=True)
+        self.assertFalse(ok)
+        self.assertIn("climbed", detail)
+
+    def test_exit_record_required(self):
+        self.ledger(history=self.hist(1))
+        ok, _ = self.check(exit_record=True)
+        self.assertFalse(ok)
+        (self.ws / ".sage" / "work" / "s" / "decisions.md").write_text(
+            "- [2026-07-20] review-loop STOP_CLEAN: s iter=2 open=0/0/0/0 "
+            "dispositions=none [auto-logged by review.py]\n")
+        ok, detail = self.check(exit_record=True)
+        self.assertTrue(ok, detail)
+
+    def test_reopened_settled_fingerprint_fails(self):
+        self.ledger(findings=[
+            {"id": "F-001", "status": "rejected", "severity": "major",
+             "anchor": {"file": "a", "region": [1, 2], "fingerprint": "abc"}},
+            {"id": "F-002", "status": "open", "severity": "major",
+             "anchor": {"file": "a", "region": [1, 2], "fingerprint": "abc"}}])
+        ok, detail = self.check(no_reopened_settled=True)
+        self.assertFalse(ok)
+        self.assertIn("settled fingerprint", detail)
+
+    def test_disputed_re_raise_is_the_guard_working(self):
+        self.ledger(findings=[
+            {"id": "F-001", "status": "rejected", "severity": "major",
+             "anchor": {"file": "a", "region": [1, 2], "fingerprint": "abc"}},
+            {"id": "F-002", "status": "disputed", "severity": "major",
+             "anchor": {"file": "a", "region": [1, 2], "fingerprint": "abc"}}])
+        ok, detail = self.check(no_reopened_settled=True)
+        self.assertTrue(ok, detail)
+
+    def test_missing_ledger_fails(self):
+        ok, detail = self.check()
+        self.assertFalse(ok)
+        self.assertIn("no ledger", detail)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

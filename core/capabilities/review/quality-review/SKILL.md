@@ -5,7 +5,7 @@ description: >
   pass, or when the user says "review my code", "quality check", "security
   review", or "is this code good". Runs as an independent sub-agent when the
   Task tool is available.
-version: "1.2.0"
+version: "1.3.0"
 modes: [build, architect, fix]
 skill_type: discipline
 compliance_marker: "⚡ Running code quality review (sub-agent)..."
@@ -200,6 +200,86 @@ MUST appear; self-review is the fallback, not a choice.
 | "It's a small diff, a sub-agent is overkill." | Security and convention breaks hide in small diffs as readily as large ones. | Size is not the condition; Task-tool availability is. |
 | "Gate 1 already passed." | Gate 1 verifies the right thing was built; Gate 3 verifies it was built well. | Both are required; spec compliance is not quality. |
 | "Self-review is faster." | Speed bought by dropping independence is exactly the cost Gate 3 exists to prevent. | Self-review only when the Task tool is unavailable or config disables it. |
+
+## Review Loop v2 (ledger mode)
+
+Active by DEFAULT (an absent `review_loop:` block means `mode: v2`)
+(loop: orchestration/quality-locked; ledger: `sage/runtime/tools/
+review.py`). When active, the sub-agent prompt's CLASSIFY + FORMAT
+block above is replaced by the contract below and the 5 dimensions by
+the perspective passes. With `mode: v1` this section is inert.
+
+### Output contract (v2 — no verdict)
+
+Include verbatim in the sub-agent prompt:
+
+> You do not decide the loop; you report findings. The decision is
+> computed from them.
+>
+> A critical or major must come with a witness: a failing test you
+> wrote and ran, a concrete repro (input → observed → expected), or an
+> execution trace. If you cannot demonstrate it, report it — it will be
+> recorded as substantive. This is not a penalty; it is the definition
+> of the severities.
+>
+> An empty finding list is a valid, creditable outcome; you are scored
+> on precision, not volume. Every critical/major must cite the spec
+> clause, constitution rule, or requirement it violates — a finding
+> that cites nothing is capped at substantive automatically, so spend
+> your effort on citations and witnesses, not on quantity.
+
+Findings are ONE fenced ```json block — an array of objects (prose
+outside it is not parsed):
+
+```json
+[{
+  "pass": "input-hostility | state-and-flow | security | regression-surface",
+  "severity": "critical | major | substantive | cosmetic",
+  "cited_rule": "spec §4.2 | constitution:api.3 | null",
+  "anchor": {"file": "src/auth.ts", "region": [118, 141]},
+  "claim": "one falsifiable sentence",
+  "witness": {"kind": "test | repro | trace | none",
+              "ref": "path or null", "status": "red | green | n/a"},
+  "exit_criteria": "what specifically would make this finding pass"
+}]
+```
+
+Where the platform grants sub-agent test execution (Tier-A attested),
+the reviewer RUNS its witness before reporting `status: red`.
+
+### Perspective passes (round 1, code)
+
+Sequential checklist passes in one dispatch; tag each finding's `pass`:
+
+1. **input-hostility** — boundaries, nulls/empties, malformed input,
+   injection, encoding, size limits.
+2. **state-and-flow** — ordering assumptions, concurrency, resource
+   lifecycle (open/close, acquire/release), partial-failure states,
+   error paths that skip cleanup.
+3. **security** — secrets in code, authz on every entry point, unsafe
+   APIs, unparameterized queries, sensitive data in logs. Security
+   findings cite the rule they violate like any other — the severity
+   rubric is the same.
+4. **regression-surface** — the packet's blast-radius neighbors:
+   callers/callees/shared state of changed symbols with no covering
+   test.
+
+### Two-phase (rounds >1)
+
+Phase A: verify each open/not-fixed ledger entry (`FIXED | NOT-FIXED |
+DISPUTED-STANDS`, evidence required; test witnesses run at current
+HEAD). Phase B: hunt the revision delta plus Phase-A anchors only —
+the whole-artifact pass happened at round 1.
+
+### Input packet (v2)
+
+Assembled by the dispatching workflow, in order: (1) changed files
+(delta on rounds >1); (2) deterministic gate outputs verbatim; (3) test
+output + per-file coverage for touched files; (4) sage-ontology blast
+radius for changed symbols — when absent, the packet says so (loud
+degradation); (5) spec/plan excerpts the diff claims to implement;
+(6) the ledger (open + settled); (7) mutation-survivor report if
+present.
 
 ## Failure Modes
 

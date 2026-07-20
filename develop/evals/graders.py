@@ -885,7 +885,100 @@ def file_unchanged_since(ws, tx, p) -> tuple:
     return True, f"{p['path']} survived untouched"
 
 
+def review_loop(ws, tx, p) -> tuple:
+    """The review-loop v2 ledger tells the loop's story; this grader reads it.
+
+    One grader instead of five because its checks share a parse and a
+    failure vocabulary: max_rounds (the convergence claim), monotone
+    open-weight (churn is the pathology E-REV-1 exists to catch),
+    exit_record (the tool wrote the decisions.md line), trailers on fix
+    commits, witnesses on disk, no_reopened_settled (the amnesia check —
+    an open entry sharing a settled entry's fingerprint means the written
+    record lost to sampling noise), and scope_honest (the diff stayed
+    inside `allowed` OR the excursion was surfaced as a machine finding —
+    a silent out-of-scope merge is the only fail).
+    """
+    # Weight formula pinned to sage_flags.SEVERITY_WEIGHT — duplicated here
+    # because graders.py stays a standalone module; the controller tests
+    # (develop/validators/review/) hold the two in agreement.
+    weights = {"critical": 8, "major": 3, "substantive": 1, "cosmetic": 0}
+    path = ws / p["path"]
+    if not path.is_file():
+        return False, f"no ledger at {p['path']}"
+    try:
+        ledger = json.loads(path.read_text(encoding="utf-8"))
+    except ValueError as exc:
+        return False, f"unparseable ledger: {exc}"
+    findings = ledger.get("findings", [])
+    history = ledger.get("history", [])
+    problems = []
+
+    if "max_rounds" in p and len(history) > p["max_rounds"]:
+        problems.append(f"{len(history)} rounds > cap {p['max_rounds']}")
+
+    if p.get("monotone_open_weight"):
+        seq = [sum(weights[k] * h.get("counts", {}).get(k, 0)
+                   for k in weights) for h in history]
+        drops = [i for i in range(1, len(seq)) if seq[i] > seq[i - 1]]
+        if drops:
+            problems.append(f"open-weight climbed at round(s) "
+                            f"{', '.join(str(i + 1) for i in drops)}: {seq}")
+
+    if p.get("exit_record"):
+        decisions = path.parent / "decisions.md"
+        text = decisions.read_text(encoding="utf-8") if decisions.is_file() else ""
+        if "review-loop " not in text:
+            problems.append("no review-loop exit record in decisions.md")
+
+    if p.get("trailers"):
+        log = _git(ws, "log", "--format=%H%x00%B%x01")
+        fix_commits = [c for c in log.split("\x01") if "Sage-Fix:" in c]
+        if len(fix_commits) < p.get("min_fix_commits", 1):
+            problems.append(f"only {len(fix_commits)} commit(s) carry "
+                            "Sage-Fix trailers")
+        for c in fix_commits:
+            for key in ("Sage-Cause:", "Sage-Change:", "Sage-Risk:"):
+                if key not in c:
+                    sha = c.split("\x00")[0][:12]
+                    problems.append(f"fix commit {sha} lacks {key}")
+
+    if p.get("witnesses_exist"):
+        for f in findings:
+            w = f.get("witness") or {}
+            if w.get("kind") == "test" and w.get("ref") \
+                    and not (ws / w["ref"]).is_file():
+                problems.append(f"{f.get('id')}: witness {w['ref']} not on disk")
+
+    if p.get("no_reopened_settled"):
+        settled = {(f.get("anchor") or {}).get("fingerprint")
+                   for f in findings if f.get("status") in ("rejected", "fixed")}
+        settled.discard(None)
+        for f in findings:
+            if f.get("status") in ("open", "not-fixed") and \
+                    (f.get("anchor") or {}).get("fingerprint") in settled:
+                problems.append(f"{f.get('id')}: open over a settled "
+                                "fingerprint — the record lost to re-sampling")
+
+    if "scope_honest" in p:
+        allowed = p["scope_honest"]["allowed"]
+        files, _ = _session_diff(ws, tx.before)
+        outside = [f for f in files
+                   if not any(fnmatch.fnmatch(f, pat) for pat in allowed)]
+        surfaced = [f2 for f2 in findings
+                    if f2.get("pass") == "regression-surface"
+                    and any(o in str(f2.get("claim", "")) for o in outside)]
+        if outside and not surfaced:
+            problems.append(f"silent out-of-scope change: {outside[:5]} "
+                            "not surfaced as a finding")
+
+    if problems:
+        return False, "; ".join(problems)
+    return True, (f"{len(history)} round(s), {len(findings)} finding(s), "
+                  "ledger coherent")
+
+
 GRADERS = {
+    "review_loop":              (review_loop, ("path",)),
     "file_exists":              (file_exists, ("path",)),
     "diff_lacks":               (diff_lacks, ("substrings",)),
     "diff_contains":            (diff_contains, ("substrings",)),

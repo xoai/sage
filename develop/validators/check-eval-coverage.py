@@ -55,6 +55,13 @@ DISCOVERY = [
     ("overlay-skill", "runtime/plugin-overlay/skills/*/SKILL.md"),
     ("hook",         "runtime/platforms/claude-code/hooks/*.sh"),
     ("gate",         "core/gates/scripts/*.sh"),
+    # The two runtime tools that carry review-loop BEHAVIOR (the ledger's
+    # normalization rules and the controller's decision table) — not the
+    # scaffolding tools. Named individually on purpose: a blanket
+    # runtime/tools/*.py would conscript release.py and friends into a
+    # registry about behavioral surfaces.
+    ("tool",         "runtime/tools/review.py"),
+    ("tool",         "runtime/tools/sage_flags.py"),
 ]
 
 

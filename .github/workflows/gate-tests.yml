@@ -37,6 +37,14 @@ jobs:
       - name: Flag/quality-locked tool tests
         run: python3 develop/validators/tools/test_sage_flags.py
 
+      - name: Review-loop v2 controller + ledger tests
+        run: |
+          python3 develop/validators/review/test_review_controller.py
+          python3 develop/validators/review/test_review_ledger.py
+          python3 develop/validators/review/test_review_checkdiff.py
+          python3 develop/validators/review/test_review_schema.py
+          python3 develop/validators/review/calibration/score_calibration.py --self-test
+
       # `sage init` is the most-run command in the framework and nothing checked
       # what it WROTE — it emitted a config.yaml no YAML parser accepts.
       - name: sage init writes a readable project

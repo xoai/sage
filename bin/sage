@@ -545,6 +545,19 @@ hard_enforcement: true
 # Escape with `tier: tier1` on a manifest, or set this to false.
 tdd_enforcement: true
 command_prefix: $prefix_val
+# review_loop: v2 puts the review-revise verdict in code — reviewer findings
+# land in a machine-owned ledger (review.py) and every CONTINUE/STOP is
+# computed from it. v2 is the default since the RR-28 numbers held
+# (E16–18 N=3, calibration recall/precision 1.0); each knob's v1-restoring
+# value is noted beside it.
+review_loop:
+  mode: v2                  # v2 (default) | v1 restores the classic loop
+  major_budget: 0           # open majors tolerated at stop (v1: majors always block)
+  iteration_cap: 5          # v1 value: 10
+  escalate_after_stalls: 2  # non-improving rounds before ESCALATE (v1: 3 identical counts)
+  witness_capping: true     # false restores severity-as-reported
+  scope_check: true         # false restores v1 (no diff-scope check on fix commits)
+  review_model: inherit     # inherit | cheap (savings unclaimed until measured)
 # isolation: how delivery workflows isolate an initiative.
 #   branch   — (default) branch in place; one session at a time.
 #   worktree — a worktree per initiative; for parallel sessions.
@@ -1131,6 +1144,17 @@ DECMD
   if [ -f "$config_file" ] && ! grep -q '^hard_enforcement:' "$config_file" 2>/dev/null; then
     echo "hard_enforcement: false" >> "$config_file"
     migration_notes="${migration_notes}\n  ${GREEN}✓${RESET} Installed the spec-gate hook (hard_enforcement: false — OFF).\n     To enforce spec-before-code, set hard_enforcement: true in .sage/config.yaml"
+  fi
+
+  # ── Migration: pin existing projects to review_loop v1 (same R27 logic) ──
+  # The v2 ledger loop is the default for fresh `sage init`, but switching an
+  # established project's review semantics silently mid-initiative would be the
+  # same surprise hard_enforcement avoided. Existing configs without the block
+  # get an explicit v1 pin and are told how to opt in. Absent-key grep is the
+  # idempotency guard.
+  if [ -f "$config_file" ] && ! grep -q '^review_loop:' "$config_file" 2>/dev/null; then
+    printf 'review_loop:\n  mode: v1\n' >> "$config_file"
+    migration_notes="${migration_notes}\n  ${GREEN}✓${RESET} Pinned review_loop: mode: v1 (your current loop, unchanged).\n     For the ledger loop (computed verdicts, evidence-capped findings), set mode: v2"
   fi
 
   # ── Deprecation notice: PM/UX skills moved to the sage-product pack (R54) ──

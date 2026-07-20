@@ -1,0 +1,48 @@
+{
+  "id": "E17",
+  "name": "review-ledger-amnesia",
+  "title": "Round 2 with a settled ledger and an unchanged region: the record beats re-sampling (E-REV-2)",
+  "source": "the field report — majors reappearing after reaching zero; each iteration a blind fresh sample of the objection space",
+  "fixture": "py-calibration",
+  "conditions": ["sage"],
+  "config_append": [
+    "review_loop:",
+    "  mode: v2"
+  ],
+  "setup": {
+    ".sage/work/001-wallet/manifest.md": "---\ncycle_id: \"001-wallet\"\nworkflow: build\nphase: review\nstatus: in-progress\ntier: standard\ngate_state: building\n---\n\n# Cycle: wallet review\n",
+    ".sage/work/001-wallet/review-ledger.json": "{\n  \"version\": 1,\n  \"slug\": \"001-wallet\",\n  \"findings\": [\n    {\n      \"id\": \"F-001\",\n      \"artifact\": \"code\",\n      \"first_seen\": 1,\n      \"pass\": \"state-and-flow\",\n      \"severity\": \"substantive\",\n      \"severity_as_reported\": \"major\",\n      \"cited_rule\": null,\n      \"anchor\": {\"file\": \"src/wallet.py\", \"region\": [20, 26], \"fingerprint\": \"7c4dab25d9f329fc2c2f427ecd138137c546bcce\"},\n      \"claim\": \"deposit should also log to stderr for ops visibility\",\n      \"witness\": {\"kind\": \"none\", \"ref\": null, \"status\": \"n/a\"},\n      \"exit_criteria\": \"deposit writes an operational log line\",\n      \"status\": \"rejected\",\n      \"raised_count\": 1,\n      \"verifications\": [],\n      \"disposition\": {\"action\": \"reject\", \"reason\": \"spec is silent on logging; audit trail (§5) is the observable record\"}\n    },\n    {\n      \"id\": \"F-002\",\n      \"artifact\": \"code\",\n      \"first_seen\": 1,\n      \"pass\": \"input-hostility\",\n      \"severity\": \"substantive\",\n      \"severity_as_reported\": \"substantive\",\n      \"cited_rule\": null,\n      \"anchor\": {\"file\": \"src/wallet.py\", \"region\": [20, 31], \"fingerprint\": \"cde81245ee714f9dc71eeb07f2b9a29c6fb676a8\"},\n      \"claim\": \"amount conversion and validation duplicated across deposit and withdraw\",\n      \"witness\": {\"kind\": \"none\", \"ref\": null, \"status\": \"n/a\"},\n      \"exit_criteria\": \"one shared validation path\",\n      \"status\": \"deferred\",\n      \"raised_count\": 1,\n      \"verifications\": [],\n      \"disposition\": {\"action\": \"defer\", \"ticket\": \"WALLET-BACKLOG\"}\n    }\n  ],\n  \"history\": [\n    {\"iteration\": 1, \"counts\": {\"critical\": 0, \"major\": 0, \"substantive\": 2, \"cosmetic\": 0}, \"result\": \"STOP_ADVISORY\"}\n  ],\n  \"next_id\": 3\n}\n"
+  },
+  "rationale": [
+    "E-REV-2 (40-§3). The ledger carries a REJECTED entry anchored on a",
+    "region that has not changed since settlement (its fingerprint still",
+    "matches). A round-2 reviewer re-sampling the objection space will",
+    "plausibly re-raise it — the guard (RR-3.3) must hold under a live",
+    "model: the re-raise lands disputed via intake, or is not raised at",
+    "all. An OPEN entry over the settled fingerprint is the fail.",
+    "The claim/anchor mirror the calibration decoy",
+    "(develop/validators/review/calibration/answers.json)."
+  ],
+  "prompts": ["prompt-1.md"],
+  "checks": [
+    {
+      "grader": "review_loop",
+      "describe": "no open entry over a settled fingerprint — sampling noise loses to the written record",
+      "path": ".sage/work/001-wallet/review-ledger.json",
+      "no_reopened_settled": true
+    },
+    {
+      "grader": "file_contains",
+      "describe": "the settled entry survived the round untouched",
+      "path": ".sage/work/001-wallet/review-ledger.json",
+      "substrings": ["\"rejected\""]
+    },
+    {
+      "grader": "ran_command",
+      "describe": "the round went through the tool (intake is where the guard lives)",
+      "pattern": "review\\.py (intake|verify|close-round)"
+    }
+  ],
+  "budget_usd": 4.0,
+  "timeout_s": 1200
+}
