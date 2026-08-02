@@ -40,8 +40,10 @@ NEW reason. Never on `on-scope` or `insufficient-evidence`, never inside
 subagents.
 
 Everything here is measurable before a model is ever attached: `scope_judge`
-ships FALSE and stays false until E-JUDGE-1 passes both runs with zero
-clean-run false positives and the per-cycle cost is published (30-§3).
+ships FALSE and stays false: E-JUDGE-1 (2026-08-02) measured 1 false
+positive in 4 compliant runs against a zero-tolerance criterion, and its
+detection half was unmeasurable because no scenario produced real drift.
+See develop/evals/SCOPE-GUARD-CAMPAIGN.md.
 
 Usage (the journal hook drives this; humans rarely will):
     scope_judge.py hook            # stdin: PostToolUse JSON; stdout: maybe an

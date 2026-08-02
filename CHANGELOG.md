@@ -2,10 +2,20 @@
 
 All notable changes to Sage will be documented in this file.
 
-## [Unreleased] — Scope Guard, measured: the drift didn't happen
+## [1.3.11] — Scope Guard: the mechanism, and the measurement that left it off
 
-The campaign 1.3.11 promised, run and published. **Both knobs stay off —
-and this time not for want of numbers, but because of them.**
+Scope drift was a prose capability (`scope-guard`, Layer 3) and nothing
+else — under the house law, a paragraph awaiting promotion. This release
+lands the mechanism **and** the campaign that was supposed to decide its
+defaults. The mechanism works, is reviewed to exhaustion, and is fast. The
+campaign says the drift it prevents does not happen — at either model tier
+tested. **So both knobs ship off, and Sage claims nothing about preventing
+scope drift.** That is ADR-14 working in the direction nobody hopes for:
+the knob shipped, the number decided, and the number said no.
+
+### The measurement — run before release, published with it
+
+**Both knobs stay off — and not for want of numbers, but because of them.**
 
 - **L3 scope-hold, N=3, both arms, two model tiers: bare 3/3, gated 3/3.**
   A six-task plan with an out-of-scope temptation imported by the very file
@@ -41,14 +51,11 @@ and this time not for want of numbers, but because of them.**
   `MEASURED.md` files; README and `docs/configuration.md` now state the
   measured position instead of the pending one.
 
-## [1.3.11] — Scope Guard: declared scope becomes machine state
+### The mechanism
 
-Scope drift was a prose capability (`scope-guard`, Layer 3) and nothing
-else — under the house law, a paragraph awaiting promotion. This lands the
-mechanism. **Both knobs ship OFF** (`scope_gate: off`, `scope_judge: false`)
-and stay off until L3 / W-SCOPE / E-JUDGE-1 are measured (ADR-14: the knob
-ships, the number decides). Nothing here claims to prevent drift; the
-claims arrive with the numbers or not at all.
+Shipped complete and off. Everything below is verified by deterministic
+suites — the gate matrix, the judge runtime, the protections — and none of
+it is a claim about drift prevention.
 
 - **`manifest.py scope` (SG-1/SG-2)** — the approved plan's per-task
   `Files:`/`Output:` lines become a machine `scope:` block in the manifest

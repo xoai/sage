@@ -15,7 +15,8 @@
 #   - SAGE_JUDGE set → exit 0 (SG-12 recursion guard: the judge's own model
 #     call fires hooks in its headless session; they must no-op)
 #   - scope_judge not `true` in .sage/config.yaml → exit 0 (ships FALSE;
-#     stays false until E-JUDGE-1's criteria pass, 30-§3)
+#     stays false — E-JUDGE-1 measured 1 false positive in 4 clean runs
+#     and detection was unmeasurable, 30-§3)
 #   - python3 or the tool missing → exit 0
 #
 # This hook NEVER blocks and NEVER exits non-zero: it records and relays.

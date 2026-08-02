@@ -35,7 +35,11 @@ the `sage-scope-gate.sh` hook blocks any Edit/Write outside it. Two legal
 exits from a block, both recorded: `manifest.py scope add-collateral <path>
 --task TN --reason "…"`, or amend the plan and `scope derive --refresh`.
 Scope changes go through the artifact, never silently through the diff.
-Both knobs ship OFF until the L3/W-SCOPE numbers land (ADR-14).
+Both knobs are OFF by default, and the 2026-08-02 campaign says leave
+them there: bare and gated both held scope 3/3 at two model tiers, so the
+gate prevented nothing (it is harmless and fast — arm it if you want the
+floor, but do not claim it catches drift). This skill's judgment layer is
+what carries scope discipline; see develop/evals/SCOPE-GUARD-CAMPAIGN.md.
 
 ## When to Use
 
