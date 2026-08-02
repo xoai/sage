@@ -661,6 +661,56 @@ assert B10 "bookkeeping_gate: false is a dedicated opt-out" "$P" \
   '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/bk3/manifest.md","new_string":"x"}}' \
   --exit 0 --hook "$BKG"
 
+# SG-3: the scope: block inherits the manifest's protection — a hand-edit of
+# the derived scope is redirected to the tool (`manifest.py scope …`), the
+# same way every other bookkeeping hand-edit is.
+P="$(new_project)"; set_config "$P" "hard_enforcement: true"
+add_manifest "$P" bk4 "building"
+assert B11 "hand-editing the scope: block is redirected — scope is amended through the tool" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/bk4/manifest.md","old_string":"  globs:","new_string":"  globs:\n    - src/anything/i/want/**"}}' \
+  --exit 2 --stderr "close-out" --hook "$BKG"
+
+# B12/B15 (review #9, round-3 #2): the gate_state yield is decided by
+# RECONSTRUCTION — apply the edit, compare the parsed scope: section. A
+# widening that mentions gate_state (B12), and one that adds ONLY a list
+# item with no structure key at all (B15 — the round-3 probe), are both
+# redirected; a transition whose old_string merely SPANS unchanged scope
+# lines as context still yields (B16).
+mk_scoped_bk() {  # a bookkeeping fixture whose manifest carries a scope block
+  local d; d="$(new_project)"; set_config "$d" "hard_enforcement: true"
+  mkdir -p "$d/.sage/work/bks"
+  printf -- '---\ncycle_id: "bks"\nstatus: in-progress\ntier: standard\ngate_state: building\nscope:\n  derived_from: plan@abcd1234\n  globs:\n    - src/auth/token.ts  # T1 auth\n  collateral: []\n---\n\n# Cycle\n' \
+    > "$d/.sage/work/bks/manifest.md"
+  echo "$d"
+}
+
+P="$(mk_scoped_bk)"
+assert B12 "mentioning gate_state does not exempt a scope-widening hand-edit" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/bks/manifest.md","old_string":"gate_state: building\nscope:\n  derived_from: plan@abcd1234\n  globs:","new_string":"gate_state: building\nscope:\n  derived_from: plan@abcd1234\n  globs:\n    - src/anything/i/want/**"}}' \
+  --exit 2 --stderr "close-out" --hook "$BKG"
+
+P="$(mk_scoped_bk)"
+assert B15 "a widening that adds ONLY a list item (no structure key) is still redirected" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/bks/manifest.md","old_string":"    - src/auth/token.ts  # T1 auth","new_string":"    - src/auth/token.ts  # T1 auth\n    - src/**  # T1 gate_state note"}}' \
+  --exit 2 --stderr "close-out" --hook "$BKG"
+
+P="$(mk_scoped_bk)"
+assert B16 "a transition whose old_string spans UNCHANGED scope lines still yields" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/bks/manifest.md","old_string":"gate_state: building\nscope:\n  derived_from: plan@abcd1234","new_string":"gate_state: gates-passed\nscope:\n  derived_from: plan@abcd1234"}}' \
+  --exit 0 --hook "$BKG"
+
+# B13: and the plain approval transition still yields (B4's promise holds).
+assert B13 "a plain gate_state transition still yields to the spec-gate" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/bk4/manifest.md","old_string":"gate_state: building","new_string":"gate_state: gates-passed"}}' \
+  --exit 0 --hook "$BKG"
+
+# B14 (round-2 review #4): scope-ish PROSE in the surrounding edit text must
+# not strand a transition — "out of scope:" is the spec template's own
+# phrasing, and nothing else in the toolchain can write gates-passed.
+assert B14 "a gate_state transition whose prose says 'out of scope:' still yields" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/bk4/manifest.md","old_string":"gate_state: building","new_string":"gate_state: gates-passed\n\nNote: TICKET-142 stayed out of scope: billing, collateral damage avoided."}}' \
+  --exit 0 --hook "$BKG"
+
 # ── sage-secrets-gate: credentials never go into source ────────────────────
 # The weak-model campaign measured why: handed a live key, haiku-bare hardcodes
 # it 3/3 and haiku with the CONSTITUTION PARAGRAPH still hardcoded it 2/3.
@@ -918,6 +968,459 @@ P="$(mk_enforced 'review_loop:
 assert C15 "an EXPLICIT v1 pin (the sage-update migration) stays editable — the floor guards v2, not v1" "$P" \
   '{"tool_name":"Edit","tool_input":{"file_path":".sage/config.yaml","old_string":"  mode: v1","new_string":"  mode: v1\n  iteration_cap: 8"}}' \
   --exit 0 --hook "$CG"
+
+# The scope floor (SG-3): scope_gate, implicit_test_scope and scope_judge join
+# the protected list — an agent must not soften its own scope floor while
+# enforcement is on. C16 is the design doc's S9 row.
+P="$(mk_enforced 'scope_gate: standard+')"
+assert C16 "scope_gate standard+→off while enforced is blocked (the scope floor, S9)" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/config.yaml","old_string":"scope_gate: standard+","new_string":"scope_gate: off"}}' \
+  --exit 2 --stderr "enforcement" --hook "$CG"
+
+P="$(mk_enforced 'scope_gate: all')"
+assert C16b "scope_gate all→standard+ is a rank decrease — blocked" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/config.yaml","old_string":"scope_gate: all","new_string":"scope_gate: standard+"}}' \
+  --exit 2 --stderr "enforcement" --hook "$CG"
+
+P="$(mk_enforced 'scope_gate: standard+')"
+assert C17 "DELETING the scope_gate line (→ default off) is blocked" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/config.yaml","old_string":"scope_gate: standard+\n","new_string":""}}' \
+  --exit 2 --stderr "enforcement" --hook "$CG"
+
+P="$(mk_enforced 'scope_gate: off')"
+assert C17b "turning the scope gate ON (off→standard+) is always allowed" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/config.yaml","old_string":"scope_gate: off","new_string":"scope_gate: standard+"}}' \
+  --exit 0 --hook "$CG"
+
+P="$(mk_enforced 'scope_gate: standard+
+implicit_test_scope: true')"
+assert C18 "flipping implicit_test_scope while the scope gate is armed is blocked" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/config.yaml","old_string":"implicit_test_scope: true","new_string":"implicit_test_scope: false"}}' \
+  --exit 2 --stderr "enforcement" --hook "$CG"
+
+P="$(mk_enforced 'implicit_test_scope: true')"
+assert C18b "with the scope gate OFF, implicit_test_scope is not protected" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/config.yaml","old_string":"implicit_test_scope: true","new_string":"implicit_test_scope: false"}}' \
+  --exit 0 --hook "$CG"
+
+P="$(mk_enforced 'scope_judge: true')"
+assert C19 "scope_judge true→false while enforced is blocked" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/config.yaml","old_string":"scope_judge: true","new_string":"scope_judge: false"}}' \
+  --exit 2 --stderr "enforcement" --hook "$CG"
+
+P="$(mk_enforced 'scope_gate: standard+')"
+assert C20 "the Bash evasion (a redirect writing scope_gate: off) is blocked" "$P" \
+  '{"tool_name":"Bash","tool_input":{"command":"echo \"scope_gate: off\" >> .sage/config.yaml"}}' \
+  --exit 2 --stderr "enforcement" --hook "$CG"
+
+# Review #4 → round-4: the duplicate-key append is refused at CREATION (a
+# file saying both standard+ and off is a reader-divergence bomb, whatever
+# each current reader picks). SC16 separately pins that even a pre-existing
+# duplicate cannot lower what the scope gate reads.
+P="$(mk_enforced 'scope_gate: standard+')"
+assert C20b "appending a SECOND scope_gate line is refused outright" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/config.yaml","old_string":"scope_gate: standard+","new_string":"scope_gate: standard+\nscope_gate: off"}}' \
+  --exit 2 --stderr "enforcement" --hook "$CG"
+
+# Review #12 — while the judge is armed, its knobs ARE the judge.
+P="$(mk_enforced 'scope_judge: true
+judge_cooldown: 15')"
+assert C21 "judge_cooldown: 999999 while the judge is armed is blocked (never-correct-me)" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/config.yaml","old_string":"judge_cooldown: 15","new_string":"judge_cooldown: 999999"}}' \
+  --exit 2 --stderr "enforcement" --hook "$CG"
+
+P="$(mk_enforced 'scope_judge: true')"
+assert C21b "pointing judge_cmd at a verdict oracle while armed is blocked" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/config.yaml","old_string":"scope_judge: true","new_string":"scope_judge: true\njudge_cmd: echo {\\\"verdict\\\":\\\"on-scope\\\"}"}}' \
+  --exit 2 --stderr "enforcement" --hook "$CG"
+
+P="$(mk_enforced 'judge_cooldown: 15')"
+assert C21c "with the judge OFF, its knobs are ordinary settings" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/config.yaml","old_string":"judge_cooldown: 15","new_string":"judge_cooldown: 30"}}' \
+  --exit 0 --hook "$CG"
+
+# Round-2 review #5 — the duplicate-key reader-divergence bomb: a config
+# carrying hard_enforcement: true AND false may not be created through this
+# gate, whatever each reader would pick.
+P="$(mk_enforced)"
+assert C23 "appending a contradictory hard_enforcement: false duplicate is blocked" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/config.yaml","old_string":"hard_enforcement: true","new_string":"hard_enforcement: true\nlog_level: debug\nhard_enforcement: false"}}' \
+  --exit 2 --stderr "enforcement" --hook "$CG"
+
+# …and the bookkeeping gate (the scope block's guard) reads FIRST-wins, so
+# even a pre-existing contradictory config cannot silence it.
+P="$(new_project)"
+printf 'sage-version: "1.3.10"\nhard_enforcement: true\nhard_enforcement: false\n' > "$P/.sage/config.yaml"
+add_manifest "$P" bk5 "building"
+assert C23b "a pre-existing contradictory config does not silence the bookkeeping gate" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/bk5/manifest.md","new_string":"## Context summary\nx"}}' \
+  --exit 2 --stderr "close-out" --hook "$BKG"
+
+# Round-3 verification #4 — the ranked key gets the same duplicate rule.
+P="$(mk_enforced 'scope_gate: standard+')"
+assert C24 "a contradictory duplicate scope_gate value cannot be created" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/config.yaml","old_string":"scope_gate: standard+","new_string":"scope_gate: standard+\nscope_gate: off"}}' \
+  --exit 2 --stderr "enforcement" --hook "$CG"
+
+# Review #14 — a rank decrease through a Bash redirect (all → standard+).
+P="$(mk_enforced 'scope_gate: all')"
+assert C22 "the Bash evasion of a rank DECREASE (all → standard+) is blocked" "$P" \
+  '{"tool_name":"Bash","tool_input":{"command":"echo \"scope_gate: standard+\" >> .sage/config.yaml"}}' \
+  --exit 2 --stderr "enforcement" --hook "$CG"
+
+# ── sage-scope-gate: declared scope, mechanically held (SG-4..SG-9) ─────────
+# The design doc's S1–S10 matrix (sage-scope 30-§1), carried here as SC1–SC10
+# because the harness's S-series was already taken by the secrets gate.
+# SC9 (config-gate protects scope keys) lives with the C-series below, where
+# the config-gate's other protected-key cases are.
+echo ""
+echo "sage-scope-gate — out-of-scope edits go through the artifact, not the diff"
+SCG="$REPO_ROOT/runtime/platforms/claude-code/hooks/sage-scope-gate.sh"
+
+scope_config() {  # scope_config <proj> [extra-line]
+  { printf 'sage-version: "1.3.10"\nhard_enforcement: true\nscope_gate: standard+\n'
+    [ -n "${2:-}" ] && printf '%s\n' "$2"; } > "$1/.sage/config.yaml"
+}
+
+add_scoped_manifest() {  # add_scoped_manifest <proj> <slug> <gate_state> [tier]
+  mkdir -p "$1/.sage/work/$2"
+  {
+    printf -- '---\ncycle_id: "%s"\nworkflow: build\nphase: implement\n' "$2"
+    printf -- 'status: in-progress\ntier: %s\ngate_state: %s\n' "${4:-standard}" "$3"
+    printf -- 'scope:\n  derived_from: plan@abcd1234\n  globs:\n'
+    printf -- '    - src/auth/**  # T1 harden refresh flow\n'
+    printf -- '    - src/session.ts  # T1 harden refresh flow\n'
+    printf -- '    - tests/auth/**  # T2 witness tests\n'
+    printf -- '  collateral:\n'
+    printf -- '    - src/shared/types.ts  # T1 — shared type moved\n'
+    printf -- '---\n\n# Cycle: %s\n' "$2"
+  } > "$1/.sage/work/$2/manifest.md"
+  # A scope without a plan behind it contributes nothing (integrity rule) —
+  # the fixture hash won't match, which is the STALE-armed shape: recorded
+  # scope enforced, re-derive warned. SC24 covers the fresh-hash shape.
+  printf -- '# Plan\n- [ ] **Task 1:** harden refresh flow\n  - **Files:** src/auth/**, src/session.ts\n- [ ] **Task 2:** witness tests\n  - **Files:** tests/auth/**\n' \
+    > "$1/.sage/work/$2/plan.md"
+}
+
+# SC1 (S1) — in-scope edit is allowed
+P=$(new_project); scope_config "$P"; add_scoped_manifest "$P" refresh plan-approved
+assert SC1 "an edit inside the derived scope is allowed" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"src/auth/token.ts"}}' \
+  --exit 0 --hook "$SCG"
+
+# SC2 (S2) — out-of-scope edit is blocked; stderr names the cycle, the nearest
+# task, and BOTH legal exits.
+P=$(new_project); scope_config "$P"; add_scoped_manifest "$P" refresh plan-approved
+assert SC2 "an out-of-scope edit is blocked with cycle, nearest task, and both exits" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"src/billing/invoice.ts"}}' \
+  --exit 2 --hook "$SCG" \
+  --stderr "refresh" --stderr "nearest task" \
+  --stderr "add-collateral" --stderr "scope derive --refresh"
+
+# SC3 (S3) — collateral-declared path is allowed
+P=$(new_project); scope_config "$P"; add_scoped_manifest "$P" refresh building
+assert SC3 "a recorded collateral path is allowed" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"src/shared/types.ts"}}' \
+  --exit 0 --hook "$SCG"
+
+# SC4 (S4) — artifact writes are never blocked, even while gated
+P=$(new_project); scope_config "$P"; add_scoped_manifest "$P" refresh building
+assert SC4 "writing the cycle's own artifacts is never scope-blocked" "$P" \
+  '{"tool_name":"Write","tool_input":{"file_path":".sage/work/refresh/spec.md"}}' \
+  --exit 0 --hook "$SCG"
+
+# SC5 (S5) — a witness test mapping to an in-scope source is allowed by
+# default, and blocked only when implicit_test_scope is explicitly false.
+P=$(new_project); scope_config "$P"; add_scoped_manifest "$P" refresh building
+assert SC5 "a test whose subject is in scope is allowed (implicit_test_scope default)" "$P" \
+  '{"tool_name":"Write","tool_input":{"file_path":"tests/test_session.py"}}' \
+  --exit 0 --hook "$SCG"
+P=$(new_project); scope_config "$P" "implicit_test_scope: false"
+add_scoped_manifest "$P" refresh building
+assert SC5b "the same test is blocked when implicit_test_scope: false" "$P" \
+  '{"tool_name":"Write","tool_input":{"file_path":"tests/test_session.py"}}' \
+  --exit 2 --hook "$SCG"
+
+# SC6 (S6) — Tier 1 (no manifest) and pre-plan cycles are never scope-gated:
+# there is no derived scope yet, and the pre-spec window is the spec-gate's.
+P=$(new_project); scope_config "$P"
+assert SC6 "no manifest (Tier 1) → never scope-gated" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"src/anything.ts"}}' \
+  --exit 0 --hook "$SCG"
+P=$(new_project); scope_config "$P"; add_scoped_manifest "$P" refresh spec-approved
+assert SC6b "gate_state before plan-approved → no derived scope in force" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"src/billing/invoice.ts"}}' \
+  --exit 0 --hook "$SCG"
+
+# SC7 (S7) — a corrupt scope block fails OPEN with exactly one warning line
+P=$(new_project); scope_config "$P"
+mkdir -p "$P/.sage/work/broken"
+printf -- '---\ncycle_id: "broken"\nstatus: in-progress\ntier: standard\ngate_state: building\nscope: yes please\n---\n' \
+  > "$P/.sage/work/broken/manifest.md"
+assert SC7 "a corrupt scope block fails open with a warning" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"src/billing/invoice.ts"}}' \
+  --exit 0 --stderr "could not be parsed" --hook "$SCG"
+if [ -z "$ONLY" ] || [ "$ONLY" = "SC7b" ]; then
+  P2=$(new_project); scope_config "$P2"
+  mkdir -p "$P2/.sage/work/broken"
+  printf -- '---\ncycle_id: "broken"\nstatus: in-progress\ntier: standard\ngate_state: building\nscope: yes please\n---\n' \
+    > "$P2/.sage/work/broken/manifest.md"
+  n=$( cd "$P2" && printf '%s' '{"tool_name":"Edit","tool_input":{"file_path":"src/x.ts"}}' \
+       | bash "$SCG" 2>&1 >/dev/null | wc -l | tr -d ' ' )
+  if [ "$n" = "1" ]; then
+    report PASS SC7b "the fail-open warning is exactly one line"; N_PASS=$((N_PASS + 1))
+  else
+    report FAIL SC7b "the fail-open warning is exactly one line" "got $n line(s)"
+    N_FAIL=$((N_FAIL + 1)); FAILED_IDS="$FAILED_IDS SC7b"
+  fi
+fi
+
+# SC8 (S8) — the off switches: scope_gate: off, scope_gate absent (ships off),
+# and hard_enforcement: false each disarm the gate entirely.
+P=$(new_project); scope_config "$P"; add_scoped_manifest "$P" refresh building
+printf 'sage-version: "1.3.10"\nhard_enforcement: true\nscope_gate: off\n' > "$P/.sage/config.yaml"
+assert SC8 "scope_gate: off → allow" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"src/billing/invoice.ts"}}' \
+  --exit 0 --hook "$SCG"
+P=$(new_project); set_config "$P" "hard_enforcement: true"; add_scoped_manifest "$P" refresh building
+assert SC8b "an ABSENT scope_gate key ships OFF (no surprise block)" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"src/billing/invoice.ts"}}' \
+  --exit 0 --hook "$SCG"
+P=$(new_project); add_scoped_manifest "$P" refresh building
+printf 'sage-version: "1.3.10"\nhard_enforcement: false\nscope_gate: standard+\n' > "$P/.sage/config.yaml"
+assert SC8c "hard_enforcement: false → the gate never fires" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"src/billing/invoice.ts"}}' \
+  --exit 0 --hook "$SCG"
+
+# SC10 (S10) — the gate applies INSIDE subagents unchanged (SG-7): blocking is
+# safe everywhere; only injection needs suppression, and that is the judge's
+# rule, not this gate's. agent_id/agent_type are the documented markers.
+P=$(new_project); scope_config "$P"; add_scoped_manifest "$P" refresh building
+assert SC10 "a subagent's out-of-scope edit is blocked all the same" "$P" \
+  '{"tool_name":"Edit","agent_id":"a-1","agent_type":"implementer","parent_tool_use_id":"toolu_01x","tool_input":{"file_path":"src/billing/invoice.ts"}}' \
+  --exit 2 --stderr "outside the approved plan" --hook "$SCG"
+
+# SC11 — a pre-upgrade cycle (manifest with NO scope block) is never
+# surprise-blocked: the gate only arms once `scope derive` has run. Same
+# promise H16/H38 make for qa:/tasks:.
+P=$(new_project); scope_config "$P"; add_manifest "$P" legacy building
+assert SC11 "a manifest with no scope block disarms the gate (pre-upgrade)" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"src/billing/invoice.ts"}}' \
+  --exit 0 --hook "$SCG"
+
+# ── SC13–SC20: the independent review's findings, pinned ────────────────────
+
+# SC13 (review #1) — a forged second manifest with a `**` scope must not widen
+# the real cycle's scope. Strictest cycle wins: the forged cycle can only
+# tighten, so forging buys nothing.
+P=$(new_project); scope_config "$P"; add_scoped_manifest "$P" refresh building
+mkdir -p "$P/.sage/work/zz"
+printf -- '---\ncycle_id: "zz"\nstatus: in-progress\ntier: standard\ngate_state: building\nscope:\n  derived_from: plan@zz\n  globs:\n    - "**"\n  collateral: []\n---\n' \
+  > "$P/.sage/work/zz/manifest.md"
+assert SC13 "a forged wide-open second manifest cannot unscope the real cycle" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"src/billing/invoice.ts"}}' \
+  --exit 2 --stderr "refresh" --hook "$SCG"
+
+# SC14 (review #2) — corruption in an UNRELATED cycle dir must not disarm an
+# armed cycle that parsed cleanly. Row 7 is per-cycle, not global.
+P=$(new_project); scope_config "$P"; add_scoped_manifest "$P" refresh building
+mkdir -p "$P/.sage/work/evil"
+printf -- '---\ngarbage, never closed\n' > "$P/.sage/work/evil/manifest.md"
+assert SC14 "a corrupt manifest elsewhere does not disarm the armed cycle" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"src/billing/invoice.ts"}}' \
+  --exit 2 --hook "$SCG"
+
+# SC15 (review #3) — a test-SHAPED file outside a dedicated test root, whose
+# subject is NOT in scope, is blocked. The wildcard-tail free pass (any test
+# path allowed because scope contains src/auth/**) is dead.
+P=$(new_project); scope_config "$P"; add_scoped_manifest "$P" refresh building
+assert SC15 "a test-shaped file outside a test root with an out-of-scope subject is blocked" "$P" \
+  '{"tool_name":"Write","tool_input":{"file_path":"src/billing/util.test.ts"}}' \
+  --exit 2 --hook "$SCG"
+assert SC15b "…and so is production code hiding in a nested tests/ dir" "$P" \
+  '{"tool_name":"Write","tool_input":{"file_path":"src/billing/tests/prod.ts"}}' \
+  --exit 2 --hook "$SCG"
+assert SC15c "a co-located test whose subject IS in scope stays allowed" "$P" \
+  '{"tool_name":"Write","tool_input":{"file_path":"testfiles/session.test.ts"}}' \
+  --exit 0 --hook "$SCG"
+
+# SC16 (review #4) — appending a duplicate `scope_gate: off` line must not
+# disarm the gate: both this gate and the config-gate read the FIRST value.
+P=$(new_project); add_scoped_manifest "$P" refresh building
+printf 'sage-version: "1.3.10"\nhard_enforcement: true\nscope_gate: standard+\nscope_gate: off\n' > "$P/.sage/config.yaml"
+assert SC16 "an appended duplicate scope_gate: off does not disarm the gate" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"src/billing/invoice.ts"}}' \
+  --exit 2 --hook "$SCG"
+
+# SC17 (review #6) — an EMPTY derived scope is a real, deliberately tiny
+# scope: it blocks (with the derive hint), it does not crash into fail-open.
+P=$(new_project); scope_config "$P"
+mkdir -p "$P/.sage/work/tiny"
+printf -- '---\ncycle_id: "tiny"\nstatus: in-progress\ntier: standard\ngate_state: building\nscope:\n  derived_from: plan@empty\n  globs: []\n  collateral: []\n---\n' \
+  > "$P/.sage/work/tiny/manifest.md"
+printf -- "# Plan\n" > "$P/.sage/work/tiny/plan.md"
+assert SC17 "an all-undeclared plan disarms LOUDLY — no crash, no silent floor" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"src/anything.ts"}}' \
+  --exit 0 --stderr "declares no" --no-stderr "internal error" --hook "$SCG"
+
+# SC17b — but row 6 outranks even an empty scope: an all-undeclared plan
+# must not make writing the FIRST witness test impossible.
+P=$(new_project); scope_config "$P"
+mkdir -p "$P/.sage/work/tiny"
+printf -- '---\ncycle_id: "tiny"\nstatus: in-progress\ntier: standard\ngate_state: building\nscope:\n  derived_from: plan@empty\n  globs: []\n  collateral: []\n---\n' \
+  > "$P/.sage/work/tiny/manifest.md"
+printf -- "# Plan\n" > "$P/.sage/work/tiny/plan.md"
+assert SC17b "an empty scope still never blocks a witness test in tests/" "$P" \
+  '{"tool_name":"Write","tool_input":{"file_path":"tests/test_first.py"}}' \
+  --exit 0 --hook "$SCG"
+
+# SC21 — a cycle owned by ANOTHER checkout (harvested from a removed worktree,
+# or a parallel session) contributes no scope: strictest-wins must not let a
+# dead worktree's cycle conscript this checkout's edits. Same owner-exclusion
+# rule /continue applies.
+P=$(new_project); scope_config "$P"; add_scoped_manifest "$P" mine building
+mkdir -p "$P/.sage/work/theirs"
+printf -- '---\ncycle_id: "theirs"\nstatus: in-progress\ntier: standard\ngate_state: building\nowner: "/somewhere/else/checkout"\nscope:\n  derived_from: plan@xx\n  globs:\n    - other/module/**  # T1 their work\n  collateral: []\n---\n' \
+  > "$P/.sage/work/theirs/manifest.md"
+assert SC21 "a foreign-owned cycle's scope does not constrain this checkout" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"src/auth/token.ts"}}' \
+  --exit 0 --hook "$SCG"
+
+# SC18 (review #8) — YAML-quoted globs match; quotes must not turn an
+# in-scope file into a false block.
+P=$(new_project); scope_config "$P"
+mkdir -p "$P/.sage/work/q"
+printf -- '---\ncycle_id: "q"\nstatus: in-progress\ntier: standard\ngate_state: building\nscope:\n  derived_from: plan@q\n  globs:\n    - "src/auth/**"  # T1 quoted\n  collateral: []\n---\n' \
+  > "$P/.sage/work/q/manifest.md"
+printf -- "# Plan\n" > "$P/.sage/work/q/plan.md"
+assert SC18 "a YAML-quoted glob still matches its in-scope file" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"src/auth/token.ts"}}' \
+  --exit 0 --hook "$SCG"
+
+# SC19 (review #16) — an entry with a non-attribution comment stays in scope;
+# a cosmetic note must never become a false block.
+P=$(new_project); scope_config "$P"
+mkdir -p "$P/.sage/work/n"
+printf -- '---\ncycle_id: "n"\nstatus: in-progress\ntier: standard\ngate_state: building\nscope:\n  derived_from: plan@n\n  globs:\n    - src/auth/**  # just a note, no task id\n  collateral: []\n---\n' \
+  > "$P/.sage/work/n/manifest.md"
+printf -- "# Plan\n" > "$P/.sage/work/n/plan.md"
+assert SC19 "a non-Tn comment does not drop the entry from scope" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"src/auth/token.ts"}}' \
+  --exit 0 --hook "$SCG"
+
+# SC20 (review #5) — an armed-state cycle that never ran `scope derive`
+# disarms LOUDLY: the warning names the command, every edit, until it runs.
+P=$(new_project); scope_config "$P"; add_manifest "$P" nodrv building
+assert SC20 "an underived armed cycle warns with the derive command (loud disarm)" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"src/anything.ts"}}' \
+  --exit 0 --stderr "scope derive" --hook "$SCG"
+
+# SC22 (round-2 review #1) — TWO legitimate cycles must not deadlock the
+# repo: the union of their scopes governs, and each cycle's own files stay
+# editable while a file in NEITHER scope still blocks.
+P=$(new_project); scope_config "$P"
+add_scoped_manifest "$P" cy-auth building
+mkdir -p "$P/.sage/work/cy-bill"
+printf -- '---\ncycle_id: "cy-bill"\nstatus: in-progress\ntier: standard\ngate_state: building\nscope:\n  derived_from: plan@bb\n  globs:\n    - src/billing/**  # T1 fee work\n  collateral: []\n---\n' \
+  > "$P/.sage/work/cy-bill/manifest.md"
+printf -- '# Plan\n- [ ] **Task 1:** fee work\n  - **Files:** src/billing/**\n' > "$P/.sage/work/cy-bill/plan.md"
+assert SC22 "cycle A's file is editable while cycle B is active (no deadlock)" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"src/auth/token.ts"}}' \
+  --exit 0 --hook "$SCG"
+assert SC22b "cycle B's file is editable too" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"src/billing/fee.ts"}}' \
+  --exit 0 --hook "$SCG"
+assert SC22c "a file in NEITHER cycle's scope still blocks" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"src/marketing/x.ts"}}' \
+  --exit 2 --hook "$SCG"
+
+# SC23 — the ∩ contract on a hash mismatch: a PARTIAL plan amendment keeps
+# every still-declared glob armed (billing still blocks, auth still allowed);
+# recorded globs the plan no longer backs stop arming. A WHOLESALE rewrite
+# therefore disarms its cycle — loudly (stale warning, artifact diff) — which
+# is the stated trade: a plan that declares `**` to escape is two artifact
+# writes a review cannot miss.
+P=$(new_project); scope_config "$P"; add_scoped_manifest "$P" refresh building
+printf -- '# amended plan\n- [ ] **Task 1:** harden refresh flow\n  - **Files:** src/auth/**, src/session.ts\n- [ ] **Task 2:** witness tests\n  - **Files:** tests/auth/**\n- [ ] **Task 3:** sneaky extra\n  - **Files:** src/extra.ts\n' \
+  > "$P/.sage/work/refresh/plan.md"
+assert SC23 "after a partial plan amendment the still-declared scope still blocks billing" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"src/billing/invoice.ts"}}' \
+  --exit 2 --hook "$SCG"
+assert SC23b "…and still allows the still-declared auth glob" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"src/auth/token.ts"}}' \
+  --exit 0 --hook "$SCG"
+
+# SC25 — round-3 verification's Attack A/B, pinned: a forged manifest with a
+# declaring-nothing plan (one junk byte, or the empty-declaration constant
+# hash sha1("")[:8]) arms NOTHING; the real cycle still blocks.
+P=$(new_project); scope_config "$P"; add_scoped_manifest "$P" refresh building
+mkdir -p "$P/.sage/work/zz"
+printf -- 'x' > "$P/.sage/work/zz/plan.md"
+printf -- '---\ncycle_id: "zz"\nstatus: in-progress\ntier: standard\ngate_state: building\nscope:\n  derived_from: plan@00000000\n  globs:\n    - "**"\n  collateral: []\n---\n' \
+  > "$P/.sage/work/zz/manifest.md"
+assert SC25 "attack A: forged manifest + junk plan arms nothing (still blocked)" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"src/billing/invoice.ts"}}' \
+  --exit 2 --hook "$SCG"
+printf -- '# empty plan\n' > "$P/.sage/work/zz/plan.md"
+printf -- '---\ncycle_id: "zz"\nstatus: in-progress\ntier: standard\ngate_state: building\nscope:\n  derived_from: plan@da39a3ee\n  globs:\n    - "**"\n  collateral: []\n---\n' \
+  > "$P/.sage/work/zz/manifest.md"
+assert SC25b "attack B: the sha1(empty) constant authenticates nothing (still blocked)" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"src/billing/invoice.ts"}}' \
+  --exit 2 --hook "$SCG"
+
+# SC26 — hand-forged degenerate COLLATERAL (add-collateral refuses to create
+# it) is dropped at read time, even on a hash-fresh cycle.
+P=$(new_project); scope_config "$P"; add_scoped_manifest "$P" refresh building
+python3 - "$P" <<'PYEOF'
+import sys
+path = sys.argv[1] + "/.sage/work/refresh/manifest.md"
+t = open(path).read().replace(
+    "    - src/shared/types.ts  # T1 — shared type moved",
+    "    - src/shared/types.ts  # T1 — shared type moved\n    - **  # T1 — mine now")
+open(path, "w").write(t)
+PYEOF
+assert SC26 "a hand-forged wildcard collateral entry is ignored (still blocked)" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"src/billing/invoice.ts"}}' \
+  --exit 2 --hook "$SCG"
+
+# SC24 — the fresh path: derived_from matching the plan's real hash arms the
+# scope with no stale warning; a scope whose cycle has NO plan.md at all
+# contributes nothing (the forged-manifest integrity rule, SC13's other half).
+if [ -z "$ONLY" ] || [ "$ONLY" = "SC24" ]; then
+  P=$(new_project); scope_config "$P"; add_scoped_manifest "$P" fresh building
+  SHA=$(python3 -c "
+import hashlib, re
+text = open('$P/.sage/work/fresh/plan.md', encoding='utf-8').read()
+decl = re.findall(r'(?m)^\s*-\s*\*\*(?:Files|Output)\s*:?\*\*:?\s*.*$', text)
+print(hashlib.sha1('\n'.join(l.strip() for l in decl).encode()).hexdigest()[:8])")
+  python3 - "$P" "$SHA" <<'PYEOF'
+import sys
+p, sha = sys.argv[1], sys.argv[2]
+path = p + "/.sage/work/fresh/manifest.md"
+t = open(path).read().replace("plan@abcd1234", "plan@" + sha)
+open(path, "w").write(t)
+PYEOF
+  err=$( cd "$P" && printf '%s' '{"tool_name":"Edit","tool_input":{"file_path":"src/auth/token.ts"}}' \
+         | bash "$SCG" 2>&1 >/dev/null ); rc=$?
+  if [ "$rc" = "0" ] && ! printf '%s' "$err" | grep -q "plan changed"; then
+    report PASS SC24 "a hash-fresh derived scope allows quietly (no stale warning)"
+    N_PASS=$((N_PASS + 1))
+  else
+    report FAIL SC24 "a hash-fresh derived scope allows quietly (no stale warning)" "rc=$rc stderr=$err"
+    N_FAIL=$((N_FAIL + 1)); FAILED_IDS="$FAILED_IDS SC24"
+  fi
+fi
+
+# SC12 — tier1 cycles: standard+ skips them (the escape valve); `all` gates them.
+P=$(new_project); scope_config "$P"; add_scoped_manifest "$P" quick building tier1
+assert SC12 "scope_gate: standard+ skips a tier1 cycle" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"src/billing/invoice.ts"}}' \
+  --exit 0 --hook "$SCG"
+P=$(new_project); add_scoped_manifest "$P" quick building tier1
+printf 'sage-version: "1.3.10"\nhard_enforcement: true\nscope_gate: all\n' > "$P/.sage/config.yaml"
+assert SC12b "scope_gate: all gates the tier1 cycle too" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"src/billing/invoice.ts"}}' \
+  --exit 2 --hook "$SCG"
 
 echo ""
 echo "═══ Summary ═══"

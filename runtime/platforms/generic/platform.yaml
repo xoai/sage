@@ -15,6 +15,7 @@ capabilities:
   post-tool-events: false         # no audit trail can be written mechanically
   subagent-dispatch: false        # reviews run in the context that wrote the code
   session-events: false
+  context-injection-midstream: false  # no post-tool → model channel verified here
 
 supported-os: [linux, macos, windows]
 # Genuinely true here, and cheap to be true: there is nothing to run. The only

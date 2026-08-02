@@ -360,13 +360,18 @@ Pick A/S/R/N, or tell me what to change.
      Run the review-revise loop per `sage/core/capabilities/orchestration/quality-locked/SKILL.md`.
    If Task tool NOT available:
      Announce: "Task tool not available — skipping independent review."
-3. THEN proceed to Step 6.
+3. **Derive the machine scope (SG-1):** run
+   `python3 sage/runtime/tools/manifest.py scope derive .sage/work/[cycle-id]/manifest.md`
+   — the plan's `Files:`/`Output:` lines become the manifest's `scope:` block
+   (enforced when `scope_gate` is on; harmless off; `--refresh` after amendments).
+4. THEN proceed to Step 6.
 
 **On [S] Skip review:**
 1. Prepend plan approach to decisions.md.
 2. Announce: "Skipping independent review."
 3. Log to decisions.md: "Plan approved without auto-review (user chose [S])."
-4. Proceed to Step 6.
+4. Derive the machine scope (same command as [A] step 3).
+5. Proceed to Step 6.
 
 ## Step 6: Implement
 

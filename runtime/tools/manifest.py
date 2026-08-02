@@ -49,6 +49,8 @@ Usage:
     manifest.py sync    <manifest.md>                  # repair from git evidence
     manifest.py check   [<manifest.md> ...]            # exit 1 on an incoherent manifest
     manifest.py resume  [<manifest.md>]                # the resume brief, generated
+    manifest.py scope derive <manifest.md> [--refresh] # plan Files:/Output: → scope block
+    manifest.py scope add-collateral <path> --task T3 --reason "..."
 
 Python 3.8+, stdlib only.
 """
@@ -56,6 +58,7 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import hashlib
 import pathlib
 import re
 import subprocess
@@ -722,7 +725,333 @@ def close_out(manifest: pathlib.Path, summary=None, next_step=None,
 
     print("close-out: wrote " + (", ".join(wrote) if wrote else "nothing (no args)")
           + f" · updated: stamped · 1 pass")
+
+    # SG-19: the scope judge's per-cycle totals surface at close-out —
+    # cost and efficacy stay UNCLAIMED in docs until measured, but the
+    # numbers themselves are always on the table.
+    journal = cycle_dir / "scope-journal.jsonl"
+    if journal.is_file():
+        try:
+            sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+            import scope_judge as _sj
+            v, d, inj, tin, tout = _sj.cycle_totals(cycle_dir)
+            print(f"scope-judge: {v} verdict(s), {d} drift, {inj} "
+                  f"injection(s), tokens {tin} in / {tout} out")
+        except Exception:
+            pass
     return 0
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# scope — declared scope becomes machine state (SG-1/SG-2).
+#
+# The plan already declares, per task, exactly which files the work may touch
+# (`Files:`) and which documents it may produce (`Output:`). Until now that
+# declaration was prose — read by the same model that is deciding whether to
+# wander. `scope derive` parses it ONCE, at plan approval, into a `scope:`
+# block in the manifest frontmatter, and the scope-gate hook reads the block,
+# not the plan. Sage's structural advantage over intent-inference tools is
+# precisely that scope here is DECLARED, not extracted from prompts by an LLM.
+#
+# Two legal expansion paths, both recorded (RR-24's spirit — scope is amended
+# through artifacts, never redefined silently in the diff):
+#   - `scope add-collateral <path> --task T3 --reason "…"` appends to
+#     `collateral:` and writes the decisions.md line ITSELF (degradation-log
+#     pattern: the record is taken, not requested).
+#   - the plan's `Files:` lines are amended, then `scope derive --refresh`
+#     re-derives and records the plan@old → plan@new delta in decisions.md.
+#
+# What derive will NOT do: guess. A task with no `Files:`/`Output:` line
+# contributes nothing and is reported as a warning — scope completeness is a
+# plan-review finding (SG-8), not something a script invents after the fact.
+
+# Template placeholders and "no files" markers that must not become globs.
+_SCOPE_JUNK = ("{", "}", "(none)", "n/a", "none", "tbd", "-", "—")
+
+
+def normalize_scope_glob(raw: str):
+    """Posix separators, repo-relative, no `..`. Returns None for anything that
+    is not a usable glob — the caller reports, never guesses."""
+    g = raw.strip().strip("`").strip('"').strip("'").rstrip(",").strip()
+    if not g or g.lower() in _SCOPE_JUNK or "{" in g or "}" in g:
+        return None
+    g = g.replace("\\", "/")
+    while g.startswith("./"):
+        g = g[2:]
+    if g.startswith("/"):
+        return None        # absolute — silently relativizing /etc/passwd to
+                           # etc/passwd would derive a scope nobody declared
+    if not g or any(part == ".." for part in g.split("/")):
+        return None
+    return g.rstrip("/") or None
+
+
+_TASK_HEAD_RE = re.compile(r"^\s*-\s*\[[ xX]\]\s*\*\*Task\s+(\d+)\s*:?\*\*:?\s*(.*?)\s*$",
+                           re.M)
+_FILES_LINE_RE = re.compile(r"^\s*-\s*\*\*(Files|Output)\s*:?\*\*:?\s*(.*?)\s*$")
+
+
+def parse_plan_scope(plan_text: str):
+    """The plan's per-task `Files:` / `Output:` declarations.
+
+    Returns (entries, undeclared, rejected):
+      entries    [(glob, task_id, task_name)] in plan order, deduplicated
+      undeclared [(task_id, task_name)] — tasks with no declaration at all
+      rejected   [raw] — declared values that could not become globs
+    """
+    entries, undeclared, rejected, seen = [], [], [], set()
+    tasks = list(_TASK_HEAD_RE.finditer(plan_text))
+    for i, m in enumerate(tasks):
+        tid, tname = int(m.group(1)), m.group(2).strip()
+        tname = re.sub(r"\s*\[DOC\]\s*$", "", tname)
+        body = plan_text[m.end():tasks[i + 1].start() if i + 1 < len(tasks)
+                         else len(plan_text)]
+        declared = False
+        for line in body.splitlines():
+            fm = _FILES_LINE_RE.match(line)
+            if not fm:
+                continue
+            for raw in re.split(r"[,\s]+", fm.group(2)):
+                if not raw.strip():
+                    continue
+                declared = True
+                g = normalize_scope_glob(raw)
+                if g is None:
+                    rejected.append(raw.strip())
+                elif g not in seen:
+                    seen.add(g)
+                    entries.append((g, tid, tname))
+        if not declared:
+            undeclared.append((tid, tname))
+    return entries, undeclared, rejected
+
+
+def _plan_sha(plan_text: str) -> str:
+    """The hash of what scope DERIVES from — the Files:/Output: lines only.
+
+    Not the whole file: checking a task's box, appending ✅ DONE markers, or
+    rewording an Action is routine cycle bookkeeping that changes no glob,
+    and a whole-file hash would mark the scope stale on every close-out
+    (warn-per-edit forever). Only edits to the declaration lines move this
+    hash — which is exactly when a re-derive is actually due. The scope
+    gate computes the same hash from the same regex."""
+    lines = re.findall(r"(?m)^\s*-\s*\*\*(?:Files|Output)\s*:?\*\*:?\s*.*$",
+                       plan_text)
+    basis = "\n".join(l.strip() for l in lines)
+    return hashlib.sha1(basis.encode("utf-8", errors="replace")).hexdigest()[:8]
+
+
+_SCOPE_KEY_RE = re.compile(r"^scope\s*:")
+# The glob, then optionally ANY comment; `# T3 name` carries attribution. An
+# entry must never fall out of scope because its note didn't match the
+# attribution shape — the gate's reader makes the same promise.
+_SCOPE_GLOB_RE = re.compile(
+    r"^\s*-\s*(?P<glob>\S+)(?:\s+#\s*(?P<comment>.*))?\s*$")
+_SCOPE_TASK_RE = re.compile(r"^T(?P<task>\d+)\s*(?:—|--|-)?\s*(?P<note>.*)$")
+
+
+def read_scope(text: str):
+    """The manifest's `scope:` block, or None when the manifest has no derived
+    scope. None and an empty block mean different things: None disarms the
+    scope gate entirely (pre-upgrade / never-derived cycles are never
+    surprise-blocked), while an empty `globs:` is a real, deliberately tiny
+    scope."""
+    fm, _ = split_frontmatter(text)
+    if fm is None:
+        return None
+    lines = fm.splitlines()
+    start = next((i for i, l in enumerate(lines) if _SCOPE_KEY_RE.match(l)), None)
+    if start is None:
+        return None
+    block = {"derived_from": None, "globs": [], "collateral": []}
+    section = None
+    for l in lines[start + 1:]:
+        if l.strip() and not l.startswith((" ", "\t")):
+            break                                  # next top-level key
+        s = l.strip()
+        m = re.match(r"^derived_from\s*:\s*(\S+)", s)
+        if m:
+            block["derived_from"] = m.group(1)
+            continue
+        if re.match(r"^globs\s*:", s):
+            section = "globs"
+            continue
+        if re.match(r"^collateral\s*:", s):
+            section = "collateral"
+            continue
+        gm = _SCOPE_GLOB_RE.match(s)
+        if gm and section:
+            glob_val = gm.group("glob").strip('"').strip("'")
+            tid, note = None, ""
+            tm = _SCOPE_TASK_RE.match((gm.group("comment") or "").strip())
+            if tm:
+                tid = int(tm.group("task"))
+                note = (tm.group("note") or "").strip()
+            if glob_val:
+                block[section].append((glob_val, tid, note))
+    return block
+
+
+def _scope_block_lines(derived_from: str, globs, collateral) -> str:
+    out = ["scope:", f"  derived_from: {derived_from}", "  globs:"]
+    if not globs:
+        out[-1] = "  globs: []"
+    for g, tid, note in globs:
+        tag = f"  # T{tid}" + (f" {note}" if note else "") if tid else ""
+        out.append(f"    - {g}{tag}")
+    if collateral:
+        out.append("  collateral:")
+        for g, tid, note in collateral:
+            tag = f"  # T{tid}" + (f" — {note}" if note else "") if tid else ""
+            out.append(f"    - {g}{tag}")
+    else:
+        out.append("  collateral: []")
+    return "\n".join(out)
+
+
+def write_scope_block(text: str, block: str) -> str:
+    """Replace (or append) the frontmatter's top-level `scope:` block. Same rule
+    as write_gate_state: only the frontmatter — body prose that quotes scope
+    is the agent's narration and must not be rewritten."""
+    fm, _ = split_frontmatter(text)
+    if fm is None:
+        raise Problem("manifest has no frontmatter")
+    lines = fm.splitlines()
+    start = next((i for i, l in enumerate(lines) if _SCOPE_KEY_RE.match(l)), None)
+    if start is None:
+        new_fm = fm.rstrip("\n") + "\n" + block
+    else:
+        end = start + 1
+        while end < len(lines) and (not lines[end].strip()
+                                    or lines[end].startswith((" ", "\t"))):
+            end += 1
+        new_fm = "\n".join(lines[:start] + block.splitlines() + lines[end:])
+    return text.replace(fm, new_fm, 1)
+
+
+def _prepend_decision(decisions_path: pathlib.Path, entry: str) -> None:
+    """One decisions.md line, written by CODE (the degradation-log pattern —
+    the record is taken, not requested)."""
+    today = datetime.datetime.now().strftime("%Y-%m-%d")
+    block = f"### {today} — {entry}\n\n"
+    old = (decisions_path.read_text(encoding="utf-8", errors="replace")
+           if decisions_path.is_file() else "")
+    m = re.match(r"(\A#[^\n]*\n+)", old)
+    head, rest = (m.group(1), old[m.end():]) if m else ("", old)
+    decisions_path.write_text(head + block + rest, encoding="utf-8")
+
+
+def scope_derive(manifest_path: pathlib.Path, refresh: bool = False) -> int:
+    plan = manifest_path.parent / "plan.md"
+    if not plan.is_file():
+        raise Problem(f"no plan to derive from: {plan}")
+    text = manifest_path.read_text(encoding="utf-8", errors="replace")
+    plan_text = plan.read_text(encoding="utf-8", errors="replace")
+
+    existing = read_scope(text)
+    if existing and not refresh:
+        raise Problem(
+            "this cycle already has a derived scope "
+            f"({existing['derived_from']}). Re-derive deliberately: "
+            "scope derive --refresh (the expansion is recorded), or add a "
+            "single path with scope add-collateral.")
+
+    entries, undeclared, rejected = parse_plan_scope(plan_text)
+    new_from = f"plan@{_plan_sha(plan_text)}"
+    # Collateral was legally recorded against THIS cycle; a re-derive of the
+    # plan's globs must not silently discard it.
+    collateral = existing["collateral"] if existing else []
+    globs = [(g, tid, tname) for g, tid, tname in entries]
+    new_text = write_scope_block(text, _scope_block_lines(new_from, globs, collateral))
+    manifest_path.write_text(stamp_updated(new_text), encoding="utf-8")
+
+    if refresh and existing and existing["derived_from"] not in (None, new_from):
+        # The record says WHAT changed, not just how many: graders (and
+        # humans) reading decisions.md must be able to see that a specific
+        # path became sanctioned — a count sanctions nothing.
+        old_globs = {g for g, _, _ in existing["globs"]}
+        added = [g for g, _, _ in globs if g not in old_globs]
+        removed = sorted(old_globs - {g for g, _, _ in globs})
+        delta = ""
+        if added:
+            delta += " + " + ", ".join(added[:8])
+            if len(added) > 8:
+                delta += f" (+{len(added) - 8} more)"
+        if removed:
+            delta += f" − {len(removed)} removed"
+        _prepend_decision(
+            manifest_path.parent / "decisions.md",
+            f"scope expanded: {existing['derived_from']} → {new_from} "
+            f"(cycle {manifest_path.parent.name}){delta}")
+
+    print(f"scope: {new_from} — {len(globs)} glob(s), "
+          f"{len(collateral)} collateral entr(y/ies)")
+    for tid, tname in undeclared:
+        print(f"warning: Task {tid} \"{tname}\" declares no Files:/Output: — "
+              f"it contributes NOTHING to scope (plan-review finding, SG-8); "
+              f"the gate does not guess scope for undeclared tasks")
+    for raw in rejected:
+        print(f"warning: unusable path {raw!r} skipped (placeholder, or escapes "
+              f"the repo)")
+    return 0
+
+
+def scope_add_collateral(manifest_path: pathlib.Path, path_or_glob: str,
+                         task: str, reason: str) -> int:
+    if not reason or not reason.strip():
+        raise Problem("--reason is required: collateral without a reason is "
+                      "scope creep with paperwork")
+    g = normalize_scope_glob(path_or_glob)
+    if g is None:
+        raise Problem(f"not a usable repo-relative path or glob: {path_or_glob!r}")
+    # A collateral glob with no literal prefix (`**`, `*`, `?x`, `[ab]/…`) is
+    # not "one extra path this task needs" — it is the whole tree, and an
+    # agent the gate just blocked must not be able to self-grant it. A
+    # scope-wide change goes through the plan (the user), not through
+    # collateral. Probed live: before this guard, `add-collateral '**'`
+    # opened the gate for everything.
+    if re.match(r"[*?\[]", g):
+        raise Problem(
+            f"{g!r} has no literal path prefix — collateral names a specific "
+            "path or a glob under one (e.g. src/billing/**). A scope-wide "
+            "expansion is a plan amendment: ask the user, then "
+            "`scope derive --refresh`.")
+    tid_m = re.fullmatch(r"[Tt]?(\d+)", task.strip())
+    if not tid_m:
+        raise Problem(f"--task must be a plan task id like T3 (got {task!r})")
+    tid = int(tid_m.group(1))
+
+    text = manifest_path.read_text(encoding="utf-8", errors="replace")
+    scope = read_scope(text)
+    if scope is None:
+        raise Problem("this cycle has no derived scope yet — run "
+                      f"`manifest.py scope derive {manifest_path}` first")
+    if any(g == c for c, _, _ in scope["collateral"]) or \
+       any(g == s for s, _, _ in scope["globs"]):
+        print(f"scope: {g} is already in scope — nothing to add")
+        return 0
+
+    reason_line = " ".join(reason.split())
+    collateral = scope["collateral"] + [(g, tid, reason_line)]
+    new_text = write_scope_block(
+        text, _scope_block_lines(scope["derived_from"] or "plan@unknown",
+                                 scope["globs"], collateral))
+    manifest_path.write_text(stamp_updated(new_text), encoding="utf-8")
+    _prepend_decision(
+        manifest_path.parent / "decisions.md",
+        f"scope collateral: {g} (task T{tid}) — {reason_line}")
+    print(f"scope: collateral added — {g} (T{tid}); decisions.md updated")
+    return 0
+
+
+def _select_active_manifest(root: pathlib.Path) -> pathlib.Path:
+    cands, _ = resume_candidates(root)
+    if len(cands) == 1:
+        return cands[0]
+    if not cands:
+        raise Problem("no active cycle — pass --manifest explicitly")
+    raise Problem("multiple active cycles (%s) — pass --manifest explicitly"
+                  % ", ".join(c.parent.name for c in cands))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -773,6 +1102,30 @@ def main(argv=None) -> int:
                     help="name the blocker (required by `check` when status is "
                          "blocked): the question, the options, whose call")
 
+    sc = sub.add_parser(
+        "scope",
+        help="the plan's declared Files:/Output: as machine state (SG-1/SG-2)")
+    scsub = sc.add_subparsers(dest="scope_cmd", required=True)
+
+    sd = scsub.add_parser("derive",
+                          help="parse the approved plan's per-task Files:/Output: "
+                               "into the manifest's scope: block")
+    sd.add_argument("manifest", type=pathlib.Path)
+    sd.add_argument("--refresh", action="store_true",
+                    help="re-derive after a plan amendment; the plan@old → "
+                         "plan@new delta is recorded in decisions.md")
+
+    sa = scsub.add_parser("add-collateral",
+                          help="record one extra path this work may touch — "
+                               "with the reason, in decisions.md, by this tool")
+    sa.add_argument("path", help="repo-relative path or glob")
+    sa.add_argument("--task", required=True, help="the plan task it serves (T3)")
+    sa.add_argument("--reason", required=True,
+                    help="why this path belongs to that task")
+    sa.add_argument("--manifest", type=pathlib.Path,
+                    help="the cycle (default: the single active cycle)")
+    sa.add_argument("--repo-root", type=pathlib.Path, default=pathlib.Path.cwd())
+
     args = p.parse_args(argv)
 
     try:
@@ -790,6 +1143,14 @@ def main(argv=None) -> int:
 
         if args.cmd == "resume":
             return resume(args.repo_root.resolve(), args.manifest)
+
+        if args.cmd == "scope":
+            if args.scope_cmd == "derive":
+                return scope_derive(args.manifest, refresh=args.refresh)
+            manifest = args.manifest or _select_active_manifest(
+                args.repo_root.resolve())
+            return scope_add_collateral(manifest, args.path,
+                                        task=args.task, reason=args.reason)
 
         if args.cmd == "close-out":
             return close_out(args.manifest, summary=args.summary,

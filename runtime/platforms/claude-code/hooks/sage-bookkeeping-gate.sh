@@ -94,8 +94,12 @@ if os.path.isfile(config_path):
     try:
         with open(config_path, encoding="utf-8", errors="replace") as fh:
             for line in fh:
+                # FIRST occurrence wins — the config-gate's reader convention.
+                # A last-wins read here let an appended duplicate
+                # `hard_enforcement: false` silence THIS gate (the scope
+                # block's guard) while the first-wins gates stayed armed.
                 m = re.match(r"\s*hard_enforcement\s*:\s*(true|false)\b", line, re.I)
-                if m:
+                if m and enforce is None:
                     enforce = (m.group(1).lower() == "true")
                 m = re.match(r"\s*bookkeeping_gate\s*:\s*false\b", line, re.I)
                 if m:
@@ -133,9 +137,63 @@ if status in ("complete", "completed", "abandoned"):
 
 # gate_state transitions are APPROVAL flow, not bookkeeping — the spec-gate's
 # completion guard already polices them (QA field, ledger). Blocking them here
-# would strand a cycle that legitimately needs to record gates-passed. Yield.
-if "gate_state" in json.dumps(tool_input):
-    emit("ALLOW")
+# would strand a cycle that legitimately needs to record gates-passed. Yield —
+# but NOT for an edit that also touches the scope block: merely mentioning
+# `gate_state` in the payload must not become a skeleton key for widening
+# `scope:` by hand (independent review, confirmed by probe). Scope is amended
+# through `manifest.py scope …`, which writes via Bash and never meets this
+# gate.
+#
+# "Touches the scope block" is decided by RECONSTRUCTION, not substrings
+# (the config-gate's pattern): apply the edit, parse the scope: section
+# before and after, compare. A structure-key regex was probed twice and
+# lost both ways — prose saying "out of scope:" stranded legit transitions,
+# and a widening that adds only a list item (`    - src/**`) carries no
+# structure key at all (round-3 review, confirmed). A Write replaces the
+# whole file, so for Write the yield requires the content to carry NO scope
+# block — a full-manifest rewrite is bookkeeping whatever else it says.
+
+
+def scope_section(text):
+    m = re.search(r"(?ms)^\s*scope\s*:\s*$\n((?:[ \t]+.*\n?)*)", text or "")
+    return m.group(0) if m else ""
+
+
+edit_texts = []
+if isinstance(tool_input.get("content"), str):
+    edit_texts.append(tool_input["content"])
+for key in ("old_string", "new_string"):
+    if isinstance(tool_input.get(key), str):
+        edit_texts.append(tool_input[key])
+for e in (tool_input.get("edits") or []):
+    if isinstance(e, dict):
+        for key in ("old_string", "new_string"):
+            if isinstance(e.get(key), str):
+                edit_texts.append(e[key])
+edit_text = "\n".join(edit_texts)
+
+if "gate_state" in edit_text:
+    tool = data.get("tool_name") or ""
+    if tool == "Write":
+        if not scope_section(str(tool_input.get("content") or "")):
+            emit("ALLOW")
+    else:
+        try:
+            with open(abspath, encoding="utf-8", errors="replace") as fh:
+                current = fh.read()
+        except OSError:
+            current = ""
+        after = current
+        edits = tool_input.get("edits")
+        if not edits and "new_string" in tool_input:
+            edits = [{"old_string": tool_input.get("old_string", ""),
+                      "new_string": tool_input.get("new_string", "")}]
+        for e in edits or []:
+            if isinstance(e, dict) and e.get("old_string"):
+                after = after.replace(e["old_string"],
+                                      e.get("new_string", ""), 1)
+        if scope_section(current) == scope_section(after):
+            emit("ALLOW")
 
 emit("BLOCK", (
     "sage-bookkeeping-gate: don't hand-edit %s during an active cycle — apply "

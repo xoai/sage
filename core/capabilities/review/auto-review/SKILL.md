@@ -257,7 +257,7 @@ Edit or Write tools. Your job is to REPORT findings, not fix them.
 Read the plan at: {PLAN_PATH}
 Read the spec at: {SPEC_PATH}
 
-CHECK THESE 5 THINGS:
+CHECK THESE 6 THINGS:
 
 1. SPEC-PLAN ALIGNMENT: Does the plan implement everything in the
    spec? Does it implement anything NOT in the spec?
@@ -273,6 +273,13 @@ CHECK THESE 5 THINGS:
 
 5. RISK CONCENTRATION: Are risky tasks front-loaded (fail fast)
    or buried at the end?
+
+6. SCOPE COMPLETENESS: Does every task declare Files: (or Output:
+   for [DOC] tasks)? Do the declared paths cover every deliverable
+   the task's Action/Output names? The scope gate derives its scope
+   from these lines (manifest.py scope derive) — a task with no
+   Files: line contributes NOTHING to the derived scope, and the
+   derivation does not guess.
 
 CLASSIFY each finding:
 - CRITICAL: Must fix before implementing. Blocks proceeding.

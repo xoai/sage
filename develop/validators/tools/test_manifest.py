@@ -467,5 +467,188 @@ class UpdatedStampTest(unittest.TestCase):
         self.assertEqual(new, "building")
 
 
+A_PLAN = """\
+# Implementation Plan: refresh flow
+
+## Tasks
+
+- [ ] **Task 1:** harden refresh flow
+  - **Files:** src/auth/**, ./src\\session.ts
+  - **Action:** do the work
+  - **Test:** tests/auth/test_refresh.py
+- [ ] **Task 2:** witness tests
+  - **Files:** tests/auth/**
+- [ ] **Task 3:** write the runbook [DOC]
+  - **Output:** docs/runbook.md
+- [x] **Task 4:** the undeclared one
+  - **Action:** no Files line at all
+- [ ] **Task 5:** template junk survives review sometimes
+  - **Files:** {exact_file_paths}
+"""
+
+
+class ScopeTest(unittest.TestCase):
+    """SG-1/SG-2 — declared scope becomes machine state, amended only through
+    the tool, never silently through the diff."""
+
+    def setUp(self):
+        self.d = pathlib.Path(tempfile.mkdtemp(prefix="manifest-scope-"))
+        self.addCleanup(shutil.rmtree, self.d, ignore_errors=True)
+        self.m = self.d / "manifest.md"
+        self.m.write_text(a_manifest("plan-approved"))
+        (self.d / "plan.md").write_text(A_PLAN)
+
+    def test_derive_parses_files_and_output_lines_normalized(self):
+        """Globs are posix, repo-relative, per-task attributed. Windows
+        separators and ./ prefixes are normalized, [DOC] Output: lines count,
+        template placeholders are rejected rather than becoming globs."""
+        M.scope_derive(self.m)
+        scope = M.read_scope(self.m.read_text())
+        self.assertIsNotNone(scope)
+        globs = [(g, t) for g, t, _ in scope["globs"]]
+        self.assertIn(("src/auth/**", 1), globs)
+        self.assertIn(("src/session.ts", 1), globs)
+        self.assertIn(("tests/auth/**", 2), globs)
+        self.assertIn(("docs/runbook.md", 3), globs)
+        self.assertNotIn("{exact_file_paths}", [g for g, _ in globs])
+        self.assertTrue((scope["derived_from"] or "").startswith("plan@"))
+        self.assertEqual(scope["collateral"], [])
+
+    def test_derive_warns_on_an_undeclared_task_and_does_not_guess(self):
+        """A task with no Files:/Output: is a plan-review finding (SG-8). The
+        derivation reports it and contributes NOTHING for that task."""
+        import contextlib
+        import io
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            M.scope_derive(self.m)
+        out = buf.getvalue()
+        self.assertIn("Task 4", out)
+        self.assertIn("NOTHING", out)
+        self.assertIn("{exact_file_paths}", out)
+
+    def test_derive_refuses_paths_that_escape_the_repo(self):
+        (self.d / "plan.md").write_text(
+            "- [ ] **Task 1:** sneaky\n"
+            "  - **Files:** ../outside.ts, /etc/passwd, src/ok.ts\n")
+        M.scope_derive(self.m)
+        scope = M.read_scope(self.m.read_text())
+        self.assertEqual([g for g, _, _ in scope["globs"]], ["src/ok.ts"],
+                         "absolute paths warn, not silently relativize")
+
+    def test_read_scope_keeps_quoted_globs_and_plain_comments(self):
+        """Review #8/#16: YAML quotes are stripped, and an entry with a
+        non-attribution comment stays in scope — the gate's reader and this
+        one must agree."""
+        self.m.write_text(a_manifest("plan-approved").replace(
+            "---\n\n# Cycle",
+            "scope:\n  derived_from: plan@aa\n  globs:\n"
+            "    - \"src/auth/**\"  # T1 quoted\n"
+            "    - src/session.ts  # just a note\n"
+            "  collateral: []\n---\n\n# Cycle"))
+        scope = M.read_scope(self.m.read_text())
+        self.assertEqual([(g, t) for g, t, _ in scope["globs"]],
+                         [("src/auth/**", 1), ("src/session.ts", None)])
+
+    def test_add_collateral_writes_entry_and_decisions_line(self):
+        """The two-writes-in-one-command pattern: the entry lands in the
+        manifest AND the decisions.md line is written by the tool itself —
+        the record is taken, not requested."""
+        M.scope_derive(self.m)
+        M.scope_add_collateral(self.m, "src/billing/types.ts",
+                               task="T1", reason="shared type moved")
+        scope = M.read_scope(self.m.read_text())
+        self.assertEqual([(g, t) for g, t, _ in scope["collateral"]],
+                         [("src/billing/types.ts", 1)])
+        decisions = (self.d / "decisions.md").read_text()
+        self.assertIn("scope collateral: src/billing/types.ts", decisions)
+        self.assertIn("shared type moved", decisions)
+
+    def test_add_collateral_refuses_an_empty_reason(self):
+        M.scope_derive(self.m)
+        with self.assertRaises(M.Problem):
+            M.scope_add_collateral(self.m, "src/x.ts", task="T1", reason="   ")
+
+    def test_add_collateral_refuses_a_scope_wide_grant(self):
+        """Found by an adversarial probe: `add-collateral '**'` opened the
+        gate for everything, recorded or not. Collateral must carry a literal
+        path prefix — the whole tree goes through the plan, not this tool."""
+        M.scope_derive(self.m)
+        for grab in ("**", "*", "**/*", "[ab]/x.ts", "?src/x.ts"):
+            with self.assertRaises(M.Problem, msg=grab):
+                M.scope_add_collateral(self.m, grab, task="T1", reason="mine now")
+        M.scope_add_collateral(self.m, "src/billing/**", task="T1",
+                               reason="a real prefix is fine")
+
+    def test_add_collateral_requires_a_derived_scope_first(self):
+        with self.assertRaises(M.Problem):
+            M.scope_add_collateral(self.m, "src/x.ts", task="T1", reason="r")
+
+    def test_derive_refuses_to_silently_rederive(self):
+        """A second bare derive is a Problem: re-deriving is legal only as the
+        DELIBERATE --refresh, whose delta is recorded."""
+        M.scope_derive(self.m)
+        with self.assertRaises(M.Problem):
+            M.scope_derive(self.m)
+
+    def test_refresh_records_the_expansion_delta_and_keeps_collateral(self):
+        """RR-24's spirit applied to scope: the plan is amended, the scope is
+        re-derived, and the old→new delta lands in decisions.md. Collateral
+        recorded against this cycle survives the re-derive."""
+        M.scope_derive(self.m)
+        M.scope_add_collateral(self.m, "src/kept.ts", task="T1", reason="keep me")
+        old = M.read_scope(self.m.read_text())["derived_from"]
+        plan = self.d / "plan.md"
+        plan.write_text(plan.read_text().replace(
+            "tests/auth/**", "tests/auth/**, src/newly/approved.ts"))
+        M.scope_derive(self.m, refresh=True)
+        scope = M.read_scope(self.m.read_text())
+        self.assertNotEqual(scope["derived_from"], old)
+        self.assertIn("src/newly/approved.ts", [g for g, _, _ in scope["globs"]])
+        self.assertIn("src/kept.ts", [g for g, _, _ in scope["collateral"]])
+        decisions = (self.d / "decisions.md").read_text()
+        self.assertIn(f"scope expanded: {old}", decisions)
+        self.assertIn(scope["derived_from"], decisions)
+        self.assertIn("src/newly/approved.ts", decisions,
+                      "the record names WHAT became sanctioned — a grader "
+                      "(and a human) must be able to match the path")
+
+    def test_refresh_with_no_plan_change_records_nothing(self):
+        M.scope_derive(self.m)
+        M.scope_derive(self.m, refresh=True)
+        self.assertFalse((self.d / "decisions.md").is_file())
+
+    def test_bookkeeping_edits_do_not_move_the_plan_hash(self):
+        """Round-3: the hash covers only the Files:/Output: lines. Checking a
+        box or stamping ✅ DONE is close-out bookkeeping — it must not mark
+        the scope stale (a whole-file hash meant warn-per-edit forever after
+        the first completed task)."""
+        before = M._plan_sha(A_PLAN)
+        ticked = A_PLAN.replace("- [ ] **Task 1:**",
+                                "- [x] **Task 1:**") + "\n✅ DONE (commit: abc)\n"
+        self.assertEqual(M._plan_sha(ticked), before)
+        rescoped = A_PLAN.replace("  - **Files:** tests/auth/**",
+                                  "  - **Files:** tests/auth/**, src/new.ts")
+        self.assertNotEqual(M._plan_sha(rescoped), before)
+
+    def test_the_block_lives_in_the_frontmatter_only(self):
+        """Body prose that mentions scope is narration, not machine state."""
+        self.m.write_text(a_manifest("plan-approved")
+                          + "\nThe scope: block is discussed here in prose.\n")
+        M.scope_derive(self.m)
+        fm, _ = M.split_frontmatter(self.m.read_text())
+        self.assertIn("derived_from: plan@", fm)
+        self.assertIn("The scope: block is discussed here in prose.",
+                      self.m.read_text())
+
+    def test_cli_add_collateral_refuses_missing_reason(self):
+        """argparse makes --reason mandatory — the CLI cannot take collateral
+        without a recorded why."""
+        with self.assertRaises(SystemExit) as ctx:
+            M.main(["scope", "add-collateral", "src/x.ts", "--task", "T1",
+                    "--manifest", str(self.m)])
+        self.assertEqual(ctx.exception.code, 2)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

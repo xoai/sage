@@ -524,6 +524,8 @@ SECRETS_GATE_SRC="$CORE/../runtime/platforms/claude-code/hooks/sage-secrets-gate
 VERIFY_GATE_SRC="$CORE/../runtime/platforms/claude-code/hooks/sage-verify-gate.sh"
 VERIFY_TRACKER_SRC="$CORE/../runtime/platforms/claude-code/hooks/sage-verify-tracker.sh"
 CONFIG_GATE_SRC="$CORE/../runtime/platforms/claude-code/hooks/sage-config-gate.sh"
+SCOPE_GATE_SRC="$CORE/../runtime/platforms/claude-code/hooks/sage-scope-gate.sh"
+SCOPE_JOURNAL_SRC="$CORE/../runtime/platforms/claude-code/hooks/sage-scope-journal.sh"
 if [ -f "$SPEC_GATE_SRC" ]; then
   cp "$SPEC_GATE_SRC" "$CLAUDE_DIR/hooks/sage-spec-gate.sh"
   chmod +x "$CLAUDE_DIR/hooks/sage-spec-gate.sh"
@@ -559,6 +561,14 @@ if [ -f "$SPEC_GATE_SRC" ]; then
     cp "$CONFIG_GATE_SRC" "$CLAUDE_DIR/hooks/sage-config-gate.sh"
     chmod +x "$CLAUDE_DIR/hooks/sage-config-gate.sh"
   fi
+  if [ -f "$SCOPE_GATE_SRC" ]; then
+    cp "$SCOPE_GATE_SRC" "$CLAUDE_DIR/hooks/sage-scope-gate.sh"
+    chmod +x "$CLAUDE_DIR/hooks/sage-scope-gate.sh"
+  fi
+  if [ -f "$SCOPE_JOURNAL_SRC" ]; then
+    cp "$SCOPE_JOURNAL_SRC" "$CLAUDE_DIR/hooks/sage-scope-journal.sh"
+    chmod +x "$CLAUDE_DIR/hooks/sage-scope-journal.sh"
+  fi
 
   # Merge the hook into settings.json rather than overwriting, so the user's
   # own settings survive; idempotent so re-running never duplicates the entry.
@@ -581,8 +591,10 @@ WANTED = [
     ("PreToolUse", "Bash", "sage-verify-gate.sh"),
     ("PostToolUse", "Bash|Edit|Write|MultiEdit", "sage-verify-tracker.sh"),
     ("PreToolUse", "Bash|Edit|Write|MultiEdit", "sage-config-gate.sh"),
+    ("PreToolUse", "Edit|Write|MultiEdit", "sage-scope-gate.sh"),
     ("PostToolUse", "Write|Edit", "sage-degradation-log.sh"),
     ("PostToolUse", "Write|Edit", "sage-manifest-sync.sh"),
+    ("PostToolUse", "Bash|Edit|Write|MultiEdit", "sage-scope-journal.sh"),
 ]
 
 try:

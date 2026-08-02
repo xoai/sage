@@ -15,6 +15,7 @@ capabilities:
   post-tool-events: false         # no mechanical audit trail
   subagent-dispatch: false        # parallel agents exist; Sage has never dispatched one
   session-events: false
+  context-injection-midstream: false  # no post-tool → model channel verified here
 
 artifacts:
   instructions: GEMINI.md

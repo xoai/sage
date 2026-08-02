@@ -34,6 +34,7 @@ const PRE_EDIT_GATES = [
   "sage-bookkeeping-gate.sh",
   "sage-secrets-gate.sh",
   "sage-config-gate.sh",
+  "sage-scope-gate.sh",   // SG-6: platform-agnostic script, this adapter's wire
 ]
 const PRE_BASH_GATES = ["sage-verify-gate.sh", "sage-config-gate.sh"]
 // PostToolUse recorders — never block; run for their side effects.

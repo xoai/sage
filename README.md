@@ -544,6 +544,23 @@ hook never bricks your editor. New projects default it on; projects upgraded
 with `sage update` get it installed but **off**, with a notice, so enforcement
 never surprises an established workflow.
 
+**Scope Guard (opt-in, unmeasured).** The same mechanical treatment now
+exists for declared scope: at plan approval, `manifest.py scope derive`
+turns the plan's per-task `Files:`/`Output:` lines into a machine `scope:`
+block, and with `scope_gate: standard+` a PreToolUse hook blocks edits
+outside it — naming both legal exits (`scope add-collateral --task --reason`,
+which records the expansion itself, or amend the plan and `derive
+--refresh`). Witness/TDD tests are never scope-blocked. An advisory
+background judge (`scope_judge`) for drift *inside* in-scope files exists as
+a runtime with full deterministic tests. **Both knobs ship off** and stay
+off until their scenarios (L3, W-SCOPE, E-JUDGE-1) are measured — no drift-
+prevention claim is made here, deliberately, until the numbers exist. Known
+residual, stated: bash-mediated writes bypass Edit/Write matchers, same as
+every path-scoped gate; the scope journal (which sees Bash) and review-time
+diff checks cover part of it. Full semantics — multi-cycle union, plan
+integrity, the witness-test guarantees, and every knob — in
+[docs/configuration.md](docs/configuration.md#scope-guard-ships-off--unmeasured).
+
 #### What is mechanical on each platform
 
 Not every platform can run every layer. When one is missing, Sage degrades —
@@ -715,28 +732,32 @@ relationships) for smarter integration.
 
 ## Configuration
 
-Sage configuration lives in `.sage/config.yaml`:
+Sage configuration lives in `.sage/config.yaml`. The complete reference —
+every key the codebase reads, its default, and which keys an agent under
+enforcement is not allowed to soften — is
+**[docs/configuration.md](docs/configuration.md)**. The short version:
 
 ```yaml
-sage-version: "<stamped by sage init from the framework's VERSION file>"
-project-name: "my-app"
-detected-stack: [react, typescript]
 auto_review: true          # sub-agent review after spec/plan approval
 auto_qa: true              # sub-agent QA after quality gates
 independent_gate3: true    # sub-agent code quality review (Gate 3)
-command_prefix: false      # prefix commands as sage:build, sage:fix, etc.
+hard_enforcement: true     # the master switch for the mechanical gates
+tdd_enforcement: true      # tests-before-code, enforced at the edit
+scope_gate: off            # Scope Guard's floor — ships off until measured
+scope_judge: false         # the advisory drift judge — ships off until measured
+review_loop:
+  mode: v2                 # the measured default; v1 restores the classic loop
 isolation: branch          # branch | worktree — how parallel work is isolated
 ```
 
-All toggles default to `true` (except `command_prefix` and `isolation`). Set to `false` to disable:
+Four families of settings, at a glance:
 
-| Setting | What It Controls |
-|---------|-----------------|
-| `auto_review` | Sub-agent review of spec, plan, and ADR after approval |
-| `auto_qa` | Sub-agent code verification after quality gates pass |
-| `independent_gate3` | Sub-agent code quality review at Gate 3 (falls back to self-review) |
-| `command_prefix` | Namespace all commands as `sage:build`, `sage:fix`, etc. (set via `--prefix` flag) |
-| `isolation` | `branch` (default, sequential) or `worktree` (parallel sessions). See [Parallel Sessions](#parallel-sessions-optional). |
+| Family | Keys | Guide section |
+|---|---|---|
+| Quality chain | `auto_review`, `auto_qa`, `independent_gate3` | [The quality chain](docs/configuration.md#the-quality-chain) |
+| Enforcement | `hard_enforcement`, `tdd_enforcement`, `secrets_gate`, `verify_gate`, `bookkeeping_gate`, the Scope Guard keys | [Enforcement](docs/configuration.md#enforcement--the-master-switch-and-the-gates) |
+| Review loop v2 | the `review_loop:` block | [The review loop](docs/configuration.md#the-review-loop-v2--the-measured-default) |
+| Sessions | flag defaults, resume economy, `isolation`, worktree seed/harvest | [Execution-flag defaults](docs/configuration.md#execution-flag-defaults) |
 
 ## Multi-Agent (optional)
 

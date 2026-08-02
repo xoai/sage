@@ -267,7 +267,8 @@ mkdir -p "$OC_DIR/plugin" "$OC_DIR/sage-hooks"
 GATE_SRC="$SAGE_DIR/runtime/platforms/claude-code/hooks"
 GATE_CORE="$CORE/gates/scripts"
 for g in sage-spec-gate.sh sage-tdd-gate.sh sage-bookkeeping-gate.sh \
-         sage-secrets-gate.sh sage-config-gate.sh sage-verify-gate.sh \
+         sage-secrets-gate.sh sage-config-gate.sh sage-scope-gate.sh \
+         sage-verify-gate.sh \
          sage-verify-tracker.sh sage-degradation-log.sh sage-manifest-sync.sh; do
   if [ -f "$GATE_SRC/$g" ]; then
     cp "$GATE_SRC/$g" "$OC_DIR/sage-hooks/$g" && chmod +x "$OC_DIR/sage-hooks/$g"

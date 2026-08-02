@@ -62,6 +62,9 @@ DISCOVERY = [
     # registry about behavioral surfaces.
     ("tool",         "runtime/tools/review.py"),
     ("tool",         "runtime/tools/sage_flags.py"),
+    # The scope judge's runtime carries the drift-verdict BEHAVIOR (locks,
+    # window, cadence, injection, anti-nag) — same rationale as review.py.
+    ("tool",         "runtime/tools/scope_judge.py"),
 ]
 
 

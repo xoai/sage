@@ -524,6 +524,8 @@ create_sage_state() {
   fi
 
   cat > "$sage_dir/config.yaml" << YAML
+# Sage project configuration. Full reference for every key (defaults, who
+# reads it, which keys enforcement protects): sage/docs/configuration.md
 sage-version: "$SAGE_FRAMEWORK_VERSION"
 project-name: "$project_name"
 detected-stack: [$DETECTED_STACK]
@@ -544,6 +546,26 @@ hard_enforcement: true
 # with the tdd skill loaded. A rule the model can talk itself out of is not a rule.
 # Escape with `tier: tier1` on a manifest, or set this to false.
 tdd_enforcement: true
+# scope_gate: the scope-gate hook blocks Edit/Write to paths outside the
+# approved plan's derived scope (manifest scope: block, written by
+# `manifest.py scope derive`). Ships OFF until the L3/W-SCOPE numbers land
+# (ADR-14: the knob ships, the number decides). standard+ gates cycles with
+# manifests and skips tier1; `all` gates tier1 cycles too. Legal exits from a
+# block: scope add-collateral (recorded), or amend the plan + scope derive
+# --refresh. Scope changes go through the artifact, never silently through
+# the diff.
+scope_gate: off
+# implicit_test_scope: with the scope gate on, a test file whose subject maps
+# to an in-scope source is always allowed — witness/TDD tests must never be
+# blocked by scope. Set false to require tests to be declared in the plan.
+implicit_test_scope: true
+# scope_judge: advisory background drift check (cheap model, event-driven,
+# non-blocking) over the scope journal. Stays false until E-JUDGE-1 passes
+# with zero clean-run false positives AND the per-cycle cost is published.
+# Tuning knobs (judge_window/judge_every/judge_cooldown/judge_timeout/
+# judge_cmd) are documented in sage/docs/configuration.md and are
+# config-gate-protected while the judge is armed.
+scope_judge: false
 command_prefix: $prefix_val
 # review_loop: v2 puts the review-revise verdict in code — reviewer findings
 # land in a machine-owned ledger (review.py) and every CONTINUE/STOP is

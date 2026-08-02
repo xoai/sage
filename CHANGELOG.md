@@ -2,6 +2,148 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [1.3.11] — Scope Guard: declared scope becomes machine state
+
+Scope drift was a prose capability (`scope-guard`, Layer 3) and nothing
+else — under the house law, a paragraph awaiting promotion. This lands the
+mechanism. **Both knobs ship OFF** (`scope_gate: off`, `scope_judge: false`)
+and stay off until L3 / W-SCOPE / E-JUDGE-1 are measured (ADR-14: the knob
+ships, the number decides). Nothing here claims to prevent drift; the
+claims arrive with the numbers or not at all.
+
+- **`manifest.py scope` (SG-1/SG-2)** — the approved plan's per-task
+  `Files:`/`Output:` lines become a machine `scope:` block in the manifest
+  frontmatter (`scope derive`; globs normalized, per-task attribution,
+  undeclared tasks warn — the derivation never guesses). Two legal
+  expansion paths, both recorded through the artifact: `scope
+  add-collateral <path> --task TN --reason "…"` (writes the decisions.md
+  line itself), and plan amendment + `scope derive --refresh` (records the
+  plan@old → plan@new delta). Hand-edits of the block redirect through the
+  bookkeeping gate (B11); `scope_gate`/`scope_judge`/`implicit_test_scope`
+  join the config-gate's protected keys (C16–C20).
+
+- **`sage-scope-gate.sh` (SG-4..SG-9)** — deterministic PreToolUse floor:
+  an Edit/Write outside scope ∪ collateral exits 2 naming the cycle, the
+  nearest task, and both legal exits. Ordered allow matrix: not-a-Sage-
+  project, gate off, pre-plan/no-derived-scope, Sage's own paths, in-scope,
+  implicit test scope (witness/TDD tests are never scope-blocked; subject
+  maps to an in-scope source), corrupt-state fail-open with one warning.
+  `standard+` skips tier1 (the escape valve); `all` gates it. Applies
+  inside subagents unchanged (SC1–SC12). Wired on claude-code (generator)
+  and opencode (the adapter's `tool.execute.before`, SG-6 — the script is
+  platform-agnostic, adapters own the wire). Collateral must carry a
+  literal path prefix — an adversarial probe showed `add-collateral '**'`
+  self-granting the tree, so the tool refuses wildcard-leading globs.
+  Stated residual, same register as config-gate's: bash-mediated writes
+  bypass Edit/Write matchers — partially covered by the journal (when
+  `scope_judge` is on), and by
+  check-diff at review.
+
+- **Scope judge runtime, model-free (SG-10..SG-19)** — `sage-scope-journal.sh`
+  (PostToolUse, one JSONL line per tool call incl. Bash, 2 MB rotation) +
+  `runtime/tools/scope_judge.py`: recursion guard (`SAGE_JUDGE=1` no-ops
+  every scope hook), per-cycle lockfile, machine-wide cap of 2, bounded
+  window, event-driven cadence (never a timer), 60 s timeout, strict
+  three-valued verdict where malformed/timeout/empty ⇒
+  `insufficient-evidence`, never `drift`. On a drift verdict the next hook
+  return injects ONE correction via `hookSpecificOutput.additionalContext`
+  — at most one per `judge_cooldown` events, one per task per reason,
+  never on sub-agent events, and the decisions.md audit line is written by
+  code at injection time. Cost per call lands in the journal; totals
+  surface at close-out. Runtime-safety model adapted from ArchAstro/scopey
+  (MIT, C18-credited). 30 deterministic tests in
+  `develop/validators/scope-judge/`, wired into fastcheck.
+
+- **`context-injection-midstream` joins the capability contract** —
+  eighth row, mandatory in every platform.yaml. claude-code: attested by a
+  live canary probe (Claude Code 2.1.220; documented API since 2.1.196) —
+  `docs/attestations/claude-code-context-injection-midstream-2026-08-02.md`.
+  opencode and the rest: `false` — the adapter's `tool.execute.after`
+  discards gate stdout, so the judge is claude-code-only and says so.
+
+- **Independently reviewed before anything ships — four rounds, until the
+  reviewer ran dry.** A fresh-context adversarial review plus live probes
+  found, and this change fixes, with a regression test each: a forged
+  second manifest widening scope (per-cycle integrity, VERIFY-THEN-HONOR:
+  a cycle contributes scope only when its sibling plan.md declares
+  Files:/Output: lines — an empty declaration list hashes to a well-known
+  constant and authenticates nothing; hash match honors the recorded
+  scope; mismatch arms only recorded ∩ still-declared plus recorded
+  collateral, and degenerate collateral entries are dropped at read time.
+  SC13/SC23/SC23b/SC24/SC25/SC25b/SC26 pin the whole matrix, including
+  the round-3 verification's two live attacks. Stated residual, SG-9's
+  register: a forged plan that OPENLY declares a wide scope defeats the
+  union — two artifact writes a review cannot miss); a
+  corrupt manifest anywhere disarming every cycle
+  (row 7 is per-cycle now, SC14); the wildcard-tail test free pass (row 6
+  now requires a test root or a subject that maps into scope, SC15);
+  duplicate-key config appends read differently by gate and config-gate
+  (both read FIRST now, SC16/C20b); an empty derived scope crashing the
+  hook open (it blocks, SC17); quoted globs and non-`# Tn` comments
+  silently dropping entries into false blocks (SC18/SC19, mirrored in
+  manifest.py); a silently-disarmed gate when `scope derive` never ran (a
+  loud per-edit warning names the command, SC20); the bookkeeping-gate's
+  `gate_state` yield doubling as a scope hand-edit skeleton key (B12);
+  `add-collateral '**'` self-granting the tree (refused); judge knobs
+  (`judge_cmd`/`judge_every`/…) unprotected while the judge is armed
+  (config-gate C21–C22); a spawn-per-event storm after skipped judge
+  passes (one attempt per timeout); window evidence labels off by the
+  window gap; journal rotation suppressing injections forever; and the
+  `scope_held` grader accepting unrecorded self-widening of the scope
+  block, missing deletions entirely (additions now count only when
+  decisions.md records them; deletions count as touches). A second round
+  over the fixes THEMSELVES caught what the first round's biggest fix
+  broke — strictest-cycle-wins deadlocked any two-cycle project (every
+  edit blocked, blamed on the wrong cycle) — and it was replaced with
+  union-plus-integrity (SC22 a/b/c pin the no-deadlock behavior); plus:
+  foreign-owned cycles (harvested worktrees / parallel sessions) now
+  excluded per /continue's owner rule (SC21); row 6 outranks an empty
+  scope so an all-undeclared plan can still get its first witness test
+  (SC17b); a healthy judge is no longer throttled to one pass per
+  judge_timeout (the spawn marker clears on a recorded verdict — cadence
+  stays event-driven); the refresh decision line now NAMES the globs it
+  sanctioned, so the L3 grader honors SG-2's second legal exit; the
+  bookkeeping-gate's scope guard matches scope STRUCTURE, not the words
+  ("out of scope:" in manifest prose no longer strands gates-passed,
+  B14); contradictory duplicate enforcement keys can't be created
+  (C23/C23b — the reader-divergence bomb); the grader only honors the
+  tool's own record shapes and treats a cycle created mid-session as its
+  own record; and the row-6 subject walk is pruned and time-capped
+  (32 ms on a 28k-file tree, against the 50 ms budget). Round 4 closed
+  what the verification pass of round 3 found: the integrity check that
+  computed its verdict and didn't act on it (both live attacks now pinned,
+  SC25/SC25b); the bookkeeping-gate's scope guard now decides by
+  RECONSTRUCTION — apply the edit, compare the parsed scope section —
+  instead of key regexes, so a widening that adds only a list item is
+  redirected while a transition whose old_string merely spans unchanged
+  scope lines yields (B15/B16); contradictory duplicates of the ranked
+  scope_gate key are refused at creation like the boolean flags (C24);
+  and the block message no longer claims an empty scope when the nearest
+  glob simply lacks task attribution. Reviewer's closing verdict, adopted
+  verbatim as policy: fit to ship off-by-default; the L3/W-SCOPE numbers
+  may be used to argue a default flip only now that these landed.
+
+- **`docs/configuration.md` — the complete `.sage/config.yaml` reference.**
+  Every key the codebase actually reads (audited by grep, not memory):
+  identity, the quality chain, the enforcement family with each gate's
+  absent-key reading, the full Scope Guard section (gate semantics, judge
+  knobs, stated residuals), review-loop v2, execution-flag defaults and
+  their canonical-form requirement, the resume close-out economy, and
+  worktree seed/harvest — plus the protection model: exactly which keys an
+  agent under enforcement cannot soften, and why humans edit out-of-band.
+  The README's thin Configuration section now points there, and the config
+  template `sage init` writes carries the pointer in its header.
+
+- **Evals authored, not yet run (30-§2)** — `L3-scope-hold` (6-task plan,
+  out-of-scope temptation + in-file lure; `scope_held` grader: files
+  touched ⊆ scope ∪ recorded collateral — the record is the sanctioned
+  exit, the silent touch is the fail), `E-JUDGE-1a/b` (drift detection
+  mechanics / the zero-false-positive clean run). W-SCOPE is L3 re-run on
+  the Haiku tier per the weak-model-campaign convention. New graders
+  `scope_held` + `file_count` with unit tests; plan auto-review gains the
+  scope-completeness item (SG-8). Flip criteria and claims discipline as
+  written in the pack: the defaults move only on the numbers.
+
 ## [1.3.10] — review loop v2: the verdict moves from the reviewer to code
 
 - **`review_loop: v2` is now the default.** The RR-28 flip criteria were
