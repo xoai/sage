@@ -17,6 +17,7 @@ capabilities:
   post-tool-events: attested      # tool.execute.after fires with the tool result
   subagent-dispatch: attested     # the task tool spawns an independent reviewer session
   session-events: false           # the platform's event hook fires session.*, but the adapter ships no session-init that uses it
+  context-injection-midstream: false  # [V3] resolved 2026-08-02: tool.execute.after discards gate stdout — no post-tool → model channel in the adapter; the scope judge is claude-code-only and says so (loud degradation)
 
 attestations:
   - capability: pre-tool-veto

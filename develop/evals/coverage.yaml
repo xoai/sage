@@ -54,12 +54,14 @@ surfaces:
   workflow-build:
     path: core/workflows/build.workflow.md
     kind: workflow
-    covered-by: [E1, E4, E7, E9, E10]
+    covered-by: [E1, E4, E7, E9, E10, L3]
     notes: >
       Both paths of Step 6's fork are now covered. E1/E4/E7 grade the INLINE path
       (TDD order, scope, spec gate); E9/E10 grade the SUBAGENT path. Before E9/E10
       existed, all three of the first set would have passed with the subagent path
-      completely broken, because none of them sets the flag.
+      completely broken, because none of them sets the flag. L3 drives a 6-task
+      plan through the build loop under a derived scope (the plan-approval
+      checkpoint's `scope derive` step) with planted temptations.
 
   workflow-fix:
     path: core/workflows/fix.workflow.md
@@ -80,7 +82,8 @@ surfaces:
       E6 grades only the decision to ROUTE to architect. Nothing grades what
       architect then does — the three elicitation rounds, brief.md-before-
       design, per-milestone checkpoints — all of which the eager layer asserts
-      as non-negotiable.
+      as non-negotiable. The plan-approval `scope derive` step (SG-1) mirrors
+      build's and is exercised only through L3's build-side twin.
 
   workflow-review:
     path: core/workflows/review.workflow.md
@@ -273,6 +276,54 @@ surfaces:
       H-series hook tests cover the script's own contract (it fires, it emits
       the state block); nothing measures whether the injected state changes
       what the agent then does. L1 (Phase 5) is the natural home for that.
+
+  hook-scope-gate:
+    path: runtime/platforms/claude-code/hooks/sage-scope-gate.sh
+    kind: hook
+    covered-by: [L3]
+    notes: >
+      Scope Guard's deterministic floor (SG-4..SG-9): Edit/Write outside the
+      plan's derived scope (manifest scope: block, `manifest.py scope derive`)
+      exits 2 with both legal exits named — add-collateral, or amend the plan
+      and derive --refresh. Ships scope_gate: off; the default flips only when
+      L3 gate-only ≥ bare with zero false-blocks AND a covering re-run of the
+      review-bearing scenarios shows no blocking regression (30-§3). The
+      SC1–SC26 matrix in run-hook-tests.sh pins the allow/block rows — incl.
+      the four-review-round pins: union + verify-then-honor plan integrity
+      (forged manifests, the sha1-empty constant, partial-amendment ∩),
+      two-cycle no-deadlock, owner exclusion, and the witness-test
+      invariants. L3 is the end-to-end scenario; W-SCOPE is L3 re-run at the
+      Haiku tier (WEAK-MODEL-CAMPAIGN convention). Stated residuals:
+      bash-mediated writes bypass Edit/Write matchers — partially covered by
+      the scope journal (when scope_judge is on) and check-diff at review
+      time — and a forged plan+manifest pair that OPENLY declares a wide
+      scope defeats the union (two artifact writes a review cannot miss).
+
+  hook-scope-journal:
+    path: runtime/platforms/claude-code/hooks/sage-scope-journal.sh
+    kind: hook
+    covered-by: [E-JUDGE-1a, E-JUDGE-1b]
+    notes: >
+      The judge's event capture AND delivery channel (SG-10, SG-16): one JSONL
+      line per tool call, and — when the background judge queued a drift
+      correction — the hookSpecificOutput.additionalContext envelope on the
+      next return, subject to the SG-17 anti-nag invariants. Inert unless
+      scope_judge: true (ships false). The runtime tests in
+      develop/validators/scope-judge/ pin every safety invariant with no model;
+      E-JUDGE-1a/b are the model-in-loop halves that decide whether the knob
+      ever flips.
+
+  tool-scope-judge:
+    path: runtime/tools/scope_judge.py
+    kind: tool
+    covered-by: [E-JUDGE-1a, E-JUDGE-1b]
+    notes: >
+      The judge runtime itself (recursion guard, per-cycle lock, machine-wide
+      cap, bounded window, event-driven cadence, strict three-valued verdict,
+      injection dedupe, cost accounting). Deterministic suite:
+      develop/validators/scope-judge/test_scope_judge.py (in fastcheck).
+      E-JUDGE-1a asserts detection mechanics end-to-end; E-JUDGE-1b is the
+      false-positive check that keeps scope_judge opt-in until it passes.
 
 # ── Gate scripts (three-state, standalone-invocable) ─────────────────────────
 
@@ -581,7 +632,12 @@ surfaces:
   capability-scope-guard:
     path: core/capabilities/context/scope-guard/SKILL.md
     kind: capability
-    covered-by: [E4]
+    covered-by: [E4, L3]
+    notes: >
+      E4 measured the one-task shape (bare frontier declines blatant creep
+      3/3). L3 is the regime the Scope Guard pack was written for — a 6-task
+      plan with planted temptations — and grades the skill's prose against
+      its new mechanical floor (scope_gate) in the same run.
 
   capability-verify-completion:
     path: core/capabilities/debugging/verify-completion/SKILL.md

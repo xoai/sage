@@ -66,6 +66,13 @@ CAPABILITIES = {
         "fresh-context task delegation (ADR-10)",
     "session-events":
         "start/stop lifecycle for state management",
+    # Mid-stream, not session-start: can a post-tool hook hand the model one
+    # piece of context DURING a session (the scope judge's correction channel,
+    # SG-16 — and the strongest available mechanism for E11's
+    # trigger-reliability gap, which is why it is a contract row rather than a
+    # feature flag). Without it: the judge is verdicts-on-disk only.
+    "context-injection-midstream":
+        "inject context into the model mid-session from a post-tool hook",
 }
 
 VALID_VALUES = (True, False, "attested")

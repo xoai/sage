@@ -7,7 +7,10 @@
 # reduce any gate's effective-enabled state (flip hard_enforcement true→false,
 # add a *_gate: false opt-out, remove tdd_enforcement: true; with the v2
 # review loop active, flip review_loop mode v2→v1 or witness_capping
-# true→false — an agent must not soften its own review floor) exits 2. Also
+# true→false — an agent must not soften its own review floor; with the scope
+# gate armed, lower scope_gate's rank or flip implicit_test_scope, or flip
+# scope_judge true→false — an agent must not soften its own scope floor,
+# SG-3) exits 2. Also
 # catches the obvious Bash evasions (a redirect/sed/tee that writes the switch
 # off). Exit 2; the reason says humans disable enforcement out-of-band.
 #
@@ -65,16 +68,28 @@ BLOCK_MSG = (
 # The enforcement keys and how each reads when ABSENT.
 #   master  hard_enforcement — default OFF; ON only when explicitly true.
 #   opt_out secrets_gate / verify_gate — default ON; OFF only when explicitly false.
-#   opt_in  tdd_enforcement — default OFF; ON only when explicitly true.
+#   opt_in  tdd_enforcement / scope_judge — default OFF; ON only when explicitly true.
+#   ranked  scope_gate — off < standard+ < all; lowering the rank is weakening.
 MASTER = "hard_enforcement"
 OPT_OUT = ("secrets_gate", "verify_gate")
-OPT_IN = ("tdd_enforcement",)
+OPT_IN = ("tdd_enforcement", "scope_judge")
+SCOPE_RANK = {"off": 0, "standard+": 1, "all": 2}
 
 
 def read_flag(text, key):
-    """None if the key is absent, else True/False."""
+    """None if the key is absent, else True/False (FIRST occurrence)."""
     m = re.search(r"(?mi)^\s*%s\s*:\s*(true|false)\b" % re.escape(key), text or "")
     return None if not m else (m.group(1).lower() == "true")
+
+
+def contradictory_flag(text, key):
+    """The same key with BOTH values in one file is a reader-divergence bomb:
+    first-wins readers stay armed while last-wins readers disarm (round-2
+    review probed exactly that split across the sibling gates). A config in
+    that state may not be CREATED through this gate."""
+    vals = {v.lower() for v in re.findall(
+        r"(?mi)^\s*%s\s*:\s*(true|false)\b" % re.escape(key), text or "")}
+    return len(vals) > 1
 
 
 def enabled(text, key):
@@ -103,6 +118,30 @@ def witness_capping(text):
     return read_flag(text, "witness_capping") is not False   # default on
 
 
+def scope_mode(text):
+    """The scope_gate mode. Absent → off (the gate SHIPS off; the default
+    flips only when 30-§3's numbers land)."""
+    m = re.search(r"(?mi)^\s*scope_gate\s*:\s*\"?([A-Za-z+]+)", text or "")
+    v = m.group(1).lower() if m else "off"
+    return v if v in SCOPE_RANK else "off"
+
+
+def implicit_test_scope(text):
+    return read_flag(text, "implicit_test_scope") is not False   # default on
+
+
+JUDGE_KNOBS = ("judge_cmd", "judge_every", "judge_window",
+               "judge_cooldown", "judge_timeout")
+
+
+def judge_knobs(text):
+    out = {}
+    for key in JUDGE_KNOBS:
+        m = re.search(r"(?mi)^\s*%s\s*:\s*(.+?)\s*(?:#.*)?$" % key, text or "")
+        out[key] = m.group(1).strip() if m else None
+    return out
+
+
 def weaker(before, after):
     """after reduces enforcement vs before, for any key."""
     for key in (MASTER,) + OPT_OUT + OPT_IN:
@@ -116,6 +155,37 @@ def weaker(before, after):
             return True
         if witness_capping(before) and not witness_capping(after):
             return True
+    # The scope floor (SG-3): lowering scope_gate's rank is an agent widening
+    # its own permitted diff. And while the scope gate is armed, the
+    # implicit_test_scope knob belongs to the human — flipping it EITHER way
+    # reshapes the floor (false→true widens the test escape; true→false
+    # breaks the witness-test guarantee the gate promises TDD).
+    if SCOPE_RANK[scope_mode(after)] < SCOPE_RANK[scope_mode(before)]:
+        return True
+    if (scope_mode(before) != "off"
+            and implicit_test_scope(before) != implicit_test_scope(after)):
+        return True
+    # While the judge is armed, its knobs are the judge: judge_cooldown:
+    # 999999 is "never correct me", judge_every: 999999 is "never look", and
+    # judge_cmd is a verdict oracle the agent would control. All of them
+    # belong to the human while scope_judge is on.
+    if enabled(before, "scope_judge") and judge_knobs(before) != judge_knobs(after):
+        return True
+    # Introducing a contradictory duplicate of an enforcement flag is
+    # weakening even though first-wins readers don't move: any last-wins
+    # reader (three sibling gates historically) reads the appended value.
+    for key in (MASTER,) + OPT_OUT + OPT_IN:
+        if not contradictory_flag(before, key) and contradictory_flag(after, key):
+            return True
+    # Same rule for the ranked scope_gate: a file saying both standard+ and
+    # off is a reader-divergence bomb even when every current reader picks
+    # the first.
+    def scope_vals(text):
+        return {v.lower() for v in re.findall(
+            r"(?mi)^\s*scope_gate\s*:\s*\"?([A-Za-z+]+)", text or "")
+            if v.lower() in SCOPE_RANK}
+    if len(scope_vals(before)) <= 1 and len(scope_vals(after)) > 1:
+        return True
     return False
 
 
@@ -194,7 +264,18 @@ if tool == "Bash":
         cmd, re.I)
     review_off = review_mode(current, absent="v1") == "v2" and re.search(
         r"witness_capping\s*:?\s*false|mode\s*:?\s*v1", cmd, re.I)
-    if names_config and writes and (turns_off or review_off):
+    scope_off = (scope_mode(current) != "off" and re.search(
+        r"scope_gate\s*:?\s*\"?off|implicit_test_scope\s*:?\s*(true|false)",
+        cmd, re.I))
+    # A rank DECREASE written through a redirect (all → standard+) is the same
+    # softening the Edit path catches via weaker().
+    if not scope_off and scope_mode(current) == "all":
+        scope_off = re.search(r"scope_gate\s*:?\s*\"?standard", cmd, re.I)
+    judge_off = enabled(current, "scope_judge") and re.search(
+        r"scope_judge\s*:?\s*false|judge_(cmd|every|window|cooldown|timeout)\s*:",
+        cmd, re.I)
+    if names_config and writes and (turns_off or review_off or scope_off
+                                    or judge_off):
         emit("BLOCK", BLOCK_MSG)
     emit("ALLOW")
 

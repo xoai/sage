@@ -16,8 +16,19 @@ capabilities:
   post-tool-events: true          # PostToolUse (sage-degradation-log writes decisions.md)
   subagent-dispatch: true         # the Agent/Task tool
   session-events: true            # SessionStart (sage-session-init)
+  context-injection-midstream: attested   # PostToolUse additionalContext (≥ 2.1.196) — the scope judge's channel
 
 attestations:
+  - capability: context-injection-midstream
+    evidence: docs/attestations/claude-code-context-injection-midstream-2026-08-02.md
+    verified: 2026-08-02
+    expires-release: "1.4"
+    note: >
+      A canary token emitted as PostToolUse hookSpecificOutput.additionalContext
+      came back verbatim from a headless run that had no other way to know it.
+      Documented API since 2.1.196, but delivery timing under -p is platform
+      behavior — so attested with an expiry, not `true`.
+
   - capability: native-skill-discovery
     evidence: docs/attestations/claude-code-native-skill-discovery-2026-07-12.md
     verified: 2026-07-12

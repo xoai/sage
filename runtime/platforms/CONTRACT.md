@@ -16,7 +16,7 @@ mechanism behind it — sitting in the file that describes the mechanisms.
 
 ## The vocabulary
 
-Seven capabilities. They are not features; they are the **preconditions of
+Eight capabilities. They are not features; they are the **preconditions of
 enforcement**. Each one, if false, takes something specific away from Sage.
 
 | Capability | The question it answers | What Sage loses without it |
@@ -28,6 +28,7 @@ enforcement**. Each one, if false, takes something specific away from Sage.
 | `post-tool-events` | Can completed tool calls be observed? | The audit trail. A degraded run stops being distinguishable from a clean one. |
 | `subagent-dispatch` | Fresh-context task delegation? | Independent review. Every reviewer is the agent that wrote the code. |
 | `session-events` | Start/stop lifecycle? | Auto-pickup of an active cycle. |
+| `context-injection-midstream` | Can a post-tool hook hand the model context DURING a session? | The scope judge's correction channel (SG-16) — detection without it is verdicts-on-disk. Also the strongest available mechanism for E11's trigger-reliability gap, which is why it is a contract row rather than a feature flag. |
 
 `pre-tool-veto` is the one that matters most, and the old schema had **no word
 for it**. It had `hooks: true` — which conflates "we can watch" with "we can
@@ -88,6 +89,7 @@ capabilities:                  # each: true | false | attested
   post-tool-events: true
   subagent-dispatch: true
   session-events: true
+  context-injection-midstream: attested
 
 attestations:                  # required for EVERY `attested` value
   - capability: pre-tool-veto
@@ -103,7 +105,7 @@ install-method: plugin-marketplace
 ---
 ```
 
-Declaring all seven capabilities is mandatory. **`false` is an answer; silence is
+Declaring all eight capabilities is mandatory. **`false` is an answer; silence is
 not.** A missing capability fails `--check`, because "we didn't think about it"
 and "it doesn't have it" look identical in a file and mean very different things
 to a user choosing a platform.

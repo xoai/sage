@@ -25,6 +25,18 @@ Do what was planned. Nothing more.
 that wasn't reviewed, wasn't tested against the spec, and wasn't approved by the
 human. "While I'm here" is how technical debt and bugs are born.
 
+## The mechanical floor (opt-in)
+
+This skill is the judgment layer. The MECHANICAL layer under it is the scope
+gate: at plan approval, `python3 sage/runtime/tools/manifest.py scope derive
+<manifest>` turns the plan's per-task `Files:`/`Output:` lines into a machine
+`scope:` block, and — with `scope_gate: standard+` in `.sage/config.yaml` —
+the `sage-scope-gate.sh` hook blocks any Edit/Write outside it. Two legal
+exits from a block, both recorded: `manifest.py scope add-collateral <path>
+--task TN --reason "…"`, or amend the plan and `scope derive --refresh`.
+Scope changes go through the artifact, never silently through the diff.
+Both knobs ship OFF until the L3/W-SCOPE numbers land (ADR-14).
+
 ## When to Use
 
 Active throughout implementation. Scope guard is a background discipline, not
