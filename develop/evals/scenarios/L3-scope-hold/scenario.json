@@ -176,5 +176,6 @@
       "script": "core/gates/scripts/sage-verify.sh",
       "exit": 0
     }
-  ]
+  ],
+  "budget_usd": 6.0
 }

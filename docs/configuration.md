@@ -8,10 +8,12 @@ it.
 
 Two principles shape everything below:
 
-- **The knob ships, the number decides (ADR-14).** Features whose value has
-  not been measured ship with their knob **off** and stay off until the
-  evals produce numbers. The scope-guard keys are in that state today; the
-  review-loop v2 keys already earned their default.
+- **The knob ships, the number decides (ADR-14).** A feature whose value is
+  unmeasured ships **off**, and the measurement decides the default — in
+  either direction. The review-loop v2 keys earned their default that way;
+  the scope-guard keys were measured on 2026-08-02 and **stayed off**,
+  because the drift they prevent did not occur in six bare runs across two
+  model tiers.
 - **An agent cannot soften its own floor.** While `hard_enforcement: true`,
   the config-gate hook blocks the agent from editing this file in any way
   that reduces enforcement. Humans change enforcement in their own editor —
@@ -78,11 +80,16 @@ knob while it is on; and creating contradictory duplicates of any of these.
 Obvious Bash evasions (redirects/`sed -i` writing the switch off) are
 blocked too.
 
-## Scope Guard (ships OFF — unmeasured)
+## Scope Guard (measured, and off by default)
 
 Scope Guard turns the approved plan's declared file lists into a machine
-floor. **Both knobs ship off** and stay off until the L3 / W-SCOPE /
-E-JUDGE-1 scenarios are measured; nothing here claims to prevent drift.
+floor. **Both knobs are off, and the 2026-08-02 measurement says leave them
+there** — not because the mechanism is unproven-but-promising, but because
+the failure it prevents did not occur: L3 at N=3 on two model tiers scored
+bare 3/3 and gated 3/3, with zero false blocks. Turn `scope_gate` on if you
+want the floor anyway (it is harmless and fast); do not expect it to catch
+something, and do not claim it does. Full numbers and the reasoning:
+[SCOPE-GUARD-CAMPAIGN.md](../develop/evals/SCOPE-GUARD-CAMPAIGN.md).
 
 At plan approval the workflow runs:
 
@@ -96,9 +103,9 @@ directly — is what the gate enforces.
 
 | Key | Default | Values |
 |---|---|---|
-| `scope_gate` | `off` | `off` \| `standard+` \| `all` |
-| `implicit_test_scope` | `true` | `false` requires tests to be declared in the plan |
-| `scope_judge` | `false` | `true` arms the advisory background judge |
+| `scope_gate` | `off` (absent) | `off` \| `standard+` \| `all` |
+| `implicit_test_scope` | `true` (absent) | `false` requires tests to be declared in the plan |
+| `scope_judge` | `false` (absent) | `true` arms the advisory background judge — measured 1 false positive in 4 clean runs; detection unmeasured |
 
 ### `scope_gate` semantics
 

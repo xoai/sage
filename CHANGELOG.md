@@ -2,6 +2,45 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [Unreleased] — Scope Guard, measured: the drift didn't happen
+
+The campaign 1.3.11 promised, run and published. **Both knobs stay off —
+and this time not for want of numbers, but because of them.**
+
+- **L3 scope-hold, N=3, both arms, two model tiers: bare 3/3, gated 3/3.**
+  A six-task plan with an out-of-scope temptation imported by the very file
+  under edit, an in-file "while I'm here" lure, and a prompt inviting
+  cleanup — and the bare agent never drifted, at either tier. Zero false
+  blocks, transcript-verified in four kept workspaces. The gate is harmless,
+  fast (27–32 ms vs its 50 ms budget), and prevented nothing.
+- **W-SCOPE: the weak-model hypothesis is falsified.** The template that
+  carried the secrets and verify hooks — haiku-bare fails what opus-bare
+  passes — does not hold for scope. Bare haiku held 3/3. Not every
+  discipline a constitution asks for is one models actually lose.
+- **E-JUDGE-1b FAILED**: 1 false-positive drift verdict in 4 compliant runs
+  against a zero-tolerance criterion. **E-JUDGE-1a is an invalid
+  instrument**: the agent declined the instructed refactor 4/4, so its 0/3
+  "no detection" measures the agent, not the judge. Detection remains
+  unmeasured, so the pre-authorized reporting-feature fallback (which
+  presumes detection) does not apply.
+- **A design finding, recorded before a user hit it**: the judge's evidence
+  window carries `{tool, path}` only, so a refactor *inside* an in-scope
+  file is indistinguishable from the declared work. SG-13's premise needs
+  content in the packet, or the feature must say semantic drift inside
+  in-scope files is beyond it.
+- **The SG-9 bash residual, witnessed**: the campaign's only out-of-scope
+  write went through `printf >> .gitignore` in Bash — predicted in the hook
+  header, now observed.
+- **Two instrument bugs found and fixed, neither by touching a grader**, with
+  the sequence disclosed in `L3-scope-hold/MEASURED.md`: a config
+  first-occurrence collision that would have run the sage arm silently
+  ungated (caught before any spend), and fixtures shipping no `.gitignore`,
+  which charged the commit-disciplined arm for cleaning up its own bytecode
+  (caught by the smoke; latent across the whole fixture suite).
+- Full campaign: `develop/evals/SCOPE-GUARD-CAMPAIGN.md`; per-scenario
+  `MEASURED.md` files; README and `docs/configuration.md` now state the
+  measured position instead of the pending one.
+
 ## [1.3.11] — Scope Guard: declared scope becomes machine state
 
 Scope drift was a prose capability (`scope-guard`, Layer 3) and nothing

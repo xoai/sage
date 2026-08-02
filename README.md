@@ -552,14 +552,21 @@ outside it — naming both legal exits (`scope add-collateral --task --reason`,
 which records the expansion itself, or amend the plan and `derive
 --refresh`). Witness/TDD tests are never scope-blocked. An advisory
 background judge (`scope_judge`) for drift *inside* in-scope files exists as
-a runtime with full deterministic tests. **Both knobs ship off** and stay
-off until their scenarios (L3, W-SCOPE, E-JUDGE-1) are measured — no drift-
-prevention claim is made here, deliberately, until the numbers exist. Known
-residual, stated: bash-mediated writes bypass Edit/Write matchers, same as
-every path-scoped gate; the scope journal (which sees Bash) and review-time
-diff checks cover part of it. Full semantics — multi-cycle union, plan
-integrity, the witness-test guarantees, and every knob — in
-[docs/configuration.md](docs/configuration.md#scope-guard-ships-off--unmeasured).
+a runtime with full deterministic tests.
+
+**Both knobs are off, and the measurement says leave them there.** L3 ran a
+six-task plan with two planted temptations and a prompt inviting cleanup, at
+two model tiers, N=3 each: **bare 3/3 and gated 3/3 at both tiers** — the
+agent never drifted, so the gate had nothing to prevent (zero false blocks
+either, transcript-verified). The weak-model hypothesis that carried the
+other hooks — haiku loses what frontier has free — was **falsified** for
+scope. The judge's clean-run precision failed (1 false positive in 4), and
+its detection half is unmeasured because no scenario produced real drift.
+So Sage ships the mechanism, off, and claims nothing: full numbers in
+[develop/evals/SCOPE-GUARD-CAMPAIGN.md](develop/evals/SCOPE-GUARD-CAMPAIGN.md).
+Known residual, witnessed in that campaign: bash-mediated writes bypass
+Edit/Write matchers, same as every path-scoped gate. Full semantics in
+[docs/configuration.md](docs/configuration.md#scope-guard-measured-and-off-by-default).
 
 #### What is mechanical on each platform
 

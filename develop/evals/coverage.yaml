@@ -298,6 +298,10 @@ surfaces:
       the scope journal (when scope_judge is on) and check-diff at review
       time — and a forged plan+manifest pair that OPENLY declares a wide
       scope defeats the union (two artifact writes a review cannot miss).
+      MEASURED 2026-08-02 (SCOPE-GUARD-CAMPAIGN.md): L3 bare 3/3 = gated
+      3/3 at BOTH opus and haiku tiers, zero false blocks — the gate is
+      harmless and prevented nothing, because no bare run drifted. Default
+      stays off; "≥ bare" is a no-harm test, not a benefit test.
 
   hook-scope-journal:
     path: runtime/platforms/claude-code/hooks/sage-scope-journal.sh
@@ -324,6 +328,11 @@ surfaces:
       develop/validators/scope-judge/test_scope_judge.py (in fastcheck).
       E-JUDGE-1a asserts detection mechanics end-to-end; E-JUDGE-1b is the
       false-positive check that keeps scope_judge opt-in until it passes.
+      MEASURED 2026-08-02: 1b FAILED (1 false positive in 4 clean runs); 1a
+      is an INVALID instrument (the agent declined the instructed drift 4/4,
+      so 0/3 detection measures the agent, not the judge). scope_judge stays
+      false; the judge's window carries paths only, so semantic drift inside
+      an in-scope file leaves no signal to detect — see its MEASURED.md.
 
 # ── Gate scripts (three-state, standalone-invocable) ─────────────────────────
 

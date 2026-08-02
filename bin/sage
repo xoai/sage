@@ -553,19 +553,20 @@ tdd_enforcement: true
 # manifests and skips tier1; `all` gates tier1 cycles too. Legal exits from a
 # block: scope add-collateral (recorded), or amend the plan + scope derive
 # --refresh. Scope changes go through the artifact, never silently through
-# the diff.
-scope_gate: off
+# the diff. ABSENT means off (it ships that way); arm by writing ONE line:
+# scope_gate: standard+     (the enforcement readers take the FIRST
+# occurrence of a key — one uncommented line per key).
 # implicit_test_scope: with the scope gate on, a test file whose subject maps
-# to an in-scope source is always allowed — witness/TDD tests must never be
-# blocked by scope. Set false to require tests to be declared in the plan.
-implicit_test_scope: true
+# to an in-scope source is always allowed (absent = true) — witness/TDD
+# tests must never be blocked by scope. Write implicit_test_scope: false to
+# require tests to be declared in the plan.
 # scope_judge: advisory background drift check (cheap model, event-driven,
 # non-blocking) over the scope journal. Stays false until E-JUDGE-1 passes
 # with zero clean-run false positives AND the per-cycle cost is published.
 # Tuning knobs (judge_window/judge_every/judge_cooldown/judge_timeout/
 # judge_cmd) are documented in sage/docs/configuration.md and are
-# config-gate-protected while the judge is armed.
-scope_judge: false
+# config-gate-protected while the judge is armed. ABSENT means off; arm by
+# writing scope_judge: true.
 command_prefix: $prefix_val
 # review_loop: v2 puts the review-revise verdict in code — reviewer findings
 # land in a machine-owned ledger (review.py) and every CONTINUE/STOP is
