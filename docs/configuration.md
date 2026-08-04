@@ -305,6 +305,44 @@ identical):
 | `autonomous` | `--autonomous` | Checkpoints auto-resolve (decisions are still logged). |
 | `subagents` | `--subagents` | Per-task fresh implementer + independent reviewer (platform permitting; refusal is announced, R97). |
 
+### Planner/implementer model split (opencode)
+
+Run the session — the planner, the orchestrator, the judgment — on your
+strong model, and route the per-task dispatches to tiers you chose. On
+opencode the routing is the same designation contract as the judge and the
+reviewer: a role dispatches as a named agent **iff you bound that agent to
+a model**; an entry without a model is treated as unbound ([V-E]: a
+modelless agent dispatches fine and silently inherits the primary — the
+exact trap the rule exists to prevent). Unbound roles keep today's
+behavior: dispatch as usual, inherit the session model.
+
+```jsonc
+// opencode.json — all three optional, each independently
+"agent": {
+  "sage-implementer":    { "mode": "subagent", "model": "<provider>/<capable-model>" },
+  "sage-task-reviewer":  { "mode": "subagent", "model": "<provider>/<cheap-model>" },
+  "sage-branch-reviewer": { "mode": "subagent", "model": "<provider>/<capable-model>" }
+}
+```
+
+Then `/build --subagents`. The workflow resolves the bindings
+deterministically (`agent_binding.py` — code reads your config; the model
+never guesses) and records the serving model per dispatch in the task
+ledger's `model:` field, aggregated on the manifest's accounting footer.
+Guidance: point `sage-task-reviewer` at the same cheap tier as
+`sage-reviewer` — per-task review is checklist-shaped verification, the
+category measured to transfer down-model. `mode: subagent` is not required
+for dispatch ([V-E]) but keeps the role agents out of the primary rotation.
+
+**The honest cost note.** Subagent execution's mechanics are proven
+(E9/E10); its cost story is deliberately unmeasured, and what evidence
+exists came from uniform dispatches on the session model — the accounting
+footer says "counts, not a verdict" for exactly this reason. Mixed-tier
+economics are *also* unmeasured. So: run one cycle, read the footer's
+`Models:` line and your provider bill for the per-cycle cost, compare
+against an inline run of similar shape, and only then adopt the split as
+your default. Sage records; it does not claim savings it never measured.
+
 Command-line flags always win: `--no-x` > `--x` > config default > off.
 
 ## Resume close-out economy

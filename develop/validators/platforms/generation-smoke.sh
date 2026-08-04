@@ -79,6 +79,14 @@ for c in build fix architect review; do
     "$target/.opencode/commands/$c.md" 2>/dev/null || bind_ok=false
 done
 grep -q "code quality" "$target/.opencode/agents/sage-reviewer.md" 2>/dev/null || bind_ok=false
+# A6: the subagent role-binding resolver line must reach the commands too —
+# and the generator must NOT emit the role agents themselves (a generated
+# modelless agent is the inherit trap; a generated model is guessed spend).
+grep -q "agent_binding.py sage-implementer" \
+  "$target/.opencode/commands/build.md" 2>/dev/null || bind_ok=false
+for a in sage-implementer sage-task-reviewer sage-branch-reviewer; do
+  [ -f "$target/.opencode/agents/$a.md" ] && bind_ok=false
+done
 if [ "$bind_ok" = true ]; then
   N_PASS=$((N_PASS + 1))
   printf '  [PASS]  %-14s → reviewer binding in AGENTS.md + 4 commands + agent\n' "opencode"

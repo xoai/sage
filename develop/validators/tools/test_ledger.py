@@ -38,6 +38,15 @@ class LedgerTest(unittest.TestCase):
         fm = (self.d / "manifest.md").read_text()
         self.assertIn("tasks:", fm)
         self.assertEqual(fm.count("- id:"), 3)
+
+    def test_every_entry_carries_the_model_field(self):
+        """A6: the serving model is recorded per dispatch — sessions record
+        their actual model (the 1.3.4 house rule), and the scaffold carries
+        the empty field so the orchestrator fills it, never invents it."""
+        run("init", self.m(), self.p())
+        fm = (self.d / "manifest.md").read_text()
+        self.assertEqual(fm.count('model: ""'), 3,
+                         "one model field per task entry")
         self.assertIn("status: pending", fm)
         self.assertIn("review: pending", fm)
 

@@ -151,7 +151,20 @@ bound in opencode config:
     "agent": { "sage-reviewer": { "model": "<provider>/<model>" } }
 
 Dispatching `general` runs the review on the primary model. Same rule for
-routing classification: use `sage-classifier`.'
+routing classification: use `sage-classifier`.
+
+For `--subagents` execution the same rule extends to the per-task roles.
+Before the FIRST dispatch, resolve which roles the user bound:
+
+    python3 sage/runtime/tools/agent_binding.py sage-implementer sage-task-reviewer sage-branch-reviewer
+
+One line per BOUND role (name, tab, model); unbound roles print nothing.
+Dispatch a bound role AS that named agent — the task tool binds its model.
+An unbound role dispatches exactly as it does today and inherits the
+session model. Never dispatch a role agent the resolver did not print: an
+agent entry without a model LOOKS routed while silently spending on the
+primary. Either way, record the serving model in the ledger entry
+(`model:` — the bound model, or `inherit`).'
 
 if [ "$SKIP_AGENTS_MD" = false ]; then
   {

@@ -151,7 +151,15 @@ surfaces:
       loop, and what it costs. That is a comparison, needs both modes on the same
       scenarios, and is Phase 5's (P5-T3). A mechanism that works and is not worth
       its price is still a mechanism that works — different question, different
-      experiment.
+      experiment. 2026-08-04 (A6): the ledger entries gained a `model:` field
+      (serving model per dispatch, orchestrator-recorded; ledger.py scaffolds
+      it, test_ledger.py pins it — now wired into fastcheck along with the
+      new agent_binding.py resolver tests) and the accounting footer gained a
+      Models: line. Role dispatch on opencode binds sage-implementer /
+      sage-task-reviewer / sage-branch-reviewer iff the user's config carries
+      a model (modelless = unbound, [V-E]); E9/E10 still measure the
+      claude-code inherit path — the binding branch is deterministic-only,
+      and the cost comparison stays P5-T3, unclaimed.
 
   subworkflow-quality-gates:
     path: core/workflows/sub-workflows/quality-gates.workflow.md
