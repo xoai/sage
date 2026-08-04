@@ -54,6 +54,7 @@ CHECKS=(
   "grader tests           :: python3 develop/evals/test_graders.py"
   "gate regression tests  :: bash develop/validators/gates/run-gate-tests.sh"
   "spec-gate hook tests   :: bash develop/validators/hooks/run-hook-tests.sh"
+  "opencode adapter tests :: bash develop/validators/platforms/run-opencode-adapter-tests.sh"
 )
 
 echo "═══ fastcheck — deterministic inner-loop gate (${#CHECKS[@]} checks) ═══"

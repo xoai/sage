@@ -21,9 +21,15 @@
 // blocks the user. Guards are guards: the cost of a false block is a broken
 // session, so every uncertainty resolves to allow. The gates themselves also
 // fail open, so this is belt-and-braces.
+//
+// SCOPE JUDGE (SG-10..SG-19, opt-in via scope_judge: true). tool.execute.after
+// additionally drives the shared judge runtime (scope_judge.py hook) and, when
+// a drift correction is queued, delivers it by appending to the mutable tool
+// result — attested 2026-08-04 (docs/attestations/opencode-context-injection-
+// midstream-2026-08-04.md).
 // ═══════════════════════════════════════════════════════════════
 import { spawnSync } from "child_process"
-import { existsSync } from "fs"
+import { existsSync, readFileSync } from "fs"
 import { join } from "path"
 
 // PreToolUse gates, in the order Claude Code runs them. Each is a script under
@@ -72,6 +78,38 @@ function toPayload(tool, args, root) {
   return null
 }
 
+// ── Scope judge (SG-10..SG-19) — journal, trigger, deliver ──────────────────
+// The judge's brain is runtime/tools/scope_judge.py, shared verbatim with
+// Claude Code: it owns the journal schema, cadence, locks, pending-file
+// handoff and anti-nag rules. This adapter is only its wire — translate the
+// event, pipe it to `scope_judge.py hook`, and deliver any queued correction
+// by appending it to the tool result the model reads next ([V-A], attested
+// 2026-08-04: tool.execute.after receives the live result object by
+// reference, and a string appended to output.output is model-visible).
+
+// The vendored framework first (a user project), then a source checkout —
+// the same resolution order as the claude-code hook wrapper.
+function judgeTool(root) {
+  for (const rel of ["sage/runtime/tools/scope_judge.py",
+                     "runtime/tools/scope_judge.py"]) {
+    const p = join(root, rel)
+    if (existsSync(p)) return p
+  }
+  return null
+}
+
+// Ships false: without an explicit `scope_judge: true` the judge path costs
+// one file read per tool call — the same bar as the claude-code wrapper's
+// one grep.
+function scopeJudgeArmed(root) {
+  try {
+    return /^[ \t]*scope_judge:[ \t]*true\b/m.test(
+      readFileSync(join(root, ".sage", "config.yaml"), "utf8"))
+  } catch {
+    return false
+  }
+}
+
 function runGate(root, script, payload) {
   const path = join(root, ".opencode", "sage-hooks", script)
   if (!existsSync(path)) return { ran: false, blocked: false, reason: "" }
@@ -86,10 +124,30 @@ function runGate(root, script, payload) {
   }
 }
 
-export const SagePlugin = async ({ directory }) => {
+export const SagePlugin = async ({ directory, client }) => {
   const root = directory || process.cwd()
   // Nothing to enforce if this is not a Sage project.
   if (!existsSync(join(root, ".sage"))) return {}
+
+  // [V-B] task-tool subagents run in a CHILD session, and the hook input
+  // carries only {tool, sessionID, callID} — the discriminator is the
+  // session record's parentID (set only on task-spawned children, verified
+  // live on 1.18.12). One client lookup per session, cached; unresolvable
+  // reads as not-a-subagent — fail open, the judge is advisory (SG-11).
+  const sessionParent = new Map()
+  async function parentSession(id) {
+    if (!client || !id) return null
+    if (sessionParent.has(id)) return sessionParent.get(id)
+    let parent = null
+    try {
+      const r = await client.session.get({ path: { id } })
+      parent = (r && r.data && r.data.parentID) || null
+    } catch {
+      parent = null
+    }
+    sessionParent.set(id, parent)
+    return parent
+  }
 
   return {
     "tool.execute.before": async (input, output) => {
@@ -116,6 +174,35 @@ export const SagePlugin = async ({ directory }) => {
       }
       if (!payload) return
       for (const h of POST_HOOKS) runGate(root, h, payload)
+
+      // Scope judge. Everything of substance — active-cycle resolution,
+      // journal line, cadence, background spawn, pending consumption, the
+      // SG-17 anti-nag rules, the SG-18 audit line — happens inside
+      // `scope_judge.py hook`. SAGE_JUDGE is the SG-12 recursion guard: the
+      // judge's own headless session loads this plugin too ([V-C]), and its
+      // events must not re-enter judging.
+      try {
+        if (process.env.SAGE_JUDGE || !scopeJudgeArmed(root)) return
+        const tool = judgeTool(root)
+        if (!tool) return
+        const hookInput = { tool_name: payload.tool_name,
+                            tool_input: payload.tool_input, cwd: root }
+        const parent = await parentSession(input?.sessionID)
+        if (parent) hookInput.parent_session_id = parent   // SG-11 marker
+        const r = spawnSync("python3", [tool, "hook"], {
+          input: JSON.stringify(hookInput), encoding: "utf8", timeout: 15000,
+          env: { ...process.env, SAGE_PLATFORM: "opencode" },
+        })
+        const text = JSON.parse(r.stdout || "{}")
+          ?.hookSpecificOutput?.additionalContext
+        if (text && typeof output?.output === "string") {
+          // Delivery ([V-A]): the correction rides the result the model is
+          // about to read. Registry tools always carry a string here; a
+          // non-string result means an unknown shape — drop the delivery
+          // rather than corrupt it (advisory, never load-bearing).
+          output.output += "\n\n" + text
+        }
+      } catch {}   // fail open: a broken judge wire never breaks a session
     },
   }
 }

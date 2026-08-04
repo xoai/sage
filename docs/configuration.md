@@ -155,8 +155,15 @@ The judge is an advisory background check for drift a path gate cannot see
 (`scope-journal.jsonl` in the cycle dir, Bash included), runs a cheap-model
 pass over a bounded window when enough events accumulate, and on a `drift`
 verdict injects **one** correction into the next hook return. It never
-blocks. It is claude-code-only at launch (the injection channel does not
-exist in the opencode adapter, and the platform contract says so).
+blocks. It runs on claude-code and opencode — one runtime, two delivery
+wires: claude-code returns the correction as PostToolUse
+`additionalContext`; the opencode adapter appends it to the next tool
+result (capability attested with a live planted-drift transcript,
+`docs/attestations/opencode-context-injection-midstream-2026-08-04.md`,
+expires 1.4). Capability is not efficacy: E-JUDGE-1 was measured on
+claude-code only — where it failed its precision criterion, which is why
+the knob ships `false` — and has never run on opencode. The floor is
+available there; its necessity is unproven everywhere.
 
 | Key | Default | Meaning |
 |---|---|---|
@@ -164,7 +171,7 @@ exist in the opencode adapter, and the platform contract says so).
 | `judge_every` | `8` | A pass becomes eligible every N journal events. Event-driven — never a timer. |
 | `judge_cooldown` | `15` | At most one injected correction per N journal events; repeats also require a *new* reason. |
 | `judge_timeout` | `60` | Seconds before a judge model call is killed. A killed pass records `insufficient-evidence`, never `drift`. |
-| `judge_cmd` | `auto` | The judge's model command (`auto` = the platform's headless CLI at the cheap tier, packet on stdin). Overridable for testing; protected while the judge is armed. |
+| `judge_cmd` | `auto` | The judge's model command, packet on stdin. `auto` resolves per platform: claude-code → `claude -p --model haiku`; opencode → your configured `small_model` (`opencode.json`/`.jsonc`, project then global) — and with no `small_model` set it soft-fails to `insufficient-evidence` with a one-time journal note rather than guess a paid model. Explicit form: `judge_cmd: "opencode run --model <provider>/<cheap-model> --format json"`. Overridable for testing; protected while the judge is armed. |
 
 Safety invariants, all deterministic-tested: the judge's own model calls
 can never re-trigger judging (`SAGE_JUDGE` guard); one pass per cycle at a

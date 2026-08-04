@@ -2,7 +2,48 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [Unreleased]
+
+### Scope judge ported to opencode — capability attested, efficacy unclaimed
+
+The judge (SG-10..SG-19) now runs on opencode with full parity, behind the
+same `scope_judge: true` knob (ships false, and the 1.3.11 measurement that
+left it off is unchanged). One brain, two wires: `scope_judge.py` is shared
+verbatim — journal schema (byte-parity pinned), cadence, locks, pending-file
+handoff, anti-nag, SG-18 audit lines, SG-19 cost totals — and only delivery
+differs. The 2026-08-02 finding that post-tool stdout goes nowhere on
+opencode stands; the port rides a channel that probe did not test: the
+after-hook's tool **result object** is live, and text appended to it is
+model-visible. Attested with a live marker probe plus a planted-drift
+end-to-end run (one injected correction, quoted verbatim by the session,
+audit line and cost row on disk) —
+`docs/attestations/opencode-context-injection-midstream-2026-08-04.md`,
+expires 1.4. Contract flipped `context-injection-midstream: false →
+attested` in the same commit.
+
+- `judge_cmd: auto` on opencode resolves to your configured `small_model`
+  (project `opencode.json`/`.jsonc`, then global); with none set it
+  soft-fails to `insufficient-evidence` with a one-time journal note —
+  never a guessed model on someone else's bill. Explicit form documented in
+  `docs/configuration.md`.
+- Subagent suppression (SG-11) via the child session's `parentID`,
+  forwarded as the platform-neutral `parent_session_id` marker; the
+  `SAGE_JUDGE` recursion guard holds across the adapter's process boundary
+  (the judge's own `opencode run` session loads the plugin and is inert;
+  `OPENCODE_PURE=true` on the auto command as belt to those braces).
+- Deterministic suite: adapter tests 5→12 (journal schema + sub flag,
+  single consumption into the mutated result, no-cycle no-op, recursion
+  guard, shipped-off default, claude-code journal byte-parity), now in
+  fastcheck via `develop/validators/platforms/run-opencode-adapter-tests.sh`;
+  judge runtime tests 34→44 (opencode `auto` resolver both branches, NDJSON
+  event-stream parsing with SG-19 usage, drift-only pending writes).
+- Zero changes to claude-code behavior; its hook tests are untouched and
+  green. Prior-art note: scopey v0.1.3 observes but does not inject on
+  opencode (its plugin discards the correction) — the channel here is
+  attested on our own evidence.
+
 ## [1.3.11] — Scope Guard: the mechanism, and the measurement that left it off
+
 
 Scope drift was a prose capability (`scope-guard`, Layer 3) and nothing
 else — under the house law, a paragraph awaiting promotion. This release

@@ -17,7 +17,7 @@ capabilities:
   post-tool-events: attested      # tool.execute.after fires with the tool result
   subagent-dispatch: attested     # the task tool spawns an independent reviewer session
   session-events: false           # the platform's event hook fires session.*, but the adapter ships no session-init that uses it
-  context-injection-midstream: false  # [V3] resolved 2026-08-02: tool.execute.after discards gate stdout — no post-tool → model channel in the adapter; the scope judge is claude-code-only and says so (loud degradation)
+  context-injection-midstream: attested  # [V-A] resolved 2026-08-04, superseding [V3] (stdout IS discarded, but the after-hook's result object is live): appending to output.output is model-visible — the scope judge's delivery channel here
 
 attestations:
   - capability: pre-tool-veto
@@ -42,6 +42,19 @@ attestations:
       tool.execute.after fires after every tool with {tool, callID, args,
       output} — the PostToolUse payload sage-verify-tracker, sage-degradation-log
       and sage-manifest-sync need. Logged firing on a real session.
+
+  - capability: context-injection-midstream
+    evidence: docs/attestations/opencode-context-injection-midstream-2026-08-04.md
+    verified: 2026-08-04
+    expires-release: "1.4"
+    note: >
+      The [V3] finding stands — post-tool stdout goes nowhere — but the
+      result object the after-hook receives is live: a marker appended to
+      output.output came back verbatim from a session that had no other way
+      to know it, and a planted-drift end-to-end run delivered exactly one
+      judge correction in-context with its audit line and cost row. Result
+      mutation is source-verified, not documented API, so it expires and is
+      re-probed each minor (one free-tier call).
 
   - capability: subagent-dispatch
     evidence: docs/attestations/opencode-tier-a-2026-07-17.md
@@ -85,9 +98,18 @@ scripts to `.opencode/sage-hooks/`. The adapter:
   opencode honours the throw by blocking the call.
 - **records** — `tool.execute.after` runs the PostToolUse recorders
   (verify-tracker, degradation-log, manifest-sync) for their side effects.
+- **judges** — the same after-hook drives the shared scope-judge runtime
+  (`scope_judge.py hook`: journal, cadence, background cheap-model pass) when
+  `scope_judge: true`, and delivers a queued drift correction by appending it
+  to the live tool result — the attested midstream channel. Subagent events
+  are flagged via the child session's `parentID` and never corrected (SG-11);
+  the `SAGE_JUDGE` env guard holds across the adapter's process boundary, so
+  the judge's own headless session is inert.
 
 The gates are the same platform-agnostic scripts Claude Code runs; they read
-`.sage/`, not `.claude/`, so a single set enforces on both platforms.
+`.sage/`, not `.claude/`, so a single set enforces on both platforms — and
+the judge is the same `runtime/tools/scope_judge.py` on both: one brain, one
+journal schema (byte-parity pinned in the adapter suite), two delivery wires.
 
 ## The honest edge
 

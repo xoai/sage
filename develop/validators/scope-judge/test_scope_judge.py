@@ -149,6 +149,12 @@ class JournalTest(Fixture):
         rows = self.rows()
         self.assertTrue(rows[0].get("sub"))
 
+    def test_parent_session_id_flags_sub(self):
+        """[V-B]: the opencode adapter forwards the child session's parentID
+        under this key — same SG-11 suppression, different wire."""
+        self.hook(edit_event(parent_session_id="ses_parent"))
+        self.assertTrue(self.rows()[0].get("sub"))
+
     def test_rotation_at_the_size_cap(self):
         old = SJ.ROTATE_BYTES
         SJ.ROTATE_BYTES = 200
@@ -417,6 +423,123 @@ class InjectionTest(Fixture):
             self.hook()
         self.assertFalse((self.cycle / SJ.PENDING).exists())
         self.assertIsNone(self.hook())
+
+
+OC_STREAM = "\n".join([
+    # Verbatim shape of `opencode run --format json` (1.18.12, [V-C] probe).
+    json.dumps({"type": "step_start", "timestamp": 1, "sessionID": "s",
+                "part": {"type": "step-start"}}),
+    json.dumps({"type": "text", "timestamp": 2, "sessionID": "s",
+                "part": {"type": "text",
+                         "text": '{"verdict": "drift", "reason": '
+                                 '"logger refactor", "evidence": "e2"}'}}),
+    json.dumps({"type": "step_finish", "timestamp": 3, "sessionID": "s",
+                "part": {"type": "step-finish", "reason": "stop",
+                         "tokens": {"total": 8041, "input": 52, "output": 23,
+                                    "reasoning": 30,
+                                    "cache": {"write": 0, "read": 7936}}}}),
+])
+
+
+class OpencodePortTest(Fixture):
+    """SG-14 on the second platform: `auto` resolves to the user's configured
+    small_model or soft-fails — it never guesses a model on someone else's
+    bill — and the NDJSON event stream parses like the claude envelope."""
+
+    def setUp(self):
+        super().setUp()
+        self.xdg = self.root / "xdg"          # isolate from ~/.config
+        self.xdg.mkdir()
+        self.oc_env = {"SAGE_PLATFORM": "opencode",
+                       "XDG_CONFIG_HOME": str(self.xdg), **self.env}
+        self.cfg = SJ.read_config(self.root)
+
+    def test_auto_resolves_project_small_model(self):
+        (self.root / "opencode.json").write_text(
+            '{"$schema": "x", "small_model": "deepseek/deepseek-v4-flash"}')
+        cmd = SJ.resolve_judge_cmd(self.cfg, self.root, self.oc_env)
+        self.assertEqual(cmd, "OPENCODE_PURE=true opencode run "
+                              "--model deepseek/deepseek-v4-flash --format json")
+
+    def test_auto_falls_back_to_the_global_config(self):
+        d = self.xdg / "opencode"
+        d.mkdir()
+        (d / "opencode.jsonc").write_text(
+            '{\n  // the user\'s cheap tier\n  "small_model": "p/m-mini"\n}')
+        cmd = SJ.resolve_judge_cmd(self.cfg, self.root, self.oc_env)
+        self.assertIn("--model p/m-mini", cmd)
+
+    def test_shell_metacharacters_are_not_a_model(self):
+        """judge_cmd runs under a shell; a config value with metacharacters
+        resolves to nothing rather than to an injection vector."""
+        (self.root / "opencode.json").write_text(
+            '{"small_model": "p/m; rm -rf ."}')
+        self.assertIsNone(SJ.resolve_judge_cmd(self.cfg, self.root, self.oc_env))
+
+    def test_auto_without_small_model_soft_fails_with_one_note(self):
+        """No small_model anywhere → insufficient-evidence, never a guessed
+        model — and the pointer note appears exactly once per cycle."""
+        for i in range(3):
+            SJ.append_journal(self.cycle, {"type": "event", "ts": i,
+                                           "tool": "Edit", "path": "src/a-%d" % i})
+        row = SJ.run_judge(self.cycle, environ=self.oc_env)
+        self.assertEqual(row["verdict"], "insufficient-evidence")
+        self.assertIn("no opencode small_model", row["reason"])
+        self.assertFalse((self.cycle / SJ.PENDING).exists())
+        SJ.run_judge(self.cycle, environ=self.oc_env)
+        notes = [r for r in self.rows() if r.get("type") == "note"]
+        self.assertEqual(len(notes), 1, "the pointer is a note, not a nag")
+        self.assertIn("judge_cmd", notes[0]["text"])
+
+    def test_claude_platform_resolution_is_unchanged(self):
+        self.assertEqual(SJ.resolve_judge_cmd(self.cfg, self.root, self.env),
+                         SJ.AUTO_CMD)
+
+    def test_explicit_judge_cmd_is_returned_untouched(self):
+        cfg = dict(self.cfg, judge_cmd="opencode run --model x/y --format json")
+        self.assertEqual(SJ.resolve_judge_cmd(cfg, self.root, self.oc_env),
+                         "opencode run --model x/y --format json")
+
+    def test_event_stream_parses_to_verdict_and_usage(self):
+        out = SJ.parse_verdict(OC_STREAM)
+        self.assertEqual(out["verdict"], "drift")
+        self.assertEqual(out["reason"], "logger refactor")
+        self.assertEqual(out["usage"], {"input_tokens": 52, "output_tokens": 23})
+
+    def test_run_judge_records_cost_from_the_event_stream(self):
+        """SG-19 parity: the opencode wire feeds the same cost rows and
+        close-out totals the claude envelope does."""
+        (self.root / "opencode.json").write_text('{"small_model": "p/m"}')
+        for i in range(3):
+            SJ.append_journal(self.cycle, {"type": "event", "ts": i,
+                                           "tool": "Edit", "path": "src/a-%d" % i})
+        seen = {}
+
+        def runner(packet, cfg):
+            seen["cmd"] = cfg.get("judge_cmd_resolved")
+            seen["cwd"] = cfg.get("judge_cwd")
+            return OC_STREAM
+
+        row = SJ.run_judge(self.cycle, environ=self.oc_env, runner=runner)
+        self.assertEqual(row["verdict"], "drift")
+        self.assertIn("--model p/m", seen["cmd"])
+        self.assertEqual(seen["cwd"], str(self.root))
+        self.assertTrue((self.cycle / SJ.PENDING).exists(),
+                        "drift → pending correction queued")
+        v, d, i, tin, tout = SJ.cycle_totals(self.cycle)
+        self.assertEqual((v, d, tin, tout), (1, 1, 52, 23))
+
+    def test_on_scope_and_insufficient_leave_no_pending(self):
+        (self.root / "opencode.json").write_text('{"small_model": "p/m"}')
+        for i in range(3):
+            SJ.append_journal(self.cycle, {"type": "event", "ts": i,
+                                           "tool": "Edit", "path": "src/a-%d" % i})
+        SJ.run_judge(self.cycle, environ=self.oc_env,
+                     runner=lambda p, c: '{"verdict":"on-scope","reason":"ok"}')
+        self.assertFalse((self.cycle / SJ.PENDING).exists())
+        SJ.run_judge(self.cycle, environ=self.oc_env,
+                     runner=lambda p, c: "no json here")
+        self.assertFalse((self.cycle / SJ.PENDING).exists())
 
 
 class EndToEndTest(Fixture):
