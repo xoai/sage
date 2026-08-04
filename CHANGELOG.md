@@ -2,6 +2,43 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [1.3.14] — the planner/implementer split: every dispatched role on the model you bound
+
+### A6 — the planner/implementer model split lands on opencode
+
+`--subagents` execution now honors per-role model designations:
+`sage-implementer`, `sage-task-reviewer`, `sage-branch-reviewer` dispatch
+as named agents **iff** your opencode config binds them to a model —
+resolved deterministically by the new `runtime/tools/agent_binding.py`
+(code reads the config; the model never guesses). The T4-rev2 rule applies
+per-role: an entry without a model is unbound, because [V-E] proved live
+that a modelless agent dispatches fine and silently inherits the primary —
+looks routed, spends expensive. Unbound roles keep today's inherit
+behavior, unchanged and said plainly in the record.
+
+- Ledger entries gain one field: `model:` — the serving model per
+  implementer dispatch, orchestrator-recorded at dispatch time (sessions
+  record their actual model, the 1.3.4 house rule, applied per-dispatch);
+  the accounting footer gains a `Models:` line aggregating it.
+- The resolver is the judge's T4-rev2 reader generalized by name;
+  scope_judge.py is untouched and a parity test pins the twins against
+  shared fixtures so they cannot drift apart silently.
+- Docs: "Planner/implementer model split" in configuration.md — session on
+  your strong model, roles on tiers you chose, task-reviewer pointed at the
+  same cheap tier as sage-reviewer. The honest cost note: mechanics are
+  proven (E9/E10), the cost story is deliberately unmeasured and what
+  exists came from uniform dispatches — mixed-tier economics are unmeasured
+  too; read the footer's Models line, compare against an inline run, then
+  decide. (The brief cited a "HOLD verdict"; no such record exists in this
+  repo — the footer's own words are "counts, not a verdict", and the docs
+  say that instead of inventing a verdict to cite.)
+- Generator emits NO role agents (A3 rule: modelless-generated is the
+  inherit trap, model-generated is guessed spend) — pinned in
+  generation-smoke alongside the resolver line reaching the commands.
+- Housekeeping the work surfaced: `test_ledger.py` was wired into neither
+  fastcheck nor CI — an orphaned suite; now in fastcheck (21→23 rows with
+  the new agent-binding tests).
+
 ## [1.3.13] — sub-agents run on the models you bound: reviewer dispatch named, stamp made honest
 
 ### opencode reviews now dispatch as `sage-reviewer` — the model binding finally lands

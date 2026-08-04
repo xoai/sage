@@ -59,6 +59,13 @@ def split_frontmatter(text):
 
 
 def render_ledger(tasks):
+    # `model` is the serving model of the task's implementer dispatch —
+    # sessions record their ACTUAL model (the 1.3.4 house rule), applied
+    # per-dispatch (A6). The orchestrator fills it at dispatch time: the
+    # bound agent's model where the platform binds roles (opencode agent
+    # designation), else "inherit". A re-dispatch overwrites it — the field
+    # answers "what served the attempt that produced these commits";
+    # `attempts` already counts the retries.
     lines = ["tasks:"]
     for n, title in tasks:
         lines += [
@@ -66,6 +73,7 @@ def render_ledger(tasks):
             "    title: %s" % title.replace('"', "'"),
             "    status: pending",
             "    attempts: 0",
+            '    model: ""',
             "    review: pending",
             '    commits: ""',
         ]

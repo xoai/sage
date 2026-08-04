@@ -105,6 +105,13 @@ not check".
 Set the task `status: in-progress`, increment `attempts`. Dispatch a fresh
 implementer subagent with `implementer-prompt.md` + the packet.
 
+Record the **serving model** in the entry's `model:` field at dispatch time —
+the bound agent's model where the platform binds roles (opencode agent
+designation, resolved by `agent_binding.py`, never assumed), else `inherit`.
+Sessions record their actual model; this applies that rule per-dispatch. A
+re-dispatch overwrites the field: it answers "what served the attempt that
+produced these commits", and `attempts` already counts the retries.
+
 The ledger moves BEFORE the dispatch. If the session dies mid-task, a ledger that
 was going to be updated afterwards records nothing, and `/continue` restarts a
 task that may already be half-done.
@@ -215,7 +222,14 @@ Implementer dispatches: 7      (2 tasks needed a second attempt)
 Reviewer dispatches: 6         (1 task needed a re-review)
 Branch reviews: 1
 Gate runs: 10                  (Gate 4 + Gate 5 per approved task)
+Models: implementer=deepseek/deepseek-v4-flash ×7 · task-reviewer=deepseek/deepseek-v4-flash ×6 · branch=inherit
 ```
+
+The `Models:` line aggregates the ledger's per-entry `model:` fields plus the
+reviewer/branch dispatches — it is what you compare against an inline run
+before deciding mixed-tier dispatch is worth it (the cost story is
+deliberately unmeasured; see "Planner/implementer model split" in
+docs/configuration.md).
 
 **These are counts, not a verdict.** The mode's cost story is measured in Phase 5,
 not asserted here. What the footer is for is the *next* cycle's planner: a task

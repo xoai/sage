@@ -31,6 +31,15 @@ dispatches independent subagent reviews, all through opencode's plugin API.
   ships in generated AGENTS.md and the review-bearing commands, pinned by
   generation-smoke. Verified live: a task-tool dispatch bound the child
   session to the configured model.
+- **Per-role bindings for `--subagents` (2026-08-04, A6).** Same contract,
+  three more roles: `sage-implementer` / `sage-task-reviewer` /
+  `sage-branch-reviewer` dispatch as named agents iff your config binds
+  them to a model, resolved deterministically (`agent_binding.py`);
+  modelless or absent → today's inherit behavior, unchanged ([V-E]: a
+  modelless agent dispatches fine and silently inherits the primary — why
+  the rule exists). The generator emits none of these agents, by design;
+  the ledger records the serving model per dispatch. See "Planner/
+  implementer model split" in docs/configuration.md.
 - **The honest edge.** No native skill discovery (system skills are inlined into
   `AGENTS.md`), and opencode's model backend was flaky during the probe — which
   is why the load-bearing proof is the deterministic adapter test, not a single

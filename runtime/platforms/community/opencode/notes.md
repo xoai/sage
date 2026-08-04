@@ -49,6 +49,13 @@ list `opencode` after `codex` in `platforms:` (the default order) or the
 note survives only in `.opencode/commands/`, which is the stronger
 carrier anyway.
 
+The `--subagents` role agents (`sage-implementer`, `sage-task-reviewer`,
+`sage-branch-reviewer`) are user-authored config entries only — the
+generator deliberately emits no files for them (A6): a generated agent
+without a model would read as "defined" and inherit the primary, and one
+with a model would be Sage guessing spend. `agent_binding.py` resolves
+which of them the user actually bound.
+
 ## Sub-Agent Invocation
 
 Opencode invokes sub-agents with `@agent-name`. Sage workflows reference
