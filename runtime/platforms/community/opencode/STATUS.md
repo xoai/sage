@@ -24,6 +24,13 @@ dispatches independent subagent reviews, all through opencode's plugin API.
   expires 1.4). Capability only: E-JUDGE-1 never ran on opencode.
   Setup walkthrough (steps, artifact checks, cost shape):
   `docs/configuration.md` § "Enabling the judge, start to finish".
+- **Reviewer model binding (2026-08-04, v1.3.13).** Independent reviews
+  dispatch as the `sage-reviewer` agent — never `general`, which has no
+  model binding and inherits the primary (observed live before the fix).
+  Bind it in opencode config the same way as the judge; the dispatch note
+  ships in generated AGENTS.md and the review-bearing commands, pinned by
+  generation-smoke. Verified live: a task-tool dispatch bound the child
+  session to the configured model.
 - **The honest edge.** No native skill discovery (system skills are inlined into
   `AGENTS.md`), and opencode's model backend was flaky during the probe — which
   is why the load-bearing proof is the deterministic adapter test, not a single

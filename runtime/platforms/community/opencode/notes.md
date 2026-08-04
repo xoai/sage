@@ -32,13 +32,22 @@ description: ...
 mode: subagent
 permission:
   edit: deny
-  bash: deny
 ---
 [system prompt]
 ```
 
-Sage's sub-agents use `permission.edit: deny` and `permission.bash: deny`
-to enforce the READ-ONLY constraint for review sub-agents.
+Permissions differ by job (since 1.3.13): `sage-reviewer` carries
+`edit: deny` only — code review needs bash for `git diff`/`grep`, so bash
+stays available and the prose pins it to inspection, matching claude-code
+reviewer parity. `sage-classifier` keeps both `edit: deny` and
+`bash: deny` (classification needs no tools). Independent reviews are
+dispatched AS `sage-reviewer` (the binding note in AGENTS.md and the
+review-bearing commands) because on opencode the agent carries the model
+binding — `general` would run on the primary model. Caveat: with multiple
+AGENTS.md-writing platforms installed, the last generator wins the file;
+list `opencode` after `codex` in `platforms:` (the default order) or the
+note survives only in `.opencode/commands/`, which is the stronger
+carrier anyway.
 
 ## Sub-Agent Invocation
 
