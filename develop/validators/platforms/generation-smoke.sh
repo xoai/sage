@@ -61,6 +61,33 @@ for entry in $CASES; do
   rm -rf "$(dirname "$target")"
 done
 
+# ── Opencode content pin: reviewer-binding note ──
+# The task tool routes by agent name, and only a named agent carries a
+# model binding. Without this note in the instructions AND the
+# review-bearing commands, independent reviews dispatch as `general` and
+# silently run on the primary model (observed live 2026-08-04).
+target="$(mktemp -d)/proj"
+mkdir -p "$target"
+( cd "$target" && git init -q . 2>/dev/null || true )
+( cd "$target" && SAGE_HOME="$HOME_DIR" \
+  bash "$REPO_ROOT/bin/sage" init --no-memory --platform opencode ) \
+  >/dev/null 2>&1
+bind_ok=true
+grep -q "Sub-agent dispatch on Opencode" "$target/AGENTS.md" 2>/dev/null || bind_ok=false
+for c in build fix architect review; do
+  grep -q "Sub-agent dispatch on Opencode" \
+    "$target/.opencode/commands/$c.md" 2>/dev/null || bind_ok=false
+done
+grep -q "code quality" "$target/.opencode/agents/sage-reviewer.md" 2>/dev/null || bind_ok=false
+if [ "$bind_ok" = true ]; then
+  N_PASS=$((N_PASS + 1))
+  printf '  [PASS]  %-14s → reviewer binding in AGENTS.md + 4 commands + agent\n' "opencode"
+else
+  N_FAIL=$((N_FAIL + 1))
+  printf '  [FAIL]  %-14s reviewer-binding note missing from generated tree\n' "opencode"
+fi
+rm -rf "$(dirname "$target")"
+
 echo ""
 printf '  pass %d · fail %d\n' "$N_PASS" "$N_FAIL"
 [ "$N_FAIL" -eq 0 ] || exit 1
