@@ -84,10 +84,28 @@ DEFAULTS = {
 # down-model — this is deliberately the cheap tier.
 AUTO_CMD = "claude -p --model haiku --output-format json"
 
+# [V-C] verified 2026-08-04 on opencode 1.18.12: `opencode run` reads the
+# packet from piped stdin and `--format json` emits NDJSON events whose
+# step_finish carries token usage (SG-19). OPENCODE_PURE=true skips external
+# plugins inside the judge's own session — belt to the SAGE_JUDGE braces
+# (the adapter honors the env guard too, so neither alone is load-bearing).
+# [V-D] (T4-rev2): `--agent sage-scope-judge` binds the user-authored
+# agent's model and its LOAD-BEARING permission block (headless agents DO
+# get tools; {edit: deny, bash: deny} is what keeps the judge read-only).
+# `--model` repeats the agent's own binding as a spend pin, so a future
+# change to --agent fallback semantics could never route the judge onto
+# the expensive primary.
+OPENCODE_AUTO_CMD = ("OPENCODE_PURE=true opencode run --agent "
+                     "sage-scope-judge --model %s --format json")
+
 # [V2] — the documented subagent markers in hook input (verified 2026-08-02
 # against code.claude.com/docs/en/hooks; agent_id/agent_type are present only
-# inside a subagent context).
-SUB_MARKERS = ("agent_id", "agent_type", "parent_tool_use_id")
+# inside a subagent context). [V-B] adds parent_session_id: opencode's hook
+# input carries no agent field, so its adapter resolves the session record's
+# parentID (set only for task-tool child sessions, verified live 2026-08-04
+# on 1.18.12) and forwards it under this platform-neutral key.
+SUB_MARKERS = ("agent_id", "agent_type", "parent_tool_use_id",
+               "parent_session_id")
 
 VERDICTS = ("on-scope", "drift", "insufficient-evidence")
 
@@ -117,6 +135,76 @@ def read_config(root: pathlib.Path) -> dict:
     if m:
         cfg["judge_cmd"] = m.group(1).strip().strip('"').strip("'")
     return cfg
+
+
+# ── SG-14: what `judge_cmd: auto` means HERE ─────────────────────────────────
+
+def _judge_agent_model(text: str) -> str:
+    """The `sage-scope-judge` agent's model binding inside ONE opencode
+    config file, or "". Brace-matched flat read — no JSON dependency; the
+    nesting is real (the agent block carries a permission object) but
+    string-content braces are not a case an agent block has. The character
+    allowlist matters: judge_cmd runs under a shell, and a config value is
+    not a place to accept shell metacharacters from."""
+    m = re.search(r'"sage-scope-judge"\s*:\s*\{', text)
+    if not m:
+        return ""
+    depth, start = 0, m.end() - 1
+    for j in range(start, len(text)):
+        c = text[j]
+        if c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                mm = re.search(r'"model"\s*:\s*"([^"]+)"', text[start:j + 1])
+                if not mm:
+                    return ""
+                model = mm.group(1)
+                return model if re.match(r"^[A-Za-z0-9._/:@-]+$", model) \
+                    else ""
+    return ""
+
+
+def _opencode_designated_model(root: pathlib.Path, environ) -> str:
+    """T4-rev2: the model bound to a USER-DEFINED `sage-scope-judge` agent
+    in opencode config — the explicit spend designation, and the only thing
+    `auto` accepts on this platform. Project config first, then the global
+    one, mirroring opencode's per-key merge. An agent entry WITHOUT a model
+    reads as undefined: defined-but-modelless must never mean "inherit the
+    session model" — that would run a background judge on the expensive
+    primary, the inverse of the feature's purpose."""
+    cfg_home = pathlib.Path(environ.get("XDG_CONFIG_HOME")
+                            or (pathlib.Path.home() / ".config"))
+    for path in (root / "opencode.json", root / "opencode.jsonc",
+                 cfg_home / "opencode" / "opencode.json",
+                 cfg_home / "opencode" / "opencode.jsonc"):
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        model = _judge_agent_model(text)
+        if model:
+            return model
+    return ""
+
+
+def resolve_judge_cmd(cfg: dict, root: pathlib.Path, environ=None):
+    """`auto` resolved per platform. claude-code → the headless CLI at the
+    canonical cheap tier, because one exists. opencode has no canonical
+    cheap model, so `auto` accepts exactly one designation ([V-D],
+    T4-rev2): a user-defined `sage-scope-judge` agent carrying a model —
+    or None, a soft-fail the caller records as insufficient-evidence.
+    Nothing else is inferred; model spend requires explicit designation.
+    An explicit judge_cmd is returned untouched on every platform."""
+    environ = os.environ if environ is None else environ
+    cmd = cfg["judge_cmd"]
+    if cmd != "auto":
+        return cmd
+    if environ.get("SAGE_PLATFORM") == "opencode":
+        model = _opencode_designated_model(root, environ)
+        return (OPENCODE_AUTO_CMD % model) if model else None
+    return AUTO_CMD
 
 
 # ── journal (SG-10) ──────────────────────────────────────────────────────────
@@ -163,6 +251,16 @@ def append_journal(cycle_dir: pathlib.Path, row: dict) -> None:
             fh.write(json.dumps(row, ensure_ascii=False) + "\n")
     except OSError:
         pass                       # journaling must never break a tool call
+
+
+def note_once(cycle_dir: pathlib.Path, key: str, text: str) -> None:
+    """One journal note per key per cycle — a pointer for the user, not a
+    nag. The close-out and anti-nag counters ignore `note` rows."""
+    for r in read_journal(cycle_dir):
+        if r.get("type") == "note" and r.get("key") == key:
+            return
+    append_journal(cycle_dir, {"type": "note", "key": key, "ts": _now(),
+                               "text": text})
 
 
 def events(rows: list, include_sub: bool = False) -> list:
@@ -291,6 +389,9 @@ def correction_text(task_label: str, reason: str) -> str:
 def envelope(text: str) -> dict:
     # [V1] — the exact PostToolUse shape current Claude Code accepts
     # (additionalContext requires Claude Code ≥ 2.1.196; verified 2026-08-02).
+    # The opencode adapter reads the SAME envelope off this tool's stdout and
+    # delivers additionalContext by appending it to the mutable tool result
+    # ([V-A], attested 2026-08-04) — one wire format, two delivery channels.
     return {"hookSpecificOutput": {"hookEventName": "PostToolUse",
                                    "additionalContext": text}}
 
@@ -568,6 +669,45 @@ def build_packet(cycle_dir: pathlib.Path, cfg: dict):
     return "\n\n".join(parts), window, n_now
 
 
+def _from_event_stream(output: str):
+    """opencode's `--format json` is one JSON event per line ([V-C], 1.18.x):
+    the reply is the `text` events' parts, and `step_finish` carries the
+    token usage SG-19 records. Returns (assembled_text, usage) — or
+    (None, None) when the output is not an event stream at all."""
+    texts, usage, saw = [], None, False
+    for line in output.splitlines():
+        line = line.strip()
+        if not (line.startswith("{") and line.endswith("}")):
+            continue
+        try:
+            e = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(e, dict) or "type" not in e:
+            continue
+        part = e.get("part") if isinstance(e.get("part"), dict) else {}
+        if e["type"] == "text":
+            saw = True
+            texts.append(str(part.get("text") or ""))
+        elif e["type"] == "step_finish":
+            saw = True
+            tokens = part.get("tokens")
+            if isinstance(tokens, dict):
+                u = {}
+                if isinstance(tokens.get("input"), int):
+                    u["input_tokens"] = tokens["input"]
+                if isinstance(tokens.get("output"), int):
+                    u["output_tokens"] = tokens["output"]
+                if u and usage:
+                    # A judge that uses its read-only tools multi-steps;
+                    # SG-19 charges every step, not just the last one.
+                    for k in u:
+                        usage[k] = usage.get(k, 0) + u[k]
+                elif u:
+                    usage = u
+    return ("\n".join(texts), usage) if saw else (None, None)
+
+
 def parse_verdict(output: str) -> dict:
     """Strict, three-valued (SG-15). Malformed ⇒ insufficient-evidence."""
     fallback = {"verdict": "insufficient-evidence",
@@ -576,13 +716,20 @@ def parse_verdict(output: str) -> dict:
         return fallback
     # The headless CLI's --output-format json wraps the text in an envelope.
     usage = None
+    unwrapped = False
     try:
         outer = json.loads(output)
         if isinstance(outer, dict) and "result" in outer:
             usage = outer.get("usage")
             output = str(outer.get("result") or "")
+            unwrapped = True
     except ValueError:
         pass
+    if not unwrapped:
+        # Not the claude envelope — maybe opencode's NDJSON event stream.
+        text, oc_usage = _from_event_stream(output)
+        if text is not None:
+            output, usage = text, oc_usage
     m = re.search(r"\{[^{}]*\"verdict\"[^{}]*\}", output, re.S)
     if not m:
         return fallback
@@ -603,13 +750,18 @@ def parse_verdict(output: str) -> dict:
 
 
 def _run_model(packet: str, cfg: dict):
-    cmd = cfg["judge_cmd"]
+    cmd = cfg.get("judge_cmd_resolved") or cfg["judge_cmd"]
     if cmd == "auto":
         cmd = AUTO_CMD
     try:
+        # cwd: on opencode the CLI resolves the project (config, auth, model)
+        # from the working directory, so run_judge pins it to the project
+        # root there; elsewhere it stays None — the inherited cwd, exactly
+        # the pre-port claude-code behavior.
         p = subprocess.run(cmd, shell=True, input=packet,
                            capture_output=True, text=True,
-                           timeout=int(cfg["judge_timeout"]))
+                           timeout=int(cfg["judge_timeout"]),
+                           cwd=cfg.get("judge_cwd") or None)
         return p.stdout
     except subprocess.TimeoutExpired:
         return None                    # SG-12: killed ⇒ insufficient-evidence
@@ -636,11 +788,32 @@ def run_judge(cycle_dir: pathlib.Path, environ=None, runner=None) -> dict:
                 verdict = {"verdict": "insufficient-evidence",
                            "reason": "empty window", "evidence": ""}
             else:
-                out = (runner or _run_model)(packet, cfg)
-                verdict = parse_verdict(out) if out is not None else {
-                    "verdict": "insufficient-evidence",
-                    "reason": "judge timed out or failed to run",
-                    "evidence": ""}
+                cmd = resolve_judge_cmd(cfg, root, environ)
+                if cmd is None:
+                    # SG-14 soft-fail (T4-rev2): `auto` on opencode with no
+                    # designated model. Record it as what it is — no
+                    # evidence — and point the user at the contract, once
+                    # per cycle. The note text is pinned verbatim by test.
+                    verdict = {"verdict": "insufficient-evidence",
+                               "reason": "no model designated for the "
+                                         "scope judge",
+                               "evidence": ""}
+                    note_once(cycle_dir, "judge-cmd-unresolved",
+                              'scope-judge: no model designated — define '
+                              'agent "sage-scope-judge" (with a model) in '
+                              'opencode.json, or set judge_cmd explicitly. '
+                              'No model is inferred; the judge stays idle '
+                              'until designated.')
+                else:
+                    run_cfg = dict(cfg)
+                    run_cfg["judge_cmd_resolved"] = cmd
+                    if environ.get("SAGE_PLATFORM") == "opencode":
+                        run_cfg["judge_cwd"] = str(root)
+                    out = (runner or _run_model)(packet, run_cfg)
+                    verdict = parse_verdict(out) if out is not None else {
+                        "verdict": "insufficient-evidence",
+                        "reason": "judge timed out or failed to run",
+                        "evidence": ""}
 
             usage = verdict.pop("usage", None)
             row = dict(verdict)

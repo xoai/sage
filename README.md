@@ -552,7 +552,12 @@ outside it — naming both legal exits (`scope add-collateral --task --reason`,
 which records the expansion itself, or amend the plan and `derive
 --refresh`). Witness/TDD tests are never scope-blocked. An advisory
 background judge (`scope_judge`) for drift *inside* in-scope files exists as
-a runtime with full deterministic tests.
+a runtime with full deterministic tests — one runtime on both Tier-A
+platforms: claude-code delivers its corrections as hook context, opencode
+via the attested mid-stream channel. claude-code's `auto` uses the
+platform's canonical cheap tier; opencode has none, so there the judge's
+model must be explicitly designated — nothing is inferred (see
+[docs/configuration.md](docs/configuration.md)).
 
 **Both knobs are off, and the measurement says leave them there.** L3 ran a
 six-task plan with two planted temptations and a prompt inviting cleanup, at

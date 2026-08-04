@@ -2,7 +2,67 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [1.3.12] — the judge crosses to opencode: one brain, two wires, spend by designation
+
+### Scope judge ported to opencode — capability attested, efficacy unclaimed
+
+The judge (SG-10..SG-19) now runs on opencode with full parity, behind the
+same `scope_judge: true` knob (ships false, and the 1.3.11 measurement that
+left it off is unchanged). One brain, two wires: `scope_judge.py` is shared
+verbatim — journal schema (byte-parity pinned), cadence, locks, pending-file
+handoff, anti-nag, SG-18 audit lines, SG-19 cost totals — and only delivery
+differs. The 2026-08-02 finding that post-tool stdout goes nowhere on
+opencode stands; the port rides a channel that probe did not test: the
+after-hook's tool **result object** is live, and text appended to it is
+model-visible. Attested with a live marker probe plus a planted-drift
+end-to-end run (one injected correction, quoted verbatim by the session,
+audit line and cost row on disk) —
+`docs/attestations/opencode-context-injection-midstream-2026-08-04.md`,
+expires 1.4. Contract flipped `context-injection-midstream: false →
+attested` in the same commit.
+
+- `judge_cmd: auto` on opencode accepts exactly one designation: a
+  user-defined `sage-scope-judge` agent in opencode config **carrying a
+  `model` binding** (invoked `--agent sage-scope-judge --model <m>`; the
+  agent's `permission: {edit: deny, bash: deny}` block is load-bearing —
+  headless agents DO get tools). A modelless agent entry reads as
+  undefined — never "inherit the session model" — and with no designation
+  the pass soft-fails to `insufficient-evidence` with a one-time journal
+  note. T4-rev2 reversal: an earlier in-branch draft fell back to
+  opencode's global `small_model`; reversed because **model spend requires
+  explicit designation** — an implicit fallback to a knob configured for
+  opencode's own internal tasks is guessing with money. Config template in
+  `docs/configuration.md`.
+- Subagent suppression (SG-11) via the child session's `parentID`,
+  forwarded as the platform-neutral `parent_session_id` marker; the
+  `SAGE_JUDGE` recursion guard holds across the adapter's process boundary
+  (the judge's own `opencode run` session loads the plugin and is inert;
+  `OPENCODE_PURE=true` on the auto command as belt to those braces).
+- Deterministic suite: adapter tests 5→13 (journal schema + sub flag,
+  single consumption into the mutated result, no-cycle no-op, recursion
+  guard, shipped-off default, claude-code journal byte-parity, and a
+  foreign `CLAUDE_PROJECT_DIR` in the user's environment cannot redirect
+  the journal — the adapter pins the root it knows, like the gates), now in
+  fastcheck via `develop/validators/platforms/run-opencode-adapter-tests.sh`;
+  judge runtime tests 34→48 (opencode `auto` resolver both branches, NDJSON
+  event-stream parsing with SG-19 usage, drift-only pending writes).
+- SG-19 on the opencode wire sums token usage across `step_finish` events
+  — a judge that uses its read-only tools multi-steps, and close-out
+  totals must charge every step, not just the last (found by the
+  independent review pass, pinned by test).
+- Setup walkthrough in `docs/configuration.md` ("Enabling the judge,
+  start to finish"), written and then EXECUTED as its own review: names
+  the two artifacts to check after install (a pre-port installed
+  framework yields a judge-less tree with no error — fail-open is
+  silent), states that a global designation arms every project, and
+  documents the opencode cost shape (the project preamble rides every
+  pass — observed ~24k input tokens vs a ~2k packet; `judge_every` is the
+  throttle). `sage update` is the whole upgrade path for existing
+  projects — re-vendors wholesale, preserves `.sage/`, verified live on a
+  stale 1.3.10 project.
+
 ## [1.3.11] — Scope Guard: the mechanism, and the measurement that left it off
+
 
 Scope drift was a prose capability (`scope-guard`, Layer 3) and nothing
 else — under the house law, a paragraph awaiting promotion. This release

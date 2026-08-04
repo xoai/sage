@@ -12,7 +12,18 @@ dispatches independent subagent reviews, all through opencode's plugin API.
 - **Proven.** Capabilities attested with an instrumented transcript
   (`docs/attestations/opencode-tier-a-2026-07-17.md`); the shipped adapter is
   tested deterministically against the real gates
-  (`setup/adapter-test.mjs`, 5/5), independent of opencode's model backend.
+  (`setup/adapter-test.mjs`, 13/13), independent of opencode's model backend.
+- **Scope judge ported (2026-08-04).** The same `scope_judge.py` runtime as
+  claude-code, behind `scope_judge: true` (ships false): the adapter journals
+  events, triggers the background cheap-model pass (`judge_cmd: auto` → a
+  user-defined `sage-scope-judge` agent carrying a model — the explicit
+  spend designation; soft-fail otherwise, nothing inferred), and delivers a
+  drift correction by appending to the live tool result —
+  `context-injection-midstream` attested with a planted-drift transcript
+  (`docs/attestations/opencode-context-injection-midstream-2026-08-04.md`,
+  expires 1.4). Capability only: E-JUDGE-1 never ran on opencode.
+  Setup walkthrough (steps, artifact checks, cost shape):
+  `docs/configuration.md` § "Enabling the judge, start to finish".
 - **The honest edge.** No native skill discovery (system skills are inlined into
   `AGENTS.md`), and opencode's model backend was flaky during the probe — which
   is why the load-bearing proof is the deterministic adapter test, not a single

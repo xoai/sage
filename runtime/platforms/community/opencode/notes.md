@@ -68,7 +68,10 @@ Opencode. No fallback needed.
 - Custom skill loaders in `.opencode/skills/` (TBD — sage skills are
   referenced by path from the workflow body)
 - Plugin distribution
-- Hook system port
+
+(The hook system was ported 2026-07-17 as the enforcement adapter —
+`.opencode/plugin/sage.js` — and extended 2026-08-04 with the scope judge's
+journal/trigger/delivery wire; see STATUS.md and platform.yaml.)
 
 ## Detection Heuristic
 

@@ -149,6 +149,12 @@ class JournalTest(Fixture):
         rows = self.rows()
         self.assertTrue(rows[0].get("sub"))
 
+    def test_parent_session_id_flags_sub(self):
+        """[V-B]: the opencode adapter forwards the child session's parentID
+        under this key — same SG-11 suppression, different wire."""
+        self.hook(edit_event(parent_session_id="ses_parent"))
+        self.assertTrue(self.rows()[0].get("sub"))
+
     def test_rotation_at_the_size_cap(self):
         old = SJ.ROTATE_BYTES
         SJ.ROTATE_BYTES = 200
@@ -417,6 +423,190 @@ class InjectionTest(Fixture):
             self.hook()
         self.assertFalse((self.cycle / SJ.PENDING).exists())
         self.assertIsNone(self.hook())
+
+
+OC_STREAM = "\n".join([
+    # Verbatim shape of `opencode run --format json` (1.18.12, [V-C] probe).
+    json.dumps({"type": "step_start", "timestamp": 1, "sessionID": "s",
+                "part": {"type": "step-start"}}),
+    json.dumps({"type": "text", "timestamp": 2, "sessionID": "s",
+                "part": {"type": "text",
+                         "text": '{"verdict": "drift", "reason": '
+                                 '"logger refactor", "evidence": "e2"}'}}),
+    json.dumps({"type": "step_finish", "timestamp": 3, "sessionID": "s",
+                "part": {"type": "step-finish", "reason": "stop",
+                         "tokens": {"total": 8041, "input": 52, "output": 23,
+                                    "reasoning": 30,
+                                    "cache": {"write": 0, "read": 7936}}}}),
+])
+
+
+JUDGE_AGENT = ('{\n'
+               '  "$schema": "https://opencode.ai/config.json",\n'
+               '  "agent": {\n'
+               '    "sage-scope-judge": {\n'
+               '      "model": "deepseek/deepseek-v4-flash",\n'
+               '      "permission": { "edit": "deny", "bash": "deny" }\n'
+               '    }\n'
+               '  }\n'
+               '}\n')
+
+# A2's note text, verbatim — the contract with the user, pinned exactly.
+DESIGNATION_NOTE = ('scope-judge: no model designated — define agent '
+                    '"sage-scope-judge" (with a model) in opencode.json, '
+                    'or set judge_cmd explicitly. No model is inferred; '
+                    'the judge stays idle until designated.')
+
+
+class OpencodePortTest(Fixture):
+    """SG-14 on the second platform (T4-rev2): `auto` accepts exactly one
+    designation — a user-defined `sage-scope-judge` agent carrying a model
+    — or soft-fails. Model spend requires explicit designation; nothing is
+    inferred. And the NDJSON event stream parses like the claude envelope."""
+
+    def setUp(self):
+        super().setUp()
+        self.xdg = self.root / "xdg"          # isolate from ~/.config
+        self.xdg.mkdir()
+        self.oc_env = {"SAGE_PLATFORM": "opencode",
+                       "XDG_CONFIG_HOME": str(self.xdg), **self.env}
+        self.cfg = SJ.read_config(self.root)
+
+    def seed(self, n=3):
+        for i in range(n):
+            SJ.append_journal(self.cycle, {"type": "event", "ts": i,
+                                           "tool": "Edit", "path": "src/a-%d" % i})
+
+    def test_designated_agent_with_model_resolves(self):
+        """The nested permission block is in the fixture on purpose — the
+        brace-matched read must not stop at the inner object."""
+        (self.root / "opencode.json").write_text(JUDGE_AGENT)
+        cmd = SJ.resolve_judge_cmd(self.cfg, self.root, self.oc_env)
+        self.assertEqual(cmd, "OPENCODE_PURE=true opencode run "
+                              "--agent sage-scope-judge "
+                              "--model deepseek/deepseek-v4-flash --format json")
+
+    def test_designation_in_the_global_config_resolves(self):
+        d = self.xdg / "opencode"
+        d.mkdir()
+        (d / "opencode.jsonc").write_text(
+            '{\n  // user-authored designation\n  "agent": {\n'
+            '    "sage-scope-judge": { "model": "p/m-mini" }\n  }\n}')
+        cmd = SJ.resolve_judge_cmd(self.cfg, self.root, self.oc_env)
+        self.assertIn("--agent sage-scope-judge --model p/m-mini", cmd)
+
+    def test_explicit_judge_cmd_wins_over_the_agent(self):
+        (self.root / "opencode.json").write_text(JUDGE_AGENT)
+        cfg = dict(self.cfg, judge_cmd="my-cmd --flag")
+        self.assertEqual(SJ.resolve_judge_cmd(cfg, self.root, self.oc_env),
+                         "my-cmd --flag")
+
+    def test_agent_without_model_is_undefined(self):
+        """Defined-but-modelless must never mean 'inherit the session
+        model' — that is a background judge on the expensive primary."""
+        (self.root / "opencode.json").write_text(
+            '{"agent": {"sage-scope-judge": '
+            '{"permission": {"edit": "deny", "bash": "deny"}}}}')
+        self.assertIsNone(SJ.resolve_judge_cmd(self.cfg, self.root, self.oc_env))
+        self.seed()
+        row = SJ.run_judge(self.cycle, environ=self.oc_env)
+        self.assertEqual(row["verdict"], "insufficient-evidence")
+        self.assertFalse((self.cycle / SJ.PENDING).exists())
+
+    def test_other_agents_do_not_designate(self):
+        (self.root / "opencode.json").write_text(
+            '{"agent": {"sage-reviewer": {"model": "p/expensive"}}}')
+        self.assertIsNone(SJ.resolve_judge_cmd(self.cfg, self.root, self.oc_env))
+
+    def test_shell_metacharacters_are_not_a_model(self):
+        """judge_cmd runs under a shell; a config value with metacharacters
+        resolves to nothing rather than to an injection vector."""
+        (self.root / "opencode.json").write_text(
+            '{"agent": {"sage-scope-judge": {"model": "p/m; rm -rf ."}}}')
+        self.assertIsNone(SJ.resolve_judge_cmd(self.cfg, self.root, self.oc_env))
+
+    def test_no_designation_soft_fails_with_the_exact_note_once(self):
+        """No agent anywhere → insufficient-evidence, never drift, never a
+        guessed model — and the pointer note is A2's text verbatim, once
+        per cycle, not once per pass. The second pass gets FRESH events on
+        purpose: without them it would end at the empty-window branch and
+        never re-enter the soft-fail path, and this test would pass with
+        note_once broken (review catch, 2026-08-04)."""
+        self.seed()
+        row = SJ.run_judge(self.cycle, environ=self.oc_env)
+        self.assertEqual(row["verdict"], "insufficient-evidence")
+        self.assertIn("no model designated", row["reason"])
+        self.assertFalse((self.cycle / SJ.PENDING).exists())
+        self.seed()                    # new window → the resolve path again
+        row2 = SJ.run_judge(self.cycle, environ=self.oc_env)
+        self.assertIn("no model designated", row2["reason"],
+                      "second pass must re-enter the soft-fail path")
+        notes = [r for r in self.rows() if r.get("type") == "note"]
+        self.assertEqual(len(notes), 1, "the pointer is a note, not a nag")
+        self.assertEqual(notes[0]["text"], DESIGNATION_NOTE)
+        verdicts = [r for r in self.rows() if r.get("type") == "verdict"]
+        self.assertEqual(len(verdicts), 2)
+        self.assertTrue(all(v["verdict"] == "insufficient-evidence"
+                            for v in verdicts), "soft-fail is never drift")
+
+    def test_claude_platform_resolution_is_unchanged(self):
+        self.assertEqual(SJ.resolve_judge_cmd(self.cfg, self.root, self.env),
+                         SJ.AUTO_CMD)
+
+    def test_explicit_judge_cmd_is_returned_untouched(self):
+        cfg = dict(self.cfg, judge_cmd="opencode run --model x/y --format json")
+        self.assertEqual(SJ.resolve_judge_cmd(cfg, self.root, self.oc_env),
+                         "opencode run --model x/y --format json")
+
+    def test_event_stream_parses_to_verdict_and_usage(self):
+        out = SJ.parse_verdict(OC_STREAM)
+        self.assertEqual(out["verdict"], "drift")
+        self.assertEqual(out["reason"], "logger refactor")
+        self.assertEqual(out["usage"], {"input_tokens": 52, "output_tokens": 23})
+
+    def test_event_stream_usage_sums_across_steps(self):
+        """[V-D] left the judge its read-only tools, and a judge that reads
+        before answering multi-steps — SG-19 must charge every step, or the
+        close-out totals undercount real spend (review catch #2)."""
+        two = OC_STREAM + "\n" + json.dumps(
+            {"type": "step_finish", "timestamp": 4, "sessionID": "s",
+             "part": {"type": "step-finish", "reason": "stop",
+                      "tokens": {"input": 10, "output": 5}}})
+        out = SJ.parse_verdict(two)
+        self.assertEqual(out["usage"],
+                         {"input_tokens": 62, "output_tokens": 28})
+
+    def test_run_judge_records_cost_from_the_event_stream(self):
+        """SG-19 parity: the opencode wire feeds the same cost rows and
+        close-out totals the claude envelope does."""
+        (self.root / "opencode.json").write_text(JUDGE_AGENT)
+        self.seed()
+        seen = {}
+
+        def runner(packet, cfg):
+            seen["cmd"] = cfg.get("judge_cmd_resolved")
+            seen["cwd"] = cfg.get("judge_cwd")
+            return OC_STREAM
+
+        row = SJ.run_judge(self.cycle, environ=self.oc_env, runner=runner)
+        self.assertEqual(row["verdict"], "drift")
+        self.assertIn("--agent sage-scope-judge "
+                      "--model deepseek/deepseek-v4-flash", seen["cmd"])
+        self.assertEqual(seen["cwd"], str(self.root))
+        self.assertTrue((self.cycle / SJ.PENDING).exists(),
+                        "drift → pending correction queued")
+        v, d, i, tin, tout = SJ.cycle_totals(self.cycle)
+        self.assertEqual((v, d, tin, tout), (1, 1, 52, 23))
+
+    def test_on_scope_and_insufficient_leave_no_pending(self):
+        (self.root / "opencode.json").write_text(JUDGE_AGENT)
+        self.seed()
+        SJ.run_judge(self.cycle, environ=self.oc_env,
+                     runner=lambda p, c: '{"verdict":"on-scope","reason":"ok"}')
+        self.assertFalse((self.cycle / SJ.PENDING).exists())
+        SJ.run_judge(self.cycle, environ=self.oc_env,
+                     runner=lambda p, c: "no json here")
+        self.assertFalse((self.cycle / SJ.PENDING).exists())
 
 
 class EndToEndTest(Fixture):

@@ -155,8 +155,15 @@ The judge is an advisory background check for drift a path gate cannot see
 (`scope-journal.jsonl` in the cycle dir, Bash included), runs a cheap-model
 pass over a bounded window when enough events accumulate, and on a `drift`
 verdict injects **one** correction into the next hook return. It never
-blocks. It is claude-code-only at launch (the injection channel does not
-exist in the opencode adapter, and the platform contract says so).
+blocks. It runs on claude-code and opencode — one runtime, two delivery
+wires: claude-code returns the correction as PostToolUse
+`additionalContext`; the opencode adapter appends it to the next tool
+result (capability attested with a live planted-drift transcript,
+`docs/attestations/opencode-context-injection-midstream-2026-08-04.md`,
+expires 1.4). Capability is not efficacy: E-JUDGE-1 was measured on
+claude-code only — where it failed its precision criterion, which is why
+the knob ships `false` — and has never run on opencode. The floor is
+available there; its necessity is unproven everywhere.
 
 | Key | Default | Meaning |
 |---|---|---|
@@ -164,7 +171,29 @@ exist in the opencode adapter, and the platform contract says so).
 | `judge_every` | `8` | A pass becomes eligible every N journal events. Event-driven — never a timer. |
 | `judge_cooldown` | `15` | At most one injected correction per N journal events; repeats also require a *new* reason. |
 | `judge_timeout` | `60` | Seconds before a judge model call is killed. A killed pass records `insufficient-evidence`, never `drift`. |
-| `judge_cmd` | `auto` | The judge's model command (`auto` = the platform's headless CLI at the cheap tier, packet on stdin). Overridable for testing; protected while the judge is armed. |
+| `judge_cmd` | `auto` | The judge's model command, packet on stdin. On claude-code, `auto` → `claude -p --model haiku`. On opencode, `auto` resolves in this order and stops: **1.** an explicit `judge_cmd` in this file — escape hatch, mostly for testing; **2.** a user-defined agent named `sage-scope-judge` in opencode config (project or global) **that carries a `model` binding** — an agent entry without a model is treated as undefined, because the judge must never resolve to "inherit the session model"; **3.** soft-fail — the pass records `insufficient-evidence` (never `drift`) and a one-time journal note says exactly how to designate. No model is inferred; the judge stays idle until designated. Protected while the judge is armed. |
+
+On opencode, designating the judge's model is one config block — this is
+the template, authored by you, never generated (a generated agent would be
+Sage picking a paid model on your behalf, or worse, a modelless entry that
+inherits the primary):
+
+```jsonc
+// opencode.json
+"agent": {
+  "sage-scope-judge": {
+    "model": "<provider>/<cheap-model>",
+    "permission": { "edit": "deny", "bash": "deny" }
+  }
+}
+```
+
+The `permission` block is load-bearing, not decoration: headless agent
+invocations DO get tools ([V-D], 2026-08-04), and the deny pair is what
+keeps the judge's session read-only. The cross-platform asymmetry is
+design, not gap: claude-code's `auto` resolves to the platform's canonical
+cheap tier because one exists; opencode has no canonical cheap model,
+which is why explicit agent designation is the correct resolution there.
 
 Safety invariants, all deterministic-tested: the judge's own model calls
 can never re-trigger judging (`SAGE_JUDGE` guard); one pass per cycle at a
@@ -172,6 +201,66 @@ time; machine-wide cap of 2; subagent events are journaled but never
 judged or corrected — a packet-scoped implementer receiving cycle-scope
 corrections is being derailed, not helped. Every injection writes its own
 decisions.md audit line, and per-cycle cost totals print at close-out.
+
+### Enabling the judge, start to finish
+
+Prerequisites on either platform: `python3` on PATH (the judge runtime is
+Python; without it the wire fails open and nothing runs), and exactly one
+active cycle — the judge stands down rather than guess which of two cycles
+an edit belongs to.
+
+**claude-code** is two steps: `sage init` (or `sage update` on an existing
+project) installs the hooks, and `scope_judge: true` in `.sage/config.yaml`
+arms them. `judge_cmd: auto` resolves to the platform's cheap tier (haiku)
+with nothing else to configure.
+
+**opencode** adds one step — the model designation:
+
+1. `sage init --platform opencode` on a new project, or `sage update` on an
+   existing one. Either writes the enforcement adapter
+   (`.opencode/plugin/sage.js`), the gate scripts
+   (`.opencode/sage-hooks/`), and vendors the judge runtime at
+   `sage/runtime/tools/scope_judge.py` — the path the adapter resolves.
+   You never need to re-run `init` on an existing project: `sage update`
+   replaces the vendored `sage/` wholesale from your installed framework
+   and regenerates the platform files, while `.sage/` project state
+   (cycles, config, decisions) is preserved untouched — verified on a
+   live 1.3.10 project, which came out with the full judge wire.
+   **Check both landed**: `.opencode/sage-hooks/sage-scope-gate.sh` and
+   `sage/runtime/tools/scope_judge.py`. Both `init` and `update` vendor
+   whatever your *installed* framework contains, and one that predates
+   the Scope Guard port produces a judge-less install with no error — the
+   wire fails open by design, so the absence is silent. Missing files
+   mean: update the installed framework itself first (re-run the
+   installer), then `sage update` — re-running `init` from the same stale
+   framework gains nothing.
+2. Designate the judge's model: add the `sage-scope-judge` agent block
+   shown above to `opencode.json`/`.jsonc` (project or global), with a
+   cheap model you are willing to pay for. This is the only thing `auto`
+   accepts — no designation, no spend.
+3. Arm it: `scope_judge: true` in `.sage/config.yaml`. From that point the
+   `judge_*` knobs are config-gate-protected against the agent softening
+   them; you can still edit the file yourself.
+
+What you should see, working inside a cycle: one JSONL line per tool call
+in `.sage/work/<cycle>/scope-journal.jsonl` (the quickest health check);
+on a `drift` verdict, one correction beginning `Sage scope-judge:`
+appended to the next tool result, with its decisions.md audit line; token
+totals at cycle close-out. If you armed the judge with no designation in
+*either* project or global opencode config, the journal gets verdict rows
+reading `insufficient-evidence` and a single note telling you exactly
+what to define — the judge idles loudly, it never guesses. A global
+designation applies to every project you arm, which is convenient and
+worth knowing before you wonder why a scratch project is spending.
+
+Cost shape, opencode-specific: each pass boots a real `opencode run`
+session in the project, so your project preamble (AGENTS.md with the
+inlined skills) rides along with the judge packet — a stock init observed
+~24k input tokens per pass against a ~2k packet. This is not hidden:
+SG-19 records the true per-pass usage in the journal and totals it at
+close-out, and `judge_every` is your throttle. Attested end-to-end on
+opencode 1.18.12
+(`docs/attestations/opencode-context-injection-midstream-2026-08-04.md`).
 
 ## The review loop (v2 — the measured default)
 

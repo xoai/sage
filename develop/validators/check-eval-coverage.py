@@ -65,6 +65,10 @@ DISCOVERY = [
     # The scope judge's runtime carries the drift-verdict BEHAVIOR (locks,
     # window, cadence, injection, anti-nag) — same rationale as review.py.
     ("tool",         "runtime/tools/scope_judge.py"),
+    # The opencode enforcement adapter is that platform's entire mechanical
+    # layer — the wire that makes the shared gates and the scope judge real
+    # off Claude Code. Behavioral surface, so it rows here.
+    ("adapter",      "runtime/platforms/community/opencode/setup/sage-plugin.js"),
 ]
 
 

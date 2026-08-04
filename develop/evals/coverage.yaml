@@ -333,6 +333,33 @@ surfaces:
       so 0/3 detection measures the agent, not the judge). scope_judge stays
       false; the judge's window carries paths only, so semantic drift inside
       an in-scope file leaves no signal to detect — see its MEASURED.md.
+      2026-08-04: the runtime gained the opencode branch of the SG-14 `auto`
+      resolver (T4-rev2: a user-defined sage-scope-judge agent WITH a model
+      is the only accepted designation; modelless or absent → soft-fail
+      with a verbatim-pinned note — model spend requires explicit
+      designation, nothing inferred), the NDJSON event-stream parser, and
+      the parent_session_id sub marker — all pinned deterministically in
+      test_scope_judge.py (OpencodePortTest, 48 total). Capability only:
+      E-JUDGE-1 has NOT run on opencode, and the measured verdict above is
+      unchanged.
+
+  adapter-opencode:
+    path: runtime/platforms/community/opencode/setup/sage-plugin.js
+    kind: adapter
+    uncovered: >
+      Stated, not deferred: no eval scenario drives opencode — the harness
+      runs claude-code. What pins the adapter is deterministic and in
+      fastcheck: setup/adapter-test.mjs (13 checks, via develop/validators/
+      platforms/run-opencode-adapter-tests.sh) drives the REAL gate scripts
+      and the REAL judge runtime through the plugin wire — veto, journal
+      schema with byte-parity against the claude-code hook's rows, sub-flag
+      suppression, single consumption of a queued correction into the
+      mutated tool result, the SAGE_JUDGE recursion guard across the process
+      boundary, and the shipped-off default. The delivery channel itself is
+      attested with a live transcript (docs/attestations/
+      opencode-context-injection-midstream-2026-08-04.md, expires 1.4).
+      Efficacy on opencode is explicitly unclaimed (E-JUDGE-1 never ran
+      there); an opencode-driving scenario would replace this row.
 
 # ── Gate scripts (three-state, standalone-invocable) ─────────────────────────
 

@@ -18,7 +18,7 @@ convince.
 `runtime/platforms/community/<your-platform>/platform.yaml`, schema v2. Full
 schema: [`runtime/platforms/CONTRACT.md`](../runtime/platforms/CONTRACT.md).
 
-The seven capabilities are not features. They are the preconditions of
+The eight capabilities are not features. They are the preconditions of
 enforcement, and each `false` takes something specific away:
 
 | Capability | Without it, Sage loses |
@@ -30,12 +30,13 @@ enforcement, and each `false` takes something specific away:
 | `post-tool-events` | The audit trail. A degraded run stops being distinguishable from a clean one. |
 | `subagent-dispatch` | Independent review. Every reviewer is the agent that wrote the code. |
 | `session-events` | Auto-pickup of an active cycle. |
+| `context-injection-midstream` | Mid-session correction delivery. The scope judge degrades to verdicts-on-disk — detection nobody hears about. The channel is rarely the obvious one: claude-code's is a documented hook field, opencode's is the live tool-result object ([V-A], attested 2026-08-04) — probe the platform before declaring `false`. |
 
 **Start with everything `false`.** That is not pessimism, it is the correct
 starting position: an unchecked capability is worth `false`. You will turn them
 on one at a time, and each one you turn on you will have to prove.
 
-Declare all seven. `false` is an answer; **silence is not**, and `--check` fails
+Declare all eight. `false` is an answer; **silence is not**, and `--check` fails
 on a missing key. "We didn't think about it" and "it doesn't have it" look
 identical in a file and mean very different things to a user choosing a platform.
 
