@@ -221,12 +221,19 @@ with nothing else to configure.
    (`.opencode/plugin/sage.js`), the gate scripts
    (`.opencode/sage-hooks/`), and vendors the judge runtime at
    `sage/runtime/tools/scope_judge.py` — the path the adapter resolves.
+   You never need to re-run `init` on an existing project: `sage update`
+   replaces the vendored `sage/` wholesale from your installed framework
+   and regenerates the platform files, while `.sage/` project state
+   (cycles, config, decisions) is preserved untouched — verified on a
+   live 1.3.10 project, which came out with the full judge wire.
    **Check both landed**: `.opencode/sage-hooks/sage-scope-gate.sh` and
-   `sage/runtime/tools/scope_judge.py`. `sage init` vendors whatever your
-   *installed* framework contains, and one that predates the Scope Guard
-   port produces a judge-less install with no error — the wire fails open
-   by design, so the absence is silent. Missing files mean: update the
-   installed framework first, then `sage update`.
+   `sage/runtime/tools/scope_judge.py`. Both `init` and `update` vendor
+   whatever your *installed* framework contains, and one that predates
+   the Scope Guard port produces a judge-less install with no error — the
+   wire fails open by design, so the absence is silent. Missing files
+   mean: update the installed framework itself first (re-run the
+   installer), then `sage update` — re-running `init` from the same stale
+   framework gains nothing.
 2. Designate the judge's model: add the `sage-scope-judge` agent block
    shown above to `opencode.json`/`.jsonc` (project or global), with a
    cheap model you are willing to pay for. This is the only thing `auto`
