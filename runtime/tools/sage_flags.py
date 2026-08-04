@@ -364,12 +364,51 @@ def decide(counts, iteration, history, ledger=None):
 # ═══════════════════════════════════════════════════════════════════════
 
 def main(argv=None):
+    argv = list(sys.argv[1:] if argv is None else argv)
+
+    # The shipped calling convention — in every generated project's preamble,
+    # the flag-parser skill, and build.workflow.md — is:
+    #
+    #     sage_flags.py parse "$ARGUMENTS" --config-path .sage/config.yaml
+    #
+    # and $ARGUMENTS is user input whose whole point is often a leading-dash
+    # flag (--subagents, --quality-locked). argparse treats ANY leading-dash
+    # token as an option — quotes are shell-level and long gone — so the very
+    # strings this tool exists to parse crashed it with "unrecognized
+    # arguments" (field report 2026-08-04: the first live CLI-flag run; the
+    # test suite exercised only the Python API and never saw the process
+    # boundary). For `parse`, split out our ONE own option by hand and treat
+    # everything else, dashes and all, as the payload. The other subcommands
+    # keep argparse untouched.
+    if argv and argv[0] == "parse" and argv[1:] not in (["-h"], ["--help"]):
+        rest, config_path, payload = argv[1:], None, []
+        i = 0
+        while i < len(rest):
+            tok = rest[i]
+            if tok == "--config-path" and i + 1 < len(rest):
+                config_path = rest[i + 1]
+                i += 2
+                continue
+            if tok.startswith("--config-path="):
+                config_path = tok.split("=", 1)[1]
+                i += 1
+                continue
+            payload.append(tok)
+            i += 1
+        if payload and payload[0] == "--":     # explicit separator: honored
+            payload = payload[1:]
+        result = parse_flags(" ".join(payload), load_defaults(config_path))
+        print(json.dumps(result))
+        return 1 if result["error"] else 0
+
     p = argparse.ArgumentParser(
         prog="sage-flags",
         description="Workflow flag parsing and quality-locked loop decisions.",
     )
     sub = p.add_subparsers(dest="command", required=True)
 
+    # Registered for `parse -h` and the usage text only — every real parse
+    # invocation is intercepted above, where leading-dash payloads are legal.
     parse_cmd = sub.add_parser("parse", help="Parse workflow flags from $ARGUMENTS")
     parse_cmd.add_argument("arguments", nargs="?", default="")
     parse_cmd.add_argument("--config-path", default=None)
