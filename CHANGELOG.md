@@ -2,7 +2,7 @@
 
 All notable changes to Sage will be documented in this file.
 
-## [Unreleased]
+## [1.3.12] — the judge crosses to opencode: one brain, two wires, spend by designation
 
 ### Scope judge ported to opencode — capability attested, efficacy unclaimed
 
@@ -46,10 +46,20 @@ attested` in the same commit.
   fastcheck via `develop/validators/platforms/run-opencode-adapter-tests.sh`;
   judge runtime tests 34→48 (opencode `auto` resolver both branches, NDJSON
   event-stream parsing with SG-19 usage, drift-only pending writes).
-- Zero changes to claude-code behavior; its hook tests are untouched and
-  green. Prior-art note: scopey v0.1.3 observes but does not inject on
-  opencode (its plugin discards the correction) — the channel here is
-  attested on our own evidence.
+- SG-19 on the opencode wire sums token usage across `step_finish` events
+  — a judge that uses its read-only tools multi-steps, and close-out
+  totals must charge every step, not just the last (found by the
+  independent review pass, pinned by test).
+- Setup walkthrough in `docs/configuration.md` ("Enabling the judge,
+  start to finish"), written and then EXECUTED as its own review: names
+  the two artifacts to check after install (a pre-port installed
+  framework yields a judge-less tree with no error — fail-open is
+  silent), states that a global designation arms every project, and
+  documents the opencode cost shape (the project preamble rides every
+  pass — observed ~24k input tokens vs a ~2k packet; `judge_every` is the
+  throttle). `sage update` is the whole upgrade path for existing
+  projects — re-vendors wholesale, preserves `.sage/`, verified live on a
+  stale 1.3.10 project.
 
 ## [1.3.11] — Scope Guard: the mechanism, and the measurement that left it off
 
