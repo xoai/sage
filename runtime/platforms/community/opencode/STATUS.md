@@ -22,6 +22,8 @@ dispatches independent subagent reviews, all through opencode's plugin API.
   `context-injection-midstream` attested with a planted-drift transcript
   (`docs/attestations/opencode-context-injection-midstream-2026-08-04.md`,
   expires 1.4). Capability only: E-JUDGE-1 never ran on opencode.
+  Setup walkthrough (steps, artifact checks, cost shape):
+  `docs/configuration.md` § "Enabling the judge, start to finish".
 - **The honest edge.** No native skill discovery (system skills are inlined into
   `AGENTS.md`), and opencode's model backend was flaky during the probe — which
   is why the load-bearing proof is the deterministic adapter test, not a single

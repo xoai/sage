@@ -202,6 +202,59 @@ judged or corrected — a packet-scoped implementer receiving cycle-scope
 corrections is being derailed, not helped. Every injection writes its own
 decisions.md audit line, and per-cycle cost totals print at close-out.
 
+### Enabling the judge, start to finish
+
+Prerequisites on either platform: `python3` on PATH (the judge runtime is
+Python; without it the wire fails open and nothing runs), and exactly one
+active cycle — the judge stands down rather than guess which of two cycles
+an edit belongs to.
+
+**claude-code** is two steps: `sage init` (or `sage update` on an existing
+project) installs the hooks, and `scope_judge: true` in `.sage/config.yaml`
+arms them. `judge_cmd: auto` resolves to the platform's cheap tier (haiku)
+with nothing else to configure.
+
+**opencode** adds one step — the model designation:
+
+1. `sage init --platform opencode` on a new project, or `sage update` on an
+   existing one. Either writes the enforcement adapter
+   (`.opencode/plugin/sage.js`), the gate scripts
+   (`.opencode/sage-hooks/`), and vendors the judge runtime at
+   `sage/runtime/tools/scope_judge.py` — the path the adapter resolves.
+   **Check both landed**: `.opencode/sage-hooks/sage-scope-gate.sh` and
+   `sage/runtime/tools/scope_judge.py`. `sage init` vendors whatever your
+   *installed* framework contains, and one that predates the Scope Guard
+   port produces a judge-less install with no error — the wire fails open
+   by design, so the absence is silent. Missing files mean: update the
+   installed framework first, then `sage update`.
+2. Designate the judge's model: add the `sage-scope-judge` agent block
+   shown above to `opencode.json`/`.jsonc` (project or global), with a
+   cheap model you are willing to pay for. This is the only thing `auto`
+   accepts — no designation, no spend.
+3. Arm it: `scope_judge: true` in `.sage/config.yaml`. From that point the
+   `judge_*` knobs are config-gate-protected against the agent softening
+   them; you can still edit the file yourself.
+
+What you should see, working inside a cycle: one JSONL line per tool call
+in `.sage/work/<cycle>/scope-journal.jsonl` (the quickest health check);
+on a `drift` verdict, one correction beginning `Sage scope-judge:`
+appended to the next tool result, with its decisions.md audit line; token
+totals at cycle close-out. If you armed the judge with no designation in
+*either* project or global opencode config, the journal gets verdict rows
+reading `insufficient-evidence` and a single note telling you exactly
+what to define — the judge idles loudly, it never guesses. A global
+designation applies to every project you arm, which is convenient and
+worth knowing before you wonder why a scratch project is spending.
+
+Cost shape, opencode-specific: each pass boots a real `opencode run`
+session in the project, so your project preamble (AGENTS.md with the
+inlined skills) rides along with the judge packet — a stock init observed
+~24k input tokens per pass against a ~2k packet. This is not hidden:
+SG-19 records the true per-pass usage in the journal and totals it at
+close-out, and `judge_every` is your throttle. Attested end-to-end on
+opencode 1.18.12
+(`docs/attestations/opencode-context-injection-midstream-2026-08-04.md`).
+
 ## The review loop (v2 — the measured default)
 
 `review_loop` puts the review-revise verdict in code: findings land in a
