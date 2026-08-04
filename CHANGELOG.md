@@ -24,6 +24,18 @@ output. A parser tested only on test-authored data.
   headings ("Tasks", "Rollback") as if they were the plan's tasks.
   Bullet-aware now, same fallback chain.
 - The workflow doc names both forms where it describes ledger generation.
+- **The class is now pinned, not just this instance**: a new
+  template-conformance suite (`test_template_conformance.py`, in
+  fastcheck) runs every parser of a Sage artifact against the TEMPLATE
+  that produces it — ledger and resume task parsing, the judge's
+  current-task and spec-boundary reads, scope-derive's declaration-line
+  regex, and the cross-language ledger↔spec-gate round-trip (scaffold →
+  blocked while pending → allowed when done+approved), all against
+  `standard.plan-template.md` and both spec templates verbatim. A parser
+  that stops reading Sage's own output now fails in fastcheck, not in a
+  field report. The audit that produced it found no further mismatches:
+  manifest frontmatter keys, `## Boundaries`, and `- **Files:**` lines
+  all conform.
 
 ## [1.3.15] — the flag parser survives its own flags, and the dead tests rise
 
