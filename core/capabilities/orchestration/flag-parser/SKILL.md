@@ -42,7 +42,9 @@ the same context reviewing itself.
 
 ## Precedence (highest wins)
 
-For each mode (quality_locked, autonomous):
+For each mode (quality_locked, autonomous, subagents — the ladder is the
+same for all three; subagents' extra step, platform refusal, happens
+AFTER parsing, R97):
 
 | Priority | Source | Effect | Source label |
 |----------|--------|--------|--------------|
