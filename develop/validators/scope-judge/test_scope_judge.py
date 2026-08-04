@@ -528,17 +528,24 @@ class OpencodePortTest(Fixture):
     def test_no_designation_soft_fails_with_the_exact_note_once(self):
         """No agent anywhere → insufficient-evidence, never drift, never a
         guessed model — and the pointer note is A2's text verbatim, once
-        per cycle, not once per pass."""
+        per cycle, not once per pass. The second pass gets FRESH events on
+        purpose: without them it would end at the empty-window branch and
+        never re-enter the soft-fail path, and this test would pass with
+        note_once broken (review catch, 2026-08-04)."""
         self.seed()
         row = SJ.run_judge(self.cycle, environ=self.oc_env)
         self.assertEqual(row["verdict"], "insufficient-evidence")
         self.assertIn("no model designated", row["reason"])
         self.assertFalse((self.cycle / SJ.PENDING).exists())
-        SJ.run_judge(self.cycle, environ=self.oc_env)
+        self.seed()                    # new window → the resolve path again
+        row2 = SJ.run_judge(self.cycle, environ=self.oc_env)
+        self.assertIn("no model designated", row2["reason"],
+                      "second pass must re-enter the soft-fail path")
         notes = [r for r in self.rows() if r.get("type") == "note"]
         self.assertEqual(len(notes), 1, "the pointer is a note, not a nag")
         self.assertEqual(notes[0]["text"], DESIGNATION_NOTE)
         verdicts = [r for r in self.rows() if r.get("type") == "verdict"]
+        self.assertEqual(len(verdicts), 2)
         self.assertTrue(all(v["verdict"] == "insufficient-evidence"
                             for v in verdicts), "soft-fail is never drift")
 

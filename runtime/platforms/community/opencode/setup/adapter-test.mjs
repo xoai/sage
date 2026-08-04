@@ -193,5 +193,18 @@ armJudge(); resetScope()
      ccRow && ocRow && strip(ccRow) === strip(ocRow))
 }
 
+// 13. a foreign CLAUDE_PROJECT_DIR in the user's environment must not
+//     redirect the journal — the adapter pins the project root it KNOWS
+//     (same contract as runGate), so the row lands in THIS project.
+armJudge(); resetScope()
+process.env.CLAUDE_PROJECT_DIR = "/nonexistent/other-project"
+await after(hooks, bashEvent("echo pinned"))
+delete process.env.CLAUDE_PROJECT_DIR
+{
+  const rows = journalRows()
+  ok("a foreign CLAUDE_PROJECT_DIR cannot redirect the journal",
+     rows.length === 1 && rows[0].cmd === "echo pinned")
+}
+
 console.log(`\n  adapter: ${pass} pass · ${fail} fail`)
 process.exit(fail ? 1 : 0)

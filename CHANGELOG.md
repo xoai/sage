@@ -38,11 +38,13 @@ attested` in the same commit.
   `SAGE_JUDGE` recursion guard holds across the adapter's process boundary
   (the judge's own `opencode run` session loads the plugin and is inert;
   `OPENCODE_PURE=true` on the auto command as belt to those braces).
-- Deterministic suite: adapter tests 5→12 (journal schema + sub flag,
+- Deterministic suite: adapter tests 5→13 (journal schema + sub flag,
   single consumption into the mutated result, no-cycle no-op, recursion
-  guard, shipped-off default, claude-code journal byte-parity), now in
+  guard, shipped-off default, claude-code journal byte-parity, and a
+  foreign `CLAUDE_PROJECT_DIR` in the user's environment cannot redirect
+  the journal — the adapter pins the root it knows, like the gates), now in
   fastcheck via `develop/validators/platforms/run-opencode-adapter-tests.sh`;
-  judge runtime tests 34→44 (opencode `auto` resolver both branches, NDJSON
+  judge runtime tests 34→47 (opencode `auto` resolver both branches, NDJSON
   event-stream parsing with SG-19 usage, drift-only pending writes).
 - Zero changes to claude-code behavior; its hook tests are untouched and
   green. Prior-art note: scopey v0.1.3 observes but does not inject on

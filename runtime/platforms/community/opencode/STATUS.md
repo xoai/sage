@@ -12,7 +12,7 @@ dispatches independent subagent reviews, all through opencode's plugin API.
 - **Proven.** Capabilities attested with an instrumented transcript
   (`docs/attestations/opencode-tier-a-2026-07-17.md`); the shipped adapter is
   tested deterministically against the real gates
-  (`setup/adapter-test.mjs`, 12/12), independent of opencode's model backend.
+  (`setup/adapter-test.mjs`, 13/13), independent of opencode's model backend.
 - **Scope judge ported (2026-08-04).** The same `scope_judge.py` runtime as
   claude-code, behind `scope_judge: true` (ships false): the adapter journals
   events, triggers the background cheap-model pass (`judge_cmd: auto` → a

@@ -349,7 +349,7 @@ surfaces:
     uncovered: >
       Stated, not deferred: no eval scenario drives opencode — the harness
       runs claude-code. What pins the adapter is deterministic and in
-      fastcheck: setup/adapter-test.mjs (12 checks, via develop/validators/
+      fastcheck: setup/adapter-test.mjs (13 checks, via develop/validators/
       platforms/run-opencode-adapter-tests.sh) drives the REAL gate scripts
       and the REAL judge runtime through the plugin wire — veto, journal
       schema with byte-parity against the claude-code hook's rows, sub-flag

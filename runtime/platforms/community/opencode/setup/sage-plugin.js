@@ -189,9 +189,13 @@ export const SagePlugin = async ({ directory, client }) => {
                             tool_input: payload.tool_input, cwd: root }
         const parent = await parentSession(input?.sessionID)
         if (parent) hookInput.parent_session_id = parent   // SG-11 marker
+        // CLAUDE_PROJECT_DIR pinned like runGate does: the tool prefers it
+        // over the payload's cwd, and a user who exports it for another
+        // project must not redirect this project's journal (review catch).
         const r = spawnSync("python3", [tool, "hook"], {
           input: JSON.stringify(hookInput), encoding: "utf8", timeout: 15000,
-          env: { ...process.env, SAGE_PLATFORM: "opencode" },
+          env: { ...process.env, SAGE_PLATFORM: "opencode",
+                 CLAUDE_PROJECT_DIR: root },
         })
         const text = JSON.parse(r.stdout || "{}")
           ?.hookSpecificOutput?.additionalContext
