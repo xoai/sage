@@ -2,7 +2,7 @@
 
 All notable changes to Sage will be documented in this file.
 
-## [Unreleased]
+## [1.3.13] — sub-agents run on the models you bound: reviewer dispatch named, stamp made honest
 
 ### opencode reviews now dispatch as `sage-reviewer` — the model binding finally lands
 
