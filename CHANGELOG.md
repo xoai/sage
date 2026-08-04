@@ -2,7 +2,7 @@
 
 All notable changes to Sage will be documented in this file.
 
-## [Unreleased]
+## [1.3.15] — the flag parser survives its own flags, and the dead tests rise
 
 ### `/build --subagents` no longer crashes the flag parser
 
