@@ -2,7 +2,7 @@
 
 All notable changes to Sage will be documented in this file.
 
-## [Unreleased]
+## [1.3.16] — the ledger reads the plans Sage writes, and templates become the tested contract
 
 ### The ledger reads the plans Sage actually writes
 
