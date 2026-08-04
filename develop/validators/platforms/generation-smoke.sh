@@ -91,7 +91,10 @@ fi
 # Field report 2026-08-04: a project updated to vendored 1.3.12 still
 # stamped "1.3.10" — update replaced sage/ wholesale but never touched
 # the config record, so it lied a little more with every release.
-sed -i.bak 's/^sage-version:.*/sage-version: "0.0.0"/' "$target/.sage/config.yaml"
+# Non-semver placeholder on purpose: release.py's hardcoded-version scan
+# rightly flags numeric literals, and the stamp rewrite never parses the
+# old value anyway.
+sed -i.bak 's/^sage-version:.*/sage-version: "stale-for-test"/' "$target/.sage/config.yaml"
 rm -f "$target/.sage/config.yaml.bak"
 ( cd "$target" && SAGE_HOME="$HOME_DIR" bash "$REPO_ROOT/bin/sage" update ) \
   >/dev/null 2>&1
