@@ -2,7 +2,7 @@
 
 All notable changes to Sage will be documented in this file.
 
-## [Unreleased]
+## [1.3.14] — the planner/implementer split: every dispatched role on the model you bound
 
 ### A6 — the planner/implementer model split lands on opencode
 
