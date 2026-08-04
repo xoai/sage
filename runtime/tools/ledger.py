@@ -38,17 +38,39 @@ import pathlib
 import re
 import sys
 
-TASK_RE = re.compile(r"^##\s*Task\s+(\d+)\s*[—:-]\s*(.+?)\s*$", re.M)
+# The plan template's canonical task form is a CHECKBOX BULLET —
+# `- [ ] **Task N:** title` (core/templates/plan/standard.plan-template.md)
+# — while `## Task N — title` headings are the convention the E9/E10
+# fixtures were authored in. The first shipped parser read only headings:
+# written against the fixture, never against the template, so the first
+# real `--subagents` run (field report 2026-08-04) could not scaffold a
+# ledger from a plan Sage itself had generated. Both forms parse now.
+TASK_RE = re.compile(
+    r"^##\s*Task\s+(\d+)\s*[—:-]\s*(.+?)\s*$"
+    r"|^\s*-\s*\[[ xX]\]\s*\*\*Task\s+(\d+)\s*:?\*\*:?\s*(.+?)\s*$",
+    re.M)
 
 
 def parse_plan_tasks(plan_text):
-    """Every `## Task N — title` in the approved plan, in order.
+    """Every plan task, in document order — heading or checkbox-bullet form.
 
     The plan is the contract the ledger must mirror. If the plan has three tasks
     and the ledger has two, the cycle is claiming a review of work it never
     listed — which is the failure the ledger exists to make impossible.
+
+    A checked bullet still belongs in the ledger (done ≠ independently
+    reviewed); `[DOC]` markers are presentation, stripped from titles; a
+    duplicate id keeps its first occurrence.
     """
-    return [(int(n), title.strip()) for n, title in TASK_RE.findall(plan_text)]
+    tasks, seen = [], set()
+    for m in TASK_RE.finditer(plan_text):
+        n = int(m.group(1) or m.group(3))
+        title = re.sub(r"\s*\[DOC\]\s*$", "", (m.group(2) or m.group(4)).strip())
+        if n in seen:
+            continue
+        seen.add(n)
+        tasks.append((n, title))
+    return tasks
 
 
 def split_frontmatter(text):
@@ -94,9 +116,11 @@ def init(manifest_path, plan_path):
 
     tasks = parse_plan_tasks(plan.read_text(encoding="utf-8"))
     if not tasks:
-        print("✗ no `## Task N — title` headings found in %s.\n"
-              "   The ledger is generated from the plan's tasks; a plan with no "
-              "parseable tasks cannot produce one." % plan, file=sys.stderr)
+        print("✗ no plan tasks found in %s.\n"
+              "   Accepted forms: `- [ ] **Task N:** title` (the plan template's\n"
+              "   bullets) or `## Task N — title` headings. The ledger is\n"
+              "   generated from the plan's tasks; a plan with no parseable "
+              "tasks cannot produce one." % plan, file=sys.stderr)
         return 1
 
     text = manifest.read_text(encoding="utf-8")

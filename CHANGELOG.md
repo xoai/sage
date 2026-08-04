@@ -2,6 +2,29 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [Unreleased]
+
+### The ledger reads the plans Sage actually writes
+
+Field report (2026-08-04, the first real `--subagents` cycle to get past
+the flag parser): `ledger.py init` refused a 24-task plan — "no `## Task
+N — title` headings found". The plan template Sage itself generates
+(`core/templates/plan/standard.plan-template.md`) writes checkbox bullets
+(`- [ ] **Task N:** title`); the ledger's parser was written against the
+E9 fixture's heading convention and had never met the product's own
+output. A parser tested only on test-authored data.
+
+- `ledger.py` parses both forms now — heading or checkbox bullet, checked
+  or not (done ≠ independently reviewed), `[DOC]` markers stripped,
+  duplicate ids first-wins. The error message names both accepted forms.
+  Regression-pinned with the template's own shape AND verified against
+  the reporting cycle's real 24-task plan.
+- `manifest.py plan_tasks` had the same assumption with a worse failure
+  mode: on bullet plans the `/continue` resume display printed section
+  headings ("Tasks", "Rollback") as if they were the plan's tasks.
+  Bullet-aware now, same fallback chain.
+- The workflow doc names both forms where it describes ledger generation.
+
 ## [1.3.15] — the flag parser survives its own flags, and the dead tests rise
 
 ### `/build --subagents` no longer crashes the flag parser

@@ -159,7 +159,13 @@ surfaces:
       sage-task-reviewer / sage-branch-reviewer iff the user's config carries
       a model (modelless = unbound, [V-E]); E9/E10 still measure the
       claude-code inherit path — the binding branch is deterministic-only,
-      and the cost comparison stays P5-T3, unclaimed.
+      and the cost comparison stays P5-T3, unclaimed. 2026-08-04 later the
+      same day: ledger.py now parses the plan template's checkbox-bullet
+      tasks as well as the E9-fixture heading form — the first real
+      --subagents cycle could not scaffold a ledger from a plan Sage itself
+      generated (both scenario fixtures use headings, so E9/E10 could never
+      see it; BulletPlanTest pins the template's shape, and the fix was
+      verified against the reporting cycle's real 24-task plan).
 
   subworkflow-quality-gates:
     path: core/workflows/sub-workflows/quality-gates.workflow.md

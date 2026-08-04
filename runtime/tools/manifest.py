@@ -403,13 +403,19 @@ def _read(path: pathlib.Path) -> str:
 
 
 def plan_tasks(cycle_dir: pathlib.Path):
-    """The plan's task headings, verbatim. Falls back to every ## heading when the
-    plan does not use the `## Task N` convention."""
+    """The plan's tasks: `## Task N` headings, else the plan template's
+    canonical `- [ ] **Task N:**` checkbox bullets (which real plans use —
+    the resume display was printing section headings for them, field report
+    2026-08-04), else every ## heading as the last resort."""
     plan = cycle_dir / "plan.md"
     if not plan.is_file():
         return []
     text = _read(plan)
     tasks = re.findall(r"^##\s+(Task\b.*?)\s*$", text, re.M)
+    if not tasks:
+        tasks = ["Task %s: %s" % (n, t) for n, t in re.findall(
+            r"^\s*-\s*\[[ xX]\]\s*\*\*Task\s+(\d+)\s*:?\*\*:?\s*(.+?)\s*$",
+            text, re.M)]
     return tasks or re.findall(r"^##\s+(.*?)\s*$", text, re.M)
 
 

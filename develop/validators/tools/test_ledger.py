@@ -80,7 +80,68 @@ class LedgerTest(unittest.TestCase):
         (self.d / "plan.md").write_text("# Plan\n\nSome prose, no task headings.\n")
         r = run("init", self.m(), self.p())
         self.assertEqual(r.returncode, 1)
-        self.assertIn("no `## Task N", r.stderr)
+        self.assertIn("no plan tasks found", r.stderr)
+
+
+
+PLAN_BULLETS = """# Plan
+
+## Tasks
+
+- [ ] **Task 1:** Migration 0005: schema + RLS + down-guard
+  - **Files:** internal/platform/db/migrations/0005.sql
+  - **Action:** schema only
+- [x] **Task 2:** Public IDs (whk_/del_/sbr_) [DOC]
+  - **Depends on:** Task 1
+- [ ] **Task 3:** Signer + signature vectors
+
+## Rollback
+
+Not a task, just a section heading.
+"""
+
+
+class BulletPlanTest(unittest.TestCase):
+    """Field report 2026-08-04: the first real --subagents run could not
+    scaffold a ledger, because ledger.py parsed only `## Task N` headings —
+    the E9 FIXTURE's format — while the plan template Sage itself generates
+    (core/templates/plan/standard.plan-template.md) writes checkbox bullets.
+    A parser tested only against test-authored data had never met the
+    product's own output."""
+
+    def setUp(self):
+        self.d = pathlib.Path(tempfile.mkdtemp())
+        (self.d / "plan.md").write_text(PLAN_BULLETS)
+        (self.d / "manifest.md").write_text(
+            '---\ncycle_id: "t"\ngate_state: plan-approved\n---\n\n# Cycle\n')
+
+    def test_template_bullets_scaffold_a_ledger(self):
+        r = run("init", str(self.d / "manifest.md"), str(self.d / "plan.md"))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        fm = (self.d / "manifest.md").read_text()
+        self.assertEqual(fm.count("- id:"), 3)
+        self.assertIn("title: Signer + signature vectors", fm)
+
+    def test_checked_bullets_and_doc_markers(self):
+        """A checked task still belongs in the ledger (done is not
+        independently reviewed), and [DOC] is presentation, not title."""
+        import importlib.util as _iu
+        spec = _iu.spec_from_file_location("ledger", LEDGER)
+        led = _iu.module_from_spec(spec)
+        spec.loader.exec_module(led)
+        tasks = led.parse_plan_tasks(PLAN_BULLETS)
+        self.assertEqual([n for n, _ in tasks], [1, 2, 3])
+        self.assertEqual(tasks[1][1], "Public IDs (whk_/del_/sbr_)")
+
+    def test_mixed_forms_dedupe_by_id_first_wins(self):
+        import importlib.util as _iu
+        spec = _iu.spec_from_file_location("ledger", LEDGER)
+        led = _iu.module_from_spec(spec)
+        spec.loader.exec_module(led)
+        mixed = "## Task 1 — heading form\n\n- [ ] **Task 1:** bullet form\n- [ ] **Task 2:** only bullet\n"
+        tasks = led.parse_plan_tasks(mixed)
+        self.assertEqual(tasks, [(1, "heading form"), (2, "only bullet")])
+
 
 if __name__ == "__main__":
     unittest.main()
