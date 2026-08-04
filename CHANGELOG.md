@@ -44,7 +44,7 @@ attested` in the same commit.
   foreign `CLAUDE_PROJECT_DIR` in the user's environment cannot redirect
   the journal — the adapter pins the root it knows, like the gates), now in
   fastcheck via `develop/validators/platforms/run-opencode-adapter-tests.sh`;
-  judge runtime tests 34→47 (opencode `auto` resolver both branches, NDJSON
+  judge runtime tests 34→48 (opencode `auto` resolver both branches, NDJSON
   event-stream parsing with SG-19 usage, drift-only pending writes).
 - Zero changes to claude-code behavior; its hook tests are untouched and
   green. Prior-art note: scopey v0.1.3 observes but does not inject on

@@ -339,7 +339,7 @@ surfaces:
       with a verbatim-pinned note — model spend requires explicit
       designation, nothing inferred), the NDJSON event-stream parser, and
       the parent_session_id sub marker — all pinned deterministically in
-      test_scope_judge.py (OpencodePortTest, 47 total). Capability only:
+      test_scope_judge.py (OpencodePortTest, 48 total). Capability only:
       E-JUDGE-1 has NOT run on opencode, and the measured verdict above is
       unchanged.
 

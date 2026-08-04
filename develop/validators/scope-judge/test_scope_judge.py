@@ -564,6 +564,18 @@ class OpencodePortTest(Fixture):
         self.assertEqual(out["reason"], "logger refactor")
         self.assertEqual(out["usage"], {"input_tokens": 52, "output_tokens": 23})
 
+    def test_event_stream_usage_sums_across_steps(self):
+        """[V-D] left the judge its read-only tools, and a judge that reads
+        before answering multi-steps — SG-19 must charge every step, or the
+        close-out totals undercount real spend (review catch #2)."""
+        two = OC_STREAM + "\n" + json.dumps(
+            {"type": "step_finish", "timestamp": 4, "sessionID": "s",
+             "part": {"type": "step-finish", "reason": "stop",
+                      "tokens": {"input": 10, "output": 5}}})
+        out = SJ.parse_verdict(two)
+        self.assertEqual(out["usage"],
+                         {"input_tokens": 62, "output_tokens": 28})
+
     def test_run_judge_records_cost_from_the_event_stream(self):
         """SG-19 parity: the opencode wire feeds the same cost rows and
         close-out totals the claude envelope does."""

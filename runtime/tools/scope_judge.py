@@ -698,7 +698,13 @@ def _from_event_stream(output: str):
                     u["input_tokens"] = tokens["input"]
                 if isinstance(tokens.get("output"), int):
                     u["output_tokens"] = tokens["output"]
-                usage = u or usage
+                if u and usage:
+                    # A judge that uses its read-only tools multi-steps;
+                    # SG-19 charges every step, not just the last one.
+                    for k in u:
+                        usage[k] = usage.get(k, 0) + u[k]
+                elif u:
+                    usage = u
     return ("\n".join(texts), usage) if saw else (None, None)
 
 
