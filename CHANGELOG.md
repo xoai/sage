@@ -31,6 +31,15 @@ unnamed dispatch is an unbound one.
 - `docs/configuration.md`: reviewer model binding on opencode documented
   beside `review_model` (which governs claude-code).
 
+### `sage update` now refreshes the `sage-version` config stamp
+
+Same field session: a project updated to vendored 1.3.12 still stamped
+`sage-version: "1.3.10"` — update replaced `sage/` wholesale but never
+touched the config record, so every updated project reported the version
+it was born at, forever. The stamp now follows the vendored `sage/VERSION`
+on every update (pinned in generation-smoke). Only the `sage-version:`
+line is touched; the rest of `.sage/config.yaml` stays yours.
+
 ## [1.3.12] — the judge crosses to opencode: one brain, two wires, spend by designation
 
 ### Scope judge ported to opencode — capability attested, efficacy unclaimed

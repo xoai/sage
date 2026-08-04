@@ -86,6 +86,24 @@ else
   N_FAIL=$((N_FAIL + 1))
   printf '  [FAIL]  %-14s reviewer-binding note missing from generated tree\n' "opencode"
 fi
+
+# ── Update stamp pin: `sage update` must refresh sage-version ──
+# Field report 2026-08-04: a project updated to vendored 1.3.12 still
+# stamped "1.3.10" — update replaced sage/ wholesale but never touched
+# the config record, so it lied a little more with every release.
+sed -i.bak 's/^sage-version:.*/sage-version: "0.0.0"/' "$target/.sage/config.yaml"
+rm -f "$target/.sage/config.yaml.bak"
+( cd "$target" && SAGE_HOME="$HOME_DIR" bash "$REPO_ROOT/bin/sage" update ) \
+  >/dev/null 2>&1
+want_v="$(tr -d ' \t\n\r' < "$REPO_ROOT/VERSION")"
+if grep -q "^sage-version: \"$want_v\"" "$target/.sage/config.yaml"; then
+  N_PASS=$((N_PASS + 1))
+  printf '  [PASS]  %-14s → update refreshes the config stamp (%s)\n' "opencode" "$want_v"
+else
+  N_FAIL=$((N_FAIL + 1))
+  printf '  [FAIL]  %-14s update left a stale sage-version stamp: %s\n' "opencode" \
+    "$(grep '^sage-version:' "$target/.sage/config.yaml" 2>/dev/null || echo missing)"
+fi
 rm -rf "$(dirname "$target")"
 
 echo ""
