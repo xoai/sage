@@ -2,6 +2,41 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [1.3.16] — the ledger reads the plans Sage writes, and templates become the tested contract
+
+### The ledger reads the plans Sage actually writes
+
+Field report (2026-08-04, the first real `--subagents` cycle to get past
+the flag parser): `ledger.py init` refused a 24-task plan — "no `## Task
+N — title` headings found". The plan template Sage itself generates
+(`core/templates/plan/standard.plan-template.md`) writes checkbox bullets
+(`- [ ] **Task N:** title`); the ledger's parser was written against the
+E9 fixture's heading convention and had never met the product's own
+output. A parser tested only on test-authored data.
+
+- `ledger.py` parses both forms now — heading or checkbox bullet, checked
+  or not (done ≠ independently reviewed), `[DOC]` markers stripped,
+  duplicate ids first-wins. The error message names both accepted forms.
+  Regression-pinned with the template's own shape AND verified against
+  the reporting cycle's real 24-task plan.
+- `manifest.py plan_tasks` had the same assumption with a worse failure
+  mode: on bullet plans the `/continue` resume display printed section
+  headings ("Tasks", "Rollback") as if they were the plan's tasks.
+  Bullet-aware now, same fallback chain.
+- The workflow doc names both forms where it describes ledger generation.
+- **The class is now pinned, not just this instance**: a new
+  template-conformance suite (`test_template_conformance.py`, in
+  fastcheck) runs every parser of a Sage artifact against the TEMPLATE
+  that produces it — ledger and resume task parsing, the judge's
+  current-task and spec-boundary reads, scope-derive's declaration-line
+  regex, and the cross-language ledger↔spec-gate round-trip (scaffold →
+  blocked while pending → allowed when done+approved), all against
+  `standard.plan-template.md` and both spec templates verbatim. A parser
+  that stops reading Sage's own output now fails in fastcheck, not in a
+  field report. The audit that produced it found no further mismatches:
+  manifest frontmatter keys, `## Boundaries`, and `- **Files:**` lines
+  all conform.
+
 ## [1.3.15] — the flag parser survives its own flags, and the dead tests rise
 
 ### `/build --subagents` no longer crashes the flag parser

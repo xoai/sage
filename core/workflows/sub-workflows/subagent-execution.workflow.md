@@ -63,7 +63,8 @@ python3 sage/runtime/tools/ledger.py init \
   .sage/work/<initiative>/plan.md
 ```
 
-This generates one ledger entry per `## Task N` in the approved plan and sets
+This generates one ledger entry per plan task — the template's
+`- [ ] **Task N:**` bullets or `## Task N` headings — and sets
 `execution_mode: subagent`, which arms the completion guard.
 
 **Why a script and not an instruction to you.** E9 measured this. Given a ledger,
