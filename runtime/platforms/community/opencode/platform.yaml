@@ -29,10 +29,11 @@ attestations:
       it false. The 2026-07-17 probe closed it: paths parsed out of apply_patch's
       patchText, sage-spec-gate.sh returned exit 2 in a pre-spec cycle, the
       adapter threw, and opencode BLOCKED the edit. The shipped adapter is tested
-      deterministically (setup/adapter-test.mjs, 5/5) driving the real gates —
-      pre-spec veto, config self-disable veto, secrets veto — independent of
-      opencode's model backend. Undocumented platform behaviour that can regress
-      silently, so it expires and is re-probed.
+      deterministically (setup/adapter-test.mjs, 13/13 since the 2026-08-04
+      scope-judge port) driving the real gates — pre-spec veto, config
+      self-disable veto, secrets veto — independent of opencode's model
+      backend. Undocumented platform behaviour that can regress silently, so
+      it expires and is re-probed.
 
   - capability: post-tool-events
     evidence: docs/attestations/opencode-tier-a-2026-07-17.md
