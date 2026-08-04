@@ -1059,3 +1059,12 @@ surfaces:
       table is pinned by R1–R6 (test_review_controller.py, including the
       field-report replay in both directions); the v1 path stays byte-identical
       under test_sage_flags.py. E16 exercises the v2 controller end-to-end.
+      2026-08-04 field report: the SHIPPED CLI invocation (`parse
+      "$ARGUMENTS" --config-path ...`) crashed on any leading-dash payload —
+      argparse rejects `--subagents` as a positional, and the suite only
+      ever called the Python API, so the process boundary was never tested.
+      Fixed with a pre-argparse intercept for `parse` (calling convention
+      unchanged everywhere it ships); CliBoundaryTest now invokes the tool
+      exactly as generated projects do. Same commit resurrected
+      SubagentModeTest: the file's unittest.main() sat mid-file, so that
+      class never ran in CI — 28 "green" tests were actually 46.

@@ -2,6 +2,33 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [Unreleased]
+
+### `/build --subagents` no longer crashes the flag parser
+
+Field report (2026-08-04, minutes after 1.3.14 shipped the split): the
+first live CLI flag through the SHIPPED invocation —
+`sage_flags.py parse "$ARGUMENTS" --config-path …` — died with argparse's
+"unrecognized arguments". A positional can never begin with `--`, quotes
+are shell-level, and the flags this tool exists to parse all begin with
+`--`. It was never caught because the test suite exercised only the
+Python API; the eval scenarios arm flags via config, so the process
+boundary had never once been crossed with a real flag.
+
+- Fixed with a pre-argparse intercept for `parse`: everything that is not
+  `--config-path` is the payload, dashes and all. The calling convention
+  is UNCHANGED everywhere it ships (preambles, flag-parser skill,
+  build.workflow, antigravity generator) — existing vendored projects
+  heal by updating the tool alone. `parse -h` still prints help; an
+  explicit `--` separator is honored.
+- CliBoundaryTest added: seven tests that invoke the tool exactly as
+  generated projects do, leading-dash payloads included.
+- The same commit found and fixed a second latent bug in the test file
+  itself: `unittest.main()` sat mid-file, so every class defined below it
+  — `SubagentModeTest`, the R97 degradation suite — had NEVER run in CI.
+  The runner moved to the end: 28 "green" tests were actually 46, all
+  green now for real. `test_sage_flags.py` joins fastcheck (23→24 rows).
+
 ## [1.3.14] — the planner/implementer split: every dispatched role on the model you bound
 
 ### A6 — the planner/implementer model split lands on opencode

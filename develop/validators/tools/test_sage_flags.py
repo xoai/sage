@@ -172,10 +172,6 @@ class DecideTest(unittest.TestCase):
         self.assertFalse(sf.is_stuck(hist))
 
 
-if __name__ == "__main__":
-    unittest.main(verbosity=2)
-
-
 class SubagentModeTest(unittest.TestCase):
     """--subagents (ADR-10, C13) — the one flag the platform can refuse."""
 
@@ -247,3 +243,82 @@ class SubagentModeTest(unittest.TestCase):
         r = sf.resolve_execution_mode(False, self.GENERIC)
         self.assertFalse(r["degraded"])
         self.assertIsNone(r["announcement"])
+
+
+class CliBoundaryTest(unittest.TestCase):
+    """The SHIPPED calling convention, exercised at the process boundary.
+
+    Field report 2026-08-04: `/build --subagents` crashed the parser with
+    argparse's "unrecognized arguments" — the preamble's documented
+    invocation passes $ARGUMENTS as a positional, and a positional can
+    never begin with `--` under argparse. This suite ran green throughout
+    because it only ever called the Python API. These tests invoke the
+    tool exactly as every generated project's instructions do; if the
+    calling convention breaks again, it breaks HERE first.
+    """
+
+    def run_cli(self, *argv):
+        import json as _json
+        import subprocess
+        import sys as _sys
+        r = subprocess.run([_sys.executable, str(MOD), *argv],
+                           capture_output=True, text=True)
+        try:
+            payload = _json.loads(r.stdout)
+        except ValueError:
+            payload = None
+        return r.returncode, payload, r.stderr
+
+    def cfg(self, body=""):
+        d = tempfile.mkdtemp()
+        p = pathlib.Path(d) / "config.yaml"
+        p.write_text(body)
+        return str(p)
+
+    def test_the_shipped_invocation_with_a_leading_dash_flag(self):
+        rc, out, err = self.run_cli("parse", "--subagents",
+                                    "--config-path", self.cfg())
+        self.assertEqual(rc, 0, err)
+        self.assertIsNone(out["error"])
+        self.assertTrue(out["subagents"])
+
+    def test_multiple_flags_and_prose_in_one_payload(self):
+        rc, out, _ = self.run_cli(
+            "parse", "--quality-locked --autonomous fix the login bug",
+            "--config-path", self.cfg())
+        self.assertEqual(rc, 0)
+        self.assertTrue(out["quality_locked"])
+        self.assertTrue(out["autonomous"])
+
+    def test_reordered_invocation_still_parses(self):
+        """Models reorder arguments; the payload is whatever is not ours."""
+        rc, out, _ = self.run_cli("parse", "--config-path", self.cfg(),
+                                  "--subagents")
+        self.assertEqual(rc, 0)
+        self.assertTrue(out["subagents"])
+
+    def test_config_path_equals_form(self):
+        rc, out, _ = self.run_cli("parse", "--subagents",
+                                  "--config-path=" + self.cfg())
+        self.assertEqual(rc, 0)
+        self.assertTrue(out["subagents"])
+
+    def test_empty_arguments_yield_defaults(self):
+        rc, out, _ = self.run_cli("parse", "",
+                                  "--config-path", self.cfg("subagents: true\n"))
+        self.assertEqual(rc, 0)
+        self.assertTrue(out["subagents"],
+                        "config default survives an empty $ARGUMENTS")
+
+    def test_explicit_separator_is_honored(self):
+        rc, out, _ = self.run_cli("parse", "--", "--subagents")
+        self.assertEqual(rc, 0)
+        self.assertTrue(out["subagents"])
+
+    def test_parse_help_still_prints_help(self):
+        rc, _, _ = self.run_cli("parse", "-h")
+        self.assertEqual(rc, 0)
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)
