@@ -2,6 +2,44 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [1.3.13] — sub-agents run on the models you bound: reviewer dispatch named, stamp made honest
+
+### opencode reviews now dispatch as `sage-reviewer` — the model binding finally lands
+
+Field report (2026-08-04, a real project on Qwen3.8-Max primary): the
+review loop dispatched three independent reviewers as `general` tasks —
+opencode's `general` agent carries no model binding, so all three ran on
+the expensive primary while the user's `sage-reviewer: {model: cheap}`
+config sat unused. Root cause: the core workflows say "sub-agent
+dispatch" platform-neutrally, and nothing in the generated opencode
+instructions ever NAMED the reviewer agent — on a platform where the
+agent IS the model routing (the scope-judge designation principle), an
+unnamed dispatch is an unbound one.
+
+- Generated `AGENTS.md` and the review-bearing commands (`/build`,
+  `/fix`, `/architect`, `/review`) now carry a dispatch-binding note:
+  independent reviews go to the `sage-reviewer` agent, never `general`;
+  routing classification to `sage-classifier`.
+- `sage-reviewer` agent widened to claim code-quality / Gate 3 /
+  review-loop packets (its description only claimed artifact reviews,
+  which is exactly why description-matching picked `general`), and its
+  `bash: deny` dropped to parity with claude-code reviewers: code review
+  needs `git diff`; `edit: deny` stays as the mechanical floor and the
+  prose keeps bash inspection-only.
+- Pinned by generation-smoke: the note must reach AGENTS.md + all four
+  commands, and the agent must claim code review.
+- `docs/configuration.md`: reviewer model binding on opencode documented
+  beside `review_model` (which governs claude-code).
+
+### `sage update` now refreshes the `sage-version` config stamp
+
+Same field session: a project updated to vendored 1.3.12 still stamped
+`sage-version: "1.3.10"` — update replaced `sage/` wholesale but never
+touched the config record, so every updated project reported the version
+it was born at, forever. The stamp now follows the vendored `sage/VERSION`
+on every update (pinned in generation-smoke). Only the `sage-version:`
+line is touched; the rest of `.sage/config.yaml` stays yours.
+
 ## [1.3.12] — the judge crosses to opencode: one brain, two wires, spend by designation
 
 ### Scope judge ported to opencode — capability attested, efficacy unclaimed

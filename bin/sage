@@ -1037,6 +1037,21 @@ except: pass
     spin $! "Updating framework..."
     prune_framework_copy "$target/sage"
     echo -e "  ${GREEN}✓${RESET} sage/ updated"
+
+    # The config stamp follows the vendored reality. Without this, every
+    # updated project reports the version it was BORN at, forever — a
+    # record that lies a little more with each release (field report
+    # 2026-08-04: a project on vendored 1.3.12 still stamped "1.3.10").
+    if [ -f "$target/.sage/config.yaml" ] && [ -f "$target/sage/VERSION" ]; then
+      local stamped_v
+      stamped_v="$(tr -d ' \t\n\r' < "$target/sage/VERSION")"
+      if grep -q '^sage-version:' "$target/.sage/config.yaml"; then
+        sed -i.bak "s/^sage-version:.*/sage-version: \"$stamped_v\"/" \
+          "$target/.sage/config.yaml"
+        rm -f "$target/.sage/config.yaml.bak"
+        echo -e "  ${GREEN}✓${RESET} config stamp → $stamped_v"
+      fi
+    fi
   fi
 
   # Restore community skills

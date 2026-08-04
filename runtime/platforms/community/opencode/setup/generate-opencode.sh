@@ -128,6 +128,38 @@ with open('$SAGE_ROOT/AGENTS.md', 'w') as f:
 " 2>/dev/null || true
 fi
 
+# ── Reviewer dispatch binding (opencode-specific) ──
+#
+# The task tool picks an agent by name/description, and only a NAMED agent
+# carries a model binding. The core workflows say "sub-agent dispatch"
+# platform-neutrally; without this note the model reaches for `general`,
+# which has no binding — every independent review silently runs on the
+# expensive primary model, and the user's sage-reviewer model config is
+# never exercised (observed live 2026-08-04: three Gate-3 reviewers on the
+# primary while sage-reviewer sat bound to a cheap tier). Same designation
+# principle as the scope judge: on this platform, the agent IS the model
+# routing.
+REVIEWER_NOTE='## Sub-agent dispatch on Opencode (model binding)
+
+When a workflow calls for an INDEPENDENT reviewer — the review loop, Gate 3
+code quality, the combined gate reviewer, spec/plan/ADR/root-cause/QA
+review — dispatch the task-tool agent `sage-reviewer`, never `general`.
+`sage-reviewer` is edit-locked by permission (bash is for inspection:
+git diff, grep), and it is the only dispatch that carries the model
+bound in opencode config:
+
+    "agent": { "sage-reviewer": { "model": "<provider>/<model>" } }
+
+Dispatching `general` runs the review on the primary model. Same rule for
+routing classification: use `sage-classifier`.'
+
+if [ "$SKIP_AGENTS_MD" = false ]; then
+  {
+    echo ""
+    printf '%s\n' "$REVIEWER_NOTE"
+  } >> "$SAGE_ROOT/AGENTS.md"
+fi
+
 # ═══════════════════════════════════════════════════════════════
 # Per-workflow command files in .opencode/commands/
 # Format: markdown with YAML frontmatter
@@ -166,6 +198,14 @@ for wf in "$CORE"/workflows/*.workflow.md; do
     printf "%s" "$PREAMBLE" | sed \
       -e 's|Task tool|sub-agent invocation|g' \
       -e 's|the Task tool|the sub-agent system|g'
+    # Review-bearing workflows carry the dispatch binding inline — the
+    # command body is what the model actually acts on mid-workflow.
+    case "$basename_wf" in
+      build|fix|architect|review)
+        echo ""
+        printf '%s\n' "$REVIEWER_NOTE"
+        ;;
+    esac
     # Workflow body (strip frontmatter, substitute paths)
     sed '/^---$/,/^---$/d' "$wf" \
       | sed 's|\*\*sage-navigator\*\* skill|**sage-navigator** skill at `sage/core/capabilities/orchestration/sage-navigator/SKILL.md`|g' \
@@ -188,19 +228,20 @@ echo "🤖 Generating .opencode/agents/ sub-agents..."
 
 cat > "$OC_DIR/agents/sage-reviewer.md" << 'AGENT_EOF'
 ---
-description: Independent reviewer for Sage artifacts (spec, plan, ADR, root cause, fix plan, QA). READ-ONLY — never modifies files.
+description: Independent reviewer for ALL Sage review passes — code quality / Gate 3 / milestone review-loop packets AND artifacts (spec, plan, ADR, root cause, fix plan, QA). READ-ONLY — never modifies files. Carries the model bound in opencode config.
 mode: subagent
 permission:
   edit: deny
-  bash: deny
 ---
 
 You are a review sub-agent for the Sage framework. You were NOT
 involved in writing the artifact under review. Evaluate it with fresh
 eyes. Be specific. Be brief.
 
-CRITICAL: You are READ-ONLY. Do NOT modify any files. Do NOT use
-Edit or Write tools. Your job is to REPORT findings, not fix them.
+CRITICAL: You are READ-ONLY. Edit/Write are denied by permission. Bash
+is available for INSPECTION ONLY — git diff, grep, reading build/test
+output the packet asks about — never a command that mutates the tree,
+the index, or any file. Your job is to REPORT findings, not fix them.
 
 You will be invoked with a specific review prompt (spec review, plan
 review, ADR review, root cause review, fix plan review, or QA review).

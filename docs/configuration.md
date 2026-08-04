@@ -284,6 +284,14 @@ review_loop:
 An *absent* block reads as v2; `mode` and `witness_capping` are part of the
 enforcement floor while v2 is active.
 
+Reviewer model on opencode: `review_model` governs claude-code; on
+opencode the reviewer's model is bound the same way the judge's is — by
+agent designation. The generated instructions dispatch independent
+reviews as the `sage-reviewer` agent (never `general`, which has no
+binding and inherits the primary model), so bind it in
+`opencode.json`/`.jsonc`:
+`"agent": { "sage-reviewer": { "model": "<provider>/<model>" } }`.
+
 ## Execution-flag defaults
 
 The `/build`-family flags can be defaulted from config. **Canonical form
