@@ -28,6 +28,13 @@ boundary had never once been crossed with a real flag.
   — `SubagentModeTest`, the R97 degradation suite — had NEVER run in CI.
   The runner moved to the end: 28 "green" tests were actually 46, all
   green now for real. `test_sage_flags.py` joins fastcheck (23→24 rows).
+- A repo-wide sweep for the same pattern found ONE more:
+  `test_build_plugin.py` had `NavigatorIsGeneratedTest` — the guard
+  written specifically because the navigator once drifted for two
+  releases unwatched — defined below a mid-file runner, dead since it was
+  added. Resurrected (17 "green" were really 21, all pass; the navigator
+  behavior held even while its guard was dead). The sweep is now clean:
+  no test file has a class below its runner or lacks a runner.
 
 ## [1.3.14] — the planner/implementer split: every dispatched role on the model you bound
 

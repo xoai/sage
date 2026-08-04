@@ -168,10 +168,6 @@ class BuildPluginTest(unittest.TestCase):
                         f"audit did not report {needle!r}; got: {problems}")
 
 
-if __name__ == "__main__":
-    unittest.main(verbosity=2)
-
-
 class NavigatorIsGeneratedTest(unittest.TestCase):
     """The navigator drifted for two releases. It cannot again.
 
@@ -228,3 +224,7 @@ class NavigatorIsGeneratedTest(unittest.TestCase):
         self.assertFalse(
             (build_plugin.OVERLAY / "skills" / "sage-navigator" / "SKILL.md").exists(),
             "a hand-maintained navigator is back in the overlay — it will drift")
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)
