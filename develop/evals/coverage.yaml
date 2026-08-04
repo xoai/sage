@@ -334,11 +334,14 @@ surfaces:
       false; the judge's window carries paths only, so semantic drift inside
       an in-scope file leaves no signal to detect — see its MEASURED.md.
       2026-08-04: the runtime gained the opencode branch of the SG-14 `auto`
-      resolver (small_model or soft-fail — never a guessed model), the NDJSON
-      event-stream parser, and the parent_session_id sub marker — all pinned
-      deterministically in test_scope_judge.py (OpencodePortTest, 44 total).
-      Capability only: E-JUDGE-1 has NOT run on opencode, and the measured
-      verdict above is unchanged.
+      resolver (T4-rev2: a user-defined sage-scope-judge agent WITH a model
+      is the only accepted designation; modelless or absent → soft-fail
+      with a verbatim-pinned note — model spend requires explicit
+      designation, nothing inferred), the NDJSON event-stream parser, and
+      the parent_session_id sub marker — all pinned deterministically in
+      test_scope_judge.py (OpencodePortTest, 47 total). Capability only:
+      E-JUDGE-1 has NOT run on opencode, and the measured verdict above is
+      unchanged.
 
   adapter-opencode:
     path: runtime/platforms/community/opencode/setup/sage-plugin.js

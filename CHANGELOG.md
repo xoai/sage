@@ -21,10 +21,17 @@ audit line and cost row on disk) —
 expires 1.4. Contract flipped `context-injection-midstream: false →
 attested` in the same commit.
 
-- `judge_cmd: auto` on opencode resolves to your configured `small_model`
-  (project `opencode.json`/`.jsonc`, then global); with none set it
-  soft-fails to `insufficient-evidence` with a one-time journal note —
-  never a guessed model on someone else's bill. Explicit form documented in
+- `judge_cmd: auto` on opencode accepts exactly one designation: a
+  user-defined `sage-scope-judge` agent in opencode config **carrying a
+  `model` binding** (invoked `--agent sage-scope-judge --model <m>`; the
+  agent's `permission: {edit: deny, bash: deny}` block is load-bearing —
+  headless agents DO get tools). A modelless agent entry reads as
+  undefined — never "inherit the session model" — and with no designation
+  the pass soft-fails to `insufficient-evidence` with a one-time journal
+  note. T4-rev2 reversal: an earlier in-branch draft fell back to
+  opencode's global `small_model`; reversed because **model spend requires
+  explicit designation** — an implicit fallback to a knob configured for
+  opencode's own internal tasks is guessing with money. Config template in
   `docs/configuration.md`.
 - Subagent suppression (SG-11) via the child session's `parentID`,
   forwarded as the platform-neutral `parent_session_id` marker; the

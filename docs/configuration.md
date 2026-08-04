@@ -171,7 +171,29 @@ available there; its necessity is unproven everywhere.
 | `judge_every` | `8` | A pass becomes eligible every N journal events. Event-driven — never a timer. |
 | `judge_cooldown` | `15` | At most one injected correction per N journal events; repeats also require a *new* reason. |
 | `judge_timeout` | `60` | Seconds before a judge model call is killed. A killed pass records `insufficient-evidence`, never `drift`. |
-| `judge_cmd` | `auto` | The judge's model command, packet on stdin. `auto` resolves per platform: claude-code → `claude -p --model haiku`; opencode → your configured `small_model` (`opencode.json`/`.jsonc`, project then global) — and with no `small_model` set it soft-fails to `insufficient-evidence` with a one-time journal note rather than guess a paid model. Explicit form: `judge_cmd: "opencode run --model <provider>/<cheap-model> --format json"`. Overridable for testing; protected while the judge is armed. |
+| `judge_cmd` | `auto` | The judge's model command, packet on stdin. On claude-code, `auto` → `claude -p --model haiku`. On opencode, `auto` resolves in this order and stops: **1.** an explicit `judge_cmd` in this file — escape hatch, mostly for testing; **2.** a user-defined agent named `sage-scope-judge` in opencode config (project or global) **that carries a `model` binding** — an agent entry without a model is treated as undefined, because the judge must never resolve to "inherit the session model"; **3.** soft-fail — the pass records `insufficient-evidence` (never `drift`) and a one-time journal note says exactly how to designate. No model is inferred; the judge stays idle until designated. Protected while the judge is armed. |
+
+On opencode, designating the judge's model is one config block — this is
+the template, authored by you, never generated (a generated agent would be
+Sage picking a paid model on your behalf, or worse, a modelless entry that
+inherits the primary):
+
+```jsonc
+// opencode.json
+"agent": {
+  "sage-scope-judge": {
+    "model": "<provider>/<cheap-model>",
+    "permission": { "edit": "deny", "bash": "deny" }
+  }
+}
+```
+
+The `permission` block is load-bearing, not decoration: headless agent
+invocations DO get tools ([V-D], 2026-08-04), and the deny pair is what
+keeps the judge's session read-only. The cross-platform asymmetry is
+design, not gap: claude-code's `auto` resolves to the platform's canonical
+cheap tier because one exists; opencode has no canonical cheap model,
+which is why explicit agent designation is the correct resolution there.
 
 Safety invariants, all deterministic-tested: the judge's own model calls
 can never re-trigger judging (`SAGE_JUDGE` guard); one pass per cycle at a

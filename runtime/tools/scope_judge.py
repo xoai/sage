@@ -85,12 +85,18 @@ DEFAULTS = {
 AUTO_CMD = "claude -p --model haiku --output-format json"
 
 # [V-C] verified 2026-08-04 on opencode 1.18.12: `opencode run` reads the
-# packet from piped stdin, `--model provider/model` picks the model, and
-# `--format json` emits NDJSON events whose step_finish carries token usage
-# (SG-19). OPENCODE_PURE=true skips external plugins inside the judge's own
-# session — belt to the SAGE_JUDGE braces (the adapter honors the env guard
-# too, so neither alone is load-bearing).
-OPENCODE_AUTO_CMD = "OPENCODE_PURE=true opencode run --model %s --format json"
+# packet from piped stdin and `--format json` emits NDJSON events whose
+# step_finish carries token usage (SG-19). OPENCODE_PURE=true skips external
+# plugins inside the judge's own session — belt to the SAGE_JUDGE braces
+# (the adapter honors the env guard too, so neither alone is load-bearing).
+# [V-D] (T4-rev2): `--agent sage-scope-judge` binds the user-authored
+# agent's model and its LOAD-BEARING permission block (headless agents DO
+# get tools; {edit: deny, bash: deny} is what keeps the judge read-only).
+# `--model` repeats the agent's own binding as a spend pin, so a future
+# change to --agent fallback semantics could never route the judge onto
+# the expensive primary.
+OPENCODE_AUTO_CMD = ("OPENCODE_PURE=true opencode run --agent "
+                     "sage-scope-judge --model %s --format json")
 
 # [V2] — the documented subagent markers in hook input (verified 2026-08-02
 # against code.claude.com/docs/en/hooks; agent_id/agent_type are present only
@@ -133,12 +139,41 @@ def read_config(root: pathlib.Path) -> dict:
 
 # ── SG-14: what `judge_cmd: auto` means HERE ─────────────────────────────────
 
-def _opencode_small_model(root: pathlib.Path, environ) -> str:
-    """The configured opencode `small_model` ("provider/model"), project
-    config first, then the global one — flat regex reads (JSONC-tolerant),
-    like every Sage hook. Returns "" when unset: `auto` never guesses a paid
-    model. The character allowlist matters: judge_cmd runs under a shell, and
-    a config value is not a place to accept shell metacharacters from."""
+def _judge_agent_model(text: str) -> str:
+    """The `sage-scope-judge` agent's model binding inside ONE opencode
+    config file, or "". Brace-matched flat read — no JSON dependency; the
+    nesting is real (the agent block carries a permission object) but
+    string-content braces are not a case an agent block has. The character
+    allowlist matters: judge_cmd runs under a shell, and a config value is
+    not a place to accept shell metacharacters from."""
+    m = re.search(r'"sage-scope-judge"\s*:\s*\{', text)
+    if not m:
+        return ""
+    depth, start = 0, m.end() - 1
+    for j in range(start, len(text)):
+        c = text[j]
+        if c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                mm = re.search(r'"model"\s*:\s*"([^"]+)"', text[start:j + 1])
+                if not mm:
+                    return ""
+                model = mm.group(1)
+                return model if re.match(r"^[A-Za-z0-9._/:@-]+$", model) \
+                    else ""
+    return ""
+
+
+def _opencode_designated_model(root: pathlib.Path, environ) -> str:
+    """T4-rev2: the model bound to a USER-DEFINED `sage-scope-judge` agent
+    in opencode config — the explicit spend designation, and the only thing
+    `auto` accepts on this platform. Project config first, then the global
+    one, mirroring opencode's per-key merge. An agent entry WITHOUT a model
+    reads as undefined: defined-but-modelless must never mean "inherit the
+    session model" — that would run a background judge on the expensive
+    primary, the inverse of the feature's purpose."""
     cfg_home = pathlib.Path(environ.get("XDG_CONFIG_HOME")
                             or (pathlib.Path.home() / ".config"))
     for path in (root / "opencode.json", root / "opencode.jsonc",
@@ -148,25 +183,26 @@ def _opencode_small_model(root: pathlib.Path, environ) -> str:
             text = path.read_text(encoding="utf-8", errors="replace")
         except OSError:
             continue
-        m = re.search(r'"small_model"\s*:\s*"([^"]+)"', text)
-        if m:
-            model = m.group(1)
-            return model if re.match(r"^[A-Za-z0-9._/:@-]+$", model) else ""
+        model = _judge_agent_model(text)
+        if model:
+            return model
     return ""
 
 
 def resolve_judge_cmd(cfg: dict, root: pathlib.Path, environ=None):
-    """`auto` resolved per platform: claude-code → the headless CLI at the
-    cheap tier; opencode ([V-C]) → the user's configured small_model, or None
-    — a soft-fail the caller records as insufficient-evidence, never a
-    guessed model on someone else's bill. An explicit judge_cmd is returned
-    untouched on every platform."""
+    """`auto` resolved per platform. claude-code → the headless CLI at the
+    canonical cheap tier, because one exists. opencode has no canonical
+    cheap model, so `auto` accepts exactly one designation ([V-D],
+    T4-rev2): a user-defined `sage-scope-judge` agent carrying a model —
+    or None, a soft-fail the caller records as insufficient-evidence.
+    Nothing else is inferred; model spend requires explicit designation.
+    An explicit judge_cmd is returned untouched on every platform."""
     environ = os.environ if environ is None else environ
     cmd = cfg["judge_cmd"]
     if cmd != "auto":
         return cmd
     if environ.get("SAGE_PLATFORM") == "opencode":
-        model = _opencode_small_model(root, environ)
+        model = _opencode_designated_model(root, environ)
         return (OPENCODE_AUTO_CMD % model) if model else None
     return AUTO_CMD
 
@@ -748,19 +784,20 @@ def run_judge(cycle_dir: pathlib.Path, environ=None, runner=None) -> dict:
             else:
                 cmd = resolve_judge_cmd(cfg, root, environ)
                 if cmd is None:
-                    # SG-14 soft-fail: `auto` on opencode found no
-                    # small_model. Record it as what it is — no evidence —
-                    # and point the user at the knob, once per cycle.
+                    # SG-14 soft-fail (T4-rev2): `auto` on opencode with no
+                    # designated model. Record it as what it is — no
+                    # evidence — and point the user at the contract, once
+                    # per cycle. The note text is pinned verbatim by test.
                     verdict = {"verdict": "insufficient-evidence",
-                               "reason": "judge_cmd auto: no opencode "
-                                         "small_model configured",
+                               "reason": "no model designated for the "
+                                         "scope judge",
                                "evidence": ""}
                     note_once(cycle_dir, "judge-cmd-unresolved",
-                              "scope_judge: judge_cmd 'auto' needs "
-                              "`small_model` in opencode.json(c), or set "
-                              "judge_cmd explicitly, e.g. judge_cmd: "
-                              "\"opencode run --model <provider>/"
-                              "<cheap-model> --format json\"")
+                              'scope-judge: no model designated — define '
+                              'agent "sage-scope-judge" (with a model) in '
+                              'opencode.json, or set judge_cmd explicitly. '
+                              'No model is inferred; the judge stays idle '
+                              'until designated.')
                 else:
                     run_cfg = dict(cfg)
                     run_cfg["judge_cmd_resolved"] = cmd

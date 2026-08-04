@@ -15,9 +15,10 @@ dispatches independent subagent reviews, all through opencode's plugin API.
   (`setup/adapter-test.mjs`, 12/12), independent of opencode's model backend.
 - **Scope judge ported (2026-08-04).** The same `scope_judge.py` runtime as
   claude-code, behind `scope_judge: true` (ships false): the adapter journals
-  events, triggers the background cheap-model pass (`judge_cmd: auto` → your
-  configured `small_model`, soft-fail otherwise), and delivers a drift
-  correction by appending to the live tool result —
+  events, triggers the background cheap-model pass (`judge_cmd: auto` → a
+  user-defined `sage-scope-judge` agent carrying a model — the explicit
+  spend designation; soft-fail otherwise, nothing inferred), and delivers a
+  drift correction by appending to the live tool result —
   `context-injection-midstream` attested with a planted-drift transcript
   (`docs/attestations/opencode-context-injection-midstream-2026-08-04.md`,
   expires 1.4). Capability only: E-JUDGE-1 never ran on opencode.
