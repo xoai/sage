@@ -972,6 +972,11 @@ def _on_pre_llm_call(session_id=None, user_message=None, is_first_turn=False,
         if not os.path.isdir(sage_dir):
             return None
 
+        # Read the actual enforcement state from the project's config — the
+        # injected text must never claim more than the gates will actually do.
+        _, _flags = _config(project_root)
+        _enforced = _flags.get("hard_enforcement") is True
+
         parts = []
 
         # ── Always-on rules (eager core) ──
@@ -995,7 +1000,8 @@ Use skill_view("sage:<name>") to load workflow skills:
 - sage:review — independent evaluation
 - sage:learn — codebase scan → memory
 - sage:continue — resume an active cycle""".format(
-            status="ENABLED (hard_enforcement: true)" if True else "DISABLED"))
+            status="ENABLED (hard_enforcement: true)" if _enforced else
+                   "DISABLED (set hard_enforcement: true in .sage/config.yaml to opt in)"))
 
         # ── Session pickup (same as gateway hook) ──
         pickup = os.path.join(sage_dir, "gates", "session-pickup.md")
@@ -1014,52 +1020,6 @@ Use skill_view("sage:<name>") to load workflow skills:
         return {"context": "\n\n".join(parts)}
     except Exception:
         return None  # fail silent — never break the agent
-
-
-# ── Slash command handlers ──────────────────────────────────────────────────
-# These return instructions to the user. The actual workflow is in the skill
-# files, which the agent loads via skill_view("sage:<name>").
-
-def _cmd_sage(raw_args):
-    return (
-        "Load the routing skill: skill_view('sage:sage')\n\n"
-        "Or start a specific workflow directly:\n"
-        "  skill_view('sage:build') — for building features\n"
-        "  skill_view('sage:fix') — for fixing bugs\n"
-        "  skill_view('sage:architect') — for system design\n"
-        "  skill_view('sage:review') — for independent review\n"
-        "  skill_view('sage:continue') — to resume an active cycle"
-    )
-
-def _cmd_build(raw_args):
-    return "Load the build skill: skill_view('sage:build')\n\n" \
-           "Args: %s" % (raw_args or "(none)")
-
-def _cmd_fix(raw_args):
-    return "Load the fix skill: skill_view('sage:fix')\n\n" \
-           "Args: %s" % (raw_args or "(none)")
-
-def _cmd_architect(raw_args):
-    return "Load the architect skill: skill_view('sage:architect')\n\n" \
-           "Args: %s" % (raw_args or "(none)")
-
-def _cmd_review(raw_args):
-    return "Load the review skill: skill_view('sage:review')\n\n" \
-           "Mode: %s" % (raw_args or "code")
-
-def _cmd_learn(raw_args):
-    return "Load the learn skill: skill_view('sage:learn')\n\n" \
-           "Args: %s" % (raw_args or "(scan all)")
-
-def _cmd_reflect(raw_args):
-    return "Load the reflect skill: skill_view('sage:reflect')"
-
-def _cmd_continue(raw_args):
-    return "Load the continue skill: skill_view('sage:continue')"
-
-def _cmd_autoresearch(raw_args):
-    return "Load the autoresearch skill: skill_view('sage:autoresearch')\n\n" \
-           "Goal: %s" % (raw_args or "(none specified)")
 
 
 def register(ctx) -> None:
