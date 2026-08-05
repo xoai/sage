@@ -1,0 +1,3 @@
+# cargo check writes these when the gate tests run; they are not fixture data
+target/
+Cargo.lock

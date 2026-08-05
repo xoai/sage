@@ -1,0 +1,2 @@
+# dart analyze writes this when the gate tests run; it is not fixture data
+.dart_tool/

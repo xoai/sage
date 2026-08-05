@@ -25,6 +25,17 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 GATES_DIR="${SAGE_GATES_DIR:-$REPO_ROOT/core/gates/scripts}"
 FIX="$SCRIPT_DIR/fixtures"
 
+# Fixture-tree snapshot for the cleanliness check after the cases (review
+# 2026-08-06: `go build ./...` wrote the lone main package's binary into the
+# go-clean fixture — invisible to every case, since cases assert only exit
+# codes and output). Expected tool droppings (target/, .dart_tool/,
+# __pycache__/) are gitignored, so any porcelain delta is a gate mutating
+# fixtures it was only supposed to read.
+FIX_DIRT_BEFORE=""
+if git -C "$REPO_ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  FIX_DIRT_BEFORE="$(git -C "$REPO_ROOT" status --porcelain -- "$FIX" 2>/dev/null || true)"
+fi
+
 ONLY=""
 VERBOSE=false
 while [ $# -gt 0 ]; do
@@ -46,6 +57,12 @@ have_tool() {
     tsc)    command -v tsc >/dev/null 2>&1 || npx --no-install tsc --version >/dev/null 2>&1 ;;
     node)   command -v node >/dev/null 2>&1 ;;
     playwright) node -e "require.resolve('playwright')" >/dev/null 2>&1 ;;
+    # Probed by running, matching the gate's own availability checks: a broken
+    # shim on PATH (e.g. a CRLF-mangled Windows dart wrapper under WSL) must
+    # read as "missing", or the PASS/FAIL cases would exercise a dead tool.
+    go)     go version >/dev/null 2>&1 ;;
+    cargo)  cargo --version >/dev/null 2>&1 ;;
+    dart)   dart --version >/dev/null 2>&1 ;;
     *)      command -v "$1" >/dev/null 2>&1 ;;
   esac
 }
@@ -200,6 +217,70 @@ run_case G5 "type error fails closed via toolchain" \
   --requires tsc \
   -- "$FIX/hallucination/tsc-error/src/app.ts" "$FIX/hallucination/tsc-error"
 
+# Go support (field report 2026-08-06: a Go cycle hit UNVERIFIABLE on every
+# task — `.go` was not an analyzable extension and no toolchain branch existed).
+# The compiler is the checker: `go build ./...` fails hard on unresolved
+# imports and phantom APIs. The 'go build' assertion in G17 proves the
+# toolchain actually ran — same anti-vacuous-pass convention as G2.
+run_case G17 "clean Go module passes via go build" \
+  --script "$H" --exit 0 --contains "PASS" \
+  --contains "go build reports no errors" \
+  --requires go \
+  -- "$FIX/hallucination/go-clean" "$FIX/hallucination/go-clean"
+
+# Go diagnostics carry no "error" substring — this case also pins that the
+# evidence lines survive into the gate's output (the pre-fix grep showed none).
+run_case G18 "phantom Go import fails closed, with the diagnostic as evidence" \
+  --script "$H" --exit 1 --contains "FAIL" \
+  --contains "totally-not-a-real-module" \
+  --requires go \
+  -- "$FIX/hallucination/go-phantom-import" "$FIX/hallucination/go-phantom-import"
+
+run_case G19 "Go module with no go toolchain is UNVERIFIABLE, not pass" \
+  --script "$H" --exit 2 --contains "UNVERIFIABLE" \
+  --skip-if-tool go \
+  -- "$FIX/hallucination/go-clean" "$FIX/hallucination/go-clean"
+
+# Rust and Dart, same shape as Go (added by the review pass that followed the
+# Go field report: `.dart` was already listed as analyzable with no toolchain
+# branch — every Flutter project was permanently UNVERIFIABLE — and the
+# multi-agent runtime checker treats `.rs` as first-class while this gate
+# didn't). cargo error lines carry "error[E…]", dart analyze lines carry
+# "error - file:line", so the default evidence pattern covers both.
+run_case G20 "clean Rust crate passes via cargo check" \
+  --script "$H" --exit 0 --contains "PASS" \
+  --contains "cargo check reports no errors" \
+  --requires cargo \
+  -- "$FIX/hallucination/rust-clean" "$FIX/hallucination/rust-clean"
+
+run_case G21 "phantom Rust crate fails closed, with the diagnostic as evidence" \
+  --script "$H" --exit 1 --contains "FAIL" \
+  --contains "totally_not_a_real_crate" \
+  --requires cargo \
+  -- "$FIX/hallucination/rust-phantom-crate" "$FIX/hallucination/rust-phantom-crate"
+
+run_case G22 "Cargo.toml with no cargo is UNVERIFIABLE, not pass" \
+  --script "$H" --exit 2 --contains "UNVERIFIABLE" \
+  --skip-if-tool cargo \
+  -- "$FIX/hallucination/rust-clean" "$FIX/hallucination/rust-clean"
+
+run_case G23 "clean Dart package passes via dart analyze" \
+  --script "$H" --exit 0 --contains "PASS" \
+  --contains "dart analyze reports no errors" \
+  --requires dart \
+  -- "$FIX/hallucination/dart-clean" "$FIX/hallucination/dart-clean"
+
+run_case G24 "phantom Dart function fails closed, with the diagnostic as evidence" \
+  --script "$H" --exit 1 --contains "FAIL" \
+  --contains "totallyNotARealFunction" \
+  --requires dart \
+  -- "$FIX/hallucination/dart-phantom-function" "$FIX/hallucination/dart-phantom-function"
+
+run_case G25 "pubspec.yaml with no working dart toolchain is UNVERIFIABLE, not pass" \
+  --script "$H" --exit 2 --contains "UNVERIFIABLE" \
+  --skip-if-tool dart \
+  -- "$FIX/hallucination/dart-clean" "$FIX/hallucination/dart-clean"
+
 run_case G12 "counters are truthful (no contradictory 'no imports' line)" \
   --script "$H" --exit 1 \
   --contains "Checked 1 imports, 1 missing" \
@@ -321,6 +402,21 @@ run_case G11c "clean page passes" \
   --script "$W" --exit 0 --contains "PASS" \
   --requires playwright --timeout 180 \
   -- "file://$FIX/visual/page.html" "$(mktemp -d)/shots"
+
+# ── Fixture cleanliness: a gate run must not leave artifacts behind ──────
+if git -C "$REPO_ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  FIX_DIRT_AFTER="$(git -C "$REPO_ROOT" status --porcelain -- "$FIX" 2>/dev/null || true)"
+  if [ "$FIX_DIRT_AFTER" != "$FIX_DIRT_BEFORE" ]; then
+    N_FAIL=$((N_FAIL + 1)); FAILED_IDS="$FAILED_IDS FIXDIRT"
+    report FAIL FIXDIRT "gate run changed the fixture tree (artifact left behind, or fixture deleted)"
+    _fd_b=$(mktemp) && _fd_a=$(mktemp) && {
+      printf '%s\n' "$FIX_DIRT_BEFORE" > "$_fd_b"
+      printf '%s\n' "$FIX_DIRT_AFTER"  > "$_fd_a"
+      diff "$_fd_b" "$_fd_a" | grep -E '^[<>]' | sed 's/^/            | /'
+      rm -f "$_fd_b" "$_fd_a"
+    }
+  fi
+fi
 
 # ═════════════════════════════════════════════════════════════════════════
 echo ""
