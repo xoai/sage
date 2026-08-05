@@ -1,0 +1,102 @@
+---
+name: hermes
+description: >
+  Hermes Agent (Nous Research) — a self-improving AI agent with built-in
+  learning loops, multi-agent coordination, and a Python plugin system.
+  Sage achieves Tier A enforcement on Hermes: pre_tool_call hooks veto edits
+  before they happen (spec-gate, tdd-gate, secrets-gate, config-gate,
+  verify-gate, bookkeeping-gate), post_tool_call hooks write the R29
+  degradation audit, and pre_llm_call injects the eager core into CLI
+  sessions. Skills register via ctx.register_skill() and surface as native
+  /sage-* slash commands. Independent review dispatches through Hermes-native
+  delegate_task per the sage-review skill — live-probed and attested
+  2026-08-05 (docs/attestations/hermes-tier-a-2026-08-05.md).
+contract-version: 2
+maintainer: "rei-stewart"
+
+capabilities:
+  context-injection: attested     # pre_llm_call injects eager core + session-pickup into CLI; gateway via session:start hook
+  command-delivery: attested      # ctx.register_command() registers /sage, /build, /fix, etc.
+  native-skill-discovery: attested # ctx.register_skill() registers sage:* skills for on-demand loading
+  pre-tool-veto: attested         # pre_tool_call returns {"action": "block", ...} — Hermes blocks the call
+  post-tool-events: attested      # post_tool_call fires with tool result; R29 audit + verify-tracker + manifest-sync
+  subagent-dispatch: attested     # delegate_task dispatched live 2026-08-05; independent reviewer returned APPROVE (see attestation)
+  session-events: attested        # gateway session:start / session:end via hooks/sage-session/; CLI via pre_llm_call
+
+attestations:
+  - capability: pre-tool-veto
+    evidence: docs/attestations/hermes-tier-a-2026-08-05.md
+    verified: 2026-08-05
+    expires-release: "1.5"
+    note: >
+      Live probe transcript 1: six gates (spec, secrets, config, tdd,
+      bookkeeping, verify) block with model-visible messages via
+      pre_tool_call returning {"action": "block", ...}. Rerunnable via
+      develop/conformance/probes/hermes-gates-probe.py.
+
+  - capability: post-tool-events
+    evidence: docs/attestations/hermes-tier-a-2026-08-05.md
+    verified: 2026-08-05
+    expires-release: "1.5"
+    note: >
+      Live probe transcript 1: verify-tracker records last_source_edit /
+      last_test_run to .sage/tmp/verify-state; R29 degradation audit
+      auto-logs skipped QA to .sage/decisions.md. Observers never block.
+
+  - capability: context-injection
+    evidence: docs/attestations/hermes-tier-a-2026-08-05.md
+    verified: 2026-08-05
+    expires-release: "1.5"
+    note: >
+      pre_llm_call returns {"context": str} with the eager core for CLI
+      sessions; gateway sessions get context via the session:start hook
+      writing .sage/gates/session-pickup.md.
+
+  - capability: command-delivery
+    evidence: docs/attestations/hermes-tier-a-2026-08-05.md
+    verified: 2026-08-05
+    expires-release: "1.5"
+    note: >
+      Hermes generates native /sage-* slash commands from the skills the
+      plugin registers (verified in-session 2026-08-05). Former
+      plugin-registered bare command stubs collided with the native
+      commands and were removed in the same changeset.
+
+  - capability: native-skill-discovery
+    evidence: docs/attestations/hermes-tier-a-2026-08-05.md
+    verified: 2026-08-05
+    expires-release: "1.5"
+    note: >
+      21 skills registered via ctx.register_skill(); visible in the session
+      skill index and invocable as /sage-* commands.
+
+  - capability: subagent-dispatch
+    evidence: docs/attestations/hermes-tier-a-2026-08-05.md
+    verified: 2026-08-05
+    expires-release: "1.5"
+    note: >
+      Live probe transcript 2: Hermes-native delegate_task dispatched a
+      fresh-context independent reviewer (deleg_1f066fc7); verdict APPROVE,
+      5/5 checks. The sage-review skill prescribes delegate_task for all
+      independent-review steps; the R101 ledger guard refuses gates-passed
+      on subagent cycles without done+approved ledger tasks.
+
+  - capability: session-events
+    evidence: docs/attestations/hermes-tier-a-2026-08-05.md
+    verified: 2026-08-05
+    expires-release: "1.5"
+    note: >
+      Gateway session:start / session:end via hooks/sage-session/;
+      CLI equivalent via pre_llm_call context injection.
+
+supported-os: [linux, macos, windows]
+# Hermes runs on all three; the Python plugin is cross-platform.
+
+command-prefix: "/sage"
+install-method: profile-plugin
+artifacts:
+  instructions: SOUL.md           # Hermes reads SOUL.md as system prompt slot #1
+  commands-dir: null              # commands registered via plugin API, not files
+  skills-dir: null                # skills registered via plugin API, not files
+  hooks-config: null              # hooks registered via register(ctx), not config files
+---

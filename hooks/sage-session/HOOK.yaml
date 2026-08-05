@@ -1,0 +1,11 @@
+name: sage-session
+description: >
+  Sage session lifecycle for Hermes gateway sessions. session:start — if the
+  session's working directory is a Sage project with an active cycle, refresh
+  .sage/gates/session-pickup.md so the agent's session-start instructions read
+  current state (the AGENTS.md eager core tells the agent to check it).
+  session:end — append the session's close to .sage/gates/session-log so a
+  cycle's history is complete. Observer: never blocks, never raises.
+events:
+  - session:start
+  - session:end
