@@ -22,6 +22,14 @@ capabilities:
   post-tool-events: attested      # post_tool_call fires with tool result; R29 audit + verify-tracker + manifest-sync
   subagent-dispatch: attested     # delegate_task dispatched live 2026-08-05; independent reviewer returned APPROVE (see attestation)
   session-events: attested        # gateway session:start / session:end via hooks/sage-session/; CLI via pre_llm_call
+  context-injection-midstream: false
+  # Honest false, not silence: Hermes fires post_tool_call as a pure observer —
+  # the emitter (model_tools._emit_post_tool_call_hook) discards callback
+  # return values, so no post-tool hook can hand the model context mid-session
+  # (verified against hermes-agent main, 2026-08-05). The closest Hermes
+  # mechanism is pre_llm_call, which injects into every turn — but that is
+  # turn-boundary injection, not SG-16's mid-stream correction channel, so the
+  # capability is declared false rather than attested-by-analogy.
 
 attestations:
   - capability: pre-tool-veto
