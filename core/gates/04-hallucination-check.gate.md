@@ -27,20 +27,25 @@ bash .sage/gates/scripts/sage-hallucination-check.sh src/ .
 
 This script automatically: verifies relative imports resolve to real files,
 checks imported packages are declared in package.json or installed in
-node_modules, and runs the project's type-checker (tsc, else pyright/mypy).
+node_modules, and runs the project's toolchain — tsc for TypeScript,
+`go build ./...` for a Go module, `cargo check` for a Rust crate,
+`dart analyze` for a Dart/Flutter package, else pyright/mypy for Python.
 
-A real type-checker subsumes any hard-coded list of "APIs that don't exist",
-and it does not go stale — which is why the former `useServer`/`useClient`
-pattern greps are gone.
+A real type-checker or compiler subsumes any hard-coded list of "APIs that
+don't exist", and it does not go stale — which is why the former
+`useServer`/`useClient` pattern greps are gone, and why the compiled
+languages need no import analysis of their own: the compiler fails hard on
+any unresolved import or phantom API.
 
 **Exit contract:** `0` = pass · `1` = an import or package does not resolve, or
-the type-checker reported errors · `2` = UNVERIFIABLE, nothing was examined
-(no analyzable source files, or a Python project with no type-checker
-installed — this gate has no import analysis for Python).
+the toolchain reported errors · `2` = UNVERIFIABLE, nothing was examined
+(no analyzable source files, or a Python/Go/Rust/Dart project whose
+toolchain is missing or broken — this gate's own import analysis is
+JS/TS-only; for every other language the toolchain is the check).
 
 Exit 2 is not a pass. Offer `[P] Proceed unverified` (logged to
-`.sage/decisions.md`) or `[F] Fix verification setup` — install pyright/mypy,
-or point the gate at source files.
+`.sage/decisions.md`) or `[F] Fix verification setup` — install the missing
+toolchain (pyright/mypy, go, cargo, dart), or point the gate at source files.
 
 If the script passes, proceed to the manual checks below for items
 that require semantic understanding (API method names, version compatibility).

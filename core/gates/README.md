@@ -102,8 +102,10 @@ On exit 2 a workflow presents a choice and records the answer:
 Examples of each unverifiable state:
 
 - Gate 1 — the task declares no `Files:` or `Output:` deliverables.
-- Gate 4 — no analyzable source files, or a Python project with no
-  pyright/mypy installed (Gate 4 has no import analysis for Python).
+- Gate 4 — no analyzable source files, or a Python/Go/Rust/Dart project
+  whose toolchain is missing or broken (Gate 4's own import analysis is
+  JS/TS-only; for every other language the toolchain is the check, so its
+  absence means nothing was examined).
 - Gate 5 — no test runner detected, or one declared in `package.json` but not
   installed.
 - Gate 6 — no browser toolchain, or the page could not be loaded.

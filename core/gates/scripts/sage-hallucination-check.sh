@@ -73,7 +73,7 @@ PY_ANALYZER=$(mktemp "${TMPDIR:-/tmp}/sage-gate4-XXXXXX") || {
   log "⚠️ UNVERIFIABLE — could not create a temporary file"
   exit 2
 }
-trap 'rm -f "$PY_ANALYZER"' EXIT
+trap 'rm -f "$PY_ANALYZER"; [ -z "${GO_OUT:-}" ] || rm -rf "$GO_OUT"' EXIT
 
 cat > "$PY_ANALYZER" <<'PYEOF'
 import json
@@ -83,10 +83,12 @@ import sys
 
 target, root = sys.argv[1], sys.argv[2]
 
-SRC_EXT = {'.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.py', '.dart'}
+SRC_EXT = {'.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.py', '.dart',
+           '.go', '.rs'}
 JS_EXT = {'.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'}
 SKIP_DIRS = {'node_modules', '.git', 'dist', 'build', '.next', 'out',
-             'venv', '.venv', '__pycache__', '.dart_tool', 'coverage'}
+             'venv', '.venv', '__pycache__', '.dart_tool', 'coverage',
+             'vendor', 'target'}
 
 # Resolution order mirrors bundler/tsc behavior closely enough for a gate.
 CAND_EXT = ['', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.d.ts']
@@ -365,6 +367,10 @@ vlog "── Toolchain check ──"
 TOOLCHAIN_RAN=false
 TOOLCHAIN_ARGV=()
 TOOLCHAIN_NAME=""
+# Which output lines carry the evidence when the toolchain fails. tsc,
+# pyright and mypy all print the word "error"; Go diagnostics do not — they
+# look like `main.go:6:2: undefined: Foo` or `go: module …`.
+TOOLCHAIN_ERR_RE="error"
 
 # 1. TypeScript: prefer a tsc on PATH, else one already installed in the
 #    project. `--no-install` keeps the gate offline and non-mutating.
@@ -380,7 +386,53 @@ if [ -f "$ROOT/tsconfig.json" ]; then
     warn "tsconfig.json present but no tsc available — skipping type check"
   fi
 
-# 2. Python: same shape, whichever checker the project has.
+# For the compiled-language branches below, availability is probed by RUNNING
+# the tool, not by `command -v`: a broken shim on PATH (observed in the field —
+# a Windows Flutter checkout's CRLF-mangled `dart` wrapper under WSL, exit 127
+# on everything) must read as "toolchain absent" → UNVERIFIABLE, not as a
+# verdict from a tool that never ran.
+
+# 2. Go: the compiler IS the checker — `go build` fails hard on any
+#    unresolved import, missing file, or phantom API, and unlike a list of
+#    extensions it never goes stale. Build output is quarantined in a temp
+#    dir: `go build ./...` writes a lone main package's binary into the CWD
+#    (multi-package builds discard theirs), and a gate must not mutate the
+#    project it is judging. `-o <dir>` needs go ≥1.15 (2020). No go.mod
+#    edits, no network needed to flag undeclared modules.
+elif [ -f "$ROOT/go.mod" ]; then
+  if ! go version >/dev/null 2>&1; then
+    warn "go.mod present but no working go toolchain — skipping compile check"
+  elif GO_OUT=$(mktemp -d "${TMPDIR:-/tmp}/sage-gate4-go-XXXXXX"); then
+    TOOLCHAIN_ARGV=(go build -o "$GO_OUT" ./...)
+    TOOLCHAIN_NAME="go build"
+    TOOLCHAIN_ERR_RE='\.go:[0-9]+:|^go:'
+  else
+    warn "could not create a temp dir for go build output — skipping compile check"
+  fi
+
+# 3. Rust: same reasoning. `cargo check` type-checks without linking; an
+#    undeclared crate is error[E0432] with no network involved. Writes
+#    target/ and, when absent, Cargo.lock — normal cargo behavior.
+elif [ -f "$ROOT/Cargo.toml" ]; then
+  if cargo --version >/dev/null 2>&1; then
+    TOOLCHAIN_ARGV=(cargo check --quiet)
+    TOOLCHAIN_NAME="cargo check"
+  else
+    warn "Cargo.toml present but no working cargo — skipping compile check"
+  fi
+
+# 4. Dart/Flutter: `dart analyze` errors are the hallucination class
+#    (undefined identifiers, URIs that don't exist). Warnings are not
+#    confabulations, so they stay non-fatal.
+elif [ -f "$ROOT/pubspec.yaml" ]; then
+  if dart --version >/dev/null 2>&1; then
+    TOOLCHAIN_ARGV=(dart analyze --no-fatal-warnings)
+    TOOLCHAIN_NAME="dart analyze"
+  else
+    warn "pubspec.yaml present but no working dart toolchain — skipping analyze"
+  fi
+
+# 5. Python: same shape, whichever checker the project has.
 elif [ "$PY_FILES" -gt 0 ]; then
   if command -v pyright >/dev/null 2>&1; then
     TOOLCHAIN_ARGV=(pyright "$TARGET")
@@ -393,18 +445,29 @@ elif [ "$PY_FILES" -gt 0 ]; then
   fi
 fi
 
-# 3. Otherwise the import- and package-existence checks above stand alone.
+# 6. Otherwise the import- and package-existence checks above stand alone.
 if [ ${#TOOLCHAIN_ARGV[@]} -gt 0 ]; then
   TOOLCHAIN_RAN=true
   TYPE_OUTPUT=$(cd "$ROOT" && ${TOOLCHAIN_ARGV[@]+"${TOOLCHAIN_ARGV[@]}"} 2>&1)
   if [ $? -ne 0 ]; then
-    ERRORS=$(printf '%s\n' "$TYPE_OUTPUT" | grep -c -e "error" || true)
-    fail "$TOOLCHAIN_NAME reported $ERRORS error line(s)"
-    printf '%s\n' "$TYPE_OUTPUT" | grep -e "error" | head -5
+    ERR_LINES=$(printf '%s\n' "$TYPE_OUTPUT" | grep -E -e "$TOOLCHAIN_ERR_RE")
+    if [ -n "$ERR_LINES" ]; then
+      fail "$TOOLCHAIN_NAME reported $(printf '%s\n' "$ERR_LINES" | wc -l | tr -d ' ') error line(s)"
+      printf '%s\n' "$ERR_LINES" | head -5
+    else
+      # Diagnostics in a shape the pattern doesn't know — show them raw
+      # rather than failing with a claim of "0 error line(s)" and no evidence.
+      fail "$TOOLCHAIN_NAME exited non-zero"
+      printf '%s\n' "$TYPE_OUTPUT" | head -5
+    fi
   else
-    vlog "  ✅ $TOOLCHAIN_NAME reports no errors"
+    # log, not vlog: this line is the only proof the toolchain examined
+    # anything, so it survives --quiet like the import counters do.
+    log "  ✅ $TOOLCHAIN_NAME reports no errors"
   fi
-elif [ -z "$TOOLCHAIN_NAME" ] && [ "$PY_FILES" -eq 0 ] && [ ! -f "$ROOT/tsconfig.json" ]; then
+elif [ -z "$TOOLCHAIN_NAME" ] && [ "$PY_FILES" -eq 0 ] &&
+     [ ! -f "$ROOT/tsconfig.json" ] && [ ! -f "$ROOT/go.mod" ] &&
+     [ ! -f "$ROOT/Cargo.toml" ] && [ ! -f "$ROOT/pubspec.yaml" ]; then
   vlog "  No type-checker configured for this project — skipping type check"
 fi
 

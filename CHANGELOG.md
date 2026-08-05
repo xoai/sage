@@ -2,6 +2,87 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [1.3.17] — Gate 4 speaks Go, Rust, and Dart: the compiler is the checker
+
+### Gate 4 speaks Go — and, after the review that followed, Rust and Dart
+
+Field report (2026-08-06): the first Sage cycle on a Go codebase hit
+`⚠️ Gate 4 UNVERIFIABLE` on task 2 — and would have hit it on every task
+after, 14 more waiver interruptions. The hallucination check's analyzable
+extensions were ts/tsx/js/jsx/mjs/cjs/py/dart; `.go` was not on the list
+and no toolchain branch existed, so on a Go project the gate examined
+nothing and exit-2'd by design. The user's own substitute-evidence
+argument named the fix: for Go, the compiler already enforces exactly
+what this gate checks.
+
+- Gate 4 runs `go build ./...` when the project root has a `go.mod` —
+  the compiler fails hard on unresolved imports, missing files, and
+  phantom APIs, with no extension list to go stale. Build output is
+  quarantined in a temp dir (see the second review pass below), no
+  go.mod edits, no network needed to flag an undeclared module.
+  `go.mod` present but no toolchain stays UNVERIFIABLE. `.go` counts as
+  analyzable and `vendor/` is skipped, so the exit-2 message is
+  truthful ("N file(s) found, but no type-checker is available", not
+  "no analyzable source files").
+- The failure evidence now survives for Go: compile diagnostics
+  (`main.go:6:2: no required module provides package …`) contain no
+  "error" substring, so the old evidence grep would have reported
+  "0 error line(s)" and printed nothing. The evidence pattern is
+  per-toolchain now, with a raw-output fallback when nothing matches —
+  a non-zero exit can no longer produce an evidence-free FAIL.
+- The "toolchain reports no errors" line survives `--quiet`. It is the
+  only proof the compiler examined anything — the same reasoning that
+  keeps the import counters in quiet output. Regression-pinned as
+  G17–G19 (clean Go module passes with proof, phantom import fails with
+  the diagnostic shown, missing toolchain is UNVERIFIABLE).
+
+An independent review of the fix then asked where the same class was
+still latent, and found it twice:
+
+- **Dart/Flutter**: `.dart` had been listed as analyzable since the
+  extension set existed, but no toolchain branch ever backed it — every
+  Flutter project was permanently UNVERIFIABLE, the Go incident waiting
+  to recur. Gate 4 now runs `dart analyze --no-fatal-warnings` when the
+  root has a `pubspec.yaml` (analyzer *errors* — undefined identifiers,
+  URIs that don't exist — are the hallucination class; warnings are not
+  confabulations and stay non-fatal).
+- **Rust**: the multi-agent runtime's per-file checker treats `.rs` as
+  first-class, but the core gate didn't know the language. Gate 4 now
+  runs `cargo check --quiet` when the root has a `Cargo.toml` — an
+  undeclared crate is `error[E0432]` with no network involved.
+- The review also caught a live trap on the reference machine: a
+  CRLF-mangled Windows Flutter `dart` wrapper on the WSL PATH that
+  exits 127 on everything. `command -v` calls that "present". The
+  compiled-language branches (and the test harness's `have_tool`)
+  therefore probe availability by *running* the tool (`go version`,
+  `cargo --version`, `dart --version`); a dead shim reads as "toolchain
+  absent" → UNVERIFIABLE, never as a verdict from a tool that never ran.
+- Every new branch was executed against its real toolchain before
+  shipping: go 1.26 live, cargo in a rust:alpine container (BusyBox
+  grep included — the evidence extraction is POSIX-clean), dart via the
+  Windows SDK on a mounted fixture, including the broken-wrapper path.
+  Regression-pinned as G20–G25, same trio shape as Go's G17–G19.
+
+A second review pass then attacked the review itself with mechanisms the
+cases don't have, and found one real bug plus one unproven claim:
+
+- **`go build ./...` was mutating the project root.** For a module whose
+  `./...` expansion contains exactly one `main` package, `go build`
+  writes the compiled binary into the CWD (multi-package builds discard
+  theirs) — the gate dropped an executable into the project it was
+  judging, and into the go-clean fixture, where a `git add` dry run
+  caught it. Every test case was structurally blind: cases assert exit
+  codes and output, never filesystem state. Build output now goes to a
+  `mktemp -d` quarantine removed on exit (`-o <dir>`, go ≥1.15), and
+  the harness pins the whole class: it snapshots
+  `git status --porcelain` over the fixture tree before the cases and
+  fails with the delta if a gate run changed it (verified to trip on a
+  planted artifact; expected tool droppings are gitignored).
+- **`--no-fatal-warnings` was the right guess, now it is evidence.** A
+  warnings-only Dart package (one unused import): exit 0 with the flag,
+  exit 2 without it. Without the flag, any Dart project carrying a
+  single warning would have failed Gate 4 on a non-hallucination.
+
 ## [1.3.16] — the ledger reads the plans Sage writes, and templates become the tested contract
 
 ### The ledger reads the plans Sage actually writes
