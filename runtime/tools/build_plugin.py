@@ -73,7 +73,19 @@ PLUGIN_SKILLS = frozenset({
 })
 
 # Skill dirs that exist in skills/ but are deliberately NOT shipped in the plugin.
-SKILLS_NOT_IN_PLUGIN = frozenset({"autoresearch"})
+SKILLS_NOT_IN_PLUGIN = frozenset({
+    "autoresearch",
+    # The hermes-platform skill set — workflow mirrors, persona skills, and the
+    # Sage-about-Sage system skills the Hermes plugin registers via
+    # ctx.register_skill() (runtime/platforms/community/hermes/__init__.py).
+    # They ship to Hermes users through that plugin; they are not part of the
+    # claude-code plugin this builder produces.
+    "sage", "sage-analyst", "sage-architect", "sage-autoresearch", "sage-build",
+    "sage-checkpoints", "sage-classifier", "sage-constitution", "sage-continue",
+    "sage-debugger", "sage-decisions", "sage-developer", "sage-fix",
+    "sage-gates", "sage-learn", "sage-reflect", "sage-review", "sage-reviewer",
+    "sage-routing", "sage-tiers", "sage-using-memory",
+})
 
 # System skills (core/system-skills/) — Sage-about-Sage content that ADR-9 moved
 # OUT of the eager layer. They ship in the plugin because the plugin install has
