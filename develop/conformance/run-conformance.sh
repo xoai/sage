@@ -29,6 +29,10 @@
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# Windows portability: python3 here may be a native Windows build that cannot
+# open MSYS-style absolute paths (/g/... → mangled to G:\g\...). Anchor at the
+# repo root and invoke repo scripts by RELATIVE path so native python works.
+cd "$REPO_ROOT" || exit 2
 PLATFORM="${1:-}"
 LEVELS="1,3"
 REPORT=""
@@ -65,7 +69,7 @@ echo ""
 echo "── Conformance: $PLATFORM ──"
 
 # ── The contract itself must parse before anything else means anything ──
-CONTRACT_JSON="$(python3 "$REPO_ROOT/runtime/tools/contract.py" --json 2>/dev/null)" || {
+CONTRACT_JSON="$(python3 "runtime/tools/contract.py" --json 2>/dev/null)" || {
   echo "  ⚠️  UNVERIFIABLE — contracts do not parse. Fix contract.py --check first."
   exit 2
 }
@@ -205,6 +209,12 @@ if printf '%s' "$LEVELS" | grep -q 1; then
         fi
         if [ "$N_SK" -gt 0 ]; then
           ok "native-skill-discovery" "$N_SK skills emitted for on-demand discovery"
+        elif [ "$(cap native-skill-discovery)" = "attested" ] && \
+             { [ -z "$SKILLS_DIR" ] || [ "$SKILLS_DIR" = "None" ] || [ "$SKILLS_DIR" = "null" ]; }; then
+          # R112: plugin-API platforms register skills through the host plugin
+          # system (ctx.register_skill), not generated files. Don't grade them
+          # on claude-code's tree shape — Level 3 attestation carries the proof.
+          ok "native-skill-discovery" "plugin-API registration — Level 3 attestation carries the proof (R112)"
         else
           bad "native-skill-discovery" "declared, but no skills were emitted to $SKILLS_DIR"
         fi ;;
@@ -234,6 +244,12 @@ if printf '%s' "$LEVELS" | grep -q 1; then
           if { [ -f "$HOOKS_JSON" ] && grep -q "$EVENT" "$HOOKS_JSON"; } || \
              { [ -f "$WORK/proj/.claude/settings.local.json" ] && grep -q "$EVENT" "$WORK/proj/.claude/settings.local.json"; }; then
             ok "$CAPNAME" "$EVENT hook registered in the generated project"
+          elif [ "$(cap "$CAPNAME")" = "attested" ] && \
+               { [ -z "$HOOKS_FILE" ] || [ "$HOOKS_FILE" = "None" ] || [ "$HOOKS_FILE" = "null" ]; }; then
+            # R112: plugin-API platforms deliver the veto/audit via host hooks
+            # (ctx.register_hook), not generated hook files. Level 1 cannot see
+            # that; the Level 3 attestation with its probe transcript does.
+            ok "$CAPNAME" "plugin-API delivery — Level 3 attestation carries the proof (R112)"
           else
             bad "$CAPNAME" "declared, but no $EVENT hook was registered"
           fi ;;
@@ -285,7 +301,7 @@ fi
 if printf '%s' "$LEVELS" | grep -q 3; then
   echo ""
   echo "  Level 3 — attestations"
-  ATT_OUT="$(python3 "$REPO_ROOT/develop/conformance/check_attestations.py" "$PLATFORM" 2>&1)"
+  ATT_OUT="$(python3 "develop/conformance/check_attestations.py" "$PLATFORM" 2>&1)"
   ATT_RC=$?
   if [ $ATT_RC -eq 0 ]; then
     printf '%s\n' "$ATT_OUT" | while IFS= read -r line; do [ -n "$line" ] && echo "  $(green ✓) $line"; done
@@ -312,7 +328,9 @@ if [ -n "$REPORT" ]; then
     echo ""
     echo "| Capability | Result | Detail |"
     echo "|---|---|---|"
-    printf '%s\n' "$RESULTS"
+    # RESULTS accumulates a leading newline; strip it so the table starts on
+    # the line after the header (the blank row used to break rendering).
+    printf '%s\n' "${RESULTS#$'\n'}"
   } > "$OUT"
   echo "  report → ${OUT#$REPO_ROOT/}"
 fi

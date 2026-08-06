@@ -1,0 +1,191 @@
+---
+name: sage-autoresearch
+description: "Optimized codebase on dedicated branch, Iteration log"
+version: 1.0.0
+author: Sage
+metadata:
+  hermes:
+    tags: [Sage, Workflow, autoresearch]
+---
+
+## When to Use
+Load this skill when the user runs `/sage-autoresearch` or asks to autoresearch something (the Sage autoresearch workflow).
+
+## Arguments
+Hermes does NOT interpolate an in-body argument token. The user's arguments/flags arrive as a SEPARATE instruction line appended to this skill invocation. Wherever the steps below refer to "the user's arguments", use the text of that appended instruction line.
+
+## Independent review (delegate_task)
+When a step calls for an independent review, invoke `delegate_task` against the `sage-reviewer` skill. Hermes delegate_task has NO toolset-restriction parameter — read-only is prompt-enforced, and you MUST verify afterward that the reviewer made no edits (e.g. `git status` unchanged) before accepting its verdict.
+
+RULES (apply to every step — non-negotiable):
+- Announce: "Sage → autoresearch workflow." before starting work
+- Read skills/autoresearch/SKILL.md BEFORE starting the loop
+- MEMORY FIRST: Search sage-memory for priors on this repo + metric domain
+  (filter_tags: ["autoresearch"], limit: 5). Use findings as starting context.
+- Elicit: goal, metric (name + direction + optional target), verify command,
+  writable/frozen scope, per-run budget. Present as brief for [A]/[R] approval.
+- ONE CHANGE PER ITERATION. Not two. Not "try A and also B."
+- COMMIT BEFORE VERIFY. Never verify uncommitted changes.
+- The agent handles REVIEW, IDEATE, MODIFY. Runtime handles COMMIT, VERIFY,
+  DECIDE, LOG, REPEAT. Do NOT run verify yourself — the runtime does that.
+- After each iteration: update autoresearch.md living doc with what was tried.
+- If stuck (5+ consecutive discard/crash): read stuck-recovery.md before IDEATE.
+- Never touch the main/master branch. All work on autoresearch/<slug>.
+- Choices: present with [1] [2] [3] bracket notation
+- Never use code blocks for interaction (checkpoints, options, status)
+
+
+# Autoresearch Workflow
+
+Autonomous iteration toward a measurable outcome. Read the full skill
+at `skills/autoresearch/SKILL.md` before proceeding.
+
+## Auto-Pickup
+
+Scan `.sage/work/` for directories containing `autoresearch.jsonl`.
+If found, this is a resume — skip to Step 3.
+
+## Step 1: Elicit Configuration
+
+If the user provided inline flags or a complete description, extract
+the fields. Otherwise, elicit:
+
+1. **Goal** — what are we optimizing? (one sentence)
+2. **Metric** — what number, which direction, optional target
+3. **Verify command** — what command produces the METRIC line
+4. **Scope** — writable globs (what the agent can change) and
+   frozen globs (what must not be touched)
+5. **Budget** — seconds per verify run, max iterations
+
+Search sage-memory for priors on this repo + metric domain:
+- Pass domain keywords as query, filter_tags ["autoresearch"], limit 5
+- If priors exist, note winning/losing patterns for IDEATE context
+
+## Step 2: Write Brief and Approve
+
+Save to `.sage/work/YYYYMMDD-<slug>/brief.md` using the frontmatter
+format from `skills/autoresearch/SKILL.md`.
+
+🔒 **CHECKPOINT:**
+
+Sage: Autoresearch session configured.
+
+  Goal: [goal]
+  Metric: [name] ([direction]), target: [target or "none"]
+  Verify: [command]
+  Scope: writable [globs], frozen [globs]
+  Budget: [seconds]s per run, [max iterations or "unlimited"]
+
+[A] Start — begin autonomous iteration
+[R] Revise — change configuration
+
+Pick A/R, or tell me what to change.
+
+## Step 3: Run Loop
+
+Read `skills/autoresearch/SKILL.md` for the 8-phase loop protocol.
+Read `skills/autoresearch/references/loop-protocol.md` for per-phase
+detail.
+
+**Before each IDEATE:** If sage-memory priors were found in Step 1,
+use them. If stuck (5+ consecutive discard/crash), read
+`skills/autoresearch/references/stuck-recovery.md`.
+
+**Agent phases (REVIEW, IDEATE, MODIFY):**
+- REVIEW: Read current files + JSONL tail (last 20 iterations)
+- IDEATE: Propose ONE change, ≤1 sentence
+- MODIFY: Make the change within writable scope
+
+**Runtime phases (COMMIT, VERIFY, DECIDE, LOG, REPEAT):**
+
+The autoresearch runtime is an optional package (extracted from core in Phase 3,
+like sage-memory). Probe for it first, and degrade LOUDLY if absent (never
+silently fall through):
+
+```bash
+if python3 -c 'import autoresearch' 2>/dev/null; then
+  python3 -m autoresearch run --brief .sage/work/<slug>/brief.md --project .
+else
+  echo "Sage: autoresearch runtime not installed — the optimization loop will"
+  echo "run in degraded (manual) mode. Install it for the deterministic runtime:"
+  echo "    sage add xoai/sage-autoresearch"
+  # …and log one line to the initiative's decisions.md (R29 loud degradation).
+fi
+```
+
+When the package is absent, handle the phases inline (below) and announce the
+degradation so the user knows the deterministic runtime isn't active.
+
+Or handle phases inline:
+- COMMIT: `git add -A && git commit -m "autoresearch #N: <desc>"`
+- VERIFY: Run the verify command with budget
+- DECIDE: Parse METRIC, compare to best → keep/discard/crash
+- LOG: Append to JSONL, rebuild TSV, update living doc
+- REPEAT: Check termination criteria
+
+**After each iteration:** Update `autoresearch.md` living doc with
+what was tried and the result.
+
+## Step 4: Session End
+
+When the loop exits (target hit, budget exhausted, or interrupted):
+
+1. **Summary:**
+
+Sage: Autoresearch complete.
+
+  Iterations: [N total], [K kept]
+  Best: [metric_name]=[value] (started at [baseline])
+  Branch: autoresearch/[slug]
+
+  Top improvements:
+  - #[N]: [description] ([metric delta])
+  - #[M]: [description] ([metric delta])
+
+  [M] Merge — review and merge the branch
+  [C] Continue — resume iterating
+  [R] Results — show full results.tsv
+
+2. **Store to sage-memory** (if available):
+   - Winning patterns (descriptions of kept iterations)
+   - Losing patterns (descriptions of discarded iterations)
+   - Best achieved value and iteration count
+   - Tags: ["autoresearch", metric_name, domain tags]
+
+3. **Prepend to decisions.md:**
+   ```
+   ### YYYY-MM-DD — Autoresearch: [goal]
+   Result: [best value] from [baseline], [N] iterations, [K] kept.
+   Branch: autoresearch/[slug]. Top change: [best iteration description].
+   ```
+
+## Rules
+
+- **Stay in scope.** Change only files matching the writable globs; never touch
+  the frozen globs. A change that needs a frozen file is out of scope — discard it.
+- **Branch isolation.** Every iteration commits to the dedicated
+  `autoresearch/<slug>` branch. The loop never commits to the default branch.
+- **The metric decides, not the agent.** keep/discard/crash is determined by the
+  parsed METRIC compared to the current best — never by agent opinion about
+  whether a change "looks better."
+- **One change per iteration.** IDEATE proposes exactly one change (≤1 sentence)
+  so each metric delta is attributable to a single cause.
+- **Respect the budget.** Seconds-per-verify and max-iterations are hard limits.
+  When either is reached, terminate the loop and go to Step 4.
+- **Merge is user-gated.** Only the Step 4 `[M]` choice merges the branch. The
+  loop never merges, pushes, or opens a PR on its own.
+
+## Fallbacks
+
+- **Verify crashes or times out** → record the iteration as a crash, discard the
+  change, and continue. A single bad iteration never halts the loop.
+- **Metric line missing from verify output** → treat as a crash; do not guess a
+  value or infer success.
+- **5+ consecutive discards/crashes** → read
+  `skills/autoresearch/references/stuck-recovery.md` before the next IDEATE.
+- **Python runtime unavailable** → run the COMMIT/VERIFY/DECIDE/LOG/REPEAT phases
+  inline using the bash equivalents in Step 3.
+- **User interrupts ("stop" / "I'm satisfied")** → exit the loop cleanly to
+  Step 4 with the current best; do not start another iteration.
+
+the arguments the user provided alongside this skill invocation (delivered as a separate instruction line, NOT a literal token)
