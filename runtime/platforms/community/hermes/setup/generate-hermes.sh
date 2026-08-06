@@ -319,7 +319,15 @@ if hooks_start is None:
 missing = []
 for event, matcher, script in wanted:
     cmd = _cmd(script)
-    if cmd in text:
+    # Dedup on the adapter+script pair, tolerant of how the entry lands in
+    # the file: the generator writes a double-quoted YAML scalar with
+    # backslash-escaped inner quotes (gate.sh\" script), while older/live
+    # configs may hold a folded plain scalar split across lines
+    # (gate.sh"\n   script). The needle must allow an optional backslash
+    # before the quote or neither form matches and every rerun appends a
+    # duplicate set.
+    pat = re.compile(r'sage-hermes-gate\.sh\\?"?\s+' + re.escape(script))
+    if pat.search(text):
         continue  # already registered — idempotent
     missing.append((event, matcher, cmd))
 
