@@ -328,7 +328,9 @@ if [ -n "$REPORT" ]; then
     echo ""
     echo "| Capability | Result | Detail |"
     echo "|---|---|---|"
-    printf '%s\n' "$RESULTS"
+    # RESULTS accumulates a leading newline; strip it so the table starts on
+    # the line after the header (the blank row used to break rendering).
+    printf '%s\n' "${RESULTS#$'\n'}"
   } > "$OUT"
   echo "  report → ${OUT#$REPO_ROOT/}"
 fi

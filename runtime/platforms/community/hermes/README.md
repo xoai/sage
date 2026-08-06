@@ -1,5 +1,10 @@
 # Sage for Hermes Agent
 
+> **Where the code lives:** the plugin is packaged as the whole repo — the
+> Hermes plugin entry point is `__init__.py` at the repository root and the
+> manifest is `plugin.yaml`. This directory holds the platform contract,
+> docs, and the `sage init` generator only.
+
 **Tier A** — the full quality chain, live-probed 2026-08-05. Edits are blocked
 before a spec or a test exists; independent reviews run in fresh contexts via
 delegate_task; degradation is logged by code. See

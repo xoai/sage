@@ -29,12 +29,30 @@ entry points — the exact functions Hermes invokes — against a real scratch
   PASS verify-gate blocks unverified commit: BLOCKED — sage-verify-gate: source changed after the last test run — the verify-before-claiming rule, made mechanical.
 
 ── post_tool_call probes (observers, must never block) ──
-  PASS verify-tracker state: {'last_source_edit': 1785952547, 'last_test_run': 1785952547}
+  PASS verify-tracker state: {'last_source_edit': ..., 'last_test_run': ...}
   PASS commit allowed after fresh test run: allowed
   PASS R29 degradation logged to decisions.md
 
-9 passed, 0 failed
+── duplicate-key self-disarmament probes (maintainer review, 2026-08-05) ──
+  PASS main reader stays armed on contradictory config: True
+  PASS gates still veto under contradictory config: BLOCKED — sage-secrets-gate
+  PASS config-gate refuses contradictory write_file: BLOCKED — sage-config-gate
+  PASS config-gate refuses contradictory append-by-patch: BLOCKED — sage-config-gate
+
+13 passed, 0 failed
 ```
+
+### Maintainer review fix (2026-08-05)
+
+Upstream review (PR #40) reproduced a self-disarmament bypass in the first
+port: `_config()` read last-wins while `_cfg_read_flag()` read first-wins, so
+an appended duplicate `hard_enforcement: false` left the config-gate seeing
+"still enabled" while the main reader disarmed. Fixed by making both readers
+first-wins (matching the canonical sage-config-gate.sh) and porting
+`contradictory_flag()` into `_cfg_weaker`, so a both-values config is refused
+at write time in both the whole-file and append-by-patch forms. Probes 10–13
+above are the regression tests; the naive single-line flip was already caught
+by probe 3 before the fix.
 
 Six gates veto with model-visible messages (Hermes contract: return
 `{"action": "block", "message": ...}` from `pre_tool_call`). The observers
