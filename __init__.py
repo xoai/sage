@@ -81,9 +81,11 @@ DEGRADED = {
 
 DEGLOG_MARK = "[auto-logged by sage-gates post_tool_call]"
 
+# sk-ant- MUST precede sk-: the generic sk- pattern would otherwise match
+# first and mislabel Anthropic keys.
 SECRET_PATTERNS = [
-    (r"\bsk-[A-Za-z0-9_-]{16,}", "an sk-… API key"),
     (r"\bsk-ant-[A-Za-z0-9_-]{16,}", "an Anthropic API key"),
+    (r"\bsk-[A-Za-z0-9_-]{16,}", "an sk-… API key"),
     (r"\bAKIA[0-9A-Z]{16}\b", "an AWS access key id"),
     (r"\bgh[pos]_[A-Za-z0-9]{20,}", "a GitHub token"),
     (r"\bgithub_pat_[A-Za-z0-9_]{20,}", "a GitHub fine-grained token"),
@@ -167,7 +169,15 @@ def _config(project_root):
                 for line in fh:
                     m = re.match(r"\s*([a-z_]+)\s*:\s*(true|false)\b", line, re.I)
                     if m:
-                        flags[m.group(1).lower()] = (m.group(2).lower() == "true")
+                        key = m.group(1).lower()
+                        # FIRST occurrence wins — same direction the gate's
+                        # _cfg_read_flag() reads. A duplicate key with both
+                        # values is a reader-divergence bomb; the config-gate
+                        # refuses to create one, and both readers agreeing on
+                        # first-wins means a stray duplicate cannot disarm the
+                        # gates even if one appears.
+                        if key not in flags:
+                            flags[key] = (m.group(2).lower() == "true")
         except OSError:
             pass
     return sage_dir, flags
@@ -592,9 +602,26 @@ def _cfg_witness_capping(text):
     return _cfg_read_flag(text, "witness_capping") is not False
 
 
+def _cfg_contradictory_flag(text, key):
+    """The same key with BOTH values in one file is a reader-divergence
+    bomb: first-wins readers stay armed while last-wins readers disarm.
+    Ported from the canonical sage-config-gate.sh (round-2 review). A config
+    in that state may not be CREATED through this gate."""
+    vals = {v.lower() for v in re.findall(
+        r"(?mi)^\s*%s\s*:\s*(true|false)\b" % re.escape(key), text or "")}
+    return len(vals) > 1
+
+
 def _cfg_weaker(before, after):
     for key in (_CFG_MASTER,) + _CFG_OPT_OUT + _CFG_OPT_IN:
         if _cfg_enabled(before, key) and not _cfg_enabled(after, key):
+            return True
+    # Introducing a contradictory duplicate of an enforcement flag is
+    # weakening even though first-wins readers don't move: any last-wins
+    # reader reads the appended value. Same rule as the canonical gate.
+    for key in (_CFG_MASTER,) + _CFG_OPT_OUT + _CFG_OPT_IN:
+        if (not _cfg_contradictory_flag(before, key)
+                and _cfg_contradictory_flag(after, key)):
             return True
     if _cfg_review_mode(before) == "v2":
         if _cfg_review_mode(after) != "v2":
@@ -638,6 +665,10 @@ def _config_gate(project_root, sage_dir, tool_name, args, path, new_text):
             body = args.get("patch")
             if isinstance(body, str):
                 # V4A patch mode: approximate by pairing -/+ lines in order.
+                # CAVEAT (maintainer review 2026-08-05): a reordered patch can
+                # mispair and slip a weakening past this reconstruction. The
+                # main write_file path and the contradictory-flag check are the
+                # real defense; this stays fail-open by design.
                 removals, additions = [], []
                 for ln in body.splitlines():
                     if ln.startswith("-") and not ln.startswith("---"):
@@ -1046,6 +1077,20 @@ def register(ctx) -> None:
     # into the turn. Use /sage to route, /sage-fix etc. to run.
 
     # ── Register bundled skills ──
+    # The plugin IS the whole repo, so skills/ also holds the framework's
+    # own domain skills (api, web, nextjs, react, ...). Only the 21
+    # hermes-platform skills belong here — same set declared in
+    # build_plugin.py SKILLS_NOT_IN_PLUGIN and coverage.yaml. Registering
+    # the rest would drag the claude-code build's skills (and the
+    # sage-memory MCP dependency) into Hermes.
+    _HERMES_SKILLS = frozenset({
+        "sage", "sage-analyst", "sage-architect", "sage-autoresearch",
+        "sage-build", "sage-checkpoints", "sage-classifier",
+        "sage-constitution", "sage-continue", "sage-debugger",
+        "sage-decisions", "sage-developer", "sage-fix", "sage-gates",
+        "sage-learn", "sage-reflect", "sage-review", "sage-reviewer",
+        "sage-routing", "sage-tiers", "sage-using-memory",
+    })
     try:
         from pathlib import Path
         _plugin_dir = Path(__file__).parent
@@ -1053,7 +1098,8 @@ def register(ctx) -> None:
         if _skills_dir.is_dir():
             for child in sorted(_skills_dir.iterdir()):
                 skill_md = child / "SKILL.md"
-                if child.is_dir() and skill_md.exists():
+                if (child.is_dir() and skill_md.exists()
+                        and child.name in _HERMES_SKILLS):
                     try:
                         # Hermes auto-namespaces: "sage:" prefix comes from plugin name
                         ctx.register_skill(child.name, str(skill_md))

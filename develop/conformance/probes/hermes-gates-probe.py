@@ -165,6 +165,55 @@ def main():
     print(("  PASS" if logged else "  FAIL") + " R29 degradation logged to decisions.md")
     (PASS if logged else FAIL).append("r29-degradation-audit")
 
+    # ── duplicate-key self-disarmament (maintainer review, 2026-08-05) ──
+    # A config where hard_enforcement holds BOTH values is a reader-divergence
+    # bomb: a last-wins main reader disarms while a first-wins gate reader
+    # stays armed. The canonical sage-config-gate.sh refuses to create such a
+    # config (contradictory_flag); the port must too.
+    print("\n── duplicate-key self-disarmament probes ──")
+
+    # 10. main reader must stay ARMED on a contradictory config (first-wins)
+    with open(cfg, "w") as fh:
+        fh.write("hard_enforcement: true\ntdd_enforcement: true\n"
+                 "hard_enforcement: false\n")
+    _sd, flags = plugin._config(proj)
+    armed = flags.get("hard_enforcement") is True
+    print(("  PASS" if armed else "  FAIL") +
+          " main reader stays armed on contradictory config: %s" % armed)
+    (PASS if armed else FAIL).append("contradictory-config-stays-armed")
+
+    # 11. with that config on disk, enforcement must still veto (secrets-gate
+    #     is manifest-independent, so it isolates the reader question)
+    got = plugin._on_pre_tool_call(
+        tool_name="write_file",
+        args={"path": src, "content": "KEY = 'sk-AbCdEfGh1234567890xYz'\n"})
+    expect("gates still veto under contradictory config", got, True,
+           "secrets-gate")
+
+    # 12. config-gate must refuse to CREATE the contradictory config — both
+    #     the whole-file write and the append-by-patch form. Start from a
+    #     CLEAN config so the write is what introduces the contradiction.
+    with open(cfg, "w") as fh:
+        fh.write("hard_enforcement: true\ntdd_enforcement: true\n")
+    # content keeps tdd_enforcement so the ONLY objection is the duplicate key
+    got = plugin._on_pre_tool_call(
+        tool_name="write_file",
+        args={"path": cfg, "content": "hard_enforcement: true\n"
+                                      "tdd_enforcement: true\n"
+                                      "hard_enforcement: false\n"})
+    expect("config-gate refuses contradictory write_file", got, True,
+           "config-gate")
+    got = plugin._on_pre_tool_call(
+        tool_name="patch",
+        args={"path": cfg, "old_string": "hard_enforcement: true",
+              "new_string": "hard_enforcement: true\nhard_enforcement: false"})
+    expect("config-gate refuses contradictory append-by-patch", got, True,
+           "config-gate")
+
+    # restore a clean config for anything run after this block
+    with open(cfg, "w") as fh:
+        fh.write("hard_enforcement: true\ntdd_enforcement: true\n")
+
     print("\n%d passed, %d failed" % (len(PASS), len(FAIL)))
     return 1 if FAIL else 0
 
