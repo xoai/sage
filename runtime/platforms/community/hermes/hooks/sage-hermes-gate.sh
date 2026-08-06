@@ -77,7 +77,9 @@ print(json.dumps({'decision': 'block', 'reason': reason}))
 fi
 
 # Allow: if the gate printed JSON with context (session-init style),
-# forward it as a Hermes context injection; otherwise silent allow.
+# forward it as a Hermes context injection — as the ONLY JSON document
+# on stdout (Hermes core json.loads the whole stdout, so a trailing
+# {} would corrupt it). Silent allow otherwise.
 python3 -c "
 import json, sys
 try:
@@ -90,5 +92,6 @@ if isinstance(d, dict):
     ctx = hso.get('additionalContext') or d.get('context')
 if ctx:
     print(json.dumps({'context': str(ctx)[:8000]}))
-" < "$TMP_OUT" 2>/dev/null || true
-printf '{}\n'
+else:
+    print('{}')
+" < "$TMP_OUT" 2>/dev/null || printf '{}\n'

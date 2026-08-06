@@ -275,7 +275,9 @@ else
       DEST_HOOKS_ARG="$DEST_HOOKS"
     fi
     if command -v python3 >/dev/null 2>&1; then
-      python3 - "$CONFIG_YAML_ARG" "$DEST_HOOKS_ARG" "$HOOKS_WANTED" << 'PYEOF'
+      # Capture the exit code explicitly — under set -e a bare command that
+      # fails would abort the script before any error branch could run.
+      if python3 - "$CONFIG_YAML_ARG" "$DEST_HOOKS_ARG" "$HOOKS_WANTED" << 'PYEOF'
 import json, re, sys, os
 
 cfg_path, hooks_dir, wanted_json = sys.argv[1], sys.argv[2], sys.argv[3]
@@ -357,7 +359,7 @@ with open(cfg_path, "w", encoding="utf-8") as fh:
     fh.write("\n".join(lines) + "\n")
 print(f"MERGED_OK added={len(missing)}")
 PYEOF
-      if [ $? -eq 0 ]; then
+      then
         echo -e "    ${GREEN}✓${RESET} Hooks registered in $CONFIG_YAML"
       else
         echo -e "    ${YELLOW}⚠ Hook merge failed — add them manually (see docs/user-guide/features/hooks)${RESET}"
