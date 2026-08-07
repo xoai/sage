@@ -270,10 +270,22 @@ else
     if command -v cygpath >/dev/null 2>&1; then
       CONFIG_YAML_ARG="$(cygpath -w "$CONFIG_YAML")"
       DEST_HOOKS_ARG="$(cygpath -w "$DEST_HOOKS")"
+      # Blast-radius (Windows): hermes spawns hook commands via
+      # shlex.split + shell=False, so argv[0] must be an executable path
+      # CreateProcess can find. A bare `bash` resolves to WSL System32
+      # bash (System32 is searched before PATH), which cannot read G:/
+      # script paths -> exit 127, hooks fail open. Resolve the bash that
+      # is ACTUALLY running this generator to an absolute Windows path at
+      # install time. Nothing machine-specific is hardcoded.
+      SAGE_BASH_EXE="$(cygpath -w "$(command -v bash)" | tr '\\' '/')"
     else
       CONFIG_YAML_ARG="$CONFIG_YAML"
       DEST_HOOKS_ARG="$DEST_HOOKS"
+      SAGE_BASH_EXE="bash"
     fi
+    # Never emit an empty argv[0].
+    [ -z "$SAGE_BASH_EXE" ] && SAGE_BASH_EXE="bash"
+    export SAGE_BASH_EXE
     if command -v python3 >/dev/null 2>&1; then
       # Capture the exit code explicitly — under set -e a bare command that
       # fails would abort the script before any error branch could run.
@@ -294,8 +306,12 @@ lines = text.splitlines()
 
 # Commands run via shlex.split + shell=False. The adapter is a bash script,
 # so wrap it explicitly — on Windows a bare .sh is not directly executable.
+# argv[0] must be an absolute executable path on Windows (bare `bash`
+# resolves to WSL System32 bash -> exit 127 on G:/ script paths).
+# SAGE_BASH_EXE is resolved at install time by the bash wrapper above.
+_bash = os.environ.get("SAGE_BASH_EXE", "bash")
 def _cmd(script):
-    return f'"bash \\"{adapter}\\" {script}"'
+    return f'"{_bash} \\"{adapter}\\" {script}"'
 
 # Locate the top-level hooks: block (or mark end-of-file for append).
 hooks_start = None
@@ -317,6 +333,8 @@ if hooks_start is None:
     hooks_end = len(lines)
 
 missing = []
+needs_update = []  # (cmd_line_idx, end_idx_inclusive, new_cmd)
+broken_bash_re = re.compile(r'^\s*command:\s*bash(\s|$)')
 for event, matcher, script in wanted:
     cmd = _cmd(script)
     # Dedup on the adapter+script pair, tolerant of how the entry lands in
@@ -325,11 +343,54 @@ for event, matcher, script in wanted:
     # configs may hold a folded plain scalar split across lines
     # (gate.sh"\n   script). The needle must allow an optional backslash
     # before the quote or neither form matches and every rerun appends a
-    # duplicate set.
+    # duplicate set. SEARCH THE WHOLE TEXT: in folded entries the pattern
+    # spans two lines, so a per-line search can never match (root cause of
+    # the silent updated=0).
     pat = re.compile(r'sage-hermes-gate\.sh\\?"?\s+' + re.escape(script))
-    if pat.search(text):
-        continue  # already registered — idempotent
+    m = pat.search(text)
+    if m:
+        # Entry already registered. The match lands on the adapter /
+        # continuation line; walk back to the `command:` line to find the
+        # head of the entry (in folded configs the script name sits on its
+        # own line AFTER the adapter path).
+        match_line = text[:m.start()].count("\n")
+        cmd_line = None
+        for bi in range(match_line, -1, -1):
+            if re.match(r'\s*command:', lines[bi]):
+                cmd_line = bi
+                break
+        if cmd_line is not None and broken_bash_re.match(lines[cmd_line]):
+            # Command uses the bare `bash` form (the WSL System32 -> 127
+            # trap). Rewrite the WHOLE folded block in place: continuation
+            # lines are strictly deeper-indented than the command line;
+            # anything else (blank line, sibling key like `timeout:` at
+            # the same indent, new list item) ends the block. A hardcoded
+            # shallow threshold would eat `timeout: 30` — derive it from
+            # the command line's own indent instead.
+            cmd_indent = len(lines[cmd_line]) - len(lines[cmd_line].lstrip(' '))
+            end_idx = cmd_line
+            for ni in range(cmd_line + 1, len(lines)):
+                nl = lines[ni]
+                if not nl.strip():
+                    break
+                n_indent = len(nl) - len(nl.lstrip(' '))
+                if n_indent <= cmd_indent:
+                    break
+                end_idx = ni
+            needs_update.append((cmd_line, end_idx, cmd))
+        continue  # already registered — idempotent (or queued for rewrite)
     missing.append((event, matcher, cmd))
+
+# Apply in-place folded-block rewrites, reverse order so earlier indexes
+# stay valid. Each 3-line folded block collapses to 1 line; shift hooks_end
+# by the net delta so later inserts land in the right place.
+hooks_end_delta = 0
+for start_idx, end_idx, new_cmd in sorted(needs_update, key=lambda x: -x[0]):
+    removed = end_idx - start_idx  # continuation lines dropped
+    lines[start_idx:end_idx + 1] = [f"      command: {new_cmd}"]
+    hooks_end_delta -= removed
+hooks_end += hooks_end_delta
+text = "\n".join(lines) + "\n"
 
 # Ensure hooks_auto_accept so the consent prompt doesn't ambush the user.
 # Insert ABOVE the hooks: block (top-level key) and shift hooks_start so
@@ -365,7 +426,7 @@ if missing:
 os.makedirs(os.path.dirname(os.path.abspath(cfg_path)), exist_ok=True)
 with open(cfg_path, "w", encoding="utf-8") as fh:
     fh.write("\n".join(lines) + "\n")
-print(f"MERGED_OK added={len(missing)}")
+print(f"MERGED_OK added={len(missing)} updated={len(needs_update)}")
 PYEOF
       then
         echo -e "    ${GREEN}✓${RESET} Hooks registered in $CONFIG_YAML"
