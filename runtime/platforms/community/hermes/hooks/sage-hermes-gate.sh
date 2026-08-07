@@ -44,6 +44,18 @@ trap 'rm -f "$TMP_OUT" "$TMP_ERR"' EXIT
 
 PAYLOAD="$(cat 2>/dev/null || true)"
 
+# Windows/msys path-conversion fix (2026-08-06, proven byte-exact):
+# gate scripts write their python to an mktemp file and exec
+# python3 "$TMPFILE". Windows-native python3 cannot open /tmp/... (the
+# MSYS2 tree), and MSYS arg conversion rewrites any C:/... path we hand
+# it. Fix at the boundary: point TMPDIR at a Windows-native temp dir so
+# mktemp writes where python3 can read, and disable MSYS arg conversion
+# so the path arrives untouched. No-op on hosts without cygpath.
+if command -v cygpath >/dev/null 2>&1; then
+  export TMPDIR="$(cygpath -w "${TMPDIR:-/tmp}" | tr '\\' '/')"
+  export MSYS_NO_PATHCONV=1
+fi
+
 # Hermes payload → claude-code-shaped payload (path → file_path).
 printf '%s' "$PAYLOAD" | python3 -c "
 import json, sys
