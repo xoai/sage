@@ -1102,7 +1102,7 @@ def register(ctx) -> None:
                         and child.name in _HERMES_SKILLS):
                     try:
                         # Hermes auto-namespaces: "sage:" prefix comes from plugin name
-                        ctx.register_skill(child.name, str(skill_md))
+                        ctx.register_skill(child.name, skill_md)
                     except Exception as e:
                         logger.warning("Failed to register skill '%s': %s", child.name, e)
     except ImportError:
