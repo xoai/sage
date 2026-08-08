@@ -4,7 +4,7 @@
 # Two tiers (12-§20):
 #   first-class (claude-code, generic) — generate, then the generated tree is
 #     further exercised by the gate/hook/reference CI jobs.
-#   community (antigravity, codex, gemini-cli, opencode) — generation-smoke
+#   community (antigravity, codex, gemini-cli, opencode, hermes) — generation-smoke
 #     only: the generator runs and emits its instructions file.
 #
 # This job proves each generator at least runs and writes output. It does NOT
@@ -28,6 +28,7 @@ antigravity:GEMINI.md
 codex:AGENTS.md
 gemini-cli:GEMINI.md
 opencode:AGENTS.md
+hermes:SOUL.md
 "
 
 HOME_DIR="$(mktemp -d)"
@@ -46,6 +47,7 @@ for entry in $CASES; do
   ( cd "$target" && git init -q . 2>/dev/null || true )
 
   out=$( cd "$target" && SAGE_HOME="$HOME_DIR" \
+         HERMES_HOME="$HOME_DIR/hermes" \
          bash "$REPO_ROOT/bin/sage" init --no-memory --platform "$platform" 2>&1 )
   rc=$?
 

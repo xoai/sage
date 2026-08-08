@@ -206,32 +206,32 @@ else
     echo ""
     echo -e "  ${BOLD}Hermes profiles found — which ones should get Sage?${RESET}"
     echo ""
-    for i in "${!ALL_PROFILES[@]}"; do
+    for ((i = 0; i < ${#ALL_PROFILES[@]}; i++)); do
       echo "    $((i + 1))) ${ALL_PROFILES[$i]}"
     done
     echo ""
     printf "  Enter numbers separated by spaces (or 'all'): "
     read -r selection
     if [ "$selection" = "all" ] || [ -z "${selection// /}" ]; then
-      SELECTED_PROFILES=("${ALL_PROFILES[@]}")
+      SELECTED_PROFILES=(${ALL_PROFILES[@]+"${ALL_PROFILES[@]}"})
     else
       for tok in $selection; do
         if [[ "$tok" =~ ^[0-9]+$ ]] && [ "$tok" -ge 1 ] && [ "$tok" -le ${#ALL_PROFILES[@]} ]; then
           SELECTED_PROFILES+=("${ALL_PROFILES[$((tok - 1))]}")
         fi
       done
-      [ ${#SELECTED_PROFILES[@]} -eq 0 ] && SELECTED_PROFILES=("${ALL_PROFILES[@]}")
+      [ ${#SELECTED_PROFILES[@]} -eq 0 ] && SELECTED_PROFILES=(${ALL_PROFILES[@]+"${ALL_PROFILES[@]}"})
     fi
   else
     # Non-interactive: install into every profile.
-    SELECTED_PROFILES=("${ALL_PROFILES[@]}")
+    SELECTED_PROFILES=(${ALL_PROFILES[@]+"${ALL_PROFILES[@]}"})
   fi
 
   echo ""
-  echo -e "  Installing Sage for profiles: ${SELECTED_PROFILES[*]}"
+  echo -e "  Installing Sage for profiles: ${SELECTED_PROFILES[*]+"${SELECTED_PROFILES[*]}"}"
   echo ""
 
-  for PROFILE in "${SELECTED_PROFILES[@]}"; do
+  for PROFILE in ${SELECTED_PROFILES[@]+"${SELECTED_PROFILES[@]}"}; do
     echo -e "  ${BOLD}── Profile: $PROFILE${RESET}"
     if [ "$PROFILE" = "default" ] && [ ! -d "$PROFILES_DIR/default" ]; then
       PROF_ROOT="$HERMES_HOME"

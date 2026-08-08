@@ -40,6 +40,7 @@ from __future__ import annotations
 import argparse
 import filecmp
 import json
+import os
 import pathlib
 import re
 import shutil
@@ -53,8 +54,14 @@ SKILLS = REPO_ROOT / "skills"
 SYSTEM_SKILLS = REPO_ROOT / "core" / "system-skills"
 INSTRUCTIONS_BODY = REPO_ROOT / "runtime" / "platforms" / "_shared" / "instructions-body.sh"
 CONSTITUTION_SH = REPO_ROOT / "runtime" / "platforms" / "_shared" / "constitution.sh"
+BASH = os.environ.get("SAGE_BASH_EXE") or shutil.which("bash") or "bash"
 
 VERSION_PLACEHOLDER = "{{VERSION}}"
+
+
+def bash_path(path: pathlib.Path) -> str:
+    """Return a path Bash can consume on both POSIX and Windows hosts."""
+    return str(path).replace("\\", "/")
 
 # The branch the release workflow publishes the built tree to. The marketplace
 # entry must pin this as its `ref` — without it, `source` resolves to the default
@@ -187,9 +194,10 @@ def build_navigator() -> str:
         'set -eu\n'
         'source "%s"\n'
         'source "%s"\n'
-        'emit_instructions_body\n' % (INSTRUCTIONS_BODY, CONSTITUTION_SH)
+        'emit_instructions_body\n' % (bash_path(INSTRUCTIONS_BODY),
+                                      bash_path(CONSTITUTION_SH))
     )
-    proc = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+    proc = subprocess.run([BASH, "-c", script], capture_output=True, text=True)
     if proc.returncode != 0:
         raise BuildError("could not emit the instructions body for the navigator:\n"
                          + proc.stderr[-800:])
@@ -201,9 +209,9 @@ def build_navigator() -> str:
     # each principle naming the mechanism that enforces it, exactly as the eager
     # layer does.
     const = subprocess.run(
-        ["bash", "-c",
+        [BASH, "-c",
          'source "%s"; build_constitution_section "%s" "/nonexistent"'
-         % (CONSTITUTION_SH, REPO_ROOT / "core")],
+         % (bash_path(CONSTITUTION_SH), bash_path(REPO_ROOT / "core"))],
         capture_output=True, text=True)
     if const.returncode != 0:
         raise BuildError("constitution merge failed:\n" + const.stderr[-400:])
