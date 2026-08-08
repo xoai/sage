@@ -209,13 +209,14 @@ prune_framework_copy() {
     return 0
   fi
 
-  # Allowlist vendoring (ADR-6/§16): a project needs only the runtime — core/,
-  # skills/, runtime/, bin/, LICENSE, VERSION. Everything else the repo carries
+  # Allowlist vendoring (ADR-6/§16): a project needs the runtime plus the
+  # Hermes plugin entry files — core/, skills/, runtime/, bin/, __init__.py,
+  # plugin.yaml, LICENSE, VERSION. Everything else the repo carries
   # is framework-dev material (docs/, develop/, tools/, marketing SVGs,
   # CHANGELOG, the repo README, .claude-plugin/, install.sh, RELEASING/
   # CONTRIBUTING, VCS/OS litter) and is not shipped into user projects. This
   # drops the per-project footprint from ~5.4 MB to well under 1.5 MB.
-  local keep=" core skills runtime bin LICENSE VERSION "
+  local keep=" core skills runtime bin __init__.py plugin.yaml LICENSE VERSION "
   local entry name
   for entry in "$sage_dir"/* "$sage_dir"/.[!.]*; do
     [ -e "$entry" ] || continue
@@ -238,7 +239,8 @@ prune_framework_copy() {
 # Sage (vendored runtime)
 
 Vendored Sage ${vendored_version} runtime for this project: \`core/\`, \`skills/\`,
-\`runtime/\`, \`bin/\`. This is a generated copy — do not edit it by hand.
+\`runtime/\`, \`bin/\`, plus the Hermes plugin entry files. This is a generated
+copy — do not edit it by hand.
 
 - Framework source and docs: https://github.com/xoai/sage
 - Regenerate platform files: \`sage update\`
@@ -327,17 +329,17 @@ select_platform() {
     # `--platform ","`) yields an empty FLAG_LIST; bash 3.2 aborts.
     for p in ${FLAG_LIST[@]+"${FLAG_LIST[@]}"}; do
       case "$p" in
-        claude-code|generic|antigravity|codex|opencode|gemini-cli)
+        claude-code|generic|antigravity|codex|opencode|gemini-cli|hermes)
           PLATFORMS+=("$p")
           ;;
         both)
           PLATFORMS+=("claude-code" "antigravity")
           ;;
         all)
-          PLATFORMS=("claude-code" "antigravity" "codex" "opencode" "gemini-cli")
+          PLATFORMS=("claude-code" "antigravity" "codex" "opencode" "gemini-cli" "hermes")
           ;;
         *)
-          echo -e "  ${YELLOW}Unknown platform: $p (supported: claude-code, antigravity, codex, opencode, gemini-cli)${RESET}"
+          echo -e "  ${YELLOW}Unknown platform: $p (supported: claude-code, antigravity, codex, opencode, gemini-cli, hermes)${RESET}"
           ;;
       esac
     done
@@ -361,7 +363,8 @@ select_platform() {
     echo "    [3] Codex (OpenAI)        (community — experimental)"
     echo "    [4] Opencode              (community — experimental)"
     echo "    [5] Gemini CLI            (community — experimental)"
-    echo "    [6] Multiple — install for all"
+    echo "    [6] Hermes Agent          (community — experimental)"
+    echo "    [7] Multiple — install for all"
     printf "  > "
     read -r choice
     case "$choice" in
@@ -369,7 +372,8 @@ select_platform() {
       3) PLATFORMS=("codex") ;;
       4) PLATFORMS=("opencode") ;;
       5) PLATFORMS=("gemini-cli") ;;
-      6) PLATFORMS=("claude-code" "antigravity" "codex" "opencode" "gemini-cli") ;;
+      6) PLATFORMS=("hermes") ;;
+      7) PLATFORMS=("claude-code" "antigravity" "codex" "opencode" "gemini-cli" "hermes") ;;
       *) PLATFORMS=("claude-code") ;;
     esac
     PLATFORM=$(printf '%s\n' ${PLATFORMS[@]+"${PLATFORMS[@]}"} | tr '\n' '+' | sed 's/+$//')
@@ -544,15 +548,15 @@ hard_enforcement: true
 # test. New projects default ON, because the rule was measured and it did not hold:
 # asked to change one constant under pressure the agent wrote no test in 3 runs of 3,
 # with the tdd skill loaded. A rule the model can talk itself out of is not a rule.
-# Escape with `tier: tier1` on a manifest, or set this to false.
+# Escape with \`tier: tier1\` on a manifest, or set this to false.
 tdd_enforcement: true
 # scope_gate: the scope-gate hook blocks Edit/Write to paths outside the
 # approved plan's derived scope (manifest scope: block, written by
-# `manifest.py scope derive`). MEASURED 2026-08-02 and left OFF: bare and
+# \`manifest.py scope derive\`). MEASURED 2026-08-02 and left OFF: bare and
 # gated both held scope 3/3 at two model tiers, so the gate prevented
 # nothing (harmless and fast — arm it if you want the floor, but it is not
 # a drift-prevention claim). standard+ gates cycles with
-# manifests and skips tier1; `all` gates tier1 cycles too. Legal exits from a
+# manifests and skips tier1; \`all\` gates tier1 cycles too. Legal exits from a
 # block: scope add-collateral (recorded), or amend the plan + scope derive
 # --refresh. Scope changes go through the artifact, never silently through
 # the diff. ABSENT means off (it ships that way); arm by writing ONE line:
@@ -660,6 +664,14 @@ CONSTMD
 # Best-effort: failures never abort sage's primary operation. Helper
 # itself returns 0 in all expected paths (no-op when sage-memory absent).
 # ═══════════════════════════════════════════════════════════════
+native_python_path() {
+  if command -v cygpath >/dev/null 2>&1; then
+    cygpath -m "$1"
+  else
+    printf '%s\n' "$1"
+  fi
+}
+
 sage_memory_sync_hook() {
   local target="$1"
   local ms_script="$SAGE_FRAMEWORK/runtime/tools/memory_sync.py"
@@ -667,8 +679,15 @@ sage_memory_sync_hook() {
   [ -f "$ms_script" ] || return 0
   command -v python3 >/dev/null 2>&1 || return 0
 
-  python3 "$ms_script" migrate-legacy "$target" "$target" || true
-  python3 "$ms_script" sync "$SAGE_FRAMEWORK" "$target" --yes || true
+  local py_ms py_target py_framework
+  py_ms=$(native_python_path "$ms_script")
+  py_target=$(native_python_path "$target")
+  py_framework=$(native_python_path "$SAGE_FRAMEWORK")
+
+  MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL="*" \
+    python3 "$py_ms" migrate-legacy "$py_target" "$py_target" || true
+  MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL="*" \
+    python3 "$py_ms" sync "$py_framework" "$py_target" --yes || true
 }
 
 run_generators() {
@@ -689,6 +708,7 @@ run_generators() {
       codex)       platforms_to_run=("codex") ;;
       opencode)    platforms_to_run=("opencode") ;;
       gemini-cli)  platforms_to_run=("gemini-cli") ;;
+      hermes)      platforms_to_run=("hermes") ;;
       *)           platforms_to_run=("claude-code") ;;
     esac
   fi
@@ -757,6 +777,9 @@ print_success() {
         ;;
       gemini-cli)
         echo "    $step. Gemini CLI: run \`gemini\` — TOML commands in .gemini/commands/"
+        ;;
+      hermes)
+        echo "    $step. Hermes: start \`hermes\` in this project — SOUL.md loads as system prompt, gates run via profile hooks"
         ;;
     esac
     step=$((step + 1))
@@ -953,10 +976,10 @@ sage_update() {
     # Empty-safe expansion (see select_platform — same bash 3.2 guard).
     for p in ${FLAG_LIST[@]+"${FLAG_LIST[@]}"}; do
       case "$p" in
-        claude-code|generic|antigravity|codex|opencode|gemini-cli)
+        claude-code|generic|antigravity|codex|opencode|gemini-cli|hermes)
           PLATFORMS+=("$p") ;;
         all)
-          PLATFORMS=("claude-code" "antigravity" "codex" "opencode" "gemini-cli")
+          PLATFORMS=("claude-code" "antigravity" "codex" "opencode" "gemini-cli" "hermes")
           break ;;
       esac
     done
@@ -1448,7 +1471,11 @@ sage_upgrade() {
   # itself never fails because of memory-sync side effects.
   local ms_script="$sage_home/framework/runtime/tools/memory_sync.py"
   if [ -f "$ms_script" ] && command -v python3 >/dev/null 2>&1; then
-    python3 "$ms_script" upgrade "$sage_home/framework" || true
+    local py_ms py_framework
+    py_ms=$(native_python_path "$ms_script")
+    py_framework=$(native_python_path "$sage_home/framework")
+    MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL="*" \
+      python3 "$py_ms" upgrade "$py_framework" || true
   fi
 
   echo ""
@@ -1776,7 +1803,7 @@ sage_help() {
   echo "Flags:"
   echo "  --prefix                         Namespace commands as sage:build, sage:fix, etc."
   echo "  --preset <name>                  Set constitution preset (base|startup|enterprise|opensource)"
-  echo "  --platform <list>                Comma-separated platforms (claude-code|antigravity|codex|opencode|gemini-cli|all)"
+  echo "  --platform <list>                Comma-separated platforms (claude-code|antigravity|codex|opencode|gemini-cli|hermes|all)"
   echo ""
   echo "Examples:"
   echo "  sage new my-app                  # Create project with Sage"
@@ -2117,6 +2144,7 @@ sage_worktree() {
       codex)       _wt_copy_ignored "$root" "$dir" ".codex"; _wt_copy_ignored "$root" "$dir" "AGENTS.md" ;;
       opencode)    _wt_copy_ignored "$root" "$dir" ".opencode" ;;
       gemini-cli)  _wt_copy_ignored "$root" "$dir" ".gemini"; _wt_copy_ignored "$root" "$dir" "GEMINI.md" ;;
+      hermes)      _wt_copy_ignored "$root" "$dir" "SOUL.md" ;;
     esac
   done
   [ "$WT_COPIED" -gt 0 ] && echo -e "  ${GREEN}✓${RESET} Copied $WT_COPIED gitignored runtime path(s) into the worktree."

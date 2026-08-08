@@ -53,8 +53,20 @@ class BuildPluginTest(unittest.TestCase):
     def test_build_omits_excluded_skills(self):
         out = self._build()
         for name in build_plugin.SKILLS_NOT_IN_PLUGIN:
-            self.assertFalse((out / "skills" / name).exists(),
-                             f"{name} is excluded but shipped anyway")
+            built = out / "skills" / name / "SKILL.md"
+            sources = (
+                build_plugin.OVERLAY / "skills" / name / "SKILL.md",
+                build_plugin.SYSTEM_SKILLS / name / "SKILL.md",
+            )
+            canonical = next((p for p in sources if p.is_file()), None)
+            if canonical is not None:
+                self.assertTrue(built.is_file(),
+                                f"canonical replacement for {name} should ship")
+                self.assertEqual(built.read_bytes(), canonical.read_bytes(),
+                                 f"{name} must come from its canonical replacement")
+            else:
+                self.assertFalse(built.exists(),
+                                 f"{name} is excluded but shipped anyway")
 
     def test_gate_scripts_are_identical_to_their_sources(self):
         """A mis-wired FILE_MAP would ship a stale gate — the Gate 4 failure mode."""
@@ -187,8 +199,9 @@ class NavigatorIsGeneratedTest(unittest.TestCase):
             nav = (out / "skills" / "sage-navigator" / "SKILL.md").read_text()
 
         body = sp.run(
-            ["bash", "-c",
-             'source "%s"; emit_instructions_body' % build_plugin.INSTRUCTIONS_BODY],
+            [build_plugin.BASH, "-c",
+             'source "%s"; emit_instructions_body' %
+             build_plugin.bash_path(build_plugin.INSTRUCTIONS_BODY)],
             capture_output=True, text=True).stdout
 
         # A distinctive line from the eager body must appear verbatim in the

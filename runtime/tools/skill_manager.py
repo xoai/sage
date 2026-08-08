@@ -563,6 +563,28 @@ def deploy_to_platform(name, source_dir, project_dir):
                 shutil.copy2(cf, rules / f"skill-{name}-constitution.md")
         ui.success(f"Deployed to .agent/skills/{name}/")
         deployed = True
+    # Hermes: copy full skill into the profile skills dir (flat native discovery)
+    # Resolution: $HERMES_HOME/skills first, then every ~/.hermes/profiles/*/skills/,
+    # falling back to the flat ~/.hermes/skills/. Hermes has no project-scoped
+    # skills dir — the profile skills dir IS the discovery surface.
+    hermes_homes = []
+    env_home = os.environ.get("HERMES_HOME")
+    if env_home:
+        hermes_homes.append(Path(env_home))
+    dot_hermes = Path.home() / ".hermes"
+    profiles_root = dot_hermes / "profiles"
+    if profiles_root.is_dir():
+        hermes_homes.extend(p for p in sorted(profiles_root.iterdir()) if p.is_dir())
+    hermes_homes.append(dot_hermes)
+    for home in hermes_homes:
+        skills_dir = home / "skills"
+        if not skills_dir.is_dir():
+            continue
+        dest = skills_dir / name
+        if dest.exists(): shutil.rmtree(dest)
+        shutil.copytree(source_dir, dest)
+        ui.success(f"Deployed to {skills_dir}/{name}/")
+        deployed = True
     if not deployed:
         ui.dim(f"Available at sage/skills/{name}/. Run sage init to deploy.")
 
@@ -580,6 +602,21 @@ def undeploy_from_platform(name, project_dir):
     r = project_dir / ".agent" / "rules" / f"skill-{name}-constitution.md"
     if r.exists():
         r.unlink()
+    # Hermes — same resolution order as deploy
+    hermes_homes = []
+    env_home = os.environ.get("HERMES_HOME")
+    if env_home:
+        hermes_homes.append(Path(env_home))
+    dot_hermes = Path.home() / ".hermes"
+    profiles_root = dot_hermes / "profiles"
+    if profiles_root.is_dir():
+        hermes_homes.extend(p for p in sorted(profiles_root.iterdir()) if p.is_dir())
+    hermes_homes.append(dot_hermes)
+    for home in hermes_homes:
+        p = home / "skills" / name
+        if p.exists():
+            shutil.rmtree(p)
+            ui.success(f"Removed from {p}")
 
 # ── Display ──
 def fmt_installs(n):

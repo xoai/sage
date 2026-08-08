@@ -183,21 +183,36 @@ def _config(project_root):
     return sage_dir, flags
 
 
+def _is_enrolled_project(root):
+    config = os.path.join(root, ".sage", "config.yaml")
+    if not os.path.isfile(config):
+        return False
+
+    # ~/.sage is also Sage's global CLI/framework home. A config there applies
+    # to that installation; it must not enroll every descendant of $HOME.
+    home = os.path.normcase(os.path.abspath(os.path.expanduser("~")))
+    candidate = os.path.normcase(os.path.abspath(root))
+    global_framework = os.path.isdir(os.path.join(root, ".sage", "framework"))
+    return not (candidate == home and global_framework)
+
+
 def _find_project_root(abspath):
-    """Nearest ancestor of the target file containing .sage — the gate follows
-    the FILE, not the shell's cwd. Falls back to the process cwd when it is
-    itself a Sage project (relative-path edits from inside the project).
-    Returns None when neither is a Sage project (gates inert)."""
+    """Nearest explicitly enrolled Sage project for the target or cwd.
+
+    ``~/.sage`` is Sage's global framework install, so directory presence alone
+    is not a project marker. Only ``.sage/config.yaml`` enrolls a project and
+    activates Hermes context/gates there.
+    """
     cur = os.path.dirname(abspath)
     while True:
-        if os.path.isdir(os.path.join(cur, ".sage")):
+        if _is_enrolled_project(cur):
             return cur
         parent = os.path.dirname(cur)
         if parent == cur:
             break
         cur = parent
     cwd = os.path.abspath(os.getcwd())
-    if os.path.isdir(os.path.join(cwd, ".sage")):
+    if _is_enrolled_project(cwd):
         return cwd
     return None
 
@@ -1102,7 +1117,7 @@ def register(ctx) -> None:
                         and child.name in _HERMES_SKILLS):
                     try:
                         # Hermes auto-namespaces: "sage:" prefix comes from plugin name
-                        ctx.register_skill(child.name, str(skill_md))
+                        ctx.register_skill(child.name, skill_md)
                     except Exception as e:
                         logger.warning("Failed to register skill '%s': %s", child.name, e)
     except ImportError:

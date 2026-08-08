@@ -15,7 +15,9 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
+from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
@@ -70,6 +72,39 @@ def main():
     else:
         proj = os.path.join(os.path.dirname(REPO), "tmp-sage-tier-a-probe")
     print("probe project:", proj)
+
+    # A globally enabled Hermes plugin must be inert until the current
+    # project is explicitly enrolled by creating .sage/config.yaml.
+    os.chdir(REPO)
+    outside = tempfile.mkdtemp(prefix="sage-outside-project-")
+    os.chdir(outside)
+    print("\n── project-scope probes (no .sage means no Sage behavior) ──")
+    got = plugin._on_pre_tool_call(
+        tool_name="write_file",
+        args={"path": os.path.join(outside, "app.py"),
+              "content": "KEY = 'sk-ant-not-real'\n"})
+    expect("outside Sage project: gates are inert", got, False)
+    context = plugin._on_pre_llm_call(platform="cli")
+    context_ok = context is None
+    print(("  PASS" if context_ok else "  FAIL") +
+          " outside Sage project: no context injection")
+    (PASS if context_ok else FAIL).append("outside-project-no-context")
+
+    fake_home = tempfile.mkdtemp(prefix="sage-global-home-")
+    os.makedirs(os.path.join(fake_home, ".sage", "framework"))
+    with open(os.path.join(fake_home, ".sage", "config.yaml"), "w",
+              encoding="utf-8") as fh:
+        fh.write("hard_enforcement: false\n")
+    with mock.patch.object(plugin.os.path, "expanduser", return_value=fake_home):
+        global_home_ok = not plugin._is_enrolled_project(fake_home)
+    print(("  PASS" if global_home_ok else "  FAIL") +
+          " global ~/.sage framework is not a project")
+    (PASS if global_home_ok else FAIL).append("global-home-not-project")
+    shutil.rmtree(fake_home, ignore_errors=True)
+
+    os.chdir(REPO)
+    shutil.rmtree(outside, ignore_errors=True)
+
     try:
         setup(proj)
     except Exception as exc:
