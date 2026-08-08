@@ -165,6 +165,19 @@ class SageHermesPlatformTest(unittest.TestCase):
             cls.profile_config.read_text(encoding="utf-8")
             if cls.profile_config.is_file() else ""
         )
+        cls.installed_plugin = cls.hermes_home / "plugins" / "sage"
+        (cls.installed_plugin / "__init__.py").write_text(
+            "STALE_ADAPTER\n", encoding="utf-8"
+        )
+        (cls.installed_plugin / "plugin.yaml").write_text(
+            "name: stale\n", encoding="utf-8"
+        )
+        cls.installed_deep_plugin_file = (
+            cls.installed_plugin / "runtime" / "tools" / "skill_manager.py"
+        )
+        cls.installed_deep_plugin_file.write_text(
+            "STALE_DEEP_PLUGIN\n", encoding="utf-8"
+        )
         cls.update = subprocess.run(
             [BASH, bash_path(SAGE_BIN), "update", "--no-memory",
              "--platform", "hermes"],
@@ -206,6 +219,42 @@ class SageHermesPlatformTest(unittest.TestCase):
         updated = self.profile_config.read_text(encoding="utf-8")
         entry = re.compile(r"sage-hermes-gate\.sh\\?\"?\s+sage-[\w-]+\.sh")
         self.assertEqual(len(entry.findall(updated)), 11, updated)
+
+    def test_update_refreshes_existing_plugin_from_framework(self):
+        self.assertEqual(
+            (self.installed_plugin / "__init__.py").read_bytes(),
+            (REPO_ROOT / "__init__.py").read_bytes(),
+        )
+        self.assertEqual(
+            (self.installed_plugin / "plugin.yaml").read_bytes(),
+            (REPO_ROOT / "plugin.yaml").read_bytes(),
+        )
+        self.assertEqual(
+            self.installed_deep_plugin_file.read_bytes(),
+            (REPO_ROOT / "runtime" / "tools" / "skill_manager.py").read_bytes(),
+        )
+
+    def test_update_refuses_stale_git_managed_plugin(self):
+        git_marker = self.installed_plugin / ".git"
+        deep_file = self.installed_deep_plugin_file
+        original = deep_file.read_bytes()
+        git_marker.mkdir()
+        deep_file.write_text("STALE_DEEP_PLUGIN\n", encoding="utf-8")
+        try:
+            update = subprocess.run(
+                [BASH, bash_path(SAGE_BIN), "update", "--no-memory",
+                 "--platform", "hermes"],
+                cwd=self.proj, capture_output=True, text=True,
+                stdin=subprocess.DEVNULL, env=self.env, check=False,
+            )
+            output = update.stdout + update.stderr
+            self.assertNotEqual(update.returncode, 0, output[-4000:])
+            self.assertEqual(deep_file.read_text(encoding="utf-8"),
+                             "STALE_DEEP_PLUGIN\n")
+            self.assertIn("Refusing to overwrite Git-managed plugin", output)
+        finally:
+            shutil.rmtree(git_marker, ignore_errors=True)
+            deep_file.write_bytes(original)
 
 
 if __name__ == "__main__":

@@ -255,13 +255,23 @@ else
 
     # 2. Plugin → <profile>/plugins/sage (skills, injection, commands)
     DEST_PLUGIN="$PROF_ROOT/plugins/sage"
-    if [ -d "$DEST_PLUGIN" ]; then
-      echo -e "    ${CYAN}⊘${RESET} Plugin already installed at $DEST_PLUGIN"
+    mkdir -p "$(dirname "$DEST_PLUGIN")"
+    if [ -d "$DEST_PLUGIN" ] &&
+       [ "$(cd "$DEST_PLUGIN" && pwd -P)" = "$(cd "$SAGE_ROOT" && pwd -P)" ]; then
+      echo -e "    ${CYAN}⊘${RESET} Plugin source is already installed at $DEST_PLUGIN"
+    elif [ -e "$DEST_PLUGIN/.git" ]; then
+      echo -e "    ${YELLOW}⚠ Refusing to overwrite Git-managed plugin at $DEST_PLUGIN${RESET}" >&2
+      echo "      Update that checkout directly; Sage cannot verify it from a separate framework copy." >&2
+      exit 1
     else
-      mkdir -p "$(dirname "$DEST_PLUGIN")"
-      cp -r "$SAGE_ROOT" "$DEST_PLUGIN"
-      rm -rf "$DEST_PLUGIN/.git" "$DEST_PLUGIN/.worktrees" "$DEST_PLUGIN/node_modules" 2>/dev/null || true
-      echo -e "    ${GREEN}✓${RESET} Plugin → $DEST_PLUGIN"
+      PLUGIN_STAGE="${DEST_PLUGIN}.sage-stage.$$"
+      rm -rf "$PLUGIN_STAGE"
+      cp -r "$SAGE_ROOT" "$PLUGIN_STAGE"
+      rm -rf "$PLUGIN_STAGE/.git" "$PLUGIN_STAGE/.worktrees" "$PLUGIN_STAGE/node_modules" 2>/dev/null || true
+      mkdir -p "$DEST_PLUGIN"
+      cp -r "$PLUGIN_STAGE"/. "$DEST_PLUGIN"/
+      rm -rf "$PLUGIN_STAGE"
+      echo -e "    ${GREEN}✓${RESET} Plugin refreshed → $DEST_PLUGIN"
     fi
 
     # 3. Register hooks in <profile>/config.yaml (idempotent merge).
