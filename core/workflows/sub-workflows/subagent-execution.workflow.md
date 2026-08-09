@@ -178,6 +178,65 @@ DONE having done something else — not one that was unpoliced.
 The full gate sequence still runs once at cycle end. Per-task gates do not replace
 it; they stop a broken task from being built on by the next five.
 
+## Parallel lanes (`--parallel[=N]`, opt-in — A7)
+
+Engaged only when `resolve_parallel()` grants it: parallel exists INSIDE
+subagent execution (`--subagents --parallel`), and a refused request is the
+same loud-degradation contract as subagents themselves. Default cap 2 lanes,
+hard cap 4. Never default-on.
+
+**The scheduler is code, and the graph is its only input.** Every dispatch
+decision comes from:
+
+```bash
+python3 sage/runtime/tools/lanes.py schedule .sage/work/<cycle>/manifest.md --cap <N>
+```
+
+which reads the derived `task_graph:` (A8 — if the plan was underivable,
+parallel mode never opened), the ledger, and the `lanes:` block. It prints
+what dispatches NOW and why everything else waits: overlap serializes (a
+declared overlap is a serialization signal, never a worktree signal), a
+non-`[P]` task runs alone, a parked/errored lane freezes its dependents
+while siblings continue. Do not re-derive any of this from plan prose.
+
+**Each lane is a worktree + branch**, created with the existing machinery —
+`sage worktree <slug>` (worktree_copy seeding, collision guard, harvest on
+remove) — from the burst base (merged HEAD). Then, per lane, this
+sub-workflow's own per-task loop runs unchanged: context packet, implementer
+dispatch with the A6 role bindings, task-reviewer dispatch, verdicts. Hooks
+fire inside lane subagents exactly as they do inline (attested, P3-T1).
+
+**Bookkeeping stays single-writer.** Lanes REPORT (`STATUS: DONE | BLOCKED`
++ evidence); only the orchestrator RECORDS, and only through the tool:
+
+```bash
+python3 sage/runtime/tools/lanes.py open  <manifest> --task N --branch B --worktree DIR \
+    [--model M] --base <merged-HEAD sha> --cap <N>   # refuses what schedule would not dispatch
+python3 sage/runtime/tools/lanes.py mark  <manifest> --task N --state parked|errored|failed|budget-stopped --note "..."
+python3 sage/runtime/tools/lanes.py merge <manifest> --task N   # dependency order enforced
+```
+
+`open` marks the ledger (status, attempts, `model:`, `lane_branch:`) in the
+same pass. A lane subagent that tries to write the manifest itself is
+redirected by the bookkeeping-gate — the invariant is enforced, not asked
+for. `merged` can only be written by an actual `merge`; a depends edge is
+never satisfied by prose.
+
+**Merge policy.** Merge lanes in dependency order (`merge` refuses anything
+else). A conflict means declared-disjoint was violated: the tool aborts the
+merge, notes the conflicted files on the lane record, and the conflict is
+filed as a scope finding via check-diff — serialize or re-plan. Never
+resolve a lane conflict by model judgment.
+
+**Integration proof.** After each burst merges, run the FULL suite and the
+gate sequence once on merged HEAD. This is never trimmed: lane-level green
+is lane evidence only — nothing lane-local ever looked at the composition.
+Dependent tasks' context packets are built AFTER this, from merged HEAD.
+
+**Resume.** Open lanes live in the manifest's `lanes:` block; `manifest.py
+resume` lists them with the harvest path (`sage worktree remove`, never the
+bare git command). A burst interrupted is a burst reconstructible.
+
 ## Between tasks: continuous execution
 
 **No user prompts between tasks.** Not "are you happy with task 3", not "shall I

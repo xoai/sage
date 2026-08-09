@@ -4,6 +4,52 @@ All notable changes to Sage will be documented in this file.
 
 ## [Unreleased] — parallel implementation lanes (A6→A8→A7→A9)
 
+### A7 (phase 2): dependency-aware parallel implementation lanes — opt-in, code-scheduled
+
+`/build --subagents --parallel[=N]` runs plan tasks in concurrent lanes —
+one git worktree + branch per lane, implementer and task-reviewer
+dispatched per lane with the A6 model bindings — under a scheduler that
+is code, not judgment. Default cap 2 lanes, hard cap 4 (over-asking
+clamps loudly). Never default-on; `--parallel` without effective
+subagent mode is refused with the same ADR-10 loud-degradation contract
+as subagents themselves (`resolve_parallel()`).
+
+- **The scheduler's only input is the derived `task_graph:`** (A8). A
+  task dispatches concurrently iff the planner marked it `[P]`, its
+  `Depends on:` tasks have MERGED, and its declared files are disjoint
+  from every in-flight lane's claim — glob-aware, conservative (unclear
+  = overlap). Declared overlap is a serialization signal, never a
+  worktree signal. A non-`[P]` task runs alone. A parked/errored lane
+  holds its claim and freezes its dependents; siblings continue.
+  `lanes.py schedule` prints the decision; `lanes.py open` refuses any
+  dispatch the scheduler would not have made.
+- **Bookkeeping stays single-writer.** Lanes report; only the
+  orchestrator records, only through `lanes.py open/mark/merge` — which
+  also writes the ledger's new `lane_branch:` field (the serving model
+  was already per-dispatch `model:`, A6) in the same pass. The
+  bookkeeping-gate redirects a lane process's hand-edit of the main
+  checkout's manifest (B21) and revokes the gate_state yield for
+  `lanes:` rewiring (B22–B23). `merged` can only be written by an
+  actual `lanes.py merge` — a depends edge is never satisfied by prose.
+- **Merge policy:** dependency order enforced by the tool; a conflict
+  means declared-disjoint was violated — the merge is aborted, the
+  conflicted files land on the lane record, and the conflict files as a
+  scope finding via check-diff. Never resolved by model judgment.
+  Integration proof after every burst: full suite + gate sequence once
+  on merged HEAD — lane-level green is lane evidence only.
+- **Resume:** open lanes live in the manifest's `lanes:` block (burst
+  base pinned); `manifest.py resume` lists them with the harvesting
+  cleanup path (`sage worktree remove`, never bare `git worktree
+  remove`).
+- Lane-state vocabulary designed once for the A9 hardening (open,
+  parked, errored, merged, failed, budget-stopped) so the schema does
+  not churn. Deterministic coverage: test_lanes.py (scheduler table,
+  open/mark round-trips, git merge fixtures incl. abort-on-conflict),
+  resume-with-open-lanes in test_manifest.py, B21–B23 hook cases; docs
+  in parallel-sessions.md (task-level vs session-level layers) and
+  configuration.md. **No wall-clock or cost claims** — that is E-PAR's
+  job, authored later in this pack, execution budget-gated.
+
 ### A8 (phase 1): the plan's task structure becomes machine state — `graph derive`
 
 The parallel scheduler (A7, next phase) needs to know, per task, which

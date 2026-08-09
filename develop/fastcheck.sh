@@ -46,6 +46,7 @@ CHECKS=(
   "manifest tests         :: python3 develop/validators/tools/test_manifest.py"
   "ledger tests           :: python3 develop/validators/tools/test_ledger.py"
   "agent-binding tests    :: python3 develop/validators/tools/test_agent_binding.py"
+  "lane scheduler tests   :: python3 develop/validators/tools/test_lanes.py"
   "flag parser tests      :: python3 develop/validators/tools/test_sage_flags.py"
   "template conformance   :: python3 develop/validators/tools/test_template_conformance.py"
   "scope-judge runtime tests :: python3 develop/validators/scope-judge/test_scope_judge.py"

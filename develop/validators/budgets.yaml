@@ -67,9 +67,11 @@ eager:
                           # 398 → 177 lines · ~4,433 → ~2,144 tokens · every turn
 
 commands:
-  build: 590              # measured 535 · target 400 · the heaviest workflow
+  build: 595              # measured 535 · target 400 · the heaviest workflow
                           # +10 (2026-08-09, A8): the plan-approval transition
                           # gained the `graph derive` step — protocol, not prose
+                          # +5 (2026-08-09, A7): Step 6 points --parallel at the
+                          # sub-workflow's lanes section
   fix: 505                # measured 465 · target 400
   architect: 445          # measured 409 · target 400
   autoresearch: 190       # measured 174

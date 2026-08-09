@@ -333,6 +333,38 @@ class ResumeTest(unittest.TestCase):
         self.assertIn("004-retry", text)
         self.assertIn("005-other", text)
 
+    def test_open_lanes_are_listed_with_the_harvest_path(self):
+        """A7's resume fixture: a session that died mid-burst left lanes on
+        disk. The brief lists them from the lanes: block — an unlisted
+        worktree is work that silently rots — and names the harvesting
+        remove, never the bare one."""
+        self.m.write_text(a_manifest("building").replace(
+            "---\n\n# Cycle",
+            "lanes:\n"
+            '  burst_base: "abc1234"\n'
+            "  records:\n"
+            '    - {task: T2, branch: "lane/t2-auth", worktree: "../wt-t2", '
+            'state: open, model: "cheap/model"}\n'
+            '    - {task: T3, branch: "lane/t3-ses", worktree: "../wt-t3", '
+            'state: parked, model: "inherit", note: "waiting on decision"}\n'
+            '    - {task: T1, branch: "lane/t1-types", worktree: "../wt-t1", '
+            'state: merged, model: "inherit"}\n'
+            "---\n\n# Cycle"))
+        self.commit("cycle: begin")
+        text = self.brief()
+        self.assertIn("OPEN LANES", text)
+        self.assertIn("burst base: abc1234", text)
+        self.assertIn("T2 [open] branch lane/t2-auth", text)
+        self.assertIn("T3 [parked]", text)
+        self.assertIn("waiting on decision", text)
+        self.assertNotIn("T1 [merged]", text, "merged lanes are not open")
+        self.assertIn("sage worktree remove", text)
+
+    def test_no_lanes_block_no_lanes_section(self):
+        self.m.write_text(a_manifest("building"))
+        self.commit("cycle: begin")
+        self.assertNotIn("OPEN LANES", self.brief())
+
     def test_pyc_droppings_are_not_source(self):
         """__pycache__ noise polluted the first real brief's evidence line, and a
         .pyc write must never flip a cycle to building either."""

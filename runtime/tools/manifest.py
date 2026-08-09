@@ -500,6 +500,27 @@ def print_brief(manifest: pathlib.Path, root: pathlib.Path) -> None:
         for t in tasks:
             print(f"  - {t}")
 
+    # A7: a session that died mid-burst left lanes on disk. The brief lists
+    # them from the lanes: block (never re-derived from prose) so the resumer
+    # either reconstructs the burst or harvests each lane deliberately —
+    # an unlisted worktree is work that silently rots.
+    lanes = read_lanes(text)
+    open_lanes = [r for r in (lanes["records"] if lanes else [])
+                  if r["state"] in LANE_ACTIVE_STATES]
+    if open_lanes:
+        print()
+        print("OPEN LANES (parallel burst in flight when the session ended)")
+        if lanes["burst_base"]:
+            print(f"  burst base: {lanes['burst_base']}")
+        for r in open_lanes:
+            note = f" — {r['note']}" if r["note"] else ""
+            print(f"  - T{r['task']} [{r['state']}] branch {r['branch']} "
+                  f"worktree {r['worktree']}{note}")
+        print("  Reconstruct with `lanes.py schedule` (the graph knows what was")
+        print("  eligible), or harvest a lane you are abandoning:")
+        print("  `sage worktree remove <dir>` — harvest-then-remove, never bare")
+        print("  `git worktree remove` (it drops the gitignored .sage state).")
+
     commits, changed, untracked = cycle_evidence(root, manifest)
     print()
     print("EVIDENCE (git, since the cycle began — outranks every prose claim below)")
@@ -1431,6 +1452,93 @@ def graph_derive(manifest_path: pathlib.Path, refresh: bool = False) -> int:
     print(f"task_graph: {new_from} — {len(tasks)} task(s), {n_par} "
           f"parallel-eligible, {n_edges} dependency edge(s)")
     return 0
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# lanes — parallel-lane state as machine state (A7; states designed for A9).
+#
+# One record per dispatched lane, in the manifest frontmatter, written ONLY
+# by lanes.py (single-writer: lanes report, the orchestrator records). The
+# state vocabulary is fixed here so the A9 hardening does not churn the
+# schema:
+#
+#   open           dispatched, in flight — its files are claimed
+#   parked         blocked mid-flight; dependents freeze, siblings continue;
+#                  claim held
+#   errored        infra/rate-limit death (1.3.3 evidence rules: tokens, not
+#                  turns) — gets ONE staggered retry, never graded, never
+#                  consumes a quality-locked attempt; claim held
+#   merged         landed on the integration branch — the ONLY state that
+#                  satisfies a `depends` edge
+#   failed         quality failure — a graded outcome; claim released
+#   budget-stopped the burst budget ran out before/while this ran; explicit
+#                  report, never graded as failure; claim released
+#
+# `burst_base` pins the SHA the burst's lanes forked from (A9): context
+# packets for dependent tasks are built post-merge from merged HEAD, and the
+# pin is what makes "post-merge" checkable rather than aspirational.
+
+LANE_STATES = ("open", "parked", "errored", "merged", "failed",
+               "budget-stopped")
+# States whose lane still holds its files claim against new dispatches.
+LANE_ACTIVE_STATES = ("open", "parked", "errored")
+
+_LANES_KEY_RE = re.compile(r"^lanes\s*:")
+_LANE_REC_RE = re.compile(
+    r'^-\s*\{task:\s*T(?P<task>\d+),\s*branch:\s*"(?P<branch>[^"]*)",\s*'
+    r'worktree:\s*"(?P<worktree>[^"]*)",\s*state:\s*(?P<state>[a-z-]+),\s*'
+    r'model:\s*"(?P<model>[^"]*)"(?:,\s*note:\s*"(?P<note>[^"]*)")?\}\s*$')
+
+
+def read_lanes(text: str):
+    """The manifest's `lanes:` block, or None when the cycle never went
+    parallel. Same None-vs-empty distinction as scope."""
+    fm, _ = split_frontmatter(text)
+    if fm is None:
+        return None
+    lines = fm.splitlines()
+    start = next((i for i, l in enumerate(lines) if _LANES_KEY_RE.match(l)),
+                 None)
+    if start is None:
+        return None
+    block = {"burst_base": "", "records": []}
+    for l in lines[start + 1:]:
+        if l.strip() and not l.startswith((" ", "\t")):
+            break
+        s = l.strip()
+        m = re.match(r"^burst_base\s*:\s*\"?([A-Za-z0-9]*)\"?", s)
+        if m:
+            block["burst_base"] = m.group(1)
+            continue
+        rm = _LANE_REC_RE.match(s)
+        if rm:
+            block["records"].append({
+                "task": int(rm.group("task")),
+                "branch": rm.group("branch"),
+                "worktree": rm.group("worktree"),
+                "state": rm.group("state"),
+                "model": rm.group("model"),
+                "note": rm.group("note") or "",
+            })
+    return block
+
+
+def _lanes_block_lines(burst_base: str, records) -> str:
+    out = ["lanes:", '  burst_base: "%s"' % (burst_base or ""), "  records:"]
+    if not records:
+        out[-1] = "  records: []"
+    for r in records:
+        note = (', note: "%s"' % r["note"].replace('"', "'")
+                if r.get("note") else "")
+        out.append(
+            '    - {task: T%d, branch: "%s", worktree: "%s", state: %s, '
+            'model: "%s"%s}' % (r["task"], r["branch"], r["worktree"],
+                                r["state"], r["model"], note))
+    return "\n".join(out)
+
+
+def write_lanes_block(text: str, block: str) -> str:
+    return _write_frontmatter_block(text, _LANES_KEY_RE, block)
 
 
 def _select_active_manifest(root: pathlib.Path) -> pathlib.Path:

@@ -66,7 +66,9 @@ surfaces:
       parallel scheduler's only input) — fail-closed with an announced
       degradation to sequential; deterministic coverage in test_manifest.py
       (GraphTest) + test_template_conformance.py; agentic coverage arrives
-      with E-PAR (authored in this pack, execution budget-gated).
+      with E-PAR (authored in this pack, execution budget-gated). Same day
+      (A7): Step 6 points --parallel at the sub-workflow's lanes section
+      (resolve_parallel — flag/config-gated, never default-on).
 
   workflow-fix:
     path: core/workflows/fix.workflow.md
@@ -171,6 +173,14 @@ surfaces:
       generated (both scenario fixtures use headings, so E9/E10 could never
       see it; BulletPlanTest pins the template's shape, and the fix was
       verified against the reporting cycle's real 24-task plan).
+      2026-08-09 (A7): gained the "Parallel lanes" section — opt-in
+      --parallel on top of --subagents; dispatch decided by lanes.py from
+      the derived task_graph: (scheduler table, single-writer open/mark/
+      merge, dependency-order merge with abort-on-conflict), pinned
+      deterministically by test_lanes.py + hook cases B21–B23. E9/E10
+      still grade the sequential path only; parallel-mode agentic coverage
+      is E-PAR (authored in this pack, execution budget-gated) — no
+      efficacy or wall-clock claims until it runs.
 
   subworkflow-quality-gates:
     path: core/workflows/sub-workflows/quality-gates.workflow.md
@@ -267,8 +277,10 @@ surfaces:
       block-recover-retry pattern. Its own suite lives in run-hook-tests.sh
       (B1-B16, plus B17-B20 since 2026-08-09: the task_graph: block inherits
       the scope: block's reconstruction guard — the gate_state yield is
-      revoked for an edit that rewires the graph); L1 covers it end-to-end
-      on the resume path.
+      revoked for an edit that rewires the graph; and B21-B23 same day: the
+      lanes: block too, including the single-writer assertion — a lane
+      process hand-editing the main checkout's manifest is redirected);
+      L1 covers it end-to-end on the resume path.
 
   hook-manifest-sync:
     path: runtime/platforms/claude-code/hooks/sage-manifest-sync.sh
@@ -1085,3 +1097,7 @@ surfaces:
       exactly as generated projects do. Same commit resurrected
       SubagentModeTest: the file's unittest.main() sat mid-file, so that
       class never ran in CI — 28 "green" tests were actually 46.
+      2026-08-09 (A7): gained `--parallel[=N]` (the one value-taking flag;
+      default cap 2, hard cap 4 clamped loudly) and resolve_parallel()
+      (parallel requires subagent mode, refusal is the same ADR-10 loud
+      degradation) — ParallelFlagTest + ResolveParallelTest pin both.

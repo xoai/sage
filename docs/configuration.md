@@ -304,6 +304,7 @@ identical):
 | `quality_locked` | `--quality-locked` | The review-revise loop runs at every checkpoint until clean. |
 | `autonomous` | `--autonomous` | Checkpoints auto-resolve (decisions are still logged). |
 | `subagents` | `--subagents` | Per-task fresh implementer + independent reviewer (platform permitting; refusal is announced, R97). |
+| `parallel` | `--parallel[=N]` | Dependency-aware parallel implementation lanes (A7). Requires `subagents`; refusal without it is announced. Default cap 2 lanes, hard cap 4 (`--parallel=9` clamps loudly). Dispatch is decided by `lanes.py` from the derived `task_graph:` — declared file overlap serializes, a non-`[P]` task runs alone. No wall-clock or cost claims: parallel-mode behavior is measured by E-PAR (authored, not yet run) — until then this is mechanics, not a speed promise. |
 
 ### Planner/implementer model split (opencode)
 

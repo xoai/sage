@@ -50,6 +50,38 @@ class LedgerTest(unittest.TestCase):
         self.assertIn("status: pending", fm)
         self.assertIn("review: pending", fm)
 
+    def test_every_entry_carries_the_lane_branch_field(self):
+        """A7: empty until the task dispatches into a parallel lane; then the
+        join key to the lanes: block. Scaffolded empty, filled by lanes.py —
+        single-writer, never by hand."""
+        run("init", self.m(), self.p())
+        fm = (self.d / "manifest.md").read_text()
+        self.assertEqual(fm.count('lane_branch: ""'), 3,
+                         "one lane_branch field per task entry")
+
+    def test_a_task_graph_block_is_not_a_ledger(self):
+        """Caught by the A7 end-to-end fixture: `^\\s*tasks:` matched the
+        NESTED tasks: inside A8's task_graph: block, so a graph-derived
+        cycle could never scaffold a ledger — and check() false-passed the
+        same cycle. Top-level only, both places."""
+        m = pathlib.Path(self.m())
+        m.write_text(m.read_text().replace(
+            "---\n\n", "execution_mode: subagent\n"
+            "task_graph:\n  derived_from: plan@abcd1234\n"
+            "  tasks:\n"
+            '    - {id: T1, title: "x", files: [src/a.ts], depends: [], '
+            "parallel: false}\n---\n\n", 1))
+        r = run("check", self.m())
+        self.assertEqual(r.returncode, 1,
+                         "a subagent cycle whose only tasks: is the graph's "
+                         "nested one has NO ledger — check must fail")
+        r = run("init", self.m(), self.p())
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertNotIn("already present", r.stdout)
+        fm = m.read_text()
+        self.assertEqual(fm.count("- id:"), 3, "the real ledger scaffolded")
+        self.assertEqual(run("check", self.m()).returncode, 0)
+
     def test_it_arms_the_guard(self):
         """A ledger without execution_mode: subagent is a ledger the H41 guard
         ignores. The two must never disagree."""

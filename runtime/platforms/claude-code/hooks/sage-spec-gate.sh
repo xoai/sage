@@ -167,14 +167,18 @@ def parse_ledger(text):
     if not m:
         return None
     block = m.group(1)
-    if not re.search(r"^\s*tasks\s*:", block, re.M):
+    # TOP-LEVEL tasks: only. The A8 task_graph: block carries a NESTED
+    # `  tasks:` whose flow-style entries would otherwise parse as empty
+    # ledger tasks and block gates-passed forever (the v1.3.16 lesson: a
+    # parser meets every block the manifest can carry).
+    if not re.search(r"^tasks\s*:", block, re.M):
         return None
 
     tasks = []
     in_ledger = False
     current = None
     for line in block.splitlines():
-        if re.match(r"^\s*tasks\s*:", line):
+        if re.match(r"^tasks\s*:", line):
             in_ledger = True
             continue
         if not in_ledger:

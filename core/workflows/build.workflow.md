@@ -404,6 +404,10 @@ A silent fallback here would mean a user who asked for per-task independent
 review got one context reviewing its own work, with no indication. That is the
 exact failure v1.2.x was spent eliminating.
 
+`--parallel[=N]` layers on subagent mode only (`resolve_parallel()`, same loud
+refusal contract): the sub-workflow's "Parallel lanes" section then drives
+dispatch from the derived `task_graph:` via `lanes.py` — never from plan prose.
+
 ### The inline build loop (default)
 
 Read and follow `sage/core/capabilities/orchestration/build-loop/SKILL.md`.

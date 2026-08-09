@@ -320,5 +320,109 @@ class CliBoundaryTest(unittest.TestCase):
         self.assertEqual(rc, 0)
 
 
+class ParallelFlagTest(unittest.TestCase):
+    """A7 — `--parallel[=N]`: the one value-taking flag. Default cap 2,
+    hard cap 4 (clamped loudly, never errored), off unless asked, and only
+    meaningful inside subagent execution (resolve_parallel)."""
+
+    def p(self, args, defaults=None):
+        return sf.parse_flags(args, defaults)
+
+    def test_off_by_default(self):
+        r = self.p("build a thing")
+        self.assertFalse(r["parallel"])
+        self.assertEqual(r["parallel_lanes"], 0)
+        self.assertIsNone(r["parallel_note"])
+
+    def test_bare_flag_gets_the_default_cap(self):
+        r = self.p("--parallel go")
+        self.assertTrue(r["parallel"])
+        self.assertEqual(r["parallel_lanes"], sf.DEFAULT_LANE_CAP)
+        self.assertEqual(r["parallel_source"], "flag")
+        self.assertEqual(r["goal"], "go")
+
+    def test_explicit_lane_count(self):
+        self.assertEqual(self.p("--parallel=3 go")["parallel_lanes"], 3)
+
+    def test_over_the_hard_cap_clamps_loudly(self):
+        r = self.p("--parallel=9 go")
+        self.assertEqual(r["parallel_lanes"], sf.HARD_LANE_CAP)
+        self.assertIn("hard cap", r["parallel_note"])
+        self.assertIsNone(r["error"])
+
+    def test_zero_or_garbage_lane_count_errors(self):
+        for bad in ("--parallel=0", "--parallel=two", "--parallel=-1",
+                    "--parallel="):
+            r = self.p(bad + " go")
+            self.assertTrue(r["error"], bad)
+            self.assertEqual(r["parallel_lanes"], 0, bad)
+
+    def test_only_parallel_takes_a_value(self):
+        r = self.p("--subagents=3 go")
+        self.assertIn("takes no value", r["error"])
+
+    def test_no_parallel_beats_config(self):
+        r = self.p("--no-parallel go", {"parallel": True})
+        self.assertFalse(r["parallel"])
+        self.assertEqual(r["parallel_lanes"], 0)
+
+    def test_config_default_gets_the_default_cap(self):
+        r = self.p("go", {"parallel": True})
+        self.assertTrue(r["parallel"])
+        self.assertEqual(r["parallel_lanes"], sf.DEFAULT_LANE_CAP)
+        self.assertEqual(r["parallel_source"], "config")
+
+    def test_conflict_errors(self):
+        r = self.p("--parallel --no-parallel go")
+        self.assertIn("Conflicting", r["error"])
+
+    def test_config_regex_accepts_parallel_key(self):
+        self.assertRegex("parallel: true", sf._TRUE_LINE_RE)
+
+    def test_with_subagents_both_parse(self):
+        r = self.p("--subagents --parallel=3 build it")
+        self.assertTrue(r["subagents"])
+        self.assertEqual(r["parallel_lanes"], 3)
+        self.assertEqual(r["goal"], "build it")
+
+
+class ResolveParallelTest(unittest.TestCase):
+    """Parallel exists only inside subagent execution — anything else is the
+    LOUD degradation contract (ADR-10), never a silent fallback."""
+
+    SUBAGENT = {"mode": "subagent", "degraded": False}
+    INLINE = {"mode": "inline", "degraded": True}
+
+    def test_not_requested_is_quiet(self):
+        r = sf.resolve_parallel(0, self.SUBAGENT)
+        self.assertFalse(r["parallel"])
+        self.assertFalse(r["degraded"])
+        self.assertIsNone(r["announcement"])
+        self.assertEqual(r["manifest_value"], "sequential")
+
+    def test_granted_inside_subagent_mode(self):
+        r = sf.resolve_parallel(3, self.SUBAGENT)
+        self.assertTrue(r["parallel"])
+        self.assertEqual(r["lanes"], 3)
+        self.assertEqual(r["manifest_value"], "parallel=3")
+        self.assertIsNone(r["announcement"])
+
+    def test_refused_outside_subagent_mode_is_loud(self):
+        r = sf.resolve_parallel(2, self.INLINE)
+        self.assertFalse(r["parallel"])
+        self.assertTrue(r["degraded"])
+        self.assertIn("requires subagent execution", r["announcement"])
+        self.assertEqual(r["manifest_value"],
+                         "sequential (parallel-requires-subagents)")
+
+    def test_mode_string_form_accepted(self):
+        self.assertTrue(sf.resolve_parallel(2, "subagent")["parallel"])
+        self.assertTrue(sf.resolve_parallel(2, "inline")["degraded"])
+
+    def test_hard_cap_holds_here_too(self):
+        self.assertEqual(sf.resolve_parallel(9, self.SUBAGENT)["lanes"],
+                         sf.HARD_LANE_CAP)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

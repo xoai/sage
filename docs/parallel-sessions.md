@@ -403,6 +403,48 @@ For best performance, keep repos on the native Linux filesystem
 
 ---
 
+## Task-level parallel lanes (`--parallel`) — the OTHER layer
+
+Everything above is **session-level** parallelism: you, the user, run
+several *initiatives* at once, each in its own worktree, each with its
+own Claude session. Sage also has **task-level** parallelism — one
+initiative, one orchestrating session, several *plan tasks* implemented
+concurrently. The two share the worktree machinery and nothing else, and
+it is worth being precise about which one you want:
+
+| | Session-level (`sage worktree`) | Task-level (`/build --subagents --parallel`) |
+|---|---|---|
+| Unit of parallelism | An initiative (`/build`, `/fix` cycle) | A plan task within ONE cycle |
+| Who drives | You, in N terminals | The orchestrator, in one session |
+| Isolation | One worktree + branch per session | One worktree + branch per **lane** |
+| Coordination | None needed — separate initiatives | The derived `task_graph:` (A8) |
+| Merges | You, `[M]`-gated per initiative | Orchestrator, dependency order, conflict aborts |
+
+Task-level lanes are **opt-in on top of `--subagents`** (they parallelize
+subagent dispatches; the inline loop has nothing to parallelize) and
+capped: default 2 lanes, hard cap 4. Eligibility is decided by code
+(`lanes.py schedule`) from the plan's derived task graph: a task
+dispatches concurrently only if the planner marked it `[P]`, its
+`Depends on:` tasks have MERGED, and its declared `Files:` are disjoint
+from every in-flight lane — declared overlap serializes the task rather
+than isolating it harder. A non-`[P]` task always runs alone.
+
+Each lane gets a worktree + branch (the same `worktree_copy` seeding and
+collision guard as session-level), the implementer/task-reviewer
+dispatches run per lane with the A6 model bindings, and only the
+orchestrator writes bookkeeping — lanes report, the `lanes:` block in
+the manifest records, and the bookkeeping-gate redirects anything else.
+After each burst the orchestrator merges lanes in dependency order and
+runs the full suite + gate sequence once on merged HEAD — lane-green is
+lane evidence only. If the session dies mid-burst, `manifest.py resume`
+lists the open lanes and the harvesting cleanup path.
+
+**What this is not (yet): a measured speedup.** The mechanics above are
+deterministic and pinned by tests; the wall-clock and cost story against
+sequential subagents is exactly what the E-PAR scenarios exist to
+measure, and they have not run. Until they do, treat `--parallel` as
+mechanics you can try, not a recommendation.
+
 ## How it fits the rest of Sage
 
 - **Single source of truth.** Naming, the user-gated merge protocol,

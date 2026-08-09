@@ -87,7 +87,14 @@ def render_ledger(tasks):
     # bound agent's model where the platform binds roles (opencode agent
     # designation), else "inherit". A re-dispatch overwrites it — the field
     # answers "what served the attempt that produced these commits";
-    # `attempts` already counts the retries.
+    # `attempts` already counts the retries. (This IS the pack's
+    # served_by_model fact; the field predates that name and renaming a
+    # shipped schema would fork the parsers.)
+    #
+    # `lane_branch` (A7) is empty until the task dispatches into a parallel
+    # lane; then it names the lane's branch — the join key between a ledger
+    # entry and the lanes: block's record, written by lanes.py, never by
+    # hand (single-writer).
     lines = ["tasks:"]
     for n, title in tasks:
         lines += [
@@ -96,6 +103,7 @@ def render_ledger(tasks):
             "    status: pending",
             "    attempts: 0",
             '    model: ""',
+            '    lane_branch: ""',
             "    review: pending",
             '    commits: ""',
         ]
@@ -129,7 +137,12 @@ def init(manifest_path, plan_path):
         print("✗ %s has no frontmatter" % manifest, file=sys.stderr)
         return 1
 
-    if re.search(r"^\s*tasks\s*:", fm, re.M):
+    # TOP-LEVEL tasks: only. `^\s*tasks:` also matched the NESTED tasks:
+    # line inside A8's task_graph: block, so a graph-derived cycle could
+    # never scaffold a ledger (caught by the A7 end-to-end fixture — the
+    # v1.3.16 parser lesson, again: a parser meets every block the
+    # manifest can carry, not just the ones it was written against).
+    if re.search(r"^tasks\s*:", fm, re.M):
         print("• ledger already present in %s — left alone (re-running init must "
               "never clobber in-flight task state)" % manifest.name)
         return 0
@@ -173,7 +186,8 @@ def check(manifest_path):
         print("OK — execution_mode: %s (no ledger required)" % mode)
         return 0
 
-    if not re.search(r"^\s*tasks\s*:", fm, re.M):
+    if not re.search(r"^tasks\s*:", fm, re.M):     # top-level only — the
+        # task_graph: block's nested tasks: is not a ledger
         print("✗ FAIL — this cycle is in subagent execution and has NO task "
               "ledger.\n"
               "   The ledger is the only evidence that any task was independently\n"

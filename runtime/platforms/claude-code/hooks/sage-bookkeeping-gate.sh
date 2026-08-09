@@ -167,8 +167,14 @@ def graph_section(text):
     return m.group(0) if m else ""
 
 
+def lanes_section(text):
+    m = re.search(r"(?ms)^\s*lanes\s*:\s*$\n((?:[ \t]+.*\n?)*)", text or "")
+    return m.group(0) if m else ""
+
+
 def guarded_sections(text):
-    return scope_section(text) + "\x00" + graph_section(text)
+    return "\x00".join((scope_section(text), graph_section(text),
+                        lanes_section(text)))
 
 
 edit_texts = []
@@ -188,7 +194,8 @@ if "gate_state" in edit_text:
     tool = data.get("tool_name") or ""
     if tool == "Write":
         content = str(tool_input.get("content") or "")
-        if not scope_section(content) and not graph_section(content):
+        if not (scope_section(content) or graph_section(content)
+                or lanes_section(content)):
             emit("ALLOW")
     else:
         try:

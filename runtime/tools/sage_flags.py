@@ -46,7 +46,14 @@ from pathlib import Path
 # regex alternation, an initial-state dict, and the result dict. Adding
 # `--subagents` meant finding all five, and missing one would have failed
 # silently — the flag would parse and then simply not take effect. Derive them.
-FLAG_KEYS = ("quality_locked", "autonomous", "subagents")
+FLAG_KEYS = ("quality_locked", "autonomous", "subagents", "parallel")
+
+# `--parallel[=N]` (A7) is the one flag that takes a value: the lane cap.
+# Bare `--parallel` (or `parallel: true` in config) means the default cap;
+# more than the hard cap clamps LOUDLY (recorded in `parallel_note`) rather
+# than erroring — over-asking is an adjustable request, not a typo.
+DEFAULT_LANE_CAP = 2
+HARD_LANE_CAP = 4
 
 POSITIVE_FLAGS = {"--" + k.replace("_", "-") for k in FLAG_KEYS}
 NEGATIVE_FLAGS = {"--no-" + k.replace("_", "-") for k in FLAG_KEYS}
@@ -96,19 +103,37 @@ def parse_flags(arguments, defaults=None):
         for k in FLAG_KEYS:
             out[k] = False
             out[k + "_source"] = None
+        out["parallel_lanes"] = 0
+        out["parallel_note"] = None
         return out
 
     flag_state = {k: None for k in FLAG_KEYS}
+    lane_cap, lane_note = None, None
     remaining = arguments.strip()
     while remaining.startswith("--"):
         parts = remaining.split(None, 1)
         token = parts[0]
         rest = parts[1] if len(parts) > 1 else ""
-        if token not in ALL_FLAGS:
+        base, sep, flag_value = token.partition("=")
+        if base not in ALL_FLAGS:
             supported = ", ".join(sorted(ALL_FLAGS))
             return err(f"Unknown flag '{token}'. Supported flags: {supported}.")
-        key = FLAG_TO_KEY[token]
-        new_state = "positive" if token in POSITIVE_FLAGS else "negative"
+        if sep and base != "--parallel":
+            return err(f"Flag '{base}' takes no value (got '{token}'); only "
+                       "--parallel=N does.")
+        if sep:
+            if not flag_value.isdigit() or int(flag_value) < 1:
+                return err(f"--parallel takes a lane count of 1 or more "
+                           f"(got '{flag_value}').")
+            n = int(flag_value)
+            if n > HARD_LANE_CAP:
+                lane_note = (f"--parallel={n} exceeds the hard cap; "
+                             f"clamped to {HARD_LANE_CAP}.")
+                n = HARD_LANE_CAP
+            if lane_cap is None:            # first occurrence wins — the
+                lane_cap = n                # config reader's convention
+        key = FLAG_TO_KEY[base]
+        new_state = "positive" if base in POSITIVE_FLAGS else "negative"
         if flag_state[key] is not None and flag_state[key] != new_state:
             dash = key.replace("_", "-")
             return err(f"Conflicting flags for {key}: both --{dash} and "
@@ -131,6 +156,9 @@ def parse_flags(arguments, defaults=None):
         value, source = resolve(k)
         out[k] = value
         out[k + "_source"] = source
+    out["parallel_lanes"] = ((lane_cap or DEFAULT_LANE_CAP)
+                             if out["parallel"] else 0)
+    out["parallel_note"] = lane_note
     return out
 
 
@@ -533,4 +561,51 @@ def resolve_execution_mode(requested_subagents, contract):
             "independent. Recorded in decisions.md."
             % (name, SUBAGENT_CAPABILITY)
         ),
+    }
+
+
+def resolve_parallel(requested_lanes, execution_mode):
+    """Reconcile a --parallel request with the resolved execution mode (A7).
+
+    Parallel lanes exist only INSIDE subagent execution: a lane is an
+    implementer dispatch in a worktree, and the inline loop has no
+    dispatches to parallelize. So `--parallel` without effective subagent
+    mode — not requested, or requested and refused by the platform — is a
+    request for something that does not exist, and the answer is the same
+    LOUD degradation contract as subagents themselves (ADR-10): announced,
+    recorded, never a silent fallback.
+
+    requested_lanes: parse_flags()["parallel_lanes"] — 0 when off.
+    execution_mode: resolve_execution_mode()'s dict (or its "mode" string).
+
+    Returns {parallel, lanes, degraded, manifest_value, announcement}.
+    """
+    mode = (execution_mode.get("mode")
+            if isinstance(execution_mode, dict) else execution_mode)
+    if not requested_lanes:
+        return {
+            "parallel": False,
+            "lanes": 0,
+            "degraded": False,
+            "manifest_value": "sequential",
+            "announcement": None,        # the default. Not news.
+        }
+    if mode != "subagent":
+        return {
+            "parallel": False,
+            "lanes": 0,
+            "degraded": True,
+            "manifest_value": "sequential (parallel-requires-subagents)",
+            "announcement": (
+                "Parallel lanes are unavailable: --parallel requires "
+                "subagent execution, and this cycle resolved to the inline "
+                "loop. Building sequentially — recorded in decisions.md."
+            ),
+        }
+    return {
+        "parallel": True,
+        "lanes": min(requested_lanes, HARD_LANE_CAP),
+        "degraded": False,
+        "manifest_value": "parallel=%d" % min(requested_lanes, HARD_LANE_CAP),
+        "announcement": None,
     }

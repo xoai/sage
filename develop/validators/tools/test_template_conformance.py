@@ -149,6 +149,24 @@ class LedgerRoundTrip(unittest.TestCase):
                          "done+approved (with the model: field present) "
                          "must pass — the gate parser tolerates the schema")
 
+    def test_gate_reads_the_ledger_past_a_task_graph_block(self):
+        """A8×R101: the task_graph: block carries a NESTED `tasks:` whose
+        flow entries are NOT ledger tasks. Before the top-level-only fix,
+        the gate parsed them as empty ledger entries and blocked
+        gates-passed forever on any graph-derived cycle."""
+        m = self.cyc / "manifest.md"
+        m.write_text(m.read_text().replace(
+            'cycle_id: "001-x"\n',
+            'cycle_id: "001-x"\n'
+            "task_graph:\n  derived_from: plan@abcd1234\n  tasks:\n"
+            '    - {id: T1, title: "x", files: [src/a.ts], depends: [], '
+            "parallel: false}\n", 1))
+        self.assertEqual(self.gate(), 2,
+                         "the REAL ledger is still pending — block")
+        self.mark("done", "approved")
+        self.assertEqual(self.gate(), 0,
+                         "graph block present, ledger done+approved — pass")
+
 
 class GraphTemplateHandshake(unittest.TestCase):
     """graph derive × the plan template (A8): the tightened grammar the

@@ -743,6 +743,36 @@ assert B20 "a full-manifest Write carrying a task_graph block never rides the ga
   '{"tool_name":"Write","tool_input":{"file_path":".sage/work/bkg/manifest.md","content":"---\ngate_state: gates-passed\ntask_graph:\n  derived_from: plan@ffff0000\n  tasks: []\n---\n"}}' \
   --exit 2 --stderr "close-out" --hook "$BKG"
 
+# B21–B23 (A7): the single-writer invariant, mechanically. Lanes REPORT; only
+# the orchestrator RECORDS — through lanes.py, which writes via Bash and never
+# meets this gate. A lane subagent hand-editing the cycle's bookkeeping is
+# redirected exactly like any other hand-edit, including from inside its lane
+# worktree (CLAUDE_PROJECT_DIR still names the main checkout), and the
+# gate_state yield does not exempt a lanes: rewiring.
+mk_laned_bk() {  # a bookkeeping fixture whose manifest carries a lanes block
+  local d; d="$(new_project)"; set_config "$d" "hard_enforcement: true"
+  mkdir -p "$d/.sage/work/bkl" "$d/../wt-t2" 2>/dev/null
+  printf -- '---\ncycle_id: "bkl"\nstatus: in-progress\ntier: standard\ngate_state: building\nlanes:\n  burst_base: "abc1234"\n  records:\n    - {task: T2, branch: "lane/t2", worktree: "../wt-t2", state: open, model: "inherit"}\n---\n\n# Cycle\n' \
+    > "$d/.sage/work/bkl/manifest.md"
+  echo "$d"
+}
+
+P="$(mk_laned_bk)"
+assert B21 "a lane process editing the main checkout's manifest is redirected (single-writer)" "$P/../wt-t2" \
+  "{\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"$P/.sage/work/bkl/manifest.md\",\"new_string\":\"    status: done\"}}" \
+  --env "CLAUDE_PROJECT_DIR=$P" \
+  --exit 2 --stderr "close-out" --hook "$BKG"
+
+P="$(mk_laned_bk)"
+assert B22 "mentioning gate_state does not exempt a lanes: state rewrite" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/bkl/manifest.md","old_string":"gate_state: building\nlanes:\n  burst_base: \"abc1234\"\n  records:\n    - {task: T2, branch: \"lane/t2\", worktree: \"../wt-t2\", state: open, model: \"inherit\"}","new_string":"gate_state: building\nlanes:\n  burst_base: \"abc1234\"\n  records:\n    - {task: T2, branch: \"lane/t2\", worktree: \"../wt-t2\", state: merged, model: \"inherit\"}"}}' \
+  --exit 2 --stderr "close-out" --hook "$BKG"
+
+P="$(mk_laned_bk)"
+assert B23 "a transition whose old_string spans UNCHANGED lanes lines still yields" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/bkl/manifest.md","old_string":"gate_state: building\nlanes:","new_string":"gate_state: gates-passed\nlanes:"}}' \
+  --exit 0 --hook "$BKG"
+
 # ── sage-secrets-gate: credentials never go into source ────────────────────
 # The weak-model campaign measured why: handed a live key, haiku-bare hardcodes
 # it 3/3 and haiku with the CONSTITUTION PARAGRAPH still hardcoded it 2/3.
