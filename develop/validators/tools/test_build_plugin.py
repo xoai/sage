@@ -50,11 +50,49 @@ class BuildPluginTest(unittest.TestCase):
             self.assertTrue((out / "skills" / name / "SKILL.md").is_file(),
                             f"{name} declared in PLUGIN_SKILLS but not shipped")
 
+    OVERLAY_SKILL_NAMES = frozenset(
+        p.name for p in (REPO_ROOT / "runtime" / "plugin-overlay"
+                         / "skills").iterdir()
+        if (p / "SKILL.md").is_file())
+
     def test_build_omits_excluded_skills(self):
+        """Excluded skills/ dirs must not ship — EXCEPT names the hermes
+        mirror set shares with core/system-skills/ or the plugin
+        overlay: those paths legitimately exist in the output because
+        the SAME NAME ships from its canonical source (the exclusion
+        governs the skills/ source, not the name). The companion test
+        pins that the shipped bytes ARE the canonical source's, so a
+        stale mirror can never ride the collision."""
         out = self._build()
-        for name in build_plugin.SKILLS_NOT_IN_PLUGIN:
+        for name in (build_plugin.SKILLS_NOT_IN_PLUGIN
+                     - build_plugin.SYSTEM_SKILL_NAMES
+                     - self.OVERLAY_SKILL_NAMES):
             self.assertFalse((out / "skills" / name).exists(),
                              f"{name} is excluded but shipped anyway")
+
+    def test_collision_names_ship_the_canonical_source_not_the_mirror(self):
+        """The Gate-4 duplication lesson as a tripwire: for names that
+        exist both as hermes mirrors (skills/) and as system skills or
+        overlay skills, the plugin must ship the CANONICAL source — if
+        an edit lands there and the plugin starts shipping the stale
+        mirror, this fails."""
+        out = self._build()
+        for name in (build_plugin.SKILLS_NOT_IN_PLUGIN
+                     & build_plugin.SYSTEM_SKILL_NAMES):
+            shipped = (out / "skills" / name / "SKILL.md").read_bytes()
+            system = (REPO_ROOT / "core" / "system-skills" / name
+                      / "SKILL.md").read_bytes()
+            self.assertEqual(shipped, system,
+                             f"{name}: shipped bytes are not the "
+                             f"system-skill source")
+        for name in (build_plugin.SKILLS_NOT_IN_PLUGIN
+                     & self.OVERLAY_SKILL_NAMES):
+            shipped = (out / "skills" / name / "SKILL.md").read_bytes()
+            overlay = (REPO_ROOT / "runtime" / "plugin-overlay" / "skills"
+                       / name / "SKILL.md").read_bytes()
+            self.assertEqual(shipped, overlay,
+                             f"{name}: shipped bytes are not the "
+                             f"overlay source")
 
     def test_gate_scripts_are_identical_to_their_sources(self):
         """A mis-wired FILE_MAP would ship a stale gate — the Gate 4 failure mode."""
