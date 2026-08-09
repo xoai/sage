@@ -4,6 +4,55 @@ All notable changes to Sage will be documented in this file.
 
 ## [Unreleased] — parallel implementation lanes (A6→A8→A7→A9)
 
+### Re-review (round three): different constructions, not another patch
+
+Round three attacked round two's fixes and the terrain no round had
+touched. Its verdict was blunt — two instruments were being patched to
+each reproduction while the class walked past — so both were REBUILT:
+
+- **The disjointness witness no longer reasons about merge topology at
+  all.** Subject-matching fell to rewording; topology-matching fell to
+  octopus/first-parent/evil merges while false-positiving on legitimate
+  sync merges. The witness now attributes COMMITS: every non-harness
+  commit that changed a declared file must be reachable from a recorded
+  lane's tip, and merge-INTRODUCED content (files differing from every
+  parent — conflict resolutions, evil merges) is held to the same bar. A
+  clean upstream sync introduces nothing and passes; an octopus batch of
+  unrecorded lanes convicts through its content commits. Pinned both
+  directions (octopus-launder fails, honest-sync passes). What remains
+  gameable is history rewriting — ledger_attributes_commits' documented
+  beat.
+- **The gate's section capture is a line scanner, not a regex.** Three
+  regex generations each fell to the next counterexample (EOF-greedy;
+  one blank line; two blank lines — and the `[ \t]`-anchored `$` never
+  matched CRLF headers, un-guarding Windows-written manifests entirely).
+  The scanner implements the actual YAML shape: indented lines plus
+  blank runs followed by more indented lines, CRLF-normalized for
+  decisions, byte-preserved for the compare. B27 (double blank) and B28
+  (CRLF) pin it; the scope-gate's derived_from block-scoping and
+  foreign_owner reader got the same treatment.
+
+And the terrain audit's own catches: **`- [ ] **Task 2 [P]:**` — a [P]
+inside the head — matched NO parser, so the task silently vanished from
+graph, scope, AND ledger with zero findings** (three parsers agreeing on
+the wrong answer is not a cross-check); near-miss task heads now refuse
+loudly. **The lane dispatch never said WHERE the implementer runs** —
+the context packet now leads with the lane worktree/branch and the
+workflow calls an un-directed dispatch what it is, a failed one. The
+skill layer was still teaching the pre-lanes world: plan/SKILL.md's
+three task templates all produced plans graph derive refused (the
+component that WRITES plans was the least aligned with the parser that
+reads them — the navigator-drift lesson, recurring), flag-parser's
+table/schema predated --parallel, build-loop licensed ad-hoc "dispatch
+both on Tier 1" concurrency the lanes protocol forbids, and /continue
+denied managing what the resume brief now lists. All brought current.
+Round three also verified clean: zero behavioral divergence across all
+16 seeded scenario manifests old-vs-new, the resume path through a
+mid-burst kill, glob-widening machine-checked over a 21-entry corpus
+both orders, no secrets/junk/absolute paths in any commit, release
+readiness (one retitle of this [Unreleased] heading is all --bump
+needs).
+
 ### Re-review (round two): the fixes reviewed as fixes — 12 more findings, closed as classes
 
 Round two sent fresh reviewers at commit a0457dc itself (a fix that

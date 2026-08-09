@@ -77,16 +77,16 @@ include a component map and milestone structure):
    ## Milestone 1: [What's demoable after this group]
    Delivers: R1, FR1, FR2 (foundational — internal, verifiable)
 
-   [ ] Task 1: ...
-   [ ] Task 2: ...
+   - [ ] **Task 1:** ...
+   - [ ] **Task 2:** ...
 
    🔒 CHECKPOINT: [What to verify. Can this be shipped independently?]
 
    ## Milestone 2: [What's demoable]
    Delivers: R3, R5 (first user-visible value)
 
-   [ ] Task 3: ...
-   [ ] Task 4: ...
+   - [ ] **Task 3:** ...
+   - [ ] **Task 4:** ...
 
    🔒 CHECKPOINT: [What to verify. Ship decision point.]
    ```
@@ -96,11 +96,18 @@ include a component map and milestone structure):
    content from the spec:
 
    ```markdown
-   [ ] Task N: [Title]
-       Read first: [specific spec sections, PRD scenarios, pack files]
-       Done: [1-2 line acceptance criteria — what "finished" looks like]
-       Scope: [what this task does NOT touch — prevents scope creep]
+   - [ ] **Task N:** [Title]
+     - **Read first:** [specific spec sections, PRD scenarios, pack files]
+     - **Files:** [exact repo-relative paths/globs this task may touch]
+     - **Done:** [1-2 line acceptance criteria — what "finished" looks like]
+     - **Depends on:** none | T<n>[, T<n>…]
    ```
+
+   The head is EXACTLY `- [ ] **Task N:** title` and Files:/Depends are
+   bullet-form — this is machine-read grammar, not style: `scope derive`
+   and `graph derive` parse these lines at plan approval
+   (standard.plan-template.md carries the full grammar), and graph
+   derivation is fail-closed.
 
    "Read first" is a pointer, not a copy. The agent loads the referenced
    files at execution time. "Done" is derived from the PRD's acceptance
@@ -139,14 +146,13 @@ Break the work into tasks. Each task must be:
 #### For code deliverables (or code tasks in mixed):
 
 ```
-### Task N: [descriptive name]
-
-**Read first:** [pack pattern files relevant to this task — check .sage/skills/]
-**Files:** [exact file paths to create or modify]
-**Action:** [what to do — be specific enough that there's no ambiguity]
-**Test:** [what test to write, what it should verify]
-**Verify:** [command to run to confirm task is complete]
-**Depends on:** [task numbers that must complete first, or "none"]
+- [ ] **Task N:** [descriptive name]
+  - **Read first:** [pack pattern files relevant to this task — check .sage/skills/]
+  - **Files:** [exact file paths to create or modify — backticks welcome]
+  - **Action:** [what to do — be specific enough that there's no ambiguity]
+  - **Test:** [what test to write, what it should verify]
+  - **Verify:** [command to run to confirm task is complete]
+  - **Depends on:** none | T<n>[, T<n>…]
 ```
 
 The **Read first** field tells the agent which pack detail files to read before
@@ -158,13 +164,12 @@ project uses inline mode (all pack content in CLAUDE.md), this field can say
 #### For document deliverables (or document tasks in mixed):
 
 ```
-### Task N: [descriptive name] [DOC]
-
-**Read first:** [playbook reference files relevant to this section]
-**Output:** [file path for the document, e.g. .sage/work/NNN/competitive-analysis.md]
-**Action:** [what to write — be specific about scope, structure, expected sections]
-**Criteria:** [checklist of what "done" looks like for this section]
-**Depends on:** [task numbers that must complete first, or "none"]
+- [ ] **Task N:** [descriptive name] [DOC]
+  - **Read first:** [playbook reference files relevant to this section]
+  - **Output:** [file path for the document, e.g. .sage/work/NNN/competitive-analysis.md]
+  - **Action:** [what to write — be specific about scope, structure, expected sections]
+  - **Criteria:** [checklist of what "done" looks like for this section]
+  - **Depends on:** none | T<n>[, T<n>…]
 ```
 
 Document tasks use **[DOC]** marker. They have **Criteria** instead of **Test**
@@ -185,10 +190,16 @@ Mark tasks that can run simultaneously (no dependency between them) with `[P]`.
 This enables parallel subagent execution on Tier 1 platforms.
 
 ```
-Task 3 [P]: Create user model       (depends on: Task 1)
-Task 4 [P]: Create auth middleware   (depends on: Task 1)
-Task 5:     Integrate auth with user (depends on: Task 3, Task 4)
+- [ ] **Task 3:** Create user model [P]
+  - **Depends on:** T1
+- [ ] **Task 4:** Create auth middleware [P]
+  - **Depends on:** T1
+- [ ] **Task 5:** Integrate auth with user
+  - **Depends on:** T3, T4
 ```
+
+`[P]` goes AFTER the title, never inside the head — `**Task 3 [P]:**`
+is an unparseable head and refuses the whole derivation (fail-closed).
 
 ### Step 4.5: Plan self-check (fresh eyes)
 
@@ -245,13 +256,15 @@ Delivers: [which PRD requirements, e.g., R1, FR1, FR2]
 
 - [ ] **Task 1:** [name]
   - **Read first:** [spec sections, PRD scenarios, pack files]
+  - **Files:** [repo-relative paths/globs]
   - **Done:** [1-2 line criteria]
-  - **Scope:** [what this does NOT touch]
+  - **Depends on:** none
 
 - [ ] **Task 2:** [name]
   - **Read first:** [files to load]
+  - **Files:** [paths]
   - **Done:** [criteria]
-  - **Scope:** [boundaries]
+  - **Depends on:** T1
 
 🔒 CHECKPOINT: [What to verify. Ship decision if applicable.]
 
@@ -261,8 +274,9 @@ Delivers: [PRD requirements]
 
 - [ ] **Task 3:** [name]
   - **Read first:** [files]
+  - **Files:** [paths]
   - **Done:** [criteria]
-  - **Scope:** [boundaries]
+  - **Depends on:** none
 
 🔒 CHECKPOINT: [What to verify. Ship/demo decision.]
 

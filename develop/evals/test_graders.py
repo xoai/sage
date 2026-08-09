@@ -1430,7 +1430,12 @@ class LaneGraderTest(unittest.TestCase):
         (self.ws / "a.txt").write_text("base-a\n")
         (self.ws / "b.txt").write_text("base-b\n")
         (self.ws / "shared.txt").write_text("top\n" + "mid\n" * 8 + "bot\n")
-        self.commit("base")
+        # The seed commit carries the HARNESS identity, exactly as
+        # make_workspace commits fixtures — it is the witness's boundary.
+        self.git("add", "-A")
+        self.git("-c", "user.email=evals@sage.test",
+                 "-c", "user.name=sage-evals", "commit", "-q", "-m",
+                 "fixture: initial state")
         self.main = self.git("rev-parse", "--abbrev-ref",
                              "HEAD").stdout.strip()
 
@@ -1513,7 +1518,11 @@ class LaneGraderTest(unittest.TestCase):
                       [self.rec(1, "lane-t1"), self.rec(2, "lane-t2")])
         ok, detail = G.lanes_burst_disjoint(self.ws, G.Transcript([], []), {})
         self.assertFalse(ok)
-        self.assertIn("declared-disjoint did not hold", detail)
+        # Either diagnosis convicts: the pairwise check, or the commit
+        # sweep seeing the overlap surface as merge-introduced content.
+        self.assertTrue("declared-disjoint did not hold" in detail
+                        or "outside the bookkeeping" in detail, detail)
+        self.assertIn("shared.txt", detail)
 
     def test_dependency_related_lanes_may_share(self):
         self.lane("lane-t1", {"shared.txt": "T1\n" + "mid\n" * 8 + "bot\n"})
@@ -1552,10 +1561,10 @@ class LaneGraderTest(unittest.TestCase):
         self.assertIn("shared.txt", detail)
 
     def test_reworded_merge_subject_cannot_launder_either(self):
-        """Re-review F-A: the merge SUBJECT is agent-controlled too. A
-        hand-merge titled anything else, with its record omitted, must
-        still fail — the witness is structural (two-parent commits whose
-        second parent landed declared files), not textual."""
+        """Re-review F-A / round-three F1: attribution is by COMMITS. A
+        hand-merge under any title leaves its content commits reachable
+        from no recorded lane — subjects and merge topology prove
+        nothing."""
         self.lane("lane-t1", {"a.txt": "t1\n"})
         self.lane("lane-t2", {"shared.txt": "T2\n" + "mid\n" * 8 + "bot\n"})
         self.lane("lane-t3", {"shared.txt": "top\n" + "mid\n" * 8 + "T3\n"})
@@ -1570,7 +1579,45 @@ class LaneGraderTest(unittest.TestCase):
         ok, detail = G.lanes_burst_disjoint(self.ws, G.Transcript([], []), {})
         self.assertFalse(ok)
         self.assertIn("outside the bookkeeping", detail)
-        self.assertIn("Merge feature work", detail)
+        self.assertIn("shared.txt", detail)
+
+    def test_octopus_merge_cannot_launder(self):
+        """Round-three F1: a 3-parent merge is not a shape the witness
+        reasons about — the unrecorded lanes' CONTENT commits are what
+        convict."""
+        self.lane("lane-t1", {"a.txt": "t1\n"})
+        self.lane("lane-t3", {"shared.txt": "T3\n" + "mid\n" * 8 + "bot\n"})
+        self.lane("lane-t4", {"b.txt": "t4\n"})
+        self.merge_lane(1, "lane-t1")
+        self.git("merge", "--no-ff", "lane-t3", "lane-t4",
+                 "-m", "batch integration")
+        self.manifest([self.task(1, ["a.txt"]),
+                       self.task(3, ["shared.txt"]),
+                       self.task(4, ["b.txt"])],
+                      [self.rec(1, "lane-t1")])
+        ok, detail = G.lanes_burst_disjoint(
+            self.ws, G.Transcript([], []), {"min_merged": 1})
+        self.assertFalse(ok)
+        self.assertIn("outside the bookkeeping", detail)
+
+    def test_legitimate_sync_merge_is_not_a_false_positive(self):
+        """Round-three F2: a lane that pulls the integration branch
+        mid-flight (carrying a sibling's merged, declared files) is
+        LEGITIMATE — a clean merge introduces nothing, and the witness
+        must not fail an honest, fully-recorded burst."""
+        self.lane("lane-t1", {"a.txt": "t1\n"})
+        self.merge_lane(1, "lane-t1")
+        self.git("checkout", "-q", "-b", "lane-t2")
+        (self.ws / "b.txt").write_text("t2\n")
+        self.commit("lane-t2 work")
+        self.git("merge", "-q", self.main, "-m",
+                 "Merge branch 'main' into lane-t2")   # sync: brings a.txt
+        self.git("checkout", "-q", self.main)
+        self.merge_lane(2, "lane-t2")
+        self.manifest([self.task(1, ["a.txt"]), self.task(2, ["b.txt"])],
+                      [self.rec(1, "lane-t1"), self.rec(2, "lane-t2")])
+        ok, detail = G.lanes_burst_disjoint(self.ws, G.Transcript([], []), {})
+        self.assertTrue(ok, detail)
 
     def test_merged_without_a_merge_commit_fails(self):
         self.lane("lane-t1", {"a.txt": "t1\n"})

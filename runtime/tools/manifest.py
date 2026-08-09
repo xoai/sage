@@ -1188,11 +1188,26 @@ def parse_plan_graph(plan_text: str):
     the caller must not write a graph — fail-closed, see the section header."""
     view = _plan_derivation_view(plan_text)
     findings = []
+    # NEAR-MISS heads refuse, they never vanish (round-three T2: a `[P]`
+    # placed inside the head — `**Task 1 [P]:**` — matched NO parser, so
+    # the task silently disappeared from graph, scope, AND ledger with
+    # zero findings; three parsers agreeing on the wrong answer is not a
+    # cross-check). Anything that says "Task" in checkbox-bullet position
+    # but fails the strict head grammar is a defect to surface.
+    for line in view.splitlines():
+        if re.match(r"^\s*-\s*\[[ xX]\]\s*\*\*\s*Task\b", line) \
+                and not _TASK_HEAD_RE.match(line):
+            findings.append(
+                "unparseable task head %r — the grammar is `- [ ] **Task "
+                "N:** title` with [P]/[DOC] AFTER the title, never inside "
+                "the head; this bullet would otherwise VANISH from the "
+                "graph, the scope, and the ledger" % line.strip()[:80])
     heads = list(_TASK_HEAD_RE.finditer(view))
     if not heads:
-        return [], ["plan has no parseable tasks (the template's "
-                    "`- [ ] **Task N:** title` bullets) — nothing to derive "
-                    "a graph from"]
+        return [], findings + [
+            "plan has no parseable tasks (the template's "
+            "`- [ ] **Task N:** title` bullets) — nothing to derive "
+            "a graph from"]
     tasks, seen = [], set()
     for i, m in enumerate(heads):
         tid = int(m.group(1))

@@ -110,7 +110,9 @@ the corresponding workflow's Auto-Pickup:
 
 ## What /continue Does NOT Do
 
-- Does not manage parallel execution
+- Does not dispatch parallel lanes itself (the resume brief LISTS open
+  lanes from the manifest's `lanes:` block with the harvest path; acting
+  on them is the build workflow's job)
 - Does not replace decisions.md (manifest decisions are a subset)
 - Does not replace handoff fields in artifact frontmatter
 - Does not auto-save on crash (manifest may be stale if session

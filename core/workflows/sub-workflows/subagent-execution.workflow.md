@@ -216,9 +216,14 @@ collision guard, harvest on remove). The `--from` is not optional garnish:
 bare `sage worktree` bases on the DEFAULT branch, and mid-cycle the
 integration checkout is on the feature branch — a lane forked from `main`
 is a lane forked from the wrong world. Then, per lane, this sub-workflow's
-own per-task loop runs unchanged: context packet, implementer dispatch with
-the A6 role bindings, task-reviewer dispatch, verdicts. Hooks fire inside
-lane subagents exactly as they do inline (attested, P3-T1).
+own per-task loop runs with ONE change: the context packet's leading
+"Your working directory" section (context-packet.md) names the lane
+worktree and branch, and the dispatch prompt repeats it — a subagent
+dispatched without it inherits the orchestrator's integration checkout
+and edits THERE, which silently defeats every property a lane exists to
+provide. Packet, implementer dispatch with the A6 role bindings,
+task-reviewer dispatch, verdicts: all as inline otherwise. Hooks fire
+inside lane subagents exactly as they do inline (attested, P3-T1).
 
 **Bookkeeping stays single-writer.** Lanes REPORT (`STATUS: DONE | BLOCKED`
 + evidence); only the orchestrator RECORDS, and only through the tool:

@@ -979,6 +979,16 @@ And a tab-indented one:
         self.assertIn("Prose discussing the task_graph: block.",
                       self.m.read_text())
 
+    def test_a_P_inside_the_head_refuses_rather_than_vanishing(self):
+        """Round-three T2: `**Task 2 [P]:**` matched NO parser, so the
+        task silently disappeared from graph, scope, and ledger with zero
+        findings — three parsers agreeing on the wrong answer is not a
+        cross-check. A near-miss head is a loud refusal."""
+        M.scope_derive(self.m)
+        self.plan.write_text(A_GRAPH_PLAN.replace(
+            "- [ ] **Task 2:** auth flow [P]", "- [ ] **Task 2 [P]:** auth flow"))
+        self.refuse("unparseable task head", "would otherwise VANISH")
+
     def test_no_plan_is_a_problem(self):
         self.plan.unlink()
         with self.assertRaises(M.Problem):

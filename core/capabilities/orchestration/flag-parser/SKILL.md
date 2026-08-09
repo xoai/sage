@@ -29,6 +29,8 @@ the agent trusts that JSON unconditionally.
 | `--no-autonomous` | Force off, overriding a config default | — |
 | `--subagents` | Fresh implementer + reviewer subagent per plan task (ADR-10) | off (overridable by config) |
 | `--no-subagents` | Force off, overriding a config default | — |
+| `--parallel[=N]` | Dependency-aware parallel lanes on top of `--subagents` (A7); the one value-taking flag — N is the lane cap, default 2, hard cap 4 (over-asking clamps loudly into `parallel_note`) | off (overridable by config) |
+| `--no-parallel` | Force off, overriding a config default | — |
 
 **`--subagents` is different from the other two, and the difference matters.**
 The others are policies: ask for them and you get them. This one is a
@@ -88,10 +90,15 @@ Both parsing layers emit the same JSON shape to stdout:
   "quality_locked": true | false,
   "autonomous": true | false,
   "subagents": true | false,
+  "parallel": true | false,
   "goal": "<remainder after flags, trimmed>",
   "error": null | "<error message>",
   "quality_locked_source": "flag" | "config" | null,
-  "autonomous_source": "flag" | "config" | null
+  "autonomous_source": "flag" | "config" | null,
+  "subagents_source": "flag" | "config" | null,
+  "parallel_source": "flag" | "config" | null,
+  "parallel_lanes": 0 | 1-4,
+  "parallel_note": null | "<clamp note>"
 }
 ```
 

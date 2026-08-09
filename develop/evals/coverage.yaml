@@ -282,7 +282,7 @@ surfaces:
       process hand-editing the main checkout's manifest is redirected —
       and B24's faithful replace_all reconstruction, closing the review
       finding where a MultiEdit could rewire a guarded dependency edge
-      under the count=1 model; B25/B26 from the round-two re-review: the
+      under the count=1 model; B25-B28 from review rounds two and three: the
       section capture survives blank lines inside a block and commented
       headers — the de-DOTALL fix had introduced exactly that gap);
       L1 covers it end-to-end on the resume path.
@@ -725,7 +725,10 @@ surfaces:
     notes: >
       The real build loop. E1 grades its TDD step, E4 its scope guard. The
       per-task gate runs it mandates are asserted by the gate suite, not by a
-      scenario. Phase 3's subagent-execution sub-workflow replaces this loop
+      scenario. 2026-08-09 (round-three T4): its ad-hoc "dispatch both on
+      Tier 1" concurrency license was replaced with the lanes-only rule —
+      [P] is honored exclusively by --parallel (code-scheduled, opt-in).
+      Phase 3's subagent-execution sub-workflow replaces this loop
       when --subagents is active; E9/E10 will cover that path.
 
   capability-tdd:
@@ -818,6 +821,11 @@ surfaces:
     uncovered: >
       No scenario grades plan QUALITY (task decomposition, deliverables,
       ordering). E7 asserts a plan file exists; that is not the same claim.
+      2026-08-09 (round-three T1): the SKILL's task templates were rewritten
+      to the graph grammar — a planner following the old shapes produced
+      plans graph derive REFUSED (checkbox-bullet heads, bullet-form
+      Files/Depends, [P] after the title). The grammar itself is pinned by
+      GraphTest + the template handshake; the SKILL now teaches it.
 
   capability-spec-review:
     path: core/capabilities/review/spec-review/SKILL.md
@@ -846,8 +854,11 @@ surfaces:
     kind: capability
     covered-by: [E9, E10]
     notes: >
-      E9/E10 drive --subagents end-to-end. 39 unit tests cover parsing,
-      precedence, and the degradation path — including that a request on a
+      E9/E10 drive --subagents end-to-end. The unit suite covers parsing,
+      precedence, and the degradation path — since 2026-08-09 including
+      --parallel[=N] (the one value-taking flag) and resolve_parallel; the
+      SKILL's flag table and JSON schema were brought current the same day
+      (round-three T3) — including that a request on a
       platform without subagent-dispatch degrades loudly rather than dispatching
       into a void. That degradation path is unit-tested but has no EVAL scenario:
       E8 covers loud degradation for the Task tool generally, not for this flag.
@@ -1070,6 +1081,9 @@ surfaces:
       Plugin wrapper for /continue — doubly uncovered: the plugin path is untested
       AND resume fidelity itself has no scenario (see workflow-continue). The
       headline long-horizon claim, unmeasured on the install path most users take.
+      2026-08-09: its "does not manage parallel execution" line corrected — the
+      resume brief now lists open lanes (E-PAR-3's resume session grades this,
+      authored not run).
 
   overlay-skill-fix:
     path: runtime/plugin-overlay/skills/fix/SKILL.md

@@ -194,7 +194,10 @@ def foreign_owner(fm):
     checkout on removal — an in-progress harvested cycle must not conscript
     this checkout's edits into its scope. Same rule /continue applies
     (cycle-protocol: owner exclusion); absent/unreadable owner → ours."""
-    m = re.search(r"^\s*owner\s*:\s*[\"']?([^\"'\n#]+)", fm, re.M)
+    # Column-0 only — no block carries a nested owner: today, but every
+    # other scalar reader was anchored for that exact reason (round-three
+    # F6: same pattern, left un-closed in the same file).
+    m = re.search(r"^owner\s*:\s*[\"']?([^\"'\n#]+)", fm, re.M)
     if not m:
         return False
     owner = m.group(1).strip()
@@ -384,10 +387,22 @@ for mpath in manifests:
     # derived_from, and a first-match-anywhere read returned the graph's
     # pin when the blocks were hand-ordered graph-first, producing a false
     # stale warning that no re-derive could clear (re-audit finding 2).
-    sblock = re.search(r"(?m)^scope\s*:[ \t]*(?:#.*)?$\n((?:[ \t]+.*\n?)*)",
-                       fm)
+    # Block = the indented run after the header, tolerating interior
+    # blank lines and CRLF (round-three F5: the un-hardened body pattern
+    # missed a derived_from below a blank line).
+    sb_lines, sb_on = [], False
+    for raw in fm.splitlines():
+        line = raw.rstrip("\r")
+        if re.match(r"^scope\s*:[ \t]*(?:#.*)?$", line):
+            sb_on = True
+            continue
+        if sb_on:
+            if line.strip() == "" or line.startswith((" ", "\t")):
+                sb_lines.append(line)
+            else:
+                break
     dm = re.search(r"^\s*derived_from\s*:\s*plan@([0-9a-fA-F]+)",
-                   sblock.group(1) if sblock else "", re.M)
+                   "\n".join(sb_lines), re.M)
     if dm:
         recorded = dm.group(1).lower()
     # Collateral: entries add-collateral could never have written are forged.

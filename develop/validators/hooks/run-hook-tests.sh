@@ -815,6 +815,26 @@ assert B26 "a commented block header does not unguard the block, and clean trans
   '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/bkh/manifest.md","old_string":"gate_state: building","new_string":"gate_state: gates-passed"}}' \
   --exit 0 --hook "$BKG"
 
+# B27/B28 (round-three F3/F4): the line-scanner extraction, pinned where the
+# regex generations fell — a DOUBLE blank line inside the block, and a CRLF
+# manifest (the [ \t]-anchored $ never matched `scope:\r`, un-guarding
+# Windows-written manifests entirely).
+P="$(new_project)"; set_config "$P" "hard_enforcement: true"
+mkdir -p "$P/.sage/work/bk2b"
+printf -- '---\ncycle_id: "bk2b"\nstatus: in-progress\ntier: standard\ngate_state: building\ntask_graph:\n  derived_from: plan@abcd1234\n  tasks:\n    - {id: T1, title: "types", files: [src/types.ts], depends: [], parallel: false}\n\n\n    - {id: T2, title: "auth", files: [src/auth.ts], depends: [T1], parallel: true}\n---\n\n# Cycle\n' \
+  > "$P/.sage/work/bk2b/manifest.md"
+assert B27 "a graph edit below a DOUBLE blank line inside the block is still caught" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/bk2b/manifest.md","old_string":"gate_state: building","new_string":"gate_state: gates-passed","edits":[{"old_string":"gate_state: building","new_string":"gate_state: gates-passed"},{"old_string":"depends: [T1]","new_string":"depends: []"}]}}' \
+  --exit 2 --stderr "close-out" --hook "$BKG"
+
+P="$(new_project)"; set_config "$P" "hard_enforcement: true"
+mkdir -p "$P/.sage/work/bkcrlf"
+printf -- '---\r\ncycle_id: "bkcrlf"\r\nstatus: in-progress\r\ntier: standard\r\ngate_state: building\r\ntask_graph:\r\n  derived_from: plan@abcd1234\r\n  tasks:\r\n    - {id: T2, title: "auth", files: [src/auth.ts], depends: [T1], parallel: true}\r\n---\r\n\r\n# Cycle\r\n' \
+  > "$P/.sage/work/bkcrlf/manifest.md"
+assert B28 "a CRLF manifest's guarded blocks are still guarded" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/bkcrlf/manifest.md","old_string":"gate_state: building","new_string":"gate_state: gates-passed","edits":[{"old_string":"gate_state: building","new_string":"gate_state: gates-passed"},{"old_string":"depends: [T1]","new_string":"depends: []"}]}}' \
+  --exit 2 --stderr "close-out" --hook "$BKG"
+
 # ── sage-secrets-gate: credentials never go into source ────────────────────
 # The weak-model campaign measured why: handed a live key, haiku-bare hardcodes
 # it 3/3 and haiku with the CONSTITUTION PARAGRAPH still hardcoded it 2/3.

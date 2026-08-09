@@ -16,6 +16,16 @@ description: >
 ```markdown
 # Context packet — Task {N}: {task title}
 
+{ONLY when this task runs in a parallel lane (--parallel, A7):}
+## Your working directory — read this first
+
+Everything you do happens in the lane worktree: `{worktree path}`, on
+branch `{lane branch}`. cd there before your first command; every path
+in this packet is relative to THAT directory, and every edit and commit
+lands there. The main checkout belongs to the orchestrator — an edit
+made there instead of the worktree is a failed dispatch, whatever else
+your report says.
+
 ## Your task
 
 {The plan task, VERBATIM. Do not paraphrase it into this packet — a paraphrase

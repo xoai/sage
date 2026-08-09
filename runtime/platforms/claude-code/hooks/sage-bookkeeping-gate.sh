@@ -157,35 +157,57 @@ if status in ("complete", "completed", "abandoned"):
 # else it says.
 
 
-# MULTILINE only, NOT DOTALL: with (?s) the `.` in the body pattern crossed
-# newlines and each "section" greedily captured to end-of-file, so the
-# compare only worked because gate_state happens to sit above the guarded
-# blocks in the real template (independent review, finding 3 side-note).
-# The body pattern accepts indented lines AND blank lines that are followed
-# by another indented line — a blank line INSIDE a block must not end the
-# capture (re-review F-B: it silently un-guarded everything below it), while
-# a blank line before the next top-level key still does. The header
-# tolerates a trailing comment for the same reason: a commented header is
-# still the block.
-_BLOCK_BODY = r"((?:[ \t]+.*\n?|[ \t]*\n(?=[ \t]+\S))*)"
+# Section extraction is a LINE SCANNER, not a regex. Three regex
+# generations each fell to the next counterexample (DOTALL captured to
+# EOF; MULTILINE stopped at one blank line; the one-blank lookahead
+# stopped at two, and its [ \t]-anchored `$` never matched CRLF headers
+# at all — round-three F3/F4). The scanner's rule is the actual YAML
+# shape: the block is every following line that is indented, plus any
+# run of blank lines that is FOLLOWED by another indented line. Line
+# endings are normalized for the decisions but preserved in the capture,
+# so the before/after compare stays faithful on CRLF manifests.
+def _block_section(text, key):
+    lines = (text or "").splitlines(True)
+
+    def bare(l):
+        return l.rstrip("\r\n")
+
+    head = re.compile(r"^[ \t]*%s\s*:[ \t]*(?:#.*)?$" % key)
+    start = next((i for i, l in enumerate(lines) if head.match(bare(l))),
+                 None)
+    if start is None:
+        return ""
+    out = [lines[start]]
+    j = start + 1
+    while j < len(lines):
+        b = bare(lines[j])
+        if b.strip() == "":
+            k = j
+            while k < len(lines) and bare(lines[k]).strip() == "":
+                k += 1
+            if k < len(lines) and re.match(r"^[ \t]+\S", bare(lines[k])):
+                out.extend(lines[j:k])
+                j = k
+                continue
+            break
+        if re.match(r"^[ \t]+", b):
+            out.append(lines[j])
+            j += 1
+            continue
+        break
+    return "".join(out)
 
 
 def scope_section(text):
-    m = re.search(r"(?m)^[ \t]*scope\s*:[ \t]*(?:#.*)?$\n" + _BLOCK_BODY,
-                  text or "")
-    return m.group(0) if m else ""
+    return _block_section(text, "scope")
 
 
 def graph_section(text):
-    m = re.search(r"(?m)^[ \t]*task_graph\s*:[ \t]*(?:#.*)?$\n" + _BLOCK_BODY,
-                  text or "")
-    return m.group(0) if m else ""
+    return _block_section(text, "task_graph")
 
 
 def lanes_section(text):
-    m = re.search(r"(?m)^[ \t]*lanes\s*:[ \t]*(?:#.*)?$\n" + _BLOCK_BODY,
-                  text or "")
-    return m.group(0) if m else ""
+    return _block_section(text, "lanes")
 
 
 def guarded_sections(text):

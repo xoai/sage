@@ -1184,6 +1184,31 @@ def _file_in_declaration(path, declared):
     return False
 
 
+# The eval harness commits fixture seeds under this identity
+# (run_evals.make_workspace) — everything else in the DAG is the agent's.
+HARNESS_AUTHORS = {"evals@sage.test"}
+EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+
+
+def _git_ok(ws: pathlib.Path, *args) -> bool:
+    return subprocess.run(["git", "-C", str(ws), *args],
+                          capture_output=True).returncode == 0
+
+
+def _lane_merge_tip(ws, rec):
+    """The second parent of a recorded lane's canonical merge commit, or
+    None. The subject is used only for POSITIVE attribution — rewording a
+    recorded lane's subject strands its own commits unattributed, which
+    fails safe."""
+    want = "merge lane T%d (%s)" % (rec["task"], rec["branch"])
+    for line in _git(ws, "log", "--merges", "--format=%H|%P|%s").splitlines():
+        sha, parents, subject = (line.split("|", 2) + ["", ""])[:3]
+        if subject.strip() == want:
+            pp = parents.split()
+            return pp[1] if len(pp) == 2 else None
+    return None
+
+
 def _merged_lane_files(ws, rec):
     """The files a merged lane actually landed, from its --no-ff merge
     commit (second parent vs merge-base). None when no merge commit is
@@ -1221,42 +1246,57 @@ def lanes_burst_disjoint(ws, tx, p) -> tuple:
         return False, (f"{len(merged)} merged lane(s), expected at least "
                        f"{p.get('min_merged', 2)}")
 
-    # The workspace is agent-controlled: an agent that violated
-    # disjointness must not pass by PRUNING the offending record, and the
-    # merge SUBJECT is agent-controlled too — a hand-merge titled anything
-    # else must not slip the audit (re-review F-A: the subject-shaped
-    # witness was launderable by rewording). So the witness is structural:
-    # EVERY two-parent commit in history is either a recorded lane's merge
-    # (matched by subject) or an anonymous merge — and an anonymous merge
-    # whose second parent landed files under the graph's declarations is a
-    # lane merged outside the bookkeeping. (A squash-merge leaves no merge
-    # commit and lands as ordinary commits — that residual belongs to
-    # ledger_attributes_commits and the gate_exit backstop.)
+    # The workspace is agent-controlled, and TWO prior constructions of
+    # this witness were laundered: subject-matching fell to reworded
+    # subjects, and merge-TOPOLOGY matching fell to octopus/first-parent/
+    # evil merges while false-positiving on legitimate sync merges
+    # (round-three F1/F2). So the witness no longer reasons about merge
+    # shape at all. It attributes COMMITS: every non-harness commit that
+    # changed a declared file must be reachable from a recorded merged
+    # lane's tip (its work), and merge-INTRODUCED content (files that
+    # differ from every parent — conflict resolutions, evil merges) is
+    # held to the same bar. Commits are the one artifact rewording,
+    # re-merging, and re-titling cannot hide from rev-list; what remains
+    # gameable is history REWRITING (squash/rebase before merge), which
+    # is exactly ledger_attributes_commits' beat and documented there.
     by_id = {t["id"]: t for t in (graph["tasks"] if graph else [])}
     declared_all = [f for t in (graph["tasks"] if graph else [])
                     for f in t["files"]]
-    recorded_subjects = {"merge lane T%d (%s)" % (r["task"], r["branch"])
-                         for r in merged}
-    for line in _git(ws, "log", "--merges", "--format=%H|%s").splitlines():
-        sha, _, subject = line.partition("|")
-        if subject.strip() in recorded_subjects:
+    tips = {}
+    for rec in merged:
+        tip = _lane_merge_tip(ws, rec)
+        if tip is None:
+            return False, (f"lane T{rec['task']} is recorded merged but has "
+                           f"no --no-ff merge commit — merged without a merge")
+        tips[rec["task"]] = tip
+    for line in _git(ws, "log", "--format=%H|%P|%ae").splitlines():
+        sha, parents, author = (line.split("|", 2) + ["", ""])[:3]
+        if author.strip() in HARNESS_AUTHORS:
+            continue                       # the fixture/seed boundary
+        pp = parents.split()
+        if len(pp) <= 1:
+            delta = _git(ws, "diff", "--name-only",
+                         pp[0] if pp else EMPTY_TREE, sha).split()
+        else:
+            # Merge-introduced content only: files whose result differs
+            # from EVERY parent. A clean merge (incl. an upstream sync)
+            # introduces nothing and is ignored — that is what fixes the
+            # false-positive direction.
+            per_parent = [set(_git(ws, "diff", "--name-only", par,
+                                   sha).split()) for par in pp]
+            delta = set.intersection(*per_parent) if per_parent else set()
+        hits = [f for f in delta
+                if not f.startswith((".sage/", "sage/"))
+                and _file_in_declaration(f, declared_all)]
+        if not hits:
             continue
-        parents = _git(ws, "rev-list", "--parents", "-n", "1",
-                       sha).split()[1:]
-        if len(parents) != 2:
-            continue
-        base = _git(ws, "merge-base", parents[0], parents[1]).strip()
-        landed = [f for f in _git(ws, "diff", "--name-only", base,
-                                  parents[1]).split()
-                  if not f.startswith((".sage/", "sage/"))]
-        hits = [f for f in landed
-                if _file_in_declaration(f, declared_all)]
-        if hits:
-            return False, (f"unrecorded merge commit {sha[:10]} "
-                           f"({subject.strip()!r}) landed declared files "
-                           f"({', '.join(hits[:4])}) — a lane merged "
-                           f"outside the bookkeeping; the audit trail "
-                           f"audits nothing")
+        if any(_git_ok(ws, "merge-base", "--is-ancestor", sha, tip)
+               for tip in tips.values()):
+            continue                       # attributable to a recorded lane
+        return False, (f"commit {sha[:10]} changed declared files "
+                       f"({', '.join(sorted(hits)[:4])}) and is reachable "
+                       f"from NO recorded lane — work landed outside the "
+                       f"bookkeeping; the audit trail audits nothing")
 
     # depends closure — related pairs are allowed to share files.
     def ancestors(tid, seen=None):

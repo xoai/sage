@@ -179,8 +179,12 @@ context and L2 measured its value at this horizon as null; and with
 `resume_test_cadence: lean` (default) each step's GREEN runs the targeted test,
 with the full suite run once at close-out (Gate 5) rather than per task.
 
-For tasks marked `[P]` (parallelizable), note: "Tasks [N] and [M] can run
-in parallel. Running sequentially on this platform." (On Tier 1, dispatch both.)
+For tasks marked `[P]` (parallelizable), note: "Tasks [N] and [M] are
+marked parallel-safe. Running sequentially — concurrent dispatch happens
+ONLY through `--subagents --parallel` lanes (subagent-execution
+sub-workflow), never ad-hoc from the inline loop: lanes bring the
+scheduler, worktrees, caps, and single-writer bookkeeping that ad-hoc
+concurrency lacks."
 
 ### Step 6: Final Review
 
@@ -266,7 +270,8 @@ Updated: <timestamp>
 **MAY (context-dependent):**
 - MAY skip the final review (step 6) if the plan had only 1-2 tasks, since per-task
   review already covered everything.
-- MAY run parallelizable tasks concurrently on Tier 1 platforms.
+- MUST NOT run tasks concurrently from this loop — `[P]` is honored only
+  by the `--parallel` lane machinery (opt-in, code-scheduled).
 
 ## Failure Modes
 
