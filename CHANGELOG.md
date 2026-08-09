@@ -2,7 +2,7 @@
 
 All notable changes to Sage will be documented in this file.
 
-## [Unreleased] — parallel implementation lanes (A6→A8→A7→A9)
+## [1.3.18] — parallel implementation lanes: the plan's structure becomes machine state, and lanes are code-scheduled (A6→A8→A7→A9)
 
 ### Re-review (round four): the rebuilds attacked, two fresh classes closed, convergence reached
 
