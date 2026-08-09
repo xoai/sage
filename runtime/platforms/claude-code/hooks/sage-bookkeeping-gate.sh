@@ -172,7 +172,12 @@ def _block_section(text, key):
     def bare(l):
         return l.rstrip("\r\n")
 
-    head = re.compile(r"^[ \t]*%s\s*:[ \t]*(?:#.*)?$" % key)
+    # Column-0 header only — an INDENTED `  lanes:` nested inside another
+    # block must not claim the section (round-four F5: the un-anchored
+    # form let a planted decoy strand the real block un-guarded; guarded
+    # blocks are top-level keys by construction, same rule as every
+    # scalar reader).
+    head = re.compile(r"^%s\s*:[ \t]*(?:#.*)?$" % key)
     start = next((i for i, l in enumerate(lines) if head.match(bare(l))),
                  None)
     if start is None:

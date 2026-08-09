@@ -1184,9 +1184,6 @@ def _file_in_declaration(path, declared):
     return False
 
 
-# The eval harness commits fixture seeds under this identity
-# (run_evals.make_workspace) — everything else in the DAG is the agent's.
-HARNESS_AUTHORS = {"evals@sage.test"}
 EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 
 
@@ -1223,7 +1220,8 @@ def _merged_lane_files(ws, rec):
         if len(pp) != 2:
             return None
         base = _git(ws, "merge-base", pp[0], pp[1]).strip()
-        files = _git(ws, "diff", "--name-only", base, pp[1]).split()
+        files = _git(ws, "diff", "--no-renames", "--name-only", base,
+                     pp[1]).split()
         return [f for f in files if not f.startswith((".sage/", "sage/"))]
     return None
 
@@ -1246,22 +1244,34 @@ def lanes_burst_disjoint(ws, tx, p) -> tuple:
         return False, (f"{len(merged)} merged lane(s), expected at least "
                        f"{p.get('min_merged', 2)}")
 
-    # The workspace is agent-controlled, and TWO prior constructions of
-    # this witness were laundered: subject-matching fell to reworded
-    # subjects, and merge-TOPOLOGY matching fell to octopus/first-parent/
-    # evil merges while false-positiving on legitimate sync merges
-    # (round-three F1/F2). So the witness no longer reasons about merge
-    # shape at all. It attributes COMMITS: every non-harness commit that
-    # changed a declared file must be reachable from a recorded merged
-    # lane's tip (its work), and merge-INTRODUCED content (files that
-    # differ from every parent — conflict resolutions, evil merges) is
-    # held to the same bar. Commits are the one artifact rewording,
-    # re-merging, and re-titling cannot hide from rev-list; what remains
-    # gameable is history REWRITING (squash/rebase before merge), which
-    # is exactly ledger_attributes_commits' beat and documented there.
+    # The workspace is agent-controlled, and THREE prior constructions of
+    # this witness were laundered: subject-matching fell to rewording,
+    # merge-TOPOLOGY matching fell to octopus/first-parent/evil merges,
+    # and an author-identity boundary fell to `git commit --author=`
+    # (round-four F1 — identity is a string the agent types). So both
+    # halves are structural now. The BOUNDARY is the burst_base pin:
+    # everything that is an ancestor of the pinned base predates the
+    # burst (harness seeds, sequential-phase work) and is out of scope;
+    # the pin itself is machine-written by lanes.py under the
+    # base-must-BE-integration-HEAD assertion and guarded by the
+    # bookkeeping-gate. The ATTRIBUTION is reachability: every post-base
+    # commit that changed a declared file must be reachable from a
+    # recorded merged lane's tip, and merge-INTRODUCED content (files
+    # differing from every parent — conflict resolutions, evil merges)
+    # is held to the same bar. Renames are split (--no-renames) so a
+    # declared source path cannot vanish behind its destination
+    # (round-four F2). Residuals, owned elsewhere and accepted: history
+    # REWRITING before merge (ledger_attributes_commits' beat), and
+    # folding foreign work INTO a recorded lane pre-merge — folded
+    # content becomes that lane's and is judged by ITS declaration.
     by_id = {t["id"]: t for t in (graph["tasks"] if graph else [])}
     declared_all = [f for t in (graph["tasks"] if graph else [])
                     for f in t["files"]]
+    base = lanes.get("burst_base") or ""
+    if not base or not _git_ok(ws, "cat-file", "-e", base + "^{commit}"):
+        return False, ("burst_base is unpinned or does not resolve "
+                       f"({base!r}) — the witness has no structural "
+                       "boundary, and an unbounded audit proves nothing")
     tips = {}
     for rec in merged:
         tip = _lane_merge_tip(ws, rec)
@@ -1269,21 +1279,22 @@ def lanes_burst_disjoint(ws, tx, p) -> tuple:
             return False, (f"lane T{rec['task']} is recorded merged but has "
                            f"no --no-ff merge commit — merged without a merge")
         tips[rec["task"]] = tip
-    for line in _git(ws, "log", "--format=%H|%P|%ae").splitlines():
-        sha, parents, author = (line.split("|", 2) + ["", ""])[:3]
-        if author.strip() in HARNESS_AUTHORS:
-            continue                       # the fixture/seed boundary
+    for line in _git(ws, "log", "--format=%H|%P").splitlines():
+        sha, _, parents = line.partition("|")
+        if _git_ok(ws, "merge-base", "--is-ancestor", sha, base):
+            continue                       # pre-burst: seeds, sequential work
         pp = parents.split()
         if len(pp) <= 1:
-            delta = _git(ws, "diff", "--name-only",
+            delta = _git(ws, "diff", "--no-renames", "--name-only",
                          pp[0] if pp else EMPTY_TREE, sha).split()
         else:
             # Merge-introduced content only: files whose result differs
             # from EVERY parent. A clean merge (incl. an upstream sync)
-            # introduces nothing and is ignored — that is what fixes the
-            # false-positive direction.
-            per_parent = [set(_git(ws, "diff", "--name-only", par,
-                                   sha).split()) for par in pp]
+            # introduces nothing and is ignored — that is what keeps the
+            # false-positive direction closed.
+            per_parent = [set(_git(ws, "diff", "--no-renames",
+                                   "--name-only", par, sha).split())
+                          for par in pp]
             delta = set.intersection(*per_parent) if per_parent else set()
         hits = [f for f in delta
                 if not f.startswith((".sage/", "sage/"))
@@ -1294,9 +1305,10 @@ def lanes_burst_disjoint(ws, tx, p) -> tuple:
                for tip in tips.values()):
             continue                       # attributable to a recorded lane
         return False, (f"commit {sha[:10]} changed declared files "
-                       f"({', '.join(sorted(hits)[:4])}) and is reachable "
-                       f"from NO recorded lane — work landed outside the "
-                       f"bookkeeping; the audit trail audits nothing")
+                       f"({', '.join(sorted(hits)[:4])}) after the burst "
+                       f"base and is reachable from NO recorded lane — "
+                       f"work landed outside the bookkeeping; the audit "
+                       f"trail audits nothing")
 
     # depends closure — related pairs are allowed to share files.
     def ancestors(tid, seen=None):

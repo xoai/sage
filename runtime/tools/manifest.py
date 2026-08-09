@@ -1188,15 +1188,19 @@ def parse_plan_graph(plan_text: str):
     the caller must not write a graph — fail-closed, see the section header."""
     view = _plan_derivation_view(plan_text)
     findings = []
-    # NEAR-MISS heads refuse, they never vanish (round-three T2: a `[P]`
-    # placed inside the head — `**Task 1 [P]:**` — matched NO parser, so
-    # the task silently disappeared from graph, scope, AND ledger with
-    # zero findings; three parsers agreeing on the wrong answer is not a
-    # cross-check). Anything that says "Task" in checkbox-bullet position
-    # but fails the strict head grammar is a defect to surface.
+    # NEAR-MISS heads refuse, they never vanish (round-three T2, widened
+    # by round-four F3: `**Task 1 [P]:**`, `- []`, `* [ ]`, and lowercase
+    # `task` heads each matched NO parser, so the task silently
+    # disappeared from graph, scope, AND ledger with zero findings —
+    # three parsers agreeing on the wrong answer is not a cross-check).
+    # The near-miss shape is any bulleted, checkbox-ish, bold line whose
+    # bold text says "task" followed soon by a DIGIT — a NUMBERED task
+    # was plainly meant. Prose bullets like `**Task force sign-off**`
+    # carry no number, are not tasks, and pass untouched (round-four F4).
+    _NEAR_MISS = re.compile(
+        r"^\s*[-*+]\s*\[[ xX]?\]\s*\*\*\s*[Tt]ask\s*\[?\s*\d")
     for line in view.splitlines():
-        if re.match(r"^\s*-\s*\[[ xX]\]\s*\*\*\s*Task\b", line) \
-                and not _TASK_HEAD_RE.match(line):
+        if _NEAR_MISS.match(line) and not _TASK_HEAD_RE.match(line):
             findings.append(
                 "unparseable task head %r — the grammar is `- [ ] **Task "
                 "N:** title` with [P]/[DOC] AFTER the title, never inside "

@@ -1430,12 +1430,11 @@ class LaneGraderTest(unittest.TestCase):
         (self.ws / "a.txt").write_text("base-a\n")
         (self.ws / "b.txt").write_text("base-b\n")
         (self.ws / "shared.txt").write_text("top\n" + "mid\n" * 8 + "bot\n")
-        # The seed commit carries the HARNESS identity, exactly as
-        # make_workspace commits fixtures — it is the witness's boundary.
-        self.git("add", "-A")
-        self.git("-c", "user.email=evals@sage.test",
-                 "-c", "user.name=sage-evals", "commit", "-q", "-m",
-                 "fixture: initial state")
+        self.commit("fixture: initial state")
+        # The witness's boundary is STRUCTURAL: the burst_base pin (the
+        # seed sha here) — ancestry, never an identity string (round-four
+        # F1: `git commit --author=` forges any identity).
+        self.base = self.git("rev-parse", "HEAD").stdout.strip()
         self.main = self.git("rev-parse", "--abbrev-ref",
                              "HEAD").stdout.strip()
 
@@ -1465,7 +1464,7 @@ class LaneGraderTest(unittest.TestCase):
               + (ledger + "\n" if ledger else "")
               + self.rt._task_graph_block_lines("plan@ab12cd34", graph_tasks)
               + "\n"
-              + self.rt._lanes_block_lines("base123", records)
+              + self.rt._lanes_block_lines(self.base, records)
               + "\n---\n\n# c1\n")
         (cyc / "manifest.md").write_text(fm)
 
@@ -1599,6 +1598,64 @@ class LaneGraderTest(unittest.TestCase):
             self.ws, G.Transcript([], []), {"min_merged": 1})
         self.assertFalse(ok)
         self.assertIn("outside the bookkeeping", detail)
+
+    def test_forged_author_identity_cannot_launder(self):
+        """Round-four F1: `git commit --author="sage-evals
+        <evals@sage.test>"` is one flag. The boundary is burst-base
+        ANCESTRY — a post-base commit under any identity must still be
+        reachable from a recorded lane."""
+        self.lane("lane-t1", {"a.txt": "t1\n"})
+        self.lane("lane-t2", {"b.txt": "t2\n"})
+        self.merge_lane(1, "lane-t1")
+        self.merge_lane(2, "lane-t2")
+        (self.ws / "shared.txt").write_text("smuggled\n")
+        self.git("add", "-A")
+        self.git("commit", "-q", "-m", "unrecorded work",
+                 "--author", "sage-evals <evals@sage.test>")
+        self.manifest([self.task(1, ["a.txt"]), self.task(2, ["b.txt"]),
+                       self.task(3, ["shared.txt"])],
+                      [self.rec(1, "lane-t1"), self.rec(2, "lane-t2")])
+        ok, detail = G.lanes_burst_disjoint(self.ws, G.Transcript([], []), {})
+        self.assertFalse(ok)
+        self.assertIn("outside the bookkeeping", detail)
+        self.assertIn("shared.txt", detail)
+
+    def test_rename_out_of_declared_space_cannot_hide(self):
+        """Round-four F2: default rename detection reported only the
+        destination path, so mutating a declared file via `git mv` dodged
+        the declaration match. --no-renames splits both sides."""
+        self.lane("lane-t1", {"a.txt": "t1\n"})
+        self.merge_lane(1, "lane-t1")
+        self.git("checkout", "-q", "-b", "lane-x")
+        self.git("mv", "shared.txt", "stealth.txt")
+        (self.ws / "stealth.txt").write_text("mutated\n")
+        self.commit("sneaky rename")
+        self.git("checkout", "-q", self.main)
+        self.git("merge", "--no-ff", "-q", "lane-x", "-m", "merge work")
+        self.manifest([self.task(1, ["a.txt"]),
+                       self.task(2, ["shared.txt"])],
+                      [self.rec(1, "lane-t1")])
+        ok, detail = G.lanes_burst_disjoint(
+            self.ws, G.Transcript([], []), {"min_merged": 1})
+        self.assertFalse(ok)
+        self.assertIn("shared.txt", detail)
+
+    def test_unpinned_burst_base_fails_closed(self):
+        """No structural boundary, no audit — an unbounded witness proves
+        nothing and must say so."""
+        self.lane("lane-t1", {"a.txt": "t1\n"})
+        self.lane("lane-t2", {"b.txt": "t2\n"})
+        self.merge_lane(1, "lane-t1")
+        self.merge_lane(2, "lane-t2")
+        saved, self.base = self.base, ""
+        try:
+            self.manifest([self.task(1, ["a.txt"]), self.task(2, ["b.txt"])],
+                          [self.rec(1, "lane-t1"), self.rec(2, "lane-t2")])
+        finally:
+            self.base = saved
+        ok, detail = G.lanes_burst_disjoint(self.ws, G.Transcript([], []), {})
+        self.assertFalse(ok)
+        self.assertIn("no structural boundary", detail)
 
     def test_legitimate_sync_merge_is_not_a_false_positive(self):
         """Round-three F2: a lane that pulls the integration branch

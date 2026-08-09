@@ -980,14 +980,30 @@ And a tab-indented one:
                       self.m.read_text())
 
     def test_a_P_inside_the_head_refuses_rather_than_vanishing(self):
-        """Round-three T2: `**Task 2 [P]:**` matched NO parser, so the
-        task silently disappeared from graph, scope, and ledger with zero
-        findings — three parsers agreeing on the wrong answer is not a
-        cross-check. A near-miss head is a loud refusal."""
+        """Round-three T2 + round-four F3: every near-miss shape of a
+        NUMBERED task head refuses loudly — `[P]` inside the head,
+        no-space brackets, asterisk bullets, lowercase `task`. Silently
+        disappearing from graph, scope, and ledger with zero findings is
+        the failure; three parsers agreeing on the wrong answer is not a
+        cross-check."""
         M.scope_derive(self.m)
-        self.plan.write_text(A_GRAPH_PLAN.replace(
-            "- [ ] **Task 2:** auth flow [P]", "- [ ] **Task 2 [P]:** auth flow"))
-        self.refuse("unparseable task head", "would otherwise VANISH")
+        for bad in ("- [ ] **Task 2 [P]:** auth flow",
+                    "- [] **Task 2:** auth flow [P]",
+                    "* [ ] **Task 2:** auth flow [P]",
+                    "- [ ] **task 2:** auth flow [P]"):
+            self.plan.write_text(A_GRAPH_PLAN.replace(
+                "- [ ] **Task 2:** auth flow [P]", bad))
+            self.refuse("unparseable task head", "would otherwise VANISH")
+
+    def test_task_prose_without_a_number_is_not_a_near_miss(self):
+        """Round-four F4: `**Task force sign-off**` is a checklist item,
+        not a numbered task — it must not refuse the whole plan."""
+        M.scope_derive(self.m)
+        self.plan.write_text(A_GRAPH_PLAN + "\n## Checklist\n\n"
+                             "- [ ] **Task force sign-off** before merge\n")
+        self.derive()
+        g = M.read_task_graph(self.m.read_text())
+        self.assertEqual([t["id"] for t in g["tasks"]], [1, 2, 3, 4])
 
     def test_no_plan_is_a_problem(self):
         self.plan.unlink()

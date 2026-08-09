@@ -4,6 +4,41 @@ All notable changes to Sage will be documented in this file.
 
 ## [Unreleased] — parallel implementation lanes (A6→A8→A7→A9)
 
+### Re-review (round four): the rebuilds attacked, two fresh classes closed, convergence reached
+
+One focused adversarial pass on round three's rebuilds — the newest,
+least-attacked code — under the standing failed-fix rule. It found what
+it should: each rebuild had opened one fresh class.
+
+- **The witness's identity boundary was agent-forgeable.** The commit
+  sweep skipped harness-authored commits by email — and
+  `git commit --author="sage-evals <evals@sage.test>"` is one flag. The
+  boundary is STRUCTURAL now: burst-base ancestry. Everything ancestral
+  to the pinned base (harness seeds, sequential-phase work) is
+  out of scope; every post-base commit answers to lane-tip
+  reachability, whatever identity it claims. An unpinned or unresolvable
+  base fails closed — an unbounded audit proves nothing and says so.
+  Renames also split (`--no-renames`) so mutating a declared file via
+  `git mv` cannot hide behind the destination path.
+- **The near-miss head guard closed its reproduction, not its class.**
+  `- []`, `* [ ]`, and lowercase `task` heads still vanished silently,
+  while innocent `**Task force sign-off**` prose refused the whole plan.
+  The near-miss shape is now "bulleted, checkbox-ish, bold, `task`
+  followed soon by a DIGIT" — every numbered-task variant refuses
+  loudly, unnumbered prose passes untouched. And the line scanner's
+  header went column-0, closing the planted-nested-header misextraction
+  the same commit had fixed everywhere else.
+
+Accepted residuals after four rounds, documented at the code: history
+rewriting before merge (ledger_attributes_commits' beat); folding
+foreign work into a recorded lane pre-merge (folded content is judged
+by that lane's declaration); ~linear witness cost (1.3s at 300 commits
+— note the ceiling, no realistic fixture approaches it). The reviewer's
+convergence verdict, earned rather than asserted: the recorded-lane
+topology surface is pinned in both directions and further same-method
+review there is noise; the two fresh classes this round found are now
+closed the same way. What no review can buy remains E-PAR execution.
+
 ### Re-review (round three): different constructions, not another patch
 
 Round three attacked round two's fixes and the terrain no round had
