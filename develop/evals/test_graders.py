@@ -1416,5 +1416,224 @@ class ReviewLoopGraderTest(unittest.TestCase):
         self.assertIn("no ledger", detail)
 
 
+class LaneGraderTest(unittest.TestCase):
+    """E-PAR's deterministic teeth, pinned in both directions against a real
+    git fixture — merge commits, lane branches, the runtime block writers."""
+
+    def setUp(self):
+        self.ws = pathlib.Path(tempfile.mkdtemp(prefix="lane-grader-"))
+        self.addCleanup(shutil.rmtree, self.ws, ignore_errors=True)
+        self.rt = G._runtime_manifest()
+        self.git("init", "-q")
+        self.git("config", "user.email", "t@t")
+        self.git("config", "user.name", "t")
+        (self.ws / "a.txt").write_text("base-a\n")
+        (self.ws / "b.txt").write_text("base-b\n")
+        (self.ws / "shared.txt").write_text("top\n" + "mid\n" * 8 + "bot\n")
+        self.commit("base")
+        self.main = self.git("rev-parse", "--abbrev-ref",
+                             "HEAD").stdout.strip()
+
+    def git(self, *args):
+        return subprocess.run(["git", "-C", str(self.ws), *args],
+                              capture_output=True, text=True)
+
+    def commit(self, msg):
+        self.git("add", "-A")
+        self.git("commit", "-q", "-m", msg)
+
+    def lane(self, name, edits):
+        self.git("checkout", "-q", "-b", name)
+        for path, content in edits.items():
+            (self.ws / path).write_text(content)
+        self.commit(name)
+        self.git("checkout", "-q", self.main)
+
+    def merge_lane(self, task, branch):
+        self.git("merge", "--no-ff", branch,
+                 "-m", "merge lane T%d (%s)" % (task, branch))
+
+    def manifest(self, graph_tasks, records, ledger=""):
+        cyc = self.ws / ".sage" / "work" / "c1"
+        cyc.mkdir(parents=True, exist_ok=True)
+        fm = ("---\ncycle_id: \"c1\"\ngate_state: building\n"
+              + (ledger + "\n" if ledger else "")
+              + self.rt._task_graph_block_lines("plan@ab12cd34", graph_tasks)
+              + "\n"
+              + self.rt._lanes_block_lines("base123", records)
+              + "\n---\n\n# c1\n")
+        (cyc / "manifest.md").write_text(fm)
+
+    @staticmethod
+    def task(tid, files, depends=(), parallel=True):
+        return {"id": tid, "title": "t%d" % tid, "files": list(files),
+                "depends": list(depends), "parallel": parallel}
+
+    @staticmethod
+    def rec(tid, branch, state="merged", retries=0):
+        return {"task": tid, "branch": branch, "worktree": "../wt",
+                "state": state, "model": "inherit", "retries": retries,
+                "note": ""}
+
+    def two_clean_lanes(self):
+        self.lane("lane-t1", {"a.txt": "t1\n"})
+        self.lane("lane-t2", {"b.txt": "t2\n"})
+        self.merge_lane(1, "lane-t1")
+        self.merge_lane(2, "lane-t2")
+        self.manifest([self.task(1, ["a.txt"]), self.task(2, ["b.txt"])],
+                      [self.rec(1, "lane-t1"), self.rec(2, "lane-t2")])
+
+    # ── lanes_burst_disjoint ─────────────────────────────────────────────
+    def test_disjoint_clean_burst_passes(self):
+        self.two_clean_lanes()
+        ok, detail = G.lanes_burst_disjoint(self.ws, G.Transcript([], []), {})
+        self.assertTrue(ok, detail)
+
+    def test_lane_outside_its_declaration_fails(self):
+        self.lane("lane-t1", {"a.txt": "t1\n", "b.txt": "t1-wandered\n"})
+        self.merge_lane(1, "lane-t1")
+        self.lane("lane-t2", {"shared.txt": "x\n" + "mid\n" * 8 + "bot\n"})
+        self.merge_lane(2, "lane-t2")
+        self.manifest([self.task(1, ["a.txt"]), self.task(2, ["shared.txt"])],
+                      [self.rec(1, "lane-t1"), self.rec(2, "lane-t2")])
+        ok, detail = G.lanes_burst_disjoint(self.ws, G.Transcript([], []), {})
+        self.assertFalse(ok)
+        self.assertIn("outside its declaration", detail)
+        self.assertIn("b.txt", detail)
+
+    def test_unrelated_lanes_sharing_a_file_fail(self):
+        """Both declared shared.txt (so within-declaration holds), no
+        dependency edge between them — declared-disjoint was a fiction."""
+        self.lane("lane-t1", {"shared.txt": "T1\n" + "mid\n" * 8 + "bot\n"})
+        self.lane("lane-t2", {"shared.txt": "top\n" + "mid\n" * 8 + "T2\n"})
+        self.merge_lane(1, "lane-t1")
+        self.merge_lane(2, "lane-t2")
+        self.manifest([self.task(1, ["shared.txt", "a.txt"]),
+                       self.task(2, ["shared.txt", "b.txt"])],
+                      [self.rec(1, "lane-t1"), self.rec(2, "lane-t2")])
+        ok, detail = G.lanes_burst_disjoint(self.ws, G.Transcript([], []), {})
+        self.assertFalse(ok)
+        self.assertIn("declared-disjoint did not hold", detail)
+
+    def test_dependency_related_lanes_may_share(self):
+        self.lane("lane-t1", {"shared.txt": "T1\n" + "mid\n" * 8 + "bot\n"})
+        self.merge_lane(1, "lane-t1")
+        self.lane("lane-t2", {"shared.txt": "T1\n" + "mid\n" * 8 + "T2\n"})
+        self.merge_lane(2, "lane-t2")
+        self.manifest([self.task(1, ["shared.txt"]),
+                       self.task(2, ["shared.txt"], depends=[1])],
+                      [self.rec(1, "lane-t1"), self.rec(2, "lane-t2")])
+        ok, detail = G.lanes_burst_disjoint(self.ws, G.Transcript([], []), {})
+        self.assertTrue(ok, detail)
+
+    def test_no_lanes_block_fails(self):
+        ok, detail = G.lanes_burst_disjoint(self.ws, G.Transcript([], []), {})
+        self.assertFalse(ok)
+        self.assertIn("never engaged", detail)
+
+    def test_merged_without_a_merge_commit_fails(self):
+        self.lane("lane-t1", {"a.txt": "t1\n"})
+        self.lane("lane-t2", {"b.txt": "t2\n"})
+        self.merge_lane(1, "lane-t1")   # T2 recorded merged, never merged
+        self.manifest([self.task(1, ["a.txt"]), self.task(2, ["b.txt"])],
+                      [self.rec(1, "lane-t1"), self.rec(2, "lane-t2")])
+        ok, detail = G.lanes_burst_disjoint(self.ws, G.Transcript([], []), {})
+        self.assertFalse(ok)
+        self.assertIn("merged without a merge", detail)
+
+    # ── lanes_integration_proof ──────────────────────────────────────────
+    def test_proof_after_last_merge_passes(self):
+        tx = transcript(
+            ("tool", "Bash", {"command": "python3 sage/runtime/tools/lanes.py merge m.md --task 1"}),
+            ("tool", "Bash", {"command": "python3 -m pytest -q"}))
+        ok, detail = G.lanes_integration_proof(
+            self.ws, tx, {"pattern": r"pytest"})
+        self.assertTrue(ok, detail)
+
+    def test_proof_before_the_merge_does_not_count(self):
+        tx = transcript(
+            ("tool", "Bash", {"command": "python3 -m pytest -q"}),
+            ("tool", "Bash", {"command": "python3 sage/runtime/tools/lanes.py merge m.md --task 1"}))
+        ok, detail = G.lanes_integration_proof(
+            self.ws, tx, {"pattern": r"pytest"})
+        self.assertFalse(ok)
+        self.assertIn("after the last lane merge", detail)
+
+    def test_no_merges_fails(self):
+        ok, detail = G.lanes_integration_proof(
+            self.ws, transcript(("tool", "Bash", {"command": "pytest"})),
+            {"pattern": r"pytest"})
+        self.assertFalse(ok)
+        self.assertIn("no lane merges", detail)
+
+    # ── lane_record ──────────────────────────────────────────────────────
+    def ledger_for_task2(self, attempts):
+        return ("tasks:\n  - id: 2\n    title: t2\n    status: done\n"
+                "    attempts: %d\n    model: \"\"\n"
+                "    lane_branch: \"lane-t2\"\n    review: approved\n"
+                "    commits: \"\"" % attempts)
+
+    def test_lane_record_full_assertion_passes(self):
+        self.manifest([self.task(2, ["b.txt"])],
+                      [self.rec(2, "lane-t2", retries=1)],
+                      ledger=self.ledger_for_task2(attempts=1))
+        ok, detail = G.lane_record(
+            self.ws, G.Transcript([], []),
+            {"task": 2, "state": "merged", "retries": 1, "attempts_max": 1})
+        self.assertTrue(ok, detail)
+
+    def test_lane_record_wrong_state_fails(self):
+        self.manifest([self.task(2, ["b.txt"])],
+                      [self.rec(2, "lane-t2", state="failed")])
+        ok, detail = G.lane_record(self.ws, G.Transcript([], []),
+                                   {"task": 2, "state": "errored"})
+        self.assertFalse(ok)
+        self.assertIn("failed", detail)
+
+    def test_lane_record_retry_that_consumed_an_attempt_fails(self):
+        """The errored contract's teeth: retries=1 with attempts=2 means
+        the ungraded retry was graded after all."""
+        self.manifest([self.task(2, ["b.txt"])],
+                      [self.rec(2, "lane-t2", retries=1)],
+                      ledger=self.ledger_for_task2(attempts=2))
+        ok, detail = G.lane_record(
+            self.ws, G.Transcript([], []),
+            {"task": 2, "state": "merged", "retries": 1, "attempts_max": 1})
+        self.assertFalse(ok)
+        self.assertIn("consumed a graded attempt", detail)
+
+    # ── any_of ───────────────────────────────────────────────────────────
+    def test_any_of_one_layer_suffices(self):
+        tx = transcript(("say", "serializing T3: ontology coupling", ""))
+        ok, detail = G.any_of(self.ws, tx, {"checks": [
+            {"grader": "transcript_contains", "describe": "ontology layer",
+             "substrings": ["ontology coupling"]},
+            {"grader": "transcript_contains", "describe": "review layer",
+             "substrings": ["interface-coupling finding"]}]})
+        self.assertTrue(ok, detail)
+        self.assertIn("ontology layer", detail)
+
+    def test_any_of_no_layer_fails_with_every_detail(self):
+        ok, detail = G.any_of(self.ws, G.Transcript([], []), {"checks": [
+            {"grader": "transcript_contains", "describe": "ontology layer",
+             "substrings": ["coupling"]},
+            {"grader": "transcript_contains", "describe": "review layer",
+             "substrings": ["finding"]}]})
+        self.assertFalse(ok)
+        self.assertIn("no layer caught it", detail)
+        self.assertIn("ontology layer", detail)
+        self.assertIn("review layer", detail)
+
+    def test_any_of_validation_recurses(self):
+        problems = G.validate_check(
+            {"grader": "any_of", "checks": [
+                {"grader": "no_such_grader"},
+                {"grader": "transcript_contains", "substrings": ["x"],
+                 "session": "s2"}]}, "checks[0]")
+        self.assertTrue(any("unknown grader" in p for p in problems))
+        self.assertTrue(any("not supported inside any_of" in p
+                            for p in problems))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

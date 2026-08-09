@@ -4,6 +4,56 @@ All notable changes to Sage will be documented in this file.
 
 ## [Unreleased] — parallel implementation lanes (A6→A8→A7→A9)
 
+### A9 (phase 3): hardening + the E-PAR scenarios — authored, deliberately not run
+
+The defenses a parallel burst needs before anyone trusts it, plus the
+instruments that would earn the trust. **Every E-PAR execution is
+budget-gated and did NOT happen in this pack: no efficacy, wall-clock,
+or cost claim exists anywhere — the deterministic layer is pinned, the
+agentic layer is authored and waiting.**
+
+- **Coupling defenses (disjoint files ≠ independent work):** Plan Review
+  check 8 — do any [P] tasks share a type/function/contract? add the
+  edge or land the contract first — plus the contract-first pre-task
+  pattern and the ordered/shared artifact classes (migrations,
+  lockfiles, codegen outputs, global config) documented in the plan
+  template as serialization signals. The scheduler consumes a per-burst
+  ontology consult (`lanes.py schedule --couplings` — the orchestrator
+  writes the file from sage-memory's code graph): coupled pairs
+  warn-and-serialize; a missing consult prints a standing degradation
+  line every burst — an unchecked coupling never reads as
+  checked-and-clean.
+- **The failure taxonomy grew teeth:** `errored` (infra/rate-limit, per
+  the 1.3.3 token-evidence rules) gets exactly ONE `lanes.py retry` —
+  never graded, ledger attempts untouched, staggered by
+  `parallel_stagger_seconds`. `budget-stopped` (`parallel_budget`
+  exhausted) means in-flight lanes complete, `schedule
+  --budget-exhausted` reports held tasks, and never-dispatched tasks
+  still get an explicit record — a budget stop is never a silent
+  truncation graded as failure. Blocked lanes park; questions batch to
+  burst end; close-out emits a per-lane summary (counts, not verdicts).
+- **The burst-base assertion:** `lanes.py open --repo-root` refuses a
+  base that is not the integration checkout's HEAD — dependent context
+  packets fork from merged reality, checkably, not from the
+  orchestrator's memory of it.
+- **E-PAR-1/2/3 authored** (scenarios + graders + the py-parallel
+  fixture; offline-check green, each fails on a null agent): a 6-task
+  two-[P]-pair burst graded on ledger integrity, disjointness held in
+  git, and the post-merge integration proof; a planted interface
+  coupling graded any-layer-catches (ontology serialization, plan-review
+  finding, or correctly-attributed integration failure — with a
+  one-contract backstop); a simulated mid-burst 429 graded on the
+  errored-vs-failed distinction, dependent freeze with sibling
+  continuation, and a fresh session reconstructing open lanes from the
+  brief. New deterministic graders (lanes_burst_disjoint,
+  lanes_integration_proof, lane_record, any_of) are pinned both
+  directions in test_graders.py; the harness gained a third mode arm
+  (`parallel`) and mode-scoped checks so the inline/subagent/parallel
+  comparison is one command **in a separately-approved eval session**.
+- The three-parser sweep from phase 2's bug (top-level `tasks:` only)
+  extended to the eval graders' `_read_ledger` — grader and hook must
+  not disagree about what a ledger is.
+
 ### A7 (phase 2): dependency-aware parallel implementation lanes — opt-in, code-scheduled
 
 `/build --subagents --parallel[=N]` runs plan tasks in concurrent lanes —

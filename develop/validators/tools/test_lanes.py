@@ -133,6 +133,46 @@ class ScheduleTableTest(unittest.TestCase):
         self.assertEqual([t for t, _ in d["frozen"]], [2])
 
 
+class HardeningTest(unittest.TestCase):
+    """A9 — coupling serialization, budget stops, the one ungraded retry."""
+
+    def sched(self, g, statuses=None, lanes=None, cap=2, **kw):
+        return L.schedule(g, statuses or {}, lanes, cap, **kw)
+
+    def test_ontology_coupling_warns_and_serializes(self):
+        """Disjoint files, met deps — but the consult says the modules are
+        coupled. Coupled ⇒ serialize; the second task waits."""
+        g = graph(T(1, ["src/auth.py"]), T(2, ["src/session.py"]))
+        d = self.sched(g, couplings=[{"a": 1, "b": 2,
+                                      "via": "models.TokenPayload"}])
+        self.assertEqual(d["dispatch"], [1])
+        self.assertEqual(d["serialized"][0][0], 2)
+        self.assertIn("ontology: coupled to T1 via models.TokenPayload",
+                      d["serialized"][0][1])
+
+    def test_coupling_to_an_inflight_lane_serializes_too(self):
+        g = graph(T(1, ["src/auth.py"]), T(2, ["src/session.py"]))
+        d = self.sched(g, lanes=lanes_block(lane(1)),
+                       couplings=[{"a": 1, "b": 2}])
+        self.assertEqual(d["dispatch"], [])
+        self.assertIn("ontology: coupled", d["serialized"][0][1])
+
+    def test_uncoupled_pairs_are_untouched_by_the_consult(self):
+        g = graph(T(1, ["a"]), T(2, ["b"]), T(3, ["c"]))
+        d = self.sched(g, cap=3, couplings=[{"a": 1, "b": 3}])
+        self.assertEqual(d["dispatch"], [1, 2])
+        self.assertEqual([t for t, _ in d["serialized"]], [3])
+
+    def test_budget_exhaustion_holds_new_starts_explicitly(self):
+        """No new starts, in-flight completes, held tasks REPORTED — a
+        budget stop must never be a silent truncation."""
+        g = graph(T(1, ["a"]), T(2, ["b"]))
+        d = self.sched(g, lanes=lanes_block(lane(1)), budget_exhausted=True)
+        self.assertEqual(d["dispatch"], [])
+        self.assertEqual(d["budget_held"], [2])
+        self.assertEqual(d["serialized"], [])
+
+
 A_MANIFEST = """\
 ---
 cycle_id: "005-par"
@@ -257,6 +297,68 @@ class OpenMarkTest(unittest.TestCase):
             self.quiet(L.cmd_schedule, self.d / "bare.md", 2)
         self.assertIn("task_graph", str(ctx.exception))
 
+    def test_schedule_without_couplings_announces_the_degradation(self):
+        """A9's standing line: an UNCHECKED coupling must never read as
+        checked-and-clean."""
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            L.cmd_schedule(self.m, 2)
+        self.assertIn("ontology consult: UNAVAILABLE", out.getvalue())
+        self.assertIn("UNCHECKED", out.getvalue())
+
+    def test_schedule_with_couplings_file_consumes_it(self):
+        cj = self.d / "couplings.json"
+        cj.write_text('{"pairs": [{"a": 1, "b": 3, "via": "shared types"}]}')
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            L.cmd_schedule(self.m, 2, couplings_path=str(cj))
+        self.assertNotIn("UNAVAILABLE", out.getvalue())
+        self.assertIn("ontology: coupled to T1 via shared types",
+                      out.getvalue())
+
+    def test_retry_is_once_ungraded_and_leaves_attempts_alone(self):
+        """The errored contract: one staggered retry, never graded, never
+        a quality-locked attempt — attempts counts dispatches the quality
+        loop judges, and this one it never judged."""
+        self.quiet(L.cmd_open, self.m, 1, "lane/t1", "../wt1", "", "s", 2)
+        self.quiet(L.cmd_mark, self.m, 1, "errored",
+                   "rate-limit: tokens/min exceeded")
+        self.assertIn("attempts: 1", self.m.read_text())
+        self.quiet(L.cmd_retry, self.m, 1)
+        text = self.m.read_text()
+        rec = MAN.read_lanes(text)["records"][0]
+        self.assertEqual(rec["state"], "open")
+        self.assertEqual(rec["retries"], 1)
+        self.assertIn("attempts: 1", text,
+                      "a retry is not a graded attempt")
+        # …and only once.
+        self.quiet(L.cmd_mark, self.m, 1, "errored", "again")
+        with self.assertRaises(L.Problem) as ctx:
+            self.quiet(L.cmd_retry, self.m, 1)
+        self.assertIn("one retry", str(ctx.exception))
+
+    def test_retry_refuses_a_failed_lane(self):
+        self.quiet(L.cmd_open, self.m, 1, "lane/t1", "../wt1", "", "s", 2)
+        self.quiet(L.cmd_mark, self.m, 1, "failed", "review cap hit")
+        with self.assertRaises(L.Problem) as ctx:
+            self.quiet(L.cmd_retry, self.m, 1)
+        self.assertIn("ERRORED", str(ctx.exception))
+
+    def test_budget_stopped_may_mark_a_never_dispatched_task(self):
+        """The burst ran out before T3's turn — that still leaves an
+        explicit record, never a silent truncation graded as failure."""
+        self.quiet(L.cmd_mark, self.m, 3, "budget-stopped",
+                   "parallel_budget exhausted at burst 1")
+        rec = next(r for r in MAN.read_lanes(self.m.read_text())["records"]
+                   if r["task"] == 3)
+        self.assertEqual(rec["state"], "budget-stopped")
+        self.assertEqual(rec["branch"], "")
+        self.assertIn("status: pending", self.m.read_text())
+
+    def test_mark_other_states_still_require_a_record(self):
+        with self.assertRaises(L.Problem):
+            self.quiet(L.cmd_mark, self.m, 3, "parked", "no lane yet")
+
 
 class MergeTest(unittest.TestCase):
     """Dependency-order merges; conflict aborts and reports — the merge is
@@ -351,6 +453,24 @@ class MergeTest(unittest.TestCase):
         with self.assertRaises(L.Problem) as ctx:
             self.merge(1)
         self.assertIn("uncommitted tracked changes", str(ctx.exception))
+
+    def test_burst_base_assertion_refuses_a_stale_base(self):
+        """A9(4) as a scheduler assertion: with the integration checkout
+        reachable, a new burst's base must BE its HEAD — dependent context
+        packets are built from merged HEAD, not from memory."""
+        m2 = self.repo / ".sage" / "work" / "005-par" / "m2.md"
+        m2.write_text(manifest_with([T(1, ["b.txt"])]))
+        head = self.git("rev-parse", "--short", "HEAD").stdout.strip()
+        with self.assertRaises(L.Problem) as ctx:
+            with contextlib.redirect_stdout(io.StringIO()):
+                L.cmd_open(m2, 1, "lane-t1b", "../wt1b", "", "fffffff", 2,
+                           repo_root=self.repo)
+        self.assertIn("not the integration checkout's HEAD",
+                      str(ctx.exception))
+        with contextlib.redirect_stdout(io.StringIO()):
+            L.cmd_open(m2, 1, "lane-t1b", "../wt1b", "", head, 2,
+                       repo_root=self.repo)
+        self.assertEqual(MAN.read_lanes(m2.read_text())["burst_base"], head)
 
     def test_only_an_open_lane_merges(self):
         with contextlib.redirect_stdout(io.StringIO()):

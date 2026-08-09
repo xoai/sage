@@ -306,6 +306,21 @@ identical):
 | `subagents` | `--subagents` | Per-task fresh implementer + independent reviewer (platform permitting; refusal is announced, R97). |
 | `parallel` | `--parallel[=N]` | Dependency-aware parallel implementation lanes (A7). Requires `subagents`; refusal without it is announced. Default cap 2 lanes, hard cap 4 (`--parallel=9` clamps loudly). Dispatch is decided by `lanes.py` from the derived `task_graph:` — declared file overlap serializes, a non-`[P]` task runs alone. No wall-clock or cost claims: parallel-mode behavior is measured by E-PAR (authored, not yet run) — until then this is mechanics, not a speed promise. |
 
+### Parallel-lane tuning (A9)
+
+Two knobs, both read by the orchestrator (not by hooks — they shape
+dispatch behavior, not enforcement):
+
+| Key | Default | Meaning |
+|---|---|---|
+| `parallel_stagger_seconds` | `0` | Seconds between lane dispatches — including the one ungraded retry after an `errored` (infra/rate-limit) lane death. Burst-y opens are how rate limits happen; set this to your provider's comfort. |
+| `parallel_budget` | (unset) | Per-burst spend cap, tokens (`400000`) or currency (`"USD 5"`), tracked by the orchestrator. Exhaustion means: in-flight lanes complete, **no new starts** (`lanes.py schedule --budget-exhausted`), held tasks marked `budget-stopped` — an explicit record, never a silent truncation graded as failure. Unset = no cap. |
+
+The per-burst ontology consult (module coupling between candidate lanes,
+via sage-memory's code graph) has no knob: it runs when sage-memory is
+available and announces its absence loudly when not — an unchecked
+coupling never reads as checked-and-clean.
+
 ### Planner/implementer model split (opencode)
 
 Run the session — the planner, the orchestrator, the judgment — on your

@@ -257,7 +257,7 @@ Edit or Write tools. Your job is to REPORT findings, not fix them.
 Read the plan at: {PLAN_PATH}
 Read the spec at: {SPEC_PATH}
 
-CHECK THESE 7 THINGS:
+CHECK THESE 8 THINGS:
 
 1. SPEC-PLAN ALIGNMENT: Does the plan implement everything in the
    spec? Does it implement anything NOT in the spec?
@@ -289,6 +289,19 @@ CHECK THESE 7 THINGS:
    consumes the derived task_graph: block exclusively
    (manifest.py graph derive); derivation is FAIL-CLOSED, so any
    defect here shuts parallel mode for the whole cycle.
+
+8. INTERFACE COUPLING BETWEEN [P] TASKS: Do any two [P] tasks share a
+   type, function, or contract — one defining what the other imports,
+   both touching the same wire format — while declaring disjoint
+   Files:? Disjoint files do NOT mean independent work: two lanes can
+   each be green and compose into nonsense. Either add the dependency
+   edge, or define the contract in the plan itself (the contract-first
+   pre-task pattern: a small non-[P] task that lands the shared
+   type/interface BEFORE the parallel pair forks). Also check the
+   ordered/shared artifact classes: migrations, lockfiles, codegen
+   outputs, and global config are serialization signals — two [P]
+   tasks that each add a migration or touch the lockfile must be
+   ordered even when their declared files look disjoint.
 
 CLASSIFY each finding:
 - CRITICAL: Must fix before implementing. Blocks proceeding.

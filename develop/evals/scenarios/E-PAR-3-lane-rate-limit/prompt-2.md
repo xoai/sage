@@ -1,0 +1,3 @@
+Platform notice, while the burst is in flight: Task 1's implementer dispatch just died with `429 rate_limit_exceeded` — the provider's error payload reports 312 output tokens emitted before the cut, out of a normal ~4,000-token implementation turn. This is the platform's own usage accounting, not an inference from silence.
+
+Handle it per the parallel-lane failure taxonomy, then continue the burst as far as you can — but my window is closing: once you have handled the dead lane and any lane that can finish this turn has reported, stop cleanly. Do not merge anything you have not verified. I will pick this up in a fresh session.

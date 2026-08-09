@@ -189,7 +189,8 @@ hard cap 4. Never default-on.
 decision comes from:
 
 ```bash
-python3 sage/runtime/tools/lanes.py schedule .sage/work/<cycle>/manifest.md --cap <N>
+python3 sage/runtime/tools/lanes.py schedule .sage/work/<cycle>/manifest.md --cap <N> \
+    --couplings .sage/work/<cycle>/couplings.json
 ```
 
 which reads the derived `task_graph:` (A8 — if the plan was underivable,
@@ -198,6 +199,16 @@ what dispatches NOW and why everything else waits: overlap serializes (a
 declared overlap is a serialization signal, never a worktree signal), a
 non-`[P]` task runs alone, a parked/errored lane freezes its dependents
 while siblings continue. Do not re-derive any of this from plan prose.
+
+**The ontology consult (A9), before each burst.** Disjoint files do not
+mean independent modules. Query sage-memory's code graph for dependency
+between the candidate lanes' file sets (`sage_memory_code_path` /
+`sage_memory_code_affected` over each pair's modules) and write the result
+to `couplings.json`: `{"pairs": [{"a": 2, "b": 3, "via": "models.Token"}]}`.
+The scheduler warn-and-serializes coupled pairs. When sage-memory is
+unavailable, write NO file — the scheduler then prints its standing
+degradation line ("coupling UNCHECKED") every burst; never fake an empty
+consult, an unchecked coupling must not read as checked-and-clean.
 
 **Each lane is a worktree + branch**, created with the existing machinery —
 `sage worktree <slug>` (worktree_copy seeding, collision guard, harvest on
@@ -236,6 +247,35 @@ Dependent tasks' context packets are built AFTER this, from merged HEAD.
 **Resume.** Open lanes live in the manifest's `lanes:` block; `manifest.py
 resume` lists them with the harvest path (`sage worktree remove`, never the
 bare git command). A burst interrupted is a burst reconstructible.
+
+**Failure taxonomy (A9) — three states that must never blur:**
+
+- `failed` — a GRADED outcome (review cap, broken work). Fix loop or
+  escalation; consumes quality-locked attempts.
+- `errored` — an infra death: rate limit, provider outage, detected per
+  the 1.3.3 evidence rules (token counts, not "it stopped talking").
+  `lanes.py retry --task N` grants exactly ONE re-dispatch — never
+  graded, attempts untouched — staggered by `parallel_stagger_seconds`
+  (also the gap between normal dispatches; burst-y opens are how rate
+  limits happen). A second infra death parks the lane and surfaces.
+- `budget-stopped` — the burst's `parallel_budget` (tokens or currency,
+  orchestrator-tracked) ran out. In-flight lanes COMPLETE; no new starts
+  (`lanes.py schedule --budget-exhausted` reports held tasks); at burst
+  end mark held tasks `budget-stopped` — works for never-dispatched
+  tasks too, so the stop is an explicit record, never a silent
+  truncation graded as failure.
+
+**Questions batch to burst end.** A BLOCKED lane parks (dependents
+freeze, siblings continue) and its question joins the burst-end batch —
+interrupt the user mid-burst only when ALL remaining work depends on the
+answer. Print every lane transition as it happens (open/parked/errored/
+merged — the lanes.py commands already emit the lines; surface them).
+
+**Close-out, per lane.** The accounting footer's parallel form adds one
+line per lane: task, model, tokens (from the platform's usage surface,
+or "unmetered"), attempts, retries, final verdict. Counts, not a
+verdict — the cost story is E-PAR's to measure, not this footer's to
+claim.
 
 ## Between tasks: continuous execution
 

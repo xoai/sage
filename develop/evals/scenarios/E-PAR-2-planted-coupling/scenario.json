@@ -1,0 +1,96 @@
+{
+  "id": "E-PAR-2",
+  "name": "planted-coupling",
+  "title": "Two [P] tasks with disjoint Files: and a shared contract the plan never declared. Does ANY layer catch it?",
+  "source": "parallel-lanes pack (A9 §1); exercises the coupling defense stack: ontology consult, plan-review item 8, integration proof",
+  "fixture": "py-parallel",
+  "conditions": ["sage"],
+  "rationale": [
+    "The planted defect: T2 defines TokenPayload in src/auth.py; T3's Action",
+    "says, in plain prose, to import TokenPayload FROM src/auth.py into",
+    "src/session.py. The Files: sets are perfectly disjoint — an import does",
+    "not touch the exporting file — and the plan declares no T2→T3 edge and",
+    "marks both [P]. Dispatched concurrently from the same base, T3's lane",
+    "forks a world where TokenPayload does not exist: it either fails or",
+    "invents its own, and two green lanes compose into nonsense. Disjoint",
+    "files do NOT mean independent work; that sentence is the whole scenario.",
+    "",
+    "THE GRADER IS ANY-LAYER-CATCHES, by design. A9 builds defense in depth,",
+    "not one mandatory gate: (a) the ontology consult serializes the pair",
+    "(lanes.py prints its exact 'ontology: coupled' line); (b) plan review's",
+    "item 8 (interface coupling between [P] tasks) files a finding and the",
+    "plan grows the edge or the contract-first pre-task — 'graph derive",
+    "--refresh' in the transcript is that repair's fingerprint; (c) the",
+    "integration proof fails on merged HEAD and the failure is attributed to",
+    "the T2/T3 contract, not mis-blamed. Any one layer catching it passes;",
+    "demanding a specific layer would grade the implementation of the defense,",
+    "not the defense. The hard backstop is unconditional: the cycle must END",
+    "green with TokenPayload defined exactly once — whatever was caught, the",
+    "planted coupling must not ship as two divergent contracts.",
+    "",
+    "The any_of is mode-scoped to the parallel arm: sequentially, the plan",
+    "order dissolves the hazard (T3 simply runs after T2), so 'no layer",
+    "fired' is the correct sequential outcome, not a miss. The backstop",
+    "checks run on every arm.",
+    "",
+    "Execution is budget-gated and OUT OF SCOPE for the pack that authored",
+    "this file. No claim about the defense stack exists until it runs."
+  ],
+  "setup": {
+    ".sage/work/011-token-contract/spec.md": "---\nstatus: completed\n---\n\n# Spec: token-stamped auth and sessions\n\n1. `src/models.py` — a `Clock` helper: `now_ts()` returning an int timestamp (monotonic enough for tests: any int).\n2. `src/auth.py` — a `TokenPayload` type (fields: `user_id`, `issued_ts`) and `issue_token(user_id) -> TokenPayload` for known users (None for unknown).\n3. `src/session.py` — `open_session(token) -> bool`: accepts a TokenPayload (the SAME type auth issues — one contract, defined once), registers the session keyed by `token.user_id`, rejects None.\n\nEvery change carries a test.\n",
+    ".sage/work/011-token-contract/plan.md": "---\nstatus: completed\n---\n\n# Implementation Plan: token-stamped auth and sessions\n\n## Tasks\n\n- [ ] **Task 1:** Clock helper\n  - **Files:** `src/models.py`, `tests/test_models.py`\n  - **Action:** add now_ts() per spec §1\n  - **Test:** tests/test_models.py\n  - **Depends on:** none\n- [ ] **Task 2:** token issuance [P]\n  - **Files:** `src/auth.py`, `tests/test_auth.py`\n  - **Action:** define TokenPayload in src/auth.py and issue_token(user_id) per spec §2\n  - **Test:** tests/test_auth.py\n  - **Depends on:** T1\n- [ ] **Task 3:** session opening [P]\n  - **Files:** `src/session.py`, `tests/test_session.py`\n  - **Action:** open_session(token) per spec §3 — import TokenPayload from src/auth.py and key the session by token.user_id\n  - **Test:** tests/test_session.py\n  - **Depends on:** T1\n",
+    ".sage/work/011-token-contract/manifest.md": "---\ncycle_id: \"20260809-token-contract\"\nworkflow: build\nphase: implement\nstatus: in-progress\ntier: standard\ngate_state: plan-approved\ncreated: 2026-08-09\nupdated: 2026-08-09 10:00\nflags:\n  quality_locked: false\n  autonomous: false\n  subagents: true\n  parallel: true\n---\n\n# Cycle: token-stamped auth and sessions\n\n## State\n\n**Current phase:** implement — plan approved, no tasks started\n**Next step:** derive scope + graph, then Task 1\n\n## Context summary\n\nSpec and plan approved. Three tasks; the second and third are marked\nparallel over disjoint files.\n"
+  },
+  "prompts": ["prompt-1.md", "prompt-2.md"],
+  "checks": [
+    {
+      "grader": "any_of",
+      "describe": "any layer catches the planted coupling: ontology serialization, a plan-review coupling finding (edge added, graph re-derived), or an integration failure correctly attributed",
+      "mode": "parallel",
+      "checks": [
+        {
+          "grader": "transcript_matches",
+          "describe": "ontology layer: the scheduler warn-and-serialized the pair",
+          "pattern": "ontology: coupled to T\\d"
+        },
+        {
+          "grader": "transcript_matches",
+          "describe": "plan-review layer: coupling finding named, plan repaired (edge or contract-first), graph re-derived",
+          "pattern": "(?is)(interface.{0,3}coupling|shared? (a )?(type|contract)|contract.first).{0,600}graph derive --refresh"
+        },
+        {
+          "grader": "transcript_matches",
+          "describe": "integration layer: the post-merge failure attributed to the T2/T3 contract, not mis-blamed",
+          "pattern": "(?is)(TokenPayload|token.?payload).{0,300}(coupl|contract|defined (twice|in both)|diverg|import)"
+        }
+      ]
+    },
+    {
+      "grader": "file_contains",
+      "describe": "backstop: the contract exists where the spec put it",
+      "path": "src/auth.py",
+      "substrings": ["TokenPayload"]
+    },
+    {
+      "grader": "file_lacks",
+      "describe": "backstop: the session module did not grow its OWN TokenPayload definition — one contract, defined once",
+      "path": "src/session.py",
+      "substrings": ["class TokenPayload"]
+    },
+    {
+      "grader": "ledger_complete",
+      "describe": "all 3 tasks done and independently approved",
+      "min_tasks": 3,
+      "all_done": true,
+      "all_approved": true
+    },
+    {
+      "grader": "gate_exit",
+      "describe": "whatever layer caught it, the cycle ends verifiably green",
+      "script": "core/gates/scripts/sage-verify.sh",
+      "exit": 0
+    }
+  ],
+  "budget_usd": 10.0,
+  "timeout_s": 3000
+}

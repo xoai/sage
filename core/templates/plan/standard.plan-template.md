@@ -62,6 +62,18 @@ defect refuses the whole task graph and parallel mode with it):
     position is malformed and refuses derivation rather than being
     silently ignored.
 
+PARALLEL-SAFETY (what [P] actually promises — A9):
+  - Contract-first pre-task pattern: when two would-be-[P] tasks share
+    a type, function, or wire format, land the contract FIRST as its
+    own small non-[P] task and have both depend on it. Disjoint Files:
+    do not make work independent — two green lanes can compose into
+    nonsense. If the contract can't be extracted, add a Depends edge
+    instead of [P].
+  - Ordered/shared artifact classes are SERIALIZATION signals even
+    with disjoint Files:: schema migrations (ordered by construction),
+    lockfiles (package.json.lock et al.), codegen outputs, and global
+    config. Two tasks touching any of these do not both get [P].
+
 For DOCUMENT tasks:
   - Mark with [DOC] after the task name
   - Use Criteria instead of Test (checklist, not commands)

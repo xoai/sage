@@ -1487,7 +1487,8 @@ _LANES_KEY_RE = re.compile(r"^lanes\s*:")
 _LANE_REC_RE = re.compile(
     r'^-\s*\{task:\s*T(?P<task>\d+),\s*branch:\s*"(?P<branch>[^"]*)",\s*'
     r'worktree:\s*"(?P<worktree>[^"]*)",\s*state:\s*(?P<state>[a-z-]+),\s*'
-    r'model:\s*"(?P<model>[^"]*)"(?:,\s*note:\s*"(?P<note>[^"]*)")?\}\s*$')
+    r'model:\s*"(?P<model>[^"]*)"(?:,\s*retries:\s*(?P<retries>\d+))?'
+    r'(?:,\s*note:\s*"(?P<note>[^"]*)")?\}\s*$')
 
 
 def read_lanes(text: str):
@@ -1518,6 +1519,7 @@ def read_lanes(text: str):
                 "worktree": rm.group("worktree"),
                 "state": rm.group("state"),
                 "model": rm.group("model"),
+                "retries": int(rm.group("retries") or 0),
                 "note": rm.group("note") or "",
             })
     return block
@@ -1528,12 +1530,14 @@ def _lanes_block_lines(burst_base: str, records) -> str:
     if not records:
         out[-1] = "  records: []"
     for r in records:
+        retries = (", retries: %d" % r["retries"]
+                   if r.get("retries") else "")
         note = (', note: "%s"' % r["note"].replace('"', "'")
                 if r.get("note") else "")
         out.append(
             '    - {task: T%d, branch: "%s", worktree: "%s", state: %s, '
-            'model: "%s"%s}' % (r["task"], r["branch"], r["worktree"],
-                                r["state"], r["model"], note))
+            'model: "%s"%s%s}' % (r["task"], r["branch"], r["worktree"],
+                                  r["state"], r["model"], retries, note))
     return "\n".join(out)
 
 

@@ -351,6 +351,36 @@ surfaces:
       E-JUDGE-1a/b are the model-in-loop halves that decide whether the knob
       ever flips.
 
+  tool-manifest:
+    path: runtime/tools/manifest.py
+    kind: tool
+    covered-by: [E-PAR-1, E-PAR-2, E-PAR-3, L1]
+    notes: >
+      The cycle-state writer, rowed once it grew rule-shaped behavior (A8/A7,
+      2026-08-09): graph derive's fail-closed grammar, the scope/task_graph/
+      lanes frontmatter blocks, the resume brief's OPEN LANES section.
+      Deterministic suite: test_manifest.py (74 cases, fastcheck) + the
+      template-conformance handshakes. L1 covers the resume brief live;
+      E-PAR-1/2/3 exercise the graph and lanes blocks end-to-end — AUTHORED
+      2026-08-09, NOT YET EXECUTED (budget-gated): until they run, every
+      parallel-mode property is a deterministic-layer claim only.
+
+  tool-lanes:
+    path: runtime/tools/lanes.py
+    kind: tool
+    covered-by: [E-PAR-1, E-PAR-2, E-PAR-3]
+    notes: >
+      The parallel-lane scheduler and single writer (A7/A9): dispatch
+      eligibility ([P] + merged depends + disjoint claims), overlap and
+      ontology-coupling serialization, the errored/budget-stopped taxonomy
+      with the one ungraded retry, dependency-order merges that abort on
+      conflict. Deterministic suite: test_lanes.py (38 cases incl. git merge
+      fixtures, fastcheck) + bookkeeping-gate cases B21-B23. E-PAR-1/2/3 are
+      the agentic layer — AUTHORED 2026-08-09, NOT YET EXECUTED
+      (budget-gated). HOLD: no efficacy, wall-clock, or cost claim anywhere
+      until they run; the harness's third mode arm exists so the comparison
+      is one command when the budget is approved.
+
   tool-scope-judge:
     path: runtime/tools/scope_judge.py
     kind: tool
@@ -752,7 +782,12 @@ surfaces:
       develop/validators/review/test_review_schema.py. 2026-08-09 (A8): the
       Plan Review prompt gained check 7 (graph derivability — parseable
       Files + Depends per task, [P] only where intended); the grammar it
-      polices is pinned by GraphTest + the graph template handshake.
+      polices is pinned by GraphTest + the graph template handshake. Same
+      day (A9): check 8 — interface coupling between [P] tasks (shared
+      type/contract ⇒ add the edge or the contract-first pre-task) and the
+      ordered/shared artifact classes (migrations, lockfiles, codegen,
+      global config) as serialization signals; E-PAR-2's any-layer grader
+      counts this checklist as one of its three nets (authored, not run).
 
   capability-auto-qa:
     path: core/capabilities/review/auto-qa/SKILL.md

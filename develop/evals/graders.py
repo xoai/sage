@@ -522,11 +522,14 @@ def _read_ledger(ws) -> tuple:
     for m in sorted(ws.glob(".sage/work/*/manifest.md")):
         text = m.read_text(errors="replace")
         fm = re.match(r"^\s*---\s*\n(.*?)\n---\s*(?:\n|$)", text.lstrip("﻿"), re.S)
-        if not fm or not re.search(r"^\s*tasks\s*:", fm.group(1), re.M):
+        # TOP-LEVEL tasks: only — the hook's fix travels here too (A8's
+        # task_graph: block nests a `  tasks:` whose flow entries would
+        # parse as empty ledger tasks; grader and hook must not disagree).
+        if not fm or not re.search(r"^tasks\s*:", fm.group(1), re.M):
             continue
         block, tasks, current, in_ledger = fm.group(1), [], None, False
         for line in block.splitlines():
-            if re.match(r"^\s*tasks\s*:", line):
+            if re.match(r"^tasks\s*:", line):
                 in_ledger = True
                 continue
             if not in_ledger:
@@ -1133,6 +1136,188 @@ def review_loop(ws, tx, p) -> tuple:
                   "ledger coherent")
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Lane graders (E-PAR — A7/A9)
+# ─────────────────────────────────────────────────────────────────────────────
+# These read the lanes:/task_graph: blocks through the RUNTIME reader
+# (runtime/tools/manifest.py) rather than a forked regex — the v1.3.16 lesson
+# as policy: two parsers of one artifact will disagree, and the fork is the
+# one that loses. The runtime module is stdlib-only, so the import costs CI
+# nothing.
+
+_RT_MANIFEST = None
+
+
+def _runtime_manifest():
+    global _RT_MANIFEST
+    if _RT_MANIFEST is None:
+        import importlib.util
+        path = (pathlib.Path(__file__).resolve().parents[2]
+                / "runtime" / "tools" / "manifest.py")
+        spec = importlib.util.spec_from_file_location("rt_manifest", path)
+        _RT_MANIFEST = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(_RT_MANIFEST)
+    return _RT_MANIFEST
+
+
+def _lanes_manifest(ws):
+    """(manifest_path, lanes, graph) for the first manifest carrying a
+    lanes: block, else (None, None, None)."""
+    rt = _runtime_manifest()
+    for m in sorted(ws.glob(".sage/work/*/manifest.md")):
+        text = m.read_text(errors="replace")
+        lanes = rt.read_lanes(text)
+        if lanes is not None:
+            return m, lanes, rt.read_task_graph(text)
+    return None, None, None
+
+
+def _file_in_declaration(path, declared):
+    """Does an actually-touched path fall under a task's declared entries?
+    Mirrors the scheduler's overlap semantics, one-directional."""
+    import fnmatch
+    for g in declared:
+        if path == g or fnmatch.fnmatch(path, g):
+            return True
+        if g.endswith("/**") and path.startswith(g[:-2]):
+            return True
+    return False
+
+
+def _merged_lane_files(ws, rec):
+    """The files a merged lane actually landed, from its --no-ff merge
+    commit (second parent vs merge-base). None when no merge commit is
+    found — which is itself a finding: `merged` without a merge."""
+    log = _git(ws, "log", "--format=%H|%P|%s")
+    want = "merge lane T%d (%s)" % (rec["task"], rec["branch"])
+    for line in log.splitlines():
+        sha, parents, subject = (line.split("|", 2) + ["", ""])[:3]
+        if subject.strip() != want:
+            continue
+        pp = parents.split()
+        if len(pp) != 2:
+            return None
+        base = _git(ws, "merge-base", pp[0], pp[1]).strip()
+        files = _git(ws, "diff", "--name-only", base, pp[1]).split()
+        return [f for f in files if not f.startswith((".sage/", "sage/"))]
+    return None
+
+
+def lanes_burst_disjoint(ws, tx, p) -> tuple:
+    """Declared disjointness HELD in what actually landed (E-PAR-1).
+
+    Two assertions per merged lane: (1) every file it landed falls under
+    its task's declared Files: — a lane that wandered was policed by
+    nobody; (2) no two dependency-UNRELATED lanes touched the same file —
+    unrelated means the scheduler could have run them concurrently, so a
+    shared file means declared-disjoint was a fiction. (Dependency-related
+    lanes are ordered by construction and may legally build on the same
+    module.)"""
+    m, lanes, graph = _lanes_manifest(ws)
+    if lanes is None:
+        return False, "no lanes: block — parallel mode never engaged"
+    merged = [r for r in lanes["records"] if r["state"] == "merged"]
+    if len(merged) < p.get("min_merged", 2):
+        return False, (f"{len(merged)} merged lane(s), expected at least "
+                       f"{p.get('min_merged', 2)}")
+    by_id = {t["id"]: t for t in (graph["tasks"] if graph else [])}
+
+    # depends closure — related pairs are allowed to share files.
+    def ancestors(tid, seen=None):
+        seen = seen or set()
+        for d in (by_id.get(tid, {}).get("depends") or []):
+            if d not in seen:
+                seen.add(d)
+                ancestors(d, seen)
+        return seen
+
+    actual = {}
+    for rec in merged:
+        files = _merged_lane_files(ws, rec)
+        if files is None:
+            return False, (f"lane T{rec['task']} is recorded merged but has "
+                           f"no --no-ff merge commit — merged without a merge")
+        actual[rec["task"]] = files
+        declared = by_id.get(rec["task"], {}).get("files") or []
+        outside = [f for f in files if not _file_in_declaration(f, declared)]
+        if outside:
+            return False, (f"lane T{rec['task']} landed files outside its "
+                           f"declaration: {', '.join(outside[:5])}")
+
+    ids = sorted(actual)
+    for i, a in enumerate(ids):
+        for b in ids[i + 1:]:
+            if a in ancestors(b) or b in ancestors(a):
+                continue
+            shared = sorted(set(actual[a]) & set(actual[b]))
+            if shared:
+                return False, (f"dependency-unrelated lanes T{a} and T{b} "
+                               f"both landed: {', '.join(shared[:5])} — "
+                               f"declared-disjoint did not hold")
+    return True, (f"{len(merged)} merged lane(s): all files within "
+                  f"declarations, unrelated lanes disjoint")
+
+
+def lanes_integration_proof(ws, tx, p) -> tuple:
+    """The full suite + gate sequence ran on merged HEAD AFTER the last
+    lane merge (E-PAR-1). Lane-level green is lane evidence only — nothing
+    lane-local ever looked at the composition, so a burst with no
+    post-merge proof shipped an integration nobody examined."""
+    cmds = tx.bash_commands()
+    merge_idx = [i for i, c in enumerate(cmds)
+                 if re.search(r"lanes\.py\s+merge", c)]
+    if not merge_idx:
+        return False, "no lane merges in the transcript — no burst to prove"
+    rx = re.compile(p["pattern"])
+    later = [c for c in cmds[max(merge_idx) + 1:] if rx.search(c)]
+    if not later:
+        return False, ("nothing matching %r ran after the last lane merge — "
+                       "integration proof missing (or trimmed, which is the "
+                       "same thing)" % p["pattern"])
+    return True, f"proof ran after the last merge: {later[0][:80]}"
+
+
+def lane_record(ws, tx, p) -> tuple:
+    """One lane record's terminal facts (E-PAR-3): its state, optionally
+    its retry count, optionally a ceiling on the ledger's attempts — the
+    errored contract says a retry is never a graded attempt."""
+    m, lanes, _ = _lanes_manifest(ws)
+    if lanes is None:
+        return False, "no lanes: block — parallel mode never engaged"
+    rec = next((r for r in lanes["records"] if r["task"] == p["task"]), None)
+    if rec is None:
+        return False, f"no lane record for T{p['task']}"
+    if rec["state"] != p["state"]:
+        return False, (f"T{p['task']} lane state is {rec['state']!r}, "
+                       f"expected {p['state']!r}")
+    if "retries" in p and rec.get("retries", 0) != p["retries"]:
+        return False, (f"T{p['task']} retries={rec.get('retries', 0)}, "
+                       f"expected {p['retries']}")
+    if "attempts_max" in p:
+        _, tasks = _read_ledger(ws)
+        entry = next((t for t in (tasks or [])
+                      if str(t.get("id")) == str(p["task"])), None)
+        attempts = int(entry.get("attempts") or 0) if entry else -1
+        if attempts > p["attempts_max"]:
+            return False, (f"ledger attempts={attempts} for T{p['task']} — "
+                           f"an ungraded retry consumed a graded attempt")
+    return True, f"T{p['task']}: {rec['state']}" + (
+        f", retries={rec.get('retries', 0)}" if "retries" in p else "")
+
+
+def any_of(ws, tx, p) -> tuple:
+    """ANY sub-check passing passes (E-PAR-2's any-layer-catches: ontology
+    serialization, plan-review finding, or integration failure correctly
+    attributed — defense in depth is graded as depth, not as one
+    mandatory layer)."""
+    results = [run_check(c, ws, tx) for c in p["checks"]]
+    for r in results:
+        if r["pass"]:
+            return True, f"caught by: {r['describe']} — {r['detail']}"
+    return False, "no layer caught it: " + "; ".join(
+        f"[{r['describe']}: {r['detail']}]" for r in results)
+
+
 GRADERS = {
     "review_loop":              (review_loop, ("path",)),
     "file_exists":              (file_exists, ("path",)),
@@ -1162,6 +1347,10 @@ GRADERS = {
     "ran_command":              (ran_command, ("pattern",)),
     "never_ran_command":        (never_ran_command, ("pattern",)),
     "verified_before_claiming": (verified_before_claiming, ()),
+    "lanes_burst_disjoint":     (lanes_burst_disjoint, ()),
+    "lanes_integration_proof":  (lanes_integration_proof, ("pattern",)),
+    "lane_record":              (lane_record, ("task", "state")),
+    "any_of":                   (any_of, ("checks",)),
 }
 
 
@@ -1177,7 +1366,24 @@ def validate_check(check: dict, where: str) -> list:
                 f"(known: {', '.join(sorted(GRADERS))})"]
     _, required = GRADERS[name]
     missing = [k for k in required if k not in check]
-    return [f"{where}: grader {name!r} needs {k!r}" for k in missing]
+    problems = [f"{where}: grader {name!r} needs {k!r}" for k in missing]
+    if name == "any_of":
+        subs = check.get("checks")
+        if not isinstance(subs, list) or not subs:
+            if "checks" not in missing:
+                problems.append(f"{where}: any_of needs a non-empty "
+                                f"checks list")
+        else:
+            for j, subc in enumerate(subs):
+                problems += validate_check(subc, f"{where}.checks[{j}]")
+                if isinstance(subc, dict) and any(
+                        subc.get(k) for k in ("session", "condition",
+                                              "mode")):
+                    problems.append(
+                        f"{where}.checks[{j}]: session/condition/mode "
+                        f"scoping is not supported inside any_of — scope "
+                        f"the any_of itself")
+    return problems
 
 
 def run_check(check: dict, ws: pathlib.Path, tx: Transcript) -> dict:

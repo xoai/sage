@@ -174,14 +174,24 @@ def _update_ledger_entry(text: str, task_id: int, **fields) -> str:
 
 # ── the scheduler decision ───────────────────────────────────────────────────
 
-def schedule(graph, statuses, lanes, cap):
+def schedule(graph, statuses, lanes, cap, couplings=None,
+             budget_exhausted=False):
     """The dispatch decision, pure. Returns
-    {dispatch, serialized, frozen, waiting, capped, exclusive} where
-    serialized/frozen carry (task_id, reason) pairs.
+    {dispatch, serialized, frozen, waiting, capped, budget_held,
+    exclusive} where serialized/frozen carry (task_id, reason) pairs.
 
     Inputs: graph = manifest.read_task_graph(); statuses =
     read_ledger_statuses(); lanes = manifest.read_lanes() or None;
-    cap = the lane cap (1..HARD_LANE_CAP)."""
+    cap = the lane cap (1..HARD_LANE_CAP).
+
+    couplings (A9): [{a, b, via}] pairs the ontology consult found
+    module-coupled — a candidate coupled to an in-flight or
+    already-chosen task WARNS-AND-SERIALIZES. None means the consult
+    did not run; the CLI prints the standing loud-degradation line.
+
+    budget_exhausted (A9): the burst's parallel_budget ran out — no new
+    starts; eligible candidates land in budget_held with an explicit
+    report, never silently truncated."""
     records = {r["task"]: r for r in (lanes["records"] if lanes else [])}
     tasks = graph["tasks"]
     by_id = {t["id"]: t for t in tasks}
@@ -206,9 +216,16 @@ def schedule(graph, statuses, lanes, cap):
     exclusive_active = any(not by_id[r["task"]].get("parallel", False)
                            for r in active if r["task"] in by_id)
 
+    coupled_to = {}
+    for pair in (couplings or []):
+        a, b = int(pair["a"]), int(pair["b"])
+        via = pair.get("via", "module dependency")
+        coupled_to.setdefault(a, []).append((b, via))
+        coupled_to.setdefault(b, []).append((a, via))
+
     STUCK = ("parked", "errored", "failed", "budget-stopped")
     out = {"dispatch": [], "serialized": [], "frozen": [], "waiting": [],
-           "capped": [], "exclusive": False}
+           "capped": [], "budget_held": [], "exclusive": False}
     chosen_claims = []
     for t in tasks:
         tid = t["id"]
@@ -236,6 +253,8 @@ def schedule(graph, statuses, lanes, cap):
             if active or out["dispatch"]:
                 out["serialized"].append(
                     (tid, "not [P] — runs alone, after the current burst"))
+            elif budget_exhausted:
+                out["budget_held"].append(tid)
             else:
                 out["dispatch"].append(tid)
                 out["exclusive"] = True
@@ -251,8 +270,19 @@ def schedule(graph, statuses, lanes, cap):
                 (tid, "files overlap T%d (%s) — overlap serializes, it "
                  "never re-isolates" % (overlap[0], ", ".join(overlap[1][:3]))))
             continue
+        concurrent = active_ids | {c for c, _ in chosen_claims}
+        coupled = next(((o, via) for o, via in coupled_to.get(tid, [])
+                        if o in concurrent), None)
+        if coupled:
+            out["serialized"].append(
+                (tid, "ontology: coupled to T%d via %s — warn-and-serialize"
+                 % coupled))
+            continue
         if len(active) + len(out["dispatch"]) >= cap:
             out["capped"].append(tid)
+            continue
+        if budget_exhausted:
+            out["budget_held"].append(tid)
             continue
         out["dispatch"].append(tid)
         chosen_claims.append((tid, t["files"]))
@@ -275,14 +305,44 @@ def _load(manifest_path: pathlib.Path):
     return text, graph
 
 
-def cmd_schedule(manifest_path, cap, as_json=False):
+def _load_couplings(path):
+    """The ontology consult's output, or None when it did not run. The
+    orchestrator writes this file per burst from the sage-memory code
+    graph; this tool only ever READS it — the consult needs MCP, the
+    decision must not."""
+    if not path:
+        return None
+    import json
+    try:
+        data = json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
+        return list(data.get("pairs", []))
+    except (OSError, ValueError):
+        return None
+
+
+def cmd_schedule(manifest_path, cap, as_json=False, couplings_path=None,
+                 budget_exhausted=False):
     text, graph = _load(manifest_path)
+    couplings = _load_couplings(couplings_path)
     decision = schedule(graph, read_ledger_statuses(text),
-                        MAN.read_lanes(text), cap)
+                        MAN.read_lanes(text), cap, couplings=couplings,
+                        budget_exhausted=budget_exhausted)
     if as_json:
         import json
+        decision["ontology_consulted"] = couplings is not None
         print(json.dumps(decision))
         return 0
+    if couplings is None:
+        # The standing loud-degradation line (A9): an unchecked coupling
+        # must never look like a checked-and-clean one.
+        print("ontology consult: UNAVAILABLE — module coupling between "
+              "candidate lanes is UNCHECKED this burst; interface coupling "
+              "is caught only by plan review or the integration proof")
+    if decision["budget_held"]:
+        print("budget exhausted — NO NEW STARTS: %s held (in-flight lanes "
+              "complete; mark held tasks budget-stopped at burst end — "
+              "never grade a budget stop as failure)"
+              % ", ".join("T%d" % t for t in decision["budget_held"]))
     if decision["dispatch"]:
         tag = " (exclusive — not [P], runs alone)" if decision["exclusive"] else ""
         print("dispatch now%s: %s" % (
@@ -302,11 +362,30 @@ def cmd_schedule(manifest_path, cap, as_json=False):
     return 0
 
 
-def cmd_open(manifest_path, task, branch, worktree, model, base, cap):
+def cmd_open(manifest_path, task, branch, worktree, model, base, cap,
+             repo_root=None, couplings_path=None):
     text, graph = _load(manifest_path)
     by_id = {t["id"]: t for t in graph["tasks"]}
     if task not in by_id:
         raise Problem("T%d is not in the task graph" % task)
+
+    # A9(4), as an assertion rather than a prose instruction: a burst forks
+    # from MERGED HEAD. When the integration checkout is reachable, the
+    # claimed base must BE its HEAD — a base the orchestrator remembered
+    # from before the last merge would hand dependent tasks a stale world.
+    if base and repo_root is not None:
+        r = _git(repo_root, "rev-parse", "HEAD")
+        if r.returncode == 0:
+            head = r.stdout.strip()
+            if not (head.startswith(base) or base.startswith(head[:7])):
+                raise Problem(
+                    "burst base %s is not the integration checkout's HEAD "
+                    "(%s) — lanes fork from merged HEAD, and dependent "
+                    "context packets are built from it post-merge"
+                    % (base, head[:12]))
+        else:
+            print("warning: could not verify the burst base against HEAD "
+                  "(git unavailable at %s)" % repo_root)
     lanes = MAN.read_lanes(text) or {"burst_base": "", "records": []}
     existing = next((r for r in lanes["records"] if r["task"] == task), None)
     if existing and existing["state"] in MAN.LANE_ACTIVE_STATES + ("merged",):
@@ -316,7 +395,8 @@ def cmd_open(manifest_path, task, branch, worktree, model, base, cap):
     # The mechanical eligibility guard: open() re-derives the schedule and
     # refuses a dispatch the scheduler would not have made. The model does
     # not get to "just open" an ineligible lane.
-    decision = schedule(graph, read_ledger_statuses(text), lanes, cap)
+    decision = schedule(graph, read_ledger_statuses(text), lanes, cap,
+                        couplings=_load_couplings(couplings_path))
     if task not in decision["dispatch"]:
         why = dict(decision["serialized"] + decision["frozen"])
         reason = why.get(task)
@@ -329,7 +409,8 @@ def cmd_open(manifest_path, task, branch, worktree, model, base, cap):
 
     records = [r for r in lanes["records"] if r["task"] != task]
     records.append({"task": task, "branch": branch, "worktree": worktree,
-                    "state": "open", "model": model or "inherit", "note": ""})
+                    "state": "open", "model": model or "inherit",
+                    "retries": 0, "note": ""})
     burst_base = lanes["burst_base"]
     active_before = [r for r in lanes["records"]
                      if r["state"] in MAN.LANE_ACTIVE_STATES]
@@ -362,12 +443,24 @@ def cmd_mark(manifest_path, task, state, note):
         raise Problem("state %r is not markable (merged comes only from "
                       "`lanes.py merge` — a depends edge must never be "
                       "satisfied by prose)" % state)
-    text, _ = _load(manifest_path)
+    text, graph = _load(manifest_path)
     lanes = MAN.read_lanes(text)
     rec = next((r for r in (lanes["records"] if lanes else [])
                 if r["task"] == task), None)
     if rec is None:
-        raise Problem("T%d has no lane record" % task)
+        # budget-stopped may hit a task that never dispatched — the burst
+        # ran out before its turn. That MUST still leave a record: an
+        # explicit budget stop, never a silent truncation that grades as
+        # failure (A9). Every other state describes an actual lane.
+        if state != "budget-stopped":
+            raise Problem("T%d has no lane record" % task)
+        if task not in {t["id"] for t in graph["tasks"]}:
+            raise Problem("T%d is not in the task graph" % task)
+        if lanes is None:
+            lanes = {"burst_base": "", "records": []}
+        rec = {"task": task, "branch": "", "worktree": "",
+               "state": state, "model": "", "retries": 0, "note": ""}
+        lanes["records"].append(rec)
     rec["state"] = state
     if note:
         rec["note"] = " ".join(note.split())
@@ -379,6 +472,38 @@ def cmd_mark(manifest_path, task, state, note):
     manifest_path.write_text(MAN.stamp_updated(text), encoding="utf-8")
     print("lane T%d → %s%s" % (task, state,
                                (" — " + rec["note"]) if note else ""))
+    return 0
+
+
+def cmd_retry(manifest_path, task):
+    """The A9 errored contract: infra/rate-limit death (evidence per the
+    1.3.3 rules — tokens, not turns) gets exactly ONE staggered retry.
+    It is never graded and never consumes a quality-locked attempt, so
+    this does NOT touch the ledger's attempts counter — `open` counts
+    dispatches the quality loop judges; a retry re-runs one it never
+    judged."""
+    text, _ = _load(manifest_path)
+    lanes = MAN.read_lanes(text)
+    rec = next((r for r in (lanes["records"] if lanes else [])
+                if r["task"] == task), None)
+    if rec is None or rec["state"] != "errored":
+        raise Problem("T%d has no ERRORED lane to retry (state: %s) — "
+                      "retry exists for infra deaths only; a FAILED lane "
+                      "goes back through the fix loop"
+                      % (task, rec["state"] if rec else "none"))
+    if rec.get("retries", 0) >= 1:
+        raise Problem("T%d already used its one retry — a second infra "
+                      "death is a real outage; park the lane and surface "
+                      "it, don't grind the rate limit" % task)
+    rec["state"] = "open"
+    rec["retries"] = rec.get("retries", 0) + 1
+    text = MAN.write_lanes_block(
+        text, MAN._lanes_block_lines(lanes["burst_base"], lanes["records"]))
+    text = _update_ledger_entry(text, task, status="in-progress")
+    manifest_path.write_text(MAN.stamp_updated(text), encoding="utf-8")
+    print("lane T%d → open (retry 1 of 1; not graded, attempts untouched). "
+          "Stagger the re-dispatch (parallel_stagger_seconds) — the rate "
+          "limit that killed it is probably still there." % task)
     return 0
 
 
@@ -463,6 +588,13 @@ def main(argv=None) -> int:
     s.add_argument("manifest", type=pathlib.Path)
     s.add_argument("--cap", type=int, default=DEFAULT_CAP)
     s.add_argument("--json", action="store_true")
+    s.add_argument("--couplings", default=None,
+                   help="the burst's ontology-consult output (JSON with "
+                        "pairs:[{a,b,via}]); absent = consult did not run, "
+                        "announced loudly")
+    s.add_argument("--budget-exhausted", action="store_true",
+                   help="parallel_budget ran out — no new starts, held "
+                        "tasks reported explicitly")
 
     o = sub.add_parser("open", help="record a lane dispatch (refuses what "
                                     "the scheduler would not dispatch)")
@@ -474,12 +606,22 @@ def main(argv=None) -> int:
     o.add_argument("--base", default="",
                    help="the merged-HEAD sha this burst forks from")
     o.add_argument("--cap", type=int, default=DEFAULT_CAP)
+    o.add_argument("--couplings", default=None)
+    o.add_argument("--repo-root", type=pathlib.Path, default=None,
+                   help="integration checkout; when given, --base must BE "
+                        "its HEAD (the burst-base assertion)")
 
     m = sub.add_parser("mark", help="set a lane's state (never merged)")
     m.add_argument("manifest", type=pathlib.Path)
     m.add_argument("--task", type=int, required=True)
     m.add_argument("--state", required=True)
     m.add_argument("--note", default="")
+
+    rt = sub.add_parser("retry", help="one staggered retry for an ERRORED "
+                                      "lane — never graded, attempts "
+                                      "untouched")
+    rt.add_argument("manifest", type=pathlib.Path)
+    rt.add_argument("--task", type=int, required=True)
 
     g = sub.add_parser("merge", help="merge an open lane, dependency order "
                                      "enforced; conflicts abort loudly")
@@ -491,12 +633,18 @@ def main(argv=None) -> int:
     args = p.parse_args(argv)
     try:
         if args.cmd == "schedule":
-            return cmd_schedule(args.manifest, args.cap, args.json)
+            return cmd_schedule(args.manifest, args.cap, args.json,
+                                couplings_path=args.couplings,
+                                budget_exhausted=args.budget_exhausted)
         if args.cmd == "open":
             return cmd_open(args.manifest, args.task, args.branch,
-                            args.worktree, args.model, args.base, args.cap)
+                            args.worktree, args.model, args.base, args.cap,
+                            repo_root=args.repo_root,
+                            couplings_path=args.couplings)
         if args.cmd == "mark":
             return cmd_mark(args.manifest, args.task, args.state, args.note)
+        if args.cmd == "retry":
+            return cmd_retry(args.manifest, args.task)
         if args.cmd == "merge":
             return cmd_merge(args.manifest, args.task,
                              args.repo_root.resolve())

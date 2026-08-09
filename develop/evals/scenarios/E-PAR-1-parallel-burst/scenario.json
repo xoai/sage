@@ -1,0 +1,106 @@
+{
+  "id": "E-PAR-1",
+  "name": "parallel-burst",
+  "title": "A 6-task plan with two [P] pairs: do the lanes hold their declarations, and does anyone look at the composition?",
+  "source": "parallel-lanes pack (A7/A9); exercises the lane scheduler, single-writer bookkeeping, and the integration proof",
+  "fixture": "py-parallel",
+  "conditions": ["sage"],
+  "rationale": [
+    "A7's claim is not 'lanes ran'. It is three separable claims, each with its",
+    "own deterministic grader: (1) LEDGER INTEGRITY — every task done AND",
+    "independently approved, commits real (the E9 pair, unchanged: parallel mode",
+    "must not cost the evidence chain its meaning). (2) DISJOINTNESS HELD —",
+    "every merged lane landed only files under its task's declared Files:, and",
+    "no two dependency-unrelated lanes touched the same file. The scheduler",
+    "promises this before dispatch; this grader checks the promise against what",
+    "git actually recorded, because a promise about concurrency that is only",
+    "checked at schedule time is a promise about intentions. (3) INTEGRATION",
+    "PROOF PRESENT — the full suite ran on merged HEAD AFTER the last lane",
+    "merge. Lane-level green is lane evidence only; a burst without a",
+    "post-merge proof shipped a composition nobody examined.",
+    "",
+    "THE COMPARISON IS THE POINT OF THE THREE ARMS. Run with --mode both, this",
+    "scenario produces the same graders over inline, sequential-subagent, and",
+    "parallel arms; the harness already reports wall-clock and cost per arm.",
+    "The lane graders are mode-scoped to the parallel arm — grading lane",
+    "machinery on the inline arm would score a feature's absence as a loss",
+    "(the E7/E8 rule). NO EFFICACY OR WALL-CLOCK CLAIM exists until this runs:",
+    "the pack ships mechanics; this scenario is what would earn the numbers.",
+    "",
+    "The plan's shape is the experiment: T1 (shared types, not [P]) gates two",
+    "[P] pairs — T2/T3 then T4/T5 under the default 2-lane cap — and T6 wires",
+    "the result, depending on all four. A scheduler that ignores depends, the",
+    "cap, or [P] produces a visibly different git history, and the disjointness",
+    "grader reads the history, not the manifest's account of it.",
+    "",
+    "budget_usd 14 / timeout_s 3600: the E9 lesson doubled — a parallel burst",
+    "dispatches an implementer AND a reviewer per lane, several lanes per",
+    "burst. A truncated run grades identically to a broken feature, which is",
+    "the worst property a measurement can have. Execution is budget-gated and",
+    "OUT OF SCOPE for the pack that authored this file."
+  ],
+  "setup": {
+    ".sage/work/010-service-features/spec.md": "---\nstatus: completed\n---\n\n# Spec: Service feature pass\n\nFive additions to the service skeleton, one integration seam:\n\n1. `src/models.py` — an `OpResult` type: fields `ok` (bool) and `detail` (str).\n2. `src/auth.py` — `login(user_id) -> OpResult`: ok iff the user exists.\n3. `src/session.py` — `create(user_id) -> OpResult`: registers a session, ok on first create, not ok on duplicate.\n4. `src/billing.py` — `charge(credits) -> OpResult`: ok iff credits > 0; detail carries the cents amount.\n5. `src/report.py` — `summarize(results) -> str`: one line per OpResult under a report_header('summary').\n6. `src/service.py` (new) — `run(user_id, credits) -> str`: login, create, charge, then summarize the three results.\n\nEvery change carries a test in its own tests/test_<module>.py file.\n",
+    ".sage/work/010-service-features/plan.md": "---\nstatus: completed\n---\n\n# Implementation Plan: service feature pass\n\n## Tasks\n\n- [ ] **Task 1:** OpResult shared type\n  - **Files:** `src/models.py`, `tests/test_models.py`\n  - **Action:** add OpResult (ok: bool, detail: str) per spec §1; test constructs one\n  - **Test:** tests/test_models.py\n  - **Depends on:** none\n- [ ] **Task 2:** auth.login [P]\n  - **Files:** `src/auth.py`, `tests/test_auth.py`\n  - **Action:** login(user_id) -> OpResult per spec §2\n  - **Test:** tests/test_auth.py\n  - **Depends on:** T1\n- [ ] **Task 3:** session.create [P]\n  - **Files:** `src/session.py`, `tests/test_session.py`\n  - **Action:** create(user_id) -> OpResult per spec §3\n  - **Test:** tests/test_session.py\n  - **Depends on:** T1\n- [ ] **Task 4:** billing.charge [P]\n  - **Files:** `src/billing.py`, `tests/test_billing.py`\n  - **Action:** charge(credits) -> OpResult per spec §4\n  - **Test:** tests/test_billing.py\n  - **Depends on:** T1\n- [ ] **Task 5:** report.summarize [P]\n  - **Files:** `src/report.py`, `tests/test_report.py`\n  - **Action:** summarize(results) per spec §5\n  - **Test:** tests/test_report.py\n  - **Depends on:** T1\n- [ ] **Task 6:** service.run wiring\n  - **Files:** `src/service.py`, `tests/test_service.py`\n  - **Action:** run(user_id, credits) per spec §6, composing the four features\n  - **Test:** tests/test_service.py\n  - **Depends on:** T2, T3, T4, T5\n",
+    ".sage/work/010-service-features/manifest.md": "---\ncycle_id: \"20260809-service-features\"\nworkflow: build\nphase: implement\nstatus: in-progress\ntier: standard\ngate_state: plan-approved\ncreated: 2026-08-09\nupdated: 2026-08-09 09:00\nflags:\n  quality_locked: false\n  autonomous: false\n  subagents: true\n  parallel: true\n---\n\n# Cycle: service feature pass\n\n## State\n\n**Current phase:** implement — plan approved, no tasks started\n**Next step:** derive scope + graph, then Task 1\n\n## Context summary\n\nSpec and plan approved. Six tasks: a shared type, two [P] pairs over\ndisjoint modules, and an integration seam that depends on all four.\n"
+  },
+  "prompts": ["prompt-1.md", "prompt-2.md"],
+  "checks": [
+    {
+      "grader": "tree_matches",
+      "describe": "the execution mode engaged and the manifest says which",
+      "glob": ".sage/work/*/manifest.md",
+      "pattern": "execution_mode\\s*:"
+    },
+    {
+      "grader": "ledger_complete",
+      "describe": "ledger integrity: all 6 tasks done AND independently approved",
+      "min_tasks": 6,
+      "all_done": true,
+      "all_approved": true
+    },
+    {
+      "grader": "ledger_attributes_commits",
+      "describe": "every done task cites a commit range, and those commits are real"
+    },
+    {
+      "grader": "lanes_burst_disjoint",
+      "describe": "disjointness HELD in git: lanes within declarations, unrelated lanes disjoint",
+      "mode": "parallel",
+      "min_merged": 4
+    },
+    {
+      "grader": "lanes_integration_proof",
+      "describe": "the full suite ran on merged HEAD after the last lane merge",
+      "mode": "parallel",
+      "pattern": "pytest|sage-verify|run-gates"
+    },
+    {
+      "grader": "tree_matches",
+      "describe": "the burst base was pinned (A9: packets fork from merged HEAD, checkably)",
+      "mode": "parallel",
+      "glob": ".sage/work/*/manifest.md",
+      "pattern": "burst_base:\\s*\"[0-9a-f]{7,40}\""
+    },
+    {
+      "grader": "file_contains",
+      "describe": "the work actually landed (all six deliverables)",
+      "path": "src/service.py",
+      "substrings": ["def run"]
+    },
+    {
+      "grader": "tree_contains",
+      "describe": "OpResult reached the shared types module",
+      "glob": "src/models.py",
+      "substrings": ["OpResult"]
+    },
+    {
+      "grader": "gate_exit",
+      "describe": "the final tree is verifiably green (Gate 5, exit 0)",
+      "script": "core/gates/scripts/sage-verify.sh",
+      "exit": 0
+    }
+  ],
+  "budget_usd": 14.0,
+  "timeout_s": 3600
+}

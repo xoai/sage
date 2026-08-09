@@ -65,6 +65,14 @@ DISCOVERY = [
     # The scope judge's runtime carries the drift-verdict BEHAVIOR (locks,
     # window, cadence, injection, anti-nag) — same rationale as review.py.
     ("tool",         "runtime/tools/scope_judge.py"),
+    # The cycle-state writer grew BEHAVIOR with A8/A7: graph derivation's
+    # fail-closed grammar and the lanes/scope/task_graph block semantics are
+    # rules agents live under, not scaffolding.
+    ("tool",         "runtime/tools/manifest.py"),
+    # The parallel-lane scheduler IS a behavioral surface: dispatch
+    # eligibility, overlap serialization, the errored/budget-stopped
+    # taxonomy, dependency-order merges (A7/A9).
+    ("tool",         "runtime/tools/lanes.py"),
     # The opencode enforcement adapter is that platform's entire mechanical
     # layer — the wire that makes the shared gates and the scope judge real
     # off Claude Code. Behavioral surface, so it rows here.

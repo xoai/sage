@@ -86,10 +86,12 @@ RESULTS = HERE / "results"
 CONDITIONS = ("sage", "bare")
 
 # Execution modes (R119). `inline` is Sage's default loop; `subagents` dispatches
-# a fresh implementer and an independent reviewer per plan task (ADR-10). The mode
-# is a property of the RUN, not of the scenario: the same scenario run both ways is
-# the entire point of the comparison, so it must not be baked into scenario.json.
-MODES = ("inline", "subagents")
+# a fresh implementer and an independent reviewer per plan task (ADR-10);
+# `parallel` is subagents + dependency-aware concurrent lanes (A7 — E-PAR's
+# third arm). The mode is a property of the RUN, not of the scenario: the same
+# scenario run every way is the entire point of the comparison, so it must not
+# be baked into scenario.json.
+MODES = ("inline", "subagents", "parallel")
 
 # Mode is meaningless in the bare condition — there is no Sage to put in a mode.
 # Recording it as "inline" there would be a quiet lie in the results table: it
@@ -335,6 +337,12 @@ class Scenario:
                 problems.append(
                     f"checks[{i}]: unknown condition {cond!r}")
 
+            cmode = check.get("mode")
+            if cmode is not None and cmode not in MODES:
+                problems.append(
+                    f"checks[{i}]: unknown mode {cmode!r} "
+                    f"(known: {', '.join(MODES)})")
+
         # A condition with no applicable checks cannot fail, and a scenario that
         # cannot fail is measuring nothing. Worse, it would be REPORTED — the bare
         # arm of a scenario whose every check was sage-scoped would show up in the
@@ -383,6 +391,7 @@ def git(workspace: pathlib.Path, *args) -> subprocess.CompletedProcess:
 
 
 _MANIFEST_SUBAGENT_FLAG = re.compile(r"^(\s*subagents:\s*)(true|false)\s*$", re.MULTILINE)
+_MANIFEST_PARALLEL_FLAG = re.compile(r"^(\s*parallel:\s*)(true|false)\s*$", re.MULTILINE)
 
 
 def apply_mode_to_setup(text: str, mode: str) -> str:
@@ -396,8 +405,10 @@ def apply_mode_to_setup(text: str, mode: str) -> str:
     """
     if mode not in MODES:
         return text
-    return _MANIFEST_SUBAGENT_FLAG.sub(
-        lambda m: f"{m.group(1)}{'true' if mode == 'subagents' else 'false'}", text)
+    text = _MANIFEST_SUBAGENT_FLAG.sub(
+        lambda m: f"{m.group(1)}{'true' if mode != 'inline' else 'false'}", text)
+    return _MANIFEST_PARALLEL_FLAG.sub(
+        lambda m: f"{m.group(1)}{'true' if mode == 'parallel' else 'false'}", text)
 
 
 def set_execution_mode(ws: pathlib.Path, mode: str) -> None:
@@ -414,11 +425,14 @@ def set_execution_mode(ws: pathlib.Path, mode: str) -> None:
     if not config.is_file():
         return
     text = config.read_text(encoding="utf-8")
-    line = f"subagents: {'true' if mode == 'subagents' else 'false'}"
-    if re.search(r"^subagents:.*$", text, re.MULTILINE):
-        text = re.sub(r"^subagents:.*$", line, text, count=1, flags=re.MULTILINE)
-    else:
-        text = text.rstrip("\n") + f"\n{line}\n"
+    for key, on in (("subagents", mode != "inline"),
+                    ("parallel", mode == "parallel")):
+        line = f"{key}: {'true' if on else 'false'}"
+        if re.search(rf"^{key}:.*$", text, re.MULTILINE):
+            text = re.sub(rf"^{key}:.*$", line, text, count=1,
+                          flags=re.MULTILINE)
+        else:
+            text = text.rstrip("\n") + f"\n{line}\n"
     config.write_text(text, encoding="utf-8")
 
 
@@ -927,6 +941,13 @@ def run_once(scenario: Scenario, condition: str, driver: Driver,
         # exist to prevent, and the reason E7/E8/E9 are sage-only. A skipped check
         # is not a passed check: it is dropped from the denominator entirely.
         if check.get("condition") and check["condition"] != condition:
+            continue
+        # A check may also be scoped to one execution MODE (E-PAR): the lane
+        # graders are facts about parallel machinery, and grading them on the
+        # inline or sequential-subagent arm would score a feature's absence
+        # as a behavioural loss — the same dishonesty the condition scoping
+        # exists to prevent. Dropped from the denominator, never auto-passed.
+        if check.get("mode") and check["mode"] != effective_mode:
             continue
         scope = check.get("session")
         tx = by_session.get(scope) if scope else whole
