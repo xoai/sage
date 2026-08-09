@@ -150,5 +150,30 @@ class LedgerRoundTrip(unittest.TestCase):
                          "must pass — the gate parser tolerates the schema")
 
 
+class GraphTemplateHandshake(unittest.TestCase):
+    """graph derive × the plan template (A8): the tightened grammar the
+    template teaches is exactly what the parser accepts — including the
+    template's own `Depends on:` skeleton lines."""
+
+    def test_filled_template_tasks_derive_cleanly(self):
+        filled = (PLAN_TEXT
+                  .replace("{exact_file_paths}", "src/auth.ts")
+                  .replace("{document_file_path}", "docs/guide.md"))
+        tasks, findings = MAN.parse_plan_graph(filled)
+        self.assertEqual(findings, [], "the template's own skeletons, with "
+                         "paths filled in, are the grammar's happy path")
+        self.assertEqual([t["id"] for t in tasks], [1, 2])
+        self.assertEqual(tasks[1]["depends"], [1],
+                         "the template's `Depends on: T1` must parse")
+        self.assertNotIn("[DOC]", tasks[1]["title"],
+                         "[DOC] is a marker, not title")
+
+    def test_raw_template_refuses_rather_than_deriving_junk(self):
+        _, findings = MAN.parse_plan_graph(PLAN_TEXT)
+        self.assertTrue(findings,
+                        "placeholder Files: must refuse fail-closed — an "
+                        "unfilled template can never derive an empty lane")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

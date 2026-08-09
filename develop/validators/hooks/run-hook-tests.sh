@@ -711,6 +711,38 @@ assert B14 "a gate_state transition whose prose says 'out of scope:' still yield
   '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/bk4/manifest.md","old_string":"gate_state: building","new_string":"gate_state: gates-passed\n\nNote: TICKET-142 stayed out of scope: billing, collateral damage avoided."}}' \
   --exit 0 --hook "$BKG"
 
+# B17–B20 (A8): the task_graph: block inherits the same protection as scope —
+# the gate_state yield is revoked by reconstruction when the edit rewires the
+# graph. A hand-cut dependency edge dispatches coupled tasks into concurrent
+# lanes; the graph is amended through `manifest.py graph derive`, never by hand.
+mk_graphed_bk() {  # a bookkeeping fixture whose manifest carries a task_graph block
+  local d; d="$(new_project)"; set_config "$d" "hard_enforcement: true"
+  mkdir -p "$d/.sage/work/bkg"
+  printf -- '---\ncycle_id: "bkg"\nstatus: in-progress\ntier: standard\ngate_state: building\ntask_graph:\n  derived_from: plan@abcd1234\n  tasks:\n    - {id: T1, title: "types", files: [src/types.ts], depends: [], parallel: false}\n    - {id: T2, title: "auth", files: [src/auth.ts], depends: [T1], parallel: true}\n---\n\n# Cycle\n' \
+    > "$d/.sage/work/bkg/manifest.md"
+  echo "$d"
+}
+
+P="$(mk_graphed_bk)"
+assert B17 "mentioning gate_state does not exempt a task_graph rewiring hand-edit" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/bkg/manifest.md","old_string":"gate_state: building\ntask_graph:\n  derived_from: plan@abcd1234\n  tasks:\n    - {id: T1, title: \"types\", files: [src/types.ts], depends: [], parallel: false}\n    - {id: T2, title: \"auth\", files: [src/auth.ts], depends: [T1], parallel: true}","new_string":"gate_state: building\ntask_graph:\n  derived_from: plan@abcd1234\n  tasks:\n    - {id: T1, title: \"types\", files: [src/types.ts], depends: [], parallel: false}\n    - {id: T2, title: \"auth\", files: [src/auth.ts], depends: [], parallel: true}"}}' \
+  --exit 2 --stderr "close-out" --hook "$BKG"
+
+P="$(mk_graphed_bk)"
+assert B18 "a graph edit that adds ONLY a task line (no structure key) is still redirected" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/bkg/manifest.md","old_string":"    - {id: T2, title: \"auth\", files: [src/auth.ts], depends: [T1], parallel: true}","new_string":"    - {id: T2, title: \"auth\", files: [src/auth.ts], depends: [T1], parallel: true}\n    - {id: T3, title: \"gate_state note\", files: [src/**], depends: [], parallel: true}"}}' \
+  --exit 2 --stderr "close-out" --hook "$BKG"
+
+P="$(mk_graphed_bk)"
+assert B19 "a transition whose old_string spans UNCHANGED task_graph lines still yields" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/bkg/manifest.md","old_string":"gate_state: building\ntask_graph:\n  derived_from: plan@abcd1234","new_string":"gate_state: gates-passed\ntask_graph:\n  derived_from: plan@abcd1234"}}' \
+  --exit 0 --hook "$BKG"
+
+P="$(mk_graphed_bk)"
+assert B20 "a full-manifest Write carrying a task_graph block never rides the gate_state yield" "$P" \
+  '{"tool_name":"Write","tool_input":{"file_path":".sage/work/bkg/manifest.md","content":"---\ngate_state: gates-passed\ntask_graph:\n  derived_from: plan@ffff0000\n  tasks: []\n---\n"}}' \
+  --exit 2 --stderr "close-out" --hook "$BKG"
+
 # ── sage-secrets-gate: credentials never go into source ────────────────────
 # The weak-model campaign measured why: handed a live key, haiku-bare hardcodes
 # it 3/3 and haiku with the CONSTITUTION PARAGRAPH still hardcoded it 2/3.

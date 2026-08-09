@@ -650,5 +650,278 @@ class ScopeTest(unittest.TestCase):
         self.assertEqual(ctx.exception.code, 2)
 
 
+A_GRAPH_PLAN = """\
+# Implementation Plan: parallel refresh
+
+## Tasks
+
+- [ ] **Task 1:** contract types
+  - **Files:** src/types.ts
+  - **Action:** define the contract first
+  - **Depends on:** none
+- [ ] **Task 2:** auth flow [P]
+  - **Files:** src/auth/**, `src/auth.ts`
+  - **Depends on:** T1
+- [ ] **Task 3:** session flow [P]
+  - **Files:** src/session.ts
+  - **Depends on:** T1
+- [ ] **Task 4:** the runbook [DOC] [P]
+  - **Output:** docs/runbook.md
+  - **Depends on:** Task 2, T3
+"""
+
+
+class GraphTest(unittest.TestCase):
+    """A8 — the plan's task structure becomes machine state, fail-closed.
+    A wrong graph dispatches coupled tasks into concurrent lanes, so unlike
+    scope (warn-and-continue) ANY defect refuses the whole derivation."""
+
+    def setUp(self):
+        self.d = pathlib.Path(tempfile.mkdtemp(prefix="manifest-graph-"))
+        self.addCleanup(shutil.rmtree, self.d, ignore_errors=True)
+        self.m = self.d / "manifest.md"
+        self.m.write_text(a_manifest("plan-approved"))
+        self.plan = self.d / "plan.md"
+        self.plan.write_text(A_GRAPH_PLAN)
+
+    def derive(self, expect=0):
+        import contextlib
+        import io
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = M.graph_derive(self.m)
+        self.assertEqual(rc, expect, buf.getvalue())
+        return buf.getvalue()
+
+    def refuse(self, *needles):
+        """Fail-closed contract: nonzero, every needle surfaced as a
+        plan-review finding, and NO task_graph block written."""
+        out = self.derive(expect=1)
+        for needle in needles:
+            self.assertIn(needle, out)
+        self.assertIn("plan-review finding:", out)
+        self.assertIn("NOT derived", out)
+        self.assertIsNone(M.read_task_graph(self.m.read_text()))
+        return out
+
+    def test_happy_path_round_trip(self):
+        """Markers strip into flags, backticks normalize, both `T1` and
+        `Task 1` reference forms resolve, and the reader returns exactly
+        what the writer pinned."""
+        M.scope_derive(self.m)
+        self.derive()
+        g = M.read_task_graph(self.m.read_text())
+        self.assertIsNotNone(g)
+        self.assertTrue((g["derived_from"] or "").startswith("plan@"))
+        self.assertEqual([t["id"] for t in g["tasks"]], [1, 2, 3, 4])
+        by_id = {t["id"]: t for t in g["tasks"]}
+        self.assertEqual(by_id[1]["depends"], [])
+        self.assertFalse(by_id[1]["parallel"])
+        self.assertEqual(by_id[2]["files"], ["src/auth/**", "src/auth.ts"])
+        self.assertTrue(by_id[2]["parallel"])
+        self.assertEqual(by_id[4]["depends"], [2, 3])
+        self.assertTrue(by_id[4]["parallel"])
+        self.assertEqual(by_id[4]["title"], "the runbook",
+                         "[DOC]/[P] are markers, not title")
+        self.assertEqual(by_id[4]["files"], ["docs/runbook.md"])
+
+    def test_derive_requires_a_derived_scope_first(self):
+        self.refuse("no derived scope")
+
+    def test_unknown_depends_reference_refuses(self):
+        M.scope_derive(self.m)
+        self.plan.write_text(A_GRAPH_PLAN.replace(
+            "  - **Depends on:** T1\n- [ ] **Task 3:**",
+            "  - **Depends on:** T9\n- [ ] **Task 3:**"))
+        M.scope_derive(self.m, refresh=True)
+        self.refuse("Task 2 depends on T9, which does not exist")
+
+    def test_ambiguous_depends_refuses(self):
+        M.scope_derive(self.m)
+        self.plan.write_text(A_GRAPH_PLAN.replace(
+            "**Depends on:** Task 2, T3", "**Depends on:** the auth task"))
+        self.refuse("is ambiguous", "none | T<n>")
+
+    def test_missing_depends_line_refuses_rather_than_guessing(self):
+        M.scope_derive(self.m)
+        self.plan.write_text(A_GRAPH_PLAN.replace(
+            "  - **Depends on:** none\n", ""))
+        self.refuse("Task 1 declares no `Depends on:`",
+                    "does not guess ordering")
+
+    def test_missing_files_refuses(self):
+        M.scope_derive(self.m)
+        self.plan.write_text(A_GRAPH_PLAN.replace(
+            "  - **Files:** src/session.ts\n", ""))
+        M.scope_derive(self.m, refresh=True)
+        self.refuse("Task 3 declares no Files:")
+
+    def test_placeholder_files_refuse(self):
+        """The template's own {exact_file_paths} placeholder must refuse,
+        not silently become an empty lane."""
+        M.scope_derive(self.m)
+        self.plan.write_text(A_GRAPH_PLAN.replace(
+            "**Files:** src/session.ts", "**Files:** {exact_file_paths}"))
+        M.scope_derive(self.m, refresh=True)
+        self.refuse("Task 3 declares only unusable")
+
+    def test_malformed_P_marker_refuses(self):
+        M.scope_derive(self.m)
+        for bad in ("auth flow [p]", "auth [P] flow", "auth flow [ P ]"):
+            self.plan.write_text(A_GRAPH_PLAN.replace("auth flow [P]", bad))
+            self.refuse("malformed [P] marker")
+
+    def test_dependency_cycle_refuses(self):
+        M.scope_derive(self.m)
+        # T2 → T3 and T3 → T2 (the two `Depends on: T1` lines belong to T2
+        # then T3, in plan order).
+        cyclic = A_GRAPH_PLAN.replace("  - **Depends on:** T1",
+                                      "  - **Depends on:** T3", 1)
+        cyclic = cyclic.replace("  - **Depends on:** T1",
+                                "  - **Depends on:** T2", 1)
+        self.plan.write_text(cyclic)
+        out = self.refuse("dependency cycle:")
+        self.assertIn("T2", out)
+        self.assertIn("T3", out)
+
+    def test_self_dependency_is_a_cycle(self):
+        M.scope_derive(self.m)
+        self.plan.write_text(A_GRAPH_PLAN.replace(
+            "  - **Depends on:** none", "  - **Depends on:** T1"))
+        self.refuse("dependency cycle: T1 → T1")
+
+    def test_duplicate_task_id_refuses(self):
+        M.scope_derive(self.m)
+        self.plan.write_text(A_GRAPH_PLAN.replace(
+            "**Task 3:** session flow [P]", "**Task 2:** session flow [P]"))
+        self.refuse("Task 2 appears more than once")
+
+    def test_E9_replay_fenced_examples_are_not_tasks(self):
+        """The E9 lesson as a fixture: a plan whose prose a naive regex
+        misreads must derive correctly or refuse — never derive wrong
+        silently. Fenced snippets quoting task syntax stay prose."""
+        self.plan.write_text(A_GRAPH_PLAN + """
+## Notes
+
+```markdown
+- [ ] **Task 9:** phantom from a quoted example
+  - **Files:** src/phantom.ts
+  - **Depends on:** T1
+```
+<!-- - [ ] **Task 10:** phantom from a comment
+  - **Depends on:** T9 -->
+""")
+        M.scope_derive(self.m)
+        self.derive()
+        g = M.read_task_graph(self.m.read_text())
+        self.assertEqual([t["id"] for t in g["tasks"]], [1, 2, 3, 4],
+                         "phantom tasks in fences/comments must not parse")
+
+    def test_rederive_refused_without_refresh(self):
+        M.scope_derive(self.m)
+        self.derive()
+        with self.assertRaises(M.Problem):
+            M.graph_derive(self.m)
+
+    def test_renumber_after_amend_rederives_and_records_the_delta(self):
+        """The scope-derivation pattern applied to the graph: plan amended
+        (a task inserted, successors renumbered), --refresh re-derives, and
+        the old→new delta lands in decisions.md."""
+        M.scope_derive(self.m)
+        self.derive()
+        old = M.read_task_graph(self.m.read_text())["derived_from"]
+        amended = A_GRAPH_PLAN.replace(
+            "- [ ] **Task 4:** the runbook [DOC] [P]\n"
+            "  - **Output:** docs/runbook.md\n"
+            "  - **Depends on:** Task 2, T3",
+            "- [ ] **Task 4:** wire the flows\n"
+            "  - **Files:** src/wiring.ts\n"
+            "  - **Depends on:** T2, T3\n"
+            "- [ ] **Task 5:** the runbook [DOC] [P]\n"
+            "  - **Output:** docs/runbook.md\n"
+            "  - **Depends on:** T4")
+        self.plan.write_text(amended)
+        M.scope_derive(self.m, refresh=True)
+        import contextlib
+        import io
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = M.graph_derive(self.m, refresh=True)
+        self.assertEqual(rc, 0, buf.getvalue())
+        g = M.read_task_graph(self.m.read_text())
+        self.assertNotEqual(g["derived_from"], old)
+        self.assertEqual([t["id"] for t in g["tasks"]], [1, 2, 3, 4, 5])
+        self.assertEqual({t["id"]: t for t in g["tasks"]}[5]["depends"], [4])
+        decisions = (self.d / "decisions.md").read_text()
+        self.assertIn(f"task graph re-derived: {old}", decisions)
+        self.assertIn(g["derived_from"], decisions)
+        self.assertIn("+T5", decisions)
+
+    def test_refresh_with_no_change_records_nothing(self):
+        M.scope_derive(self.m)
+        self.derive()
+        import contextlib
+        import io
+        with contextlib.redirect_stdout(io.StringIO()):
+            M.graph_derive(self.m, refresh=True)
+        self.assertFalse((self.d / "decisions.md").is_file())
+
+    def test_stale_scope_refuses(self):
+        """Graph↔scope consistency: amend the plan's declarations after
+        scope derive and the graph refuses until scope re-derives — lanes
+        must not dispatch under a scope gate policing the wrong contract."""
+        M.scope_derive(self.m)
+        self.plan.write_text(A_GRAPH_PLAN.replace(
+            "**Files:** src/session.ts", "**Files:** src/session2.ts"))
+        self.refuse("scope is stale", "scope derive --refresh")
+
+    def test_files_outside_scope_refuse(self):
+        M.scope_derive(self.m)
+        # Simulate a hand-damaged scope block: same pin, an entry missing.
+        text = self.m.read_text()
+        line = next(l for l in text.splitlines()
+                    if l.strip().startswith("- src/session.ts"))
+        self.m.write_text(text.replace(line + "\n", ""))
+        self.refuse("Task 3's files (src/session.ts) are not in the "
+                    "derived scope")
+
+    def test_bookkeeping_edits_do_not_move_the_graph_sha(self):
+        """Checking a box or stamping ✅ DONE must not mark the graph stale;
+        renumbering, a [P] change, or an edge change must."""
+        before = M._graph_sha(A_GRAPH_PLAN)
+        ticked = A_GRAPH_PLAN.replace(
+            "- [ ] **Task 1:** contract types",
+            "- [x] **Task 1:** contract types ✅ DONE (commit: abc1234)")
+        self.assertEqual(M._graph_sha(ticked), before)
+        self.assertNotEqual(
+            M._graph_sha(A_GRAPH_PLAN.replace("session flow [P]",
+                                              "session flow")), before)
+        self.assertNotEqual(
+            M._graph_sha(A_GRAPH_PLAN.replace("**Depends on:** Task 2, T3",
+                                              "**Depends on:** T3")), before)
+
+    def test_the_block_lives_in_the_frontmatter_only(self):
+        self.m.write_text(a_manifest("plan-approved")
+                          + "\nProse discussing the task_graph: block.\n")
+        M.scope_derive(self.m)
+        self.derive()
+        fm, _ = M.split_frontmatter(self.m.read_text())
+        self.assertIn("task_graph:", fm)
+        self.assertIn("Prose discussing the task_graph: block.",
+                      self.m.read_text())
+
+    def test_no_plan_is_a_problem(self):
+        self.plan.unlink()
+        with self.assertRaises(M.Problem):
+            M.graph_derive(self.m)
+
+    def test_cli_exit_codes(self):
+        """Findings exit 1 through main() — the workflow's degradation
+        branch keys off the exit code."""
+        self.assertEqual(M.main(["graph", "derive", str(self.m)]), 1)
+        M.scope_derive(self.m)
+        self.assertEqual(M.main(["graph", "derive", str(self.m)]), 0)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

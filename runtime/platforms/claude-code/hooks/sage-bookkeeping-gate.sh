@@ -138,25 +138,37 @@ if status in ("complete", "completed", "abandoned"):
 # gate_state transitions are APPROVAL flow, not bookkeeping — the spec-gate's
 # completion guard already polices them (QA field, ledger). Blocking them here
 # would strand a cycle that legitimately needs to record gates-passed. Yield —
-# but NOT for an edit that also touches the scope block: merely mentioning
-# `gate_state` in the payload must not become a skeleton key for widening
-# `scope:` by hand (independent review, confirmed by probe). Scope is amended
-# through `manifest.py scope …`, which writes via Bash and never meets this
-# gate.
+# but NOT for an edit that also touches the scope or task_graph block: merely
+# mentioning `gate_state` in the payload must not become a skeleton key for
+# widening `scope:` — or rewiring `task_graph:` dependencies (A8: a hand-cut
+# edge dispatches coupled tasks into concurrent lanes) — by hand (independent
+# review, confirmed by probe). Both blocks are amended through
+# `manifest.py scope …` / `manifest.py graph derive`, which write via Bash
+# and never meet this gate.
 #
-# "Touches the scope block" is decided by RECONSTRUCTION, not substrings
-# (the config-gate's pattern): apply the edit, parse the scope: section
+# "Touches the block" is decided by RECONSTRUCTION, not substrings
+# (the config-gate's pattern): apply the edit, parse the section
 # before and after, compare. A structure-key regex was probed twice and
 # lost both ways — prose saying "out of scope:" stranded legit transitions,
 # and a widening that adds only a list item (`    - src/**`) carries no
 # structure key at all (round-3 review, confirmed). A Write replaces the
 # whole file, so for Write the yield requires the content to carry NO scope
-# block — a full-manifest rewrite is bookkeeping whatever else it says.
+# or task_graph block — a full-manifest rewrite is bookkeeping whatever
+# else it says.
 
 
 def scope_section(text):
     m = re.search(r"(?ms)^\s*scope\s*:\s*$\n((?:[ \t]+.*\n?)*)", text or "")
     return m.group(0) if m else ""
+
+
+def graph_section(text):
+    m = re.search(r"(?ms)^\s*task_graph\s*:\s*$\n((?:[ \t]+.*\n?)*)", text or "")
+    return m.group(0) if m else ""
+
+
+def guarded_sections(text):
+    return scope_section(text) + "\x00" + graph_section(text)
 
 
 edit_texts = []
@@ -175,7 +187,8 @@ edit_text = "\n".join(edit_texts)
 if "gate_state" in edit_text:
     tool = data.get("tool_name") or ""
     if tool == "Write":
-        if not scope_section(str(tool_input.get("content") or "")):
+        content = str(tool_input.get("content") or "")
+        if not scope_section(content) and not graph_section(content):
             emit("ALLOW")
     else:
         try:
@@ -192,7 +205,7 @@ if "gate_state" in edit_text:
             if isinstance(e, dict) and e.get("old_string"):
                 after = after.replace(e["old_string"],
                                       e.get("new_string", ""), 1)
-        if scope_section(current) == scope_section(after):
+        if guarded_sections(current) == guarded_sections(after):
             emit("ALLOW")
 
 emit("BLOCK", (

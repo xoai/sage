@@ -364,14 +364,21 @@ Pick A/S/R/N, or tell me what to change.
    `python3 sage/runtime/tools/manifest.py scope derive .sage/work/[cycle-id]/manifest.md`
    — the plan's `Files:`/`Output:` lines become the manifest's `scope:` block
    (enforced when `scope_gate` is on; harmless off; `--refresh` after amendments).
-4. THEN proceed to Step 6.
+4. **Derive the task graph (A8):** run
+   `python3 sage/runtime/tools/manifest.py graph derive .sage/work/[cycle-id]/manifest.md`
+   — the `task_graph:` block, the parallel scheduler's ONLY input; fail-closed.
+   On nonzero exit surface the printed plan-review findings, announce "task
+   graph underivable — parallel mode unavailable this cycle", and continue
+   (sequential build unaffected; `--refresh` after amendments, like scope).
+5. THEN proceed to Step 6.
 
 **On [S] Skip review:**
 1. Prepend plan approach to decisions.md.
 2. Announce: "Skipping independent review."
 3. Log to decisions.md: "Plan approved without auto-review (user chose [S])."
 4. Derive the machine scope (same command as [A] step 3).
-5. Proceed to Step 6.
+5. Derive the task graph (same command and degradation rule as [A] step 4).
+6. Proceed to Step 6.
 
 ## Step 6: Implement
 

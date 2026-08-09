@@ -2,6 +2,49 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [Unreleased] — parallel implementation lanes (A6→A8→A7→A9)
+
+### A8 (phase 1): the plan's task structure becomes machine state — `graph derive`
+
+The parallel scheduler (A7, next phase) needs to know, per task, which
+files it may touch, what it waits on, and whether the planner marked it
+parallel-safe. The plan already declares all three — as prose, read by
+the same model that decides what to dispatch next. `manifest.py graph
+derive` now parses that structure ONCE, at plan approval, alongside
+`scope derive` (same Files parser), into a `task_graph:` block in the
+manifest frontmatter, pinned to `plan@<sha1>` of the declaration lines.
+Everything downstream of approval consumes the block, never the prose.
+
+- **Fail-closed, unlike scope.** A wrong graph does not degrade safely —
+  a missed dependency edge dispatches coupled tasks into concurrent
+  lanes. Unknown/ambiguous `Depends on:` reference, dependency cycle,
+  missing `Files:`, malformed `[P]`, duplicate task id, stale or
+  divergent scope: each exits nonzero as a plan-review finding and
+  writes NOTHING. An underivable plan cannot enter parallel mode; the
+  sequential build is unaffected and the degradation is announced.
+- **The E9 lesson is load-bearing:** the parser reads a fence- and
+  comment-stripped view of the plan, so example snippets quoting task
+  syntax can never become phantom graph nodes — and the replay fixture
+  pins it. Bookkeeping edits (checkbox ticks, ✅ DONE stamps) do not
+  move the graph's hash; renumbering, `[P]` changes, and edge edits do.
+- **Grammar tightened in the plan template** (v2.1.0): `Depends on:
+  none | T<n>[, T<n>…]` (long form `Task <n>` accepted), exactly one
+  line per task; `[P]` is exactly `[P]` after the task name; Files:
+  comma-separated repo-relative paths/globs, backticks welcome. Plan
+  Review gained check 7 (graph derivability). Plan amendment ⇒
+  `graph derive --refresh`, delta recorded in decisions.md — the
+  scope-derivation pattern.
+- **The bookkeeping-gate protects the block** (B17–B20): the
+  gate_state yield is revoked by reconstruction for any edit that
+  rewires `task_graph:`, exactly as for `scope:`. The graph is amended
+  through the tool, never by hand.
+- Deterministic coverage: `GraphTest` in test_manifest.py (happy path,
+  every validation failure class, renumber-after-amend re-derive,
+  graph↔scope consistency, E9 replay) + a graph×template handshake in
+  test_template_conformance.py. No efficacy claims — parallel-mode
+  behavior is measured by E-PAR (authored later in this pack,
+  execution budget-gated).
+
 ## [1.3.17] — Gate 4 speaks Go, Rust, and Dart: the compiler is the checker
 
 ### Gate 4 speaks Go — and, after the review that followed, Rust and Dart

@@ -61,7 +61,12 @@ surfaces:
       existed, all three of the first set would have passed with the subagent path
       completely broken, because none of them sets the flag. L3 drives a 6-task
       plan through the build loop under a derived scope (the plan-approval
-      checkpoint's `scope derive` step) with planted temptations.
+      checkpoint's `scope derive` step) with planted temptations. 2026-08-09
+      (A8): plan approval also runs `graph derive` (task_graph: block, the
+      parallel scheduler's only input) — fail-closed with an announced
+      degradation to sequential; deterministic coverage in test_manifest.py
+      (GraphTest) + test_template_conformance.py; agentic coverage arrives
+      with E-PAR (authored in this pack, execution budget-gated).
 
   workflow-fix:
     path: core/workflows/fix.workflow.md
@@ -259,8 +264,11 @@ surfaces:
       read the manifest directly). The tool call is the only channel that provably
       reaches every session: this hook redirects a hand-edit of an active cycle's
       manifest/decisions to the one-command writer, exit-2-with-reason, the proven
-      block-recover-retry pattern. Its own 10-case suite lives in run-hook-tests.sh
-      (B1-B10); L1 covers it end-to-end on the resume path.
+      block-recover-retry pattern. Its own suite lives in run-hook-tests.sh
+      (B1-B16, plus B17-B20 since 2026-08-09: the task_graph: block inherits
+      the scope: block's reconstruction guard — the gate_state yield is
+      revoked for an edit that rewires the graph); L1 covers it end-to-end
+      on the resume path.
 
   hook-manifest-sync:
     path: runtime/platforms/claude-code/hooks/sage-manifest-sync.sh
@@ -729,7 +737,10 @@ surfaces:
       skip is declared loudly. Nothing grades an auto-review that actually runs.
       The v2 output contract (no verdict, witness-or-downgrade, calibration
       block) is pinned deterministically by
-      develop/validators/review/test_review_schema.py.
+      develop/validators/review/test_review_schema.py. 2026-08-09 (A8): the
+      Plan Review prompt gained check 7 (graph derivability — parseable
+      Files + Depends per task, [P] only where intended); the grammar it
+      polices is pinned by GraphTest + the graph template handshake.
 
   capability-auto-qa:
     path: core/capabilities/review/auto-qa/SKILL.md

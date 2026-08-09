@@ -257,7 +257,7 @@ Edit or Write tools. Your job is to REPORT findings, not fix them.
 Read the plan at: {PLAN_PATH}
 Read the spec at: {SPEC_PATH}
 
-CHECK THESE 6 THINGS:
+CHECK THESE 7 THINGS:
 
 1. SPEC-PLAN ALIGNMENT: Does the plan implement everything in the
    spec? Does it implement anything NOT in the spec?
@@ -280,6 +280,15 @@ CHECK THESE 6 THINGS:
    from these lines (manifest.py scope derive) — a task with no
    Files: line contributes NOTHING to the derived scope, and the
    derivation does not guess.
+
+7. GRAPH DERIVABILITY: Every task: parseable Files: (or Output:) AND
+   exactly one Depends on: line — `none | T<n>[, T<n>…]`, every
+   reference resolving to a real task, no cycles. [P] only where the
+   task is truly independent of unmerged sibling work — [P] is a
+   dispatch instruction, not decoration. The parallel scheduler
+   consumes the derived task_graph: block exclusively
+   (manifest.py graph derive); derivation is FAIL-CLOSED, so any
+   defect here shuts parallel mode for the whole cycle.
 
 CLASSIFY each finding:
 - CRITICAL: Must fix before implementing. Blocks proceeding.

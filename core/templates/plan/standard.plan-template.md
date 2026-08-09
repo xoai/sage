@@ -2,7 +2,7 @@
 name: plan-standard
 type: plan
 variant: standard
-version: "2.0.0"
+version: "2.1.0"
 description: >
   Implementation plan with built-in progress tracking. Each task has a checkbox
   that serves as the source of truth for completion status. The plan file IS the
@@ -48,6 +48,20 @@ For CODE tasks:
   - Tests come before implementation (TDD)
   - [P] marks tasks that can run in parallel
 
+MACHINE-READ GRAMMAR (graph derive parses these lines FAIL-CLOSED — a
+defect refuses the whole task graph and parallel mode with it):
+  - Files:/Output: — comma-separated repo-relative paths or globs;
+    backticks welcome (`src/auth/**`, `src/session.ts`). Every task
+    declares one; the derivation never guesses a files set.
+  - Depends on: — exactly one line per task, grammar
+    `none | T<n>[, T<n>…]` (the long form `Task <n>` is accepted).
+    Every reference must name a task that exists; no cycles.
+  - [P] — exactly `[P]`, placed after the task name (after [DOC] on
+    document tasks). It declares "safe to run concurrently once my
+    Depends are merged". Wrong case, inner spaces, or any other
+    position is malformed and refuses derivation rather than being
+    silently ignored.
+
 For DOCUMENT tasks:
   - Mark with [DOC] after the task name
   - Use Criteria instead of Test (checklist, not commands)
@@ -87,7 +101,7 @@ The next session reads this file to know exactly where to resume. -->
   - **Output:** {document_file_path}
   - **Action:** {what_to_write — scope, structure, expected sections}
   - **Criteria:** {checklist of what "done" looks like}
-  - **Depends on:** Task 1
+  - **Depends on:** T1
 
 {additional_tasks}
 

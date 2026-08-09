@@ -51,6 +51,7 @@ Usage:
     manifest.py resume  [<manifest.md>]                # the resume brief, generated
     manifest.py scope derive <manifest.md> [--refresh] # plan Files:/Output: → scope block
     manifest.py scope add-collateral <path> --task T3 --reason "..."
+    manifest.py graph derive <manifest.md> [--refresh] # plan tasks/deps → task_graph block
 
 Python 3.8+, stdlib only.
 """
@@ -915,15 +916,15 @@ def _scope_block_lines(derived_from: str, globs, collateral) -> str:
     return "\n".join(out)
 
 
-def write_scope_block(text: str, block: str) -> str:
-    """Replace (or append) the frontmatter's top-level `scope:` block. Same rule
-    as write_gate_state: only the frontmatter — body prose that quotes scope
+def _write_frontmatter_block(text: str, key_re, block: str) -> str:
+    """Replace (or append) one top-level frontmatter block. Same rule as
+    write_gate_state: only the frontmatter — body prose that quotes the block
     is the agent's narration and must not be rewritten."""
     fm, _ = split_frontmatter(text)
     if fm is None:
         raise Problem("manifest has no frontmatter")
     lines = fm.splitlines()
-    start = next((i for i, l in enumerate(lines) if _SCOPE_KEY_RE.match(l)), None)
+    start = next((i for i, l in enumerate(lines) if key_re.match(l)), None)
     if start is None:
         new_fm = fm.rstrip("\n") + "\n" + block
     else:
@@ -933,6 +934,10 @@ def write_scope_block(text: str, block: str) -> str:
             end += 1
         new_fm = "\n".join(lines[:start] + block.splitlines() + lines[end:])
     return text.replace(fm, new_fm, 1)
+
+
+def write_scope_block(text: str, block: str) -> str:
+    return _write_frontmatter_block(text, _SCOPE_KEY_RE, block)
 
 
 def _prepend_decision(decisions_path: pathlib.Path, entry: str) -> None:
@@ -1050,6 +1055,384 @@ def scope_add_collateral(manifest_path: pathlib.Path, path_or_glob: str,
     return 0
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# task graph — the plan's structure becomes machine state (A8).
+#
+# The parallel scheduler (A7) needs to know, per task, three things the plan
+# already declares: which files it may touch (`Files:`/`Output:`), what it
+# waits on (`Depends on:`), and whether the planner marked it parallel-safe
+# (`[P]`). Until now that structure was prose — and prose is read by the same
+# model that is deciding what to dispatch next. `graph derive` parses it ONCE,
+# at plan approval, alongside `scope derive` (same Files parser), into a
+# `task_graph:` block in the manifest frontmatter. Everything downstream of
+# approval — the scheduler, the ledger's lane records, the resume brief, the
+# E-PAR graders — consumes the block, never the plan prose.
+#
+# FAIL-CLOSED, unlike scope. Scope-derive warns on an undeclared task because
+# the scope gate degrades safely (an undeclared file simply is not sanctioned).
+# A wrong GRAPH does not degrade safely: a missed dependency edge dispatches
+# two coupled tasks into concurrent lanes. So any defect — unknown/ambiguous
+# `Depends on:` reference, a cycle, a missing `Files:`, a malformed `[P]` —
+# exits nonzero, surfaces each defect as a plan-review finding, and writes
+# NOTHING. An underivable plan cannot enter parallel mode; the sequential
+# build is unaffected (the degradation is announced by the workflow).
+#
+# The E9 lesson is load-bearing here: never derive wrong silently. The parser
+# reads a fence- and comment-stripped view of the plan, so example snippets
+# quoting task syntax can never become phantom graph nodes — a naive regex
+# over raw markdown was exactly how the ledger schism happened.
+
+_DEPENDS_LINE_RE = re.compile(
+    r"^\s*-\s*\*\*Depends\s+on\s*:?\*\*:?\s*(.*?)\s*$", re.I)
+_STATUS_DECOR_RE = re.compile(r"\s*(?:✅|🔄|🚫).*$")
+_MARKER_TAIL_RE = re.compile(r"\s*\[(?:P|DOC)\]\s*$")
+_PSEUDO_P_RE = re.compile(r"\[\s*p\s*\]", re.I)
+
+
+def _plan_derivation_view(plan_text: str) -> str:
+    """The plan as the graph parser may read it: fenced code blocks and HTML
+    comments removed. An UNCLOSED fence or comment strips to end-of-file —
+    fail-closed beats parsing content the author marked as not-the-plan."""
+    out, fence = [], None
+    for line in plan_text.splitlines():
+        s = line.strip()
+        if fence is None and (s.startswith("```") or s.startswith("~~~")):
+            fence = s[:3]
+            continue
+        if fence is not None:
+            if s.startswith(fence):
+                fence = None
+            continue
+        out.append(line)
+    return re.sub(r"(?s)<!--.*?(?:-->|\Z)", "", "\n".join(out))
+
+
+def _split_title_markers(raw_title: str):
+    """(title, parallel, doc, malformed). Trailing `[P]` / `[DOC]` markers are
+    stripped in any order; a [P]-shaped token that survives — wrong case,
+    inner spaces, or not in the marker position — is MALFORMED, not ignored:
+    the planner plainly meant something, and guessing which thing is exactly
+    what a scheduler input must not do."""
+    t = _STATUS_DECOR_RE.sub("", raw_title).strip()
+    parallel = doc = False
+    while True:
+        m = _MARKER_TAIL_RE.search(t)
+        if not m:
+            break
+        if m.group(0).strip() == "[P]":
+            parallel = True
+        else:
+            doc = True
+        t = t[:m.start()].rstrip()
+    return t, parallel, doc, bool(_PSEUDO_P_RE.search(t))
+
+
+def _parse_depends_value(value: str):
+    """`none` → ([], True); `T1, Task 3` → ([1, 3], True); anything else →
+    ([], False). The grammar is the template's: `none | T<n>[, T<n>…]`
+    (`Task <n>` accepted). No fuzzy matching — an ambiguous reference is a
+    finding, not a guess."""
+    v = value.strip().rstrip(".")
+    if re.fullmatch(r"none", v, re.I):
+        return [], True
+    ids = []
+    for tok in v.split(","):
+        m = re.fullmatch(r"(?:[Tt]ask\s+|[Tt])(\d+)", tok.strip())
+        if not m:
+            return [], False
+        ids.append(int(m.group(1)))
+    return ids, bool(ids)
+
+
+def parse_plan_graph(plan_text: str):
+    """→ (tasks, findings). tasks: [{id, title, files, depends, parallel}]
+    in plan order. findings: plan-review finding strings. ANY finding means
+    the caller must not write a graph — fail-closed, see the section header."""
+    view = _plan_derivation_view(plan_text)
+    findings = []
+    heads = list(_TASK_HEAD_RE.finditer(view))
+    if not heads:
+        return [], ["plan has no parseable tasks (the template's "
+                    "`- [ ] **Task N:** title` bullets) — nothing to derive "
+                    "a graph from"]
+    tasks, seen = [], set()
+    for i, m in enumerate(heads):
+        tid = int(m.group(1))
+        title, parallel, doc, malformed = _split_title_markers(
+            m.group(2).strip())
+        if tid in seen:
+            findings.append(
+                "Task %d appears more than once — duplicate ids make every "
+                "`Depends on:` reference to T%d ambiguous" % (tid, tid))
+        seen.add(tid)
+        if malformed:
+            findings.append(
+                "Task %d has a malformed [P] marker in %r — the marker is "
+                "exactly `[P]`, placed after the task name" % (tid, title))
+        body = view[m.end():heads[i + 1].start() if i + 1 < len(heads)
+                    else len(view)]
+        files, rejected, declared = [], [], False
+        dep_lines = []
+        for line in body.splitlines():
+            fl = _FILES_LINE_RE.match(line)
+            if fl:
+                declared = True
+                for raw in re.split(r"[,\s]+", fl.group(2)):
+                    if not raw.strip():
+                        continue
+                    g = normalize_scope_glob(raw)
+                    if g is None:
+                        rejected.append(raw.strip())
+                    elif g not in files:
+                        files.append(g)
+                continue
+            dl = _DEPENDS_LINE_RE.match(line)
+            if dl:
+                dep_lines.append(dl.group(1))
+        if not files:
+            if rejected:
+                findings.append(
+                    "Task %d declares only unusable Files:/Output: entries "
+                    "(%s) — placeholders and paths outside the repo cannot "
+                    "become a lane's files set" % (tid, ", ".join(
+                        repr(r) for r in rejected[:4])))
+            else:
+                findings.append(
+                    "Task %d declares no %s — a lane cannot be scheduled "
+                    "without a files set" % (
+                        tid, "Output:" if doc else "Files:"))
+        if not dep_lines:
+            findings.append(
+                "Task %d declares no `Depends on:` — the graph does not "
+                "guess ordering; write `Depends on: none` if it truly has "
+                "no prerequisites" % tid)
+            depends = []
+        elif len(dep_lines) > 1:
+            findings.append(
+                "Task %d declares %d `Depends on:` lines — one per task"
+                % (tid, len(dep_lines)))
+            depends = []
+        else:
+            depends, ok = _parse_depends_value(dep_lines[0])
+            if not ok:
+                findings.append(
+                    "Task %d's `Depends on: %s` is ambiguous — the grammar "
+                    "is `none | T<n>[, T<n>…]`" % (tid, dep_lines[0].strip()))
+        tasks.append({"id": tid, "title": title, "files": files,
+                      "depends": depends, "parallel": parallel})
+    ids = {t["id"] for t in tasks}
+    for t in tasks:
+        unknown = [d for d in t["depends"] if d not in ids]
+        for d in unknown:
+            findings.append(
+                "Task %d depends on T%d, which does not exist in this plan"
+                % (t["id"], d))
+        t["depends"] = [d for d in t["depends"] if d in ids]
+    cycle = _find_cycle(tasks)
+    if cycle:
+        findings.append("dependency cycle: %s — a cycle can never be "
+                        "scheduled" % " → ".join("T%d" % c for c in cycle))
+    return tasks, findings
+
+
+def _find_cycle(tasks):
+    """One dependency cycle as [id, …, id] (first repeated), or None.
+    Iterative DFS — a plan is small, but recursion limits are not a failure
+    mode a derivation tool gets to have."""
+    edges = {t["id"]: list(t["depends"]) for t in tasks}
+    state = {}                       # id → 1 in-stack, 2 done
+    for root in edges:
+        if state.get(root):
+            continue
+        stack = [(root, iter(edges[root]))]
+        state[root] = 1
+        path = [root]
+        while stack:
+            node, it = stack[-1]
+            for nxt in it:
+                if state.get(nxt) == 1:
+                    return path[path.index(nxt):] + [nxt]
+                if not state.get(nxt):
+                    state[nxt] = 1
+                    path.append(nxt)
+                    stack.append((nxt, iter(edges.get(nxt, []))))
+                    break
+            else:
+                state[node] = 2
+                path.pop()
+                stack.pop()
+    return None
+
+
+def _graph_sha(plan_text: str) -> str:
+    """The hash of what the GRAPH derives from: task-head lines (checkbox-
+    state- and status-marker-independent — same reasoning as _plan_sha: a
+    close-out that ticks a box must not mark the graph stale), plus the
+    Files:/Output: and Depends lines. Renumbering a task, adding a [P], or
+    editing an edge moves this hash — which is exactly when a re-derive is
+    due. Scope's hash deliberately covers only the Files/Output lines, so
+    the two pins move independently."""
+    basis = []
+    for line in _plan_derivation_view(plan_text).splitlines():
+        hm = _TASK_HEAD_RE.match(line)
+        if hm:
+            basis.append("T%s:%s" % (
+                hm.group(1), _STATUS_DECOR_RE.sub("", hm.group(2)).strip()))
+            continue
+        if _FILES_LINE_RE.match(line) or _DEPENDS_LINE_RE.match(line):
+            basis.append(line.strip())
+    return hashlib.sha1(
+        "\n".join(basis).encode("utf-8", errors="replace")).hexdigest()[:8]
+
+
+_TASK_GRAPH_KEY_RE = re.compile(r"^task_graph\s*:")
+_GRAPH_TASK_RE = re.compile(
+    r'^-\s*\{id:\s*T(?P<id>\d+),\s*title:\s*"(?P<title>[^"]*)",\s*'
+    r'files:\s*\[(?P<files>[^\]]*)\],\s*depends:\s*\[(?P<dep>[^\]]*)\],\s*'
+    r'parallel:\s*(?P<par>true|false)\}\s*$')
+
+
+def read_task_graph(text: str):
+    """The manifest's `task_graph:` block, or None when never derived. The
+    reader parses exactly what the writer emits — downstream consumers (the
+    A7 scheduler, graders) call this, never the plan."""
+    fm, _ = split_frontmatter(text)
+    if fm is None:
+        return None
+    lines = fm.splitlines()
+    start = next((i for i, l in enumerate(lines)
+                  if _TASK_GRAPH_KEY_RE.match(l)), None)
+    if start is None:
+        return None
+    block = {"derived_from": None, "tasks": []}
+    for l in lines[start + 1:]:
+        if l.strip() and not l.startswith((" ", "\t")):
+            break                                  # next top-level key
+        s = l.strip()
+        m = re.match(r"^derived_from\s*:\s*(\S+)", s)
+        if m:
+            block["derived_from"] = m.group(1)
+            continue
+        gm = _GRAPH_TASK_RE.match(s)
+        if gm:
+            block["tasks"].append({
+                "id": int(gm.group("id")),
+                "title": gm.group("title"),
+                "files": [f.strip() for f in gm.group("files").split(",")
+                          if f.strip()],
+                "depends": [int(d.strip().lstrip("Tt"))
+                            for d in gm.group("dep").split(",") if d.strip()],
+                "parallel": gm.group("par") == "true",
+            })
+    return block
+
+
+def _task_graph_block_lines(derived_from: str, tasks) -> str:
+    out = ["task_graph:", f"  derived_from: {derived_from}", "  tasks:"]
+    if not tasks:
+        out[-1] = "  tasks: []"
+    for t in tasks:
+        out.append(
+            '    - {id: T%d, title: "%s", files: [%s], depends: [%s], '
+            'parallel: %s}' % (
+                t["id"], t["title"].replace('"', "'"),
+                ", ".join(t["files"]),
+                ", ".join("T%d" % d for d in t["depends"]),
+                "true" if t["parallel"] else "false"))
+    return "\n".join(out)
+
+
+def write_task_graph_block(text: str, block: str) -> str:
+    return _write_frontmatter_block(text, _TASK_GRAPH_KEY_RE, block)
+
+
+def graph_derive(manifest_path: pathlib.Path, refresh: bool = False) -> int:
+    plan = manifest_path.parent / "plan.md"
+    if not plan.is_file():
+        raise Problem(f"no plan to derive from: {plan}")
+    text = manifest_path.read_text(encoding="utf-8", errors="replace")
+    plan_text = plan.read_text(encoding="utf-8", errors="replace")
+
+    existing = read_task_graph(text)
+    if existing and not refresh:
+        raise Problem(
+            "this cycle already has a derived task graph "
+            f"({existing['derived_from']}). Re-derive deliberately: "
+            "graph derive --refresh (the delta is recorded in decisions.md).")
+
+    tasks, findings = parse_plan_graph(plan_text)
+
+    # graph↔scope consistency. Both derive from the same declaration lines
+    # with the same parser, so a divergence means the SCOPE is out of date
+    # (plan amended after `scope derive`) — and lanes dispatched under a
+    # stale scope gate would be policed against the wrong contract.
+    scope = read_scope(text)
+    if scope is None:
+        findings.append(
+            "no derived scope: block — run `manifest.py scope derive` first "
+            "(plan approval derives scope, then the graph)")
+    else:
+        scope_pin = f"plan@{_plan_sha(plan_text)}"
+        if scope["derived_from"] not in (None, scope_pin):
+            findings.append(
+                f"scope is stale ({scope['derived_from']}; the plan's "
+                f"declarations are now {scope_pin}) — run `scope derive "
+                "--refresh`, then re-derive the graph")
+        else:
+            sanctioned = ({g for g, _, _ in scope["globs"]}
+                          | {g for g, _, _ in scope["collateral"]})
+            for t in tasks:
+                outside = [f for f in t["files"] if f not in sanctioned]
+                if outside:
+                    findings.append(
+                        "Task %d's files (%s) are not in the derived scope — "
+                        "graph and scope must agree before lanes dispatch"
+                        % (t["id"], ", ".join(outside)))
+
+    if findings:
+        for f in findings:
+            print(f"plan-review finding: {f}")
+        print(f"task graph NOT derived — {len(findings)} finding(s). An "
+              "underivable plan cannot enter parallel mode; the sequential "
+              "build is unaffected. Fix the plan, then re-run graph derive.")
+        return 1
+
+    new_from = f"plan@{_graph_sha(plan_text)}"
+    new_text = write_task_graph_block(
+        text, _task_graph_block_lines(new_from, tasks))
+    manifest_path.write_text(stamp_updated(new_text), encoding="utf-8")
+
+    if refresh and existing and existing["derived_from"] not in (None, new_from):
+        old_ids = {t["id"] for t in existing["tasks"]}
+        new_ids = {t["id"] for t in tasks}
+        old_edges = {(t["id"], d) for t in existing["tasks"]
+                     for d in t["depends"]}
+        new_edges = {(t["id"], d) for t in tasks for d in t["depends"]}
+        old_par = {t["id"] for t in existing["tasks"] if t["parallel"]}
+        new_par = {t["id"] for t in tasks if t["parallel"]}
+        delta = ""
+        added = sorted(new_ids - old_ids)
+        removed = sorted(old_ids - new_ids)
+        if added:
+            delta += " +" + ",".join("T%d" % i for i in added)
+        if removed:
+            delta += " −" + ",".join("T%d" % i for i in removed)
+        if old_edges != new_edges:
+            delta += f" edges {len(old_edges)}→{len(new_edges)}"
+        if old_par != new_par:
+            delta += " [P] set changed"
+        _prepend_decision(
+            manifest_path.parent / "decisions.md",
+            f"task graph re-derived: {existing['derived_from']} → {new_from} "
+            f"(cycle {manifest_path.parent.name}){delta}")
+
+    n_par = sum(1 for t in tasks if t["parallel"])
+    n_edges = sum(len(t["depends"]) for t in tasks)
+    print(f"task_graph: {new_from} — {len(tasks)} task(s), {n_par} "
+          f"parallel-eligible, {n_edges} dependency edge(s)")
+    return 0
+
+
 def _select_active_manifest(root: pathlib.Path) -> pathlib.Path:
     cands, _ = resume_candidates(root)
     if len(cands) == 1:
@@ -1132,6 +1515,20 @@ def main(argv=None) -> int:
                     help="the cycle (default: the single active cycle)")
     sa.add_argument("--repo-root", type=pathlib.Path, default=pathlib.Path.cwd())
 
+    g = sub.add_parser(
+        "graph",
+        help="the plan's task structure (Files/Depends/[P]) as machine state "
+             "— the parallel scheduler's ONLY input (A8)")
+    gsub = g.add_subparsers(dest="graph_cmd", required=True)
+    gd = gsub.add_parser("derive",
+                         help="parse the approved plan's tasks into the "
+                              "manifest's task_graph: block; fail-closed — "
+                              "findings exit nonzero and write nothing")
+    gd.add_argument("manifest", type=pathlib.Path)
+    gd.add_argument("--refresh", action="store_true",
+                    help="re-derive after a plan amendment; the plan@old → "
+                         "plan@new delta is recorded in decisions.md")
+
     args = p.parse_args(argv)
 
     try:
@@ -1149,6 +1546,9 @@ def main(argv=None) -> int:
 
         if args.cmd == "resume":
             return resume(args.repo_root.resolve(), args.manifest)
+
+        if args.cmd == "graph":
+            return graph_derive(args.manifest, refresh=args.refresh)
 
         if args.cmd == "scope":
             if args.scope_cmd == "derive":
