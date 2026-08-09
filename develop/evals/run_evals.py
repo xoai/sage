@@ -407,8 +407,20 @@ def apply_mode_to_setup(text: str, mode: str) -> str:
         return text
     text = _MANIFEST_SUBAGENT_FLAG.sub(
         lambda m: f"{m.group(1)}{'true' if mode != 'inline' else 'false'}", text)
-    return _MANIFEST_PARALLEL_FLAG.sub(
+    text = _MANIFEST_PARALLEL_FLAG.sub(
         lambda m: f"{m.group(1)}{'true' if mode == 'parallel' else 'false'}", text)
+    # parallel implies subagents. A seeded manifest carrying a parallel:
+    # flag line but no subagents: line would flip the first and lack the
+    # second — and resolve_parallel would quietly degrade the "parallel"
+    # arm to sequential, so the arm measures the wrong mode (independent
+    # review, finding 9). Insert the implied line beside the parallel one.
+    if mode == "parallel" and not _MANIFEST_SUBAGENT_FLAG.search(text):
+        pm = _MANIFEST_PARALLEL_FLAG.search(text)
+        if pm:
+            indent = re.match(r"\s*", pm.group(1)).group(0)
+            text = (text[:pm.start()] + f"{indent}subagents: true\n"
+                    + text[pm.start():])
+    return text
 
 
 def set_execution_mode(ws: pathlib.Path, mode: str) -> None:
@@ -1154,12 +1166,13 @@ def write_report(results: list, runs: int, path: pathlib.Path) -> None:
     if len(real_modes) > 1:
         lines += [
             "",
-            "## Execution mode — inline vs. subagents",
+            "## Execution mode — " + " vs. ".join(real_modes),
             "",
             "The same scenarios, the same graders, the sage condition throughout.",
-            "The only variable is whether each plan task was implemented and reviewed",
-            "by fresh subagent contexts (ADR-10) or by the inline loop. Wall time is",
-            "the mean across runs, not the sum — it is a latency, not a bill.",
+            "The only variable is the execution mode: the inline loop, fresh",
+            "subagent contexts per task (ADR-10), or subagents in parallel lanes",
+            "(A7). Wall time is the mean across runs, not the sum — it is a",
+            "latency, not a bill.",
             "",
             "| Mode | passed | tokens in | tokens out | cost | mean wall |",
             "|---|---|---:|---:|---:|---:|",

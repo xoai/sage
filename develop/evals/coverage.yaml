@@ -277,10 +277,12 @@ surfaces:
       block-recover-retry pattern. Its own suite lives in run-hook-tests.sh
       (B1-B16, plus B17-B20 since 2026-08-09: the task_graph: block inherits
       the scope: block's reconstruction guard — the gate_state yield is
-      revoked for an edit that rewires the graph; and B21-B23 same day: the
+      revoked for an edit that rewires the graph; and B21-B24 same day: the
       lanes: block too, including the single-writer assertion — a lane
-      process hand-editing the main checkout's manifest is redirected);
-      L1 covers it end-to-end on the resume path.
+      process hand-editing the main checkout's manifest is redirected —
+      and B24's faithful replace_all reconstruction, closing the review
+      finding where a MultiEdit could rewire a guarded dependency edge
+      under the count=1 model); L1 covers it end-to-end on the resume path.
 
   hook-manifest-sync:
     path: runtime/platforms/claude-code/hooks/sage-manifest-sync.sh

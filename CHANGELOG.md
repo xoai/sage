@@ -4,6 +4,51 @@ All notable changes to Sage will be documented in this file.
 
 ## [Unreleased] — parallel implementation lanes (A6→A8→A7→A9)
 
+### Independent review pass: 13 verified findings fixed, none by reading code alone
+
+Two fresh-context reviewers (adversarial correctness; docs-vs-code drift)
+plus in-session probes, every finding reproduced before it was believed.
+The four majors, each now regression-pinned:
+
+- **A bare directory entry did not claim its subtree.** `Files: src/`
+  normalizes to `src`, and the overlap check treated it as one literal
+  path — two coupled lanes dispatched concurrently. Directory-prefix
+  overlap added; `src/auth` vs `src/auth.ts` stays disjoint.
+- **A `]` in a character-class glob silently dropped the whole task on
+  read.** `src/test_[0-9].py` wrote fine and vanished in
+  `read_task_graph` — silent task loss plus a dependent waiting forever.
+  The files capture is now anchored non-greedily; round-trip pinned.
+- **`replace_all` could rewire the guarded `task_graph:` past the
+  bookkeeping-gate.** The gate reconstructed edits with count=1; a
+  MultiEdit pairing a legit gate_state flip with a replace_all whose
+  old_string also occurs in an unguarded line mutated a dependency edge
+  while the gate compared an unchanged model. Reconstruction is now
+  faithful (B24), and the section regexes no longer DOTALL-capture to
+  end-of-file.
+- **The disjointness grader was launderable by pruning.** It audited
+  only the lanes the manifest chose to record; deleting the offending
+  record passed the audit. Git is now the witness: a `merge lane TN`
+  commit with no merged record fails the check.
+
+The nine minors: markdown's 4-space indented code blocks minting phantom
+graph nodes (fail-closed strip); the `--parallel=2 --parallel=9` clamp
+note describing a clamp that never took effect; `lanes.py --cap`
+reaching the scheduler unclamped (0 starved exclusive tasks, 99 beat the
+hard cap — now clamped in the decision function); `echo "pytest"`
+passing as an integration proof; the eval harness's parallel arm able to
+silently measure sequential (missing `subagents:` line now injected);
+E-PAR-3's freeze check vacuous against fixture-committed paths (moved to
+task-created files); a silent mid-burst base pin (now a loud warning);
+the `burst_base` reader truncating at non-alphanumerics; stale
+`lanes.py` usage header. Doc drift closed in the same pass: the
+workflow's `open` command now arms `--repo-root` and `--couplings`;
+lane worktrees are commanded with `--from <burst-base>` (bare
+`sage worktree` bases on the default branch — the wrong world
+mid-cycle); README scopes `--subagents`/`--parallel` to the workflows
+that wire them; `sage init` no longer emits the dead
+`execution.parallel` key that name-collided with the real flag default;
+configuration example and parallel-sessions status brought current.
+
 ### A9 (phase 3): hardening + the E-PAR scenarios — authored, deliberately not run
 
 The defenses a parallel burst needs before anyone trusts it, plus the

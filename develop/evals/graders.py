@@ -1220,6 +1220,20 @@ def lanes_burst_disjoint(ws, tx, p) -> tuple:
     if len(merged) < p.get("min_merged", 2):
         return False, (f"{len(merged)} merged lane(s), expected at least "
                        f"{p.get('min_merged', 2)}")
+
+    # The workspace is agent-controlled: an agent that violated
+    # disjointness must not pass by PRUNING the offending record
+    # (independent review, finding 4). Git is the witness — every
+    # `merge lane TN (...)` commit must have a matching merged record.
+    recorded = {(r["task"], r["branch"]) for r in merged}
+    for line in _git(ws, "log", "--format=%s").splitlines():
+        mm = re.match(r"^merge lane T(\d+) \((.+)\)$", line.strip())
+        if mm and (int(mm.group(1)), mm.group(2)) not in recorded:
+            return False, (f"git carries a merge commit for lane "
+                           f"T{mm.group(1)} ({mm.group(2)}) with no merged "
+                           f"lane record — records were pruned; the audit "
+                           f"trail audits nothing")
+
     by_id = {t["id"]: t for t in (graph["tasks"] if graph else [])}
 
     # depends closure — related pairs are allowed to share files.
@@ -1269,7 +1283,14 @@ def lanes_integration_proof(ws, tx, p) -> tuple:
     if not merge_idx:
         return False, "no lane merges in the transcript — no burst to prove"
     rx = re.compile(p["pattern"])
-    later = [c for c in cmds[max(merge_idx) + 1:] if rx.search(c)]
+    # A command that merely MENTIONS the runner is not a run — `echo
+    # "pytest passed"` matched the old check (independent review,
+    # finding 7). Print-only prefixes are excluded; the residual (a real
+    # runner invoked on nothing) is the ran_command class limit, and the
+    # gate_exit check on the final tree is the backstop.
+    trivial = re.compile(r"^\s*(?:echo|printf|true|:|#)\b")
+    later = [c for c in cmds[max(merge_idx) + 1:]
+             if rx.search(c) and not trivial.match(c)]
     if not later:
         return False, ("nothing matching %r ran after the last lane merge — "
                        "integration proof missing (or trimmed, which is the "

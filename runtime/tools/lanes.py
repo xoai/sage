@@ -33,10 +33,13 @@ docstring.
 
 Usage:
     lanes.py schedule <manifest.md> [--cap N] [--json]
+                      [--couplings FILE] [--budget-exhausted]
     lanes.py open     <manifest.md> --task N --branch B --worktree DIR
                       [--model M] [--base SHA] [--cap N]
+                      [--couplings FILE] [--repo-root PATH]
     lanes.py mark     <manifest.md> --task N --state open|parked|errored|
                       failed|budget-stopped [--note "..."]
+    lanes.py retry    <manifest.md> --task N     # errored only, once, ungraded
     lanes.py merge    <manifest.md> --task N [--repo-root PATH]
 
 Python 3.8+, stdlib only.
@@ -52,6 +55,7 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import manifest as MAN  # noqa: E402
+from sage_flags import HARD_LANE_CAP  # noqa: E402  — ONE hard cap, one home
 
 
 class Problem(Exception):
@@ -87,6 +91,13 @@ def _entries_overlap(a: str, b: str) -> bool:
         return True
     for x, y in ((a, b), (b, a)):
         if x.endswith("/**") and (y == x[:-3] or y.startswith(x[:-2])):
+            return True
+        # A bare directory entry (`src`, `src/auth`) claims everything
+        # under it — `Files: src/` normalizes to `src`, and treating it
+        # as one literal path dispatched two coupled lanes concurrently
+        # (independent review, finding 1: the exact missed-overlap this
+        # function's bias exists to prevent).
+        if y.startswith(x + "/"):
             return True
         if fnmatch.fnmatch(y, x):
             return True
@@ -182,7 +193,7 @@ def schedule(graph, statuses, lanes, cap, couplings=None,
 
     Inputs: graph = manifest.read_task_graph(); statuses =
     read_ledger_statuses(); lanes = manifest.read_lanes() or None;
-    cap = the lane cap (1..HARD_LANE_CAP).
+    cap = the lane cap, clamped below to 1..HARD_LANE_CAP.
 
     couplings (A9): [{a, b, via}] pairs the ontology consult found
     module-coupled — a candidate coupled to an in-flight or
@@ -192,6 +203,11 @@ def schedule(graph, statuses, lanes, cap, couplings=None,
     budget_exhausted (A9): the burst's parallel_budget ran out — no new
     starts; eligible candidates land in budget_held with an explicit
     report, never silently truncated."""
+    # The flag parser clamps --parallel=N, but this function is also
+    # reachable through the raw CLI --cap — clamp HERE so no caller can
+    # smuggle 0 (which silently starved exclusive tasks) or 10 past the
+    # hard cap (independent review, finding 8).
+    cap = max(1, min(cap, HARD_LANE_CAP))
     records = {r["task"]: r for r in (lanes["records"] if lanes else [])}
     tasks = graph["tasks"]
     by_id = {t["id"]: t for t in tasks}
@@ -420,6 +436,10 @@ def cmd_open(manifest_path, task, branch, worktree, model, base, cap,
                 "burst base mismatch: lanes are in flight from %s, this open "
                 "names %s — dependent work forks from merged HEAD in a NEW "
                 "burst, never mid-burst" % (burst_base, base))
+        if active_before and not burst_base:
+            print("warning: this burst was opened UNPINNED — pinning %s now, "
+                  "but the earlier lane(s)' fork point is unverified; treat "
+                  "the pin as claimed, not proven" % base)
         burst_base = base
     elif not active_before:
         burst_base = ""            # new burst, unpinned — say so below

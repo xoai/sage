@@ -28,7 +28,7 @@ enforcement, and each `false` takes something specific away:
 | `native-skill-discovery` | On-demand delivery. Skills must be **inlined**, and the instructions file grows. |
 | `pre-tool-veto` | **The product.** Rules become prose, and prose was measured at zero. |
 | `post-tool-events` | The audit trail. A degraded run stops being distinguishable from a clean one. |
-| `subagent-dispatch` | Independent review. Every reviewer is the agent that wrote the code. |
+| `subagent-dispatch` | Independent review. Every reviewer is the agent that wrote the code. Also `--parallel` implementation lanes (A7) — they parallelize subagent dispatches, so without this capability both degrade loudly together. |
 | `session-events` | Auto-pickup of an active cycle. |
 | `context-injection-midstream` | Mid-session correction delivery. The scope judge degrades to verdicts-on-disk — detection nobody hears about. The channel is rarely the obvious one: claude-code's is a documented hook field, opencode's is the live tool-result object ([V-A], attested 2026-08-04) — probe the platform before declaring `false`. |
 

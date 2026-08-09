@@ -382,15 +382,20 @@ The core command set is 9 (down from 16 in v1.2.0). `/analyze`, `/design-review`
 `/continue`; the old names still route for one deprecation cycle. `/research` and
 `/design` ship with the [sage-product](https://github.com/xoai/sage-product) pack.
 
-### Workflow Flags (`/build` and `/architect`)
+### Workflow Flags
 
-Two optional flags change how the workflow operates without changing
-what it produces:
+Optional flags change how the workflow operates without changing what it
+produces. `--quality-locked` and `--autonomous` apply to `/build` and
+`/architect`; `--subagents` and `--parallel` are `/build`'s execution
+modes (`/fix` also accepts `--subagents`; a `--parallel` request outside
+a graph-derived `/build` cycle is refused loudly, never silently):
 
 | Flag | Effect |
 |------|--------|
 | `--quality-locked` | At each review checkpoint, loop review/revise until the loop's controller stops it. By default (`review_loop: mode: v2`) the verdict lives in code: findings land in a machine-owned ledger, evidence-free criticals never block, and every CONTINUE/STOP is computed — measured to converge in ≤3 rounds where the old loop churned to its cap. `mode: v1` restores the classic clean-bar loop (pre-flip projects are pinned there by `sage update`); see the `configure` skill's "Review loop" section. |
 | `--autonomous` | Skip user-facing elicitation. Agent makes brief/spec/plan decisions by reading memory, codebase patterns, constitution principles, and prior cycles. Every decision cites its source. Unconfident substantive decisions fall back to asking. Use when you want Sage to draft a recommended approach from your project's context. |
+| `--subagents` | A fresh implementer subagent per plan task, an independent reviewer per task, a whole-branch review at the end — wired into a machine-scaffolded task ledger the completion guard enforces (a subagent cycle cannot reach `gates-passed` until every task is done AND independently approved). Platform permitting; refusal is loud, never a silent fallback. Mechanics proven (E9/E10); the cost story is deliberately unmeasured — the accounting footer reports counts, not a verdict. |
+| `--parallel[=N]` | Dependency-aware parallel implementation lanes on top of `--subagents` (refused loudly without it). The scheduler is code (`lanes.py`), its only input the plan's derived `task_graph:`: a task runs concurrently only if marked `[P]`, its `Depends on:` tasks have merged, and its declared `Files:` are disjoint from every in-flight lane — overlap serializes, a non-`[P]` task runs alone. One worktree + branch per lane, single-writer bookkeeping, dependency-order merges that abort on conflict, full-suite integration proof on merged HEAD per burst. Default 2 lanes, hard cap 4. **No speed or cost claim** — the E-PAR scenarios that would earn one are authored, not yet run. |
 
 ```bash
 /build --quality-locked                       # interactive, quality-locked
@@ -550,7 +555,12 @@ turns the plan's per-task `Files:`/`Output:` lines into a machine `scope:`
 block, and with `scope_gate: standard+` a PreToolUse hook blocks edits
 outside it — naming both legal exits (`scope add-collateral --task --reason`,
 which records the expansion itself, or amend the plan and `derive
---refresh`). Witness/TDD tests are never scope-blocked. An advisory
+--refresh`). Witness/TDD tests are never scope-blocked. The same
+transition also runs `manifest.py graph derive` — the plan's task
+structure (`Files:` / `Depends on:` / `[P]`) becomes a fail-closed
+`task_graph:` block, the parallel-lane scheduler's only input; an
+underivable plan cannot enter parallel mode, and the sequential build is
+untouched. An advisory
 background judge (`scope_judge`) for drift *inside* in-scope files exists as
 a runtime with full deterministic tests — one runtime on both Tier-A
 platforms: claude-code delivers its corrections as hook context, opencode

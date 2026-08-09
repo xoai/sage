@@ -157,18 +157,23 @@ if status in ("complete", "completed", "abandoned"):
 # else it says.
 
 
+# MULTILINE only, NOT DOTALL: with (?s) the `.` in the body pattern crossed
+# newlines and each "section" greedily captured to end-of-file, so the
+# compare only worked because gate_state happens to sit above the guarded
+# blocks in the real template (independent review, finding 3 side-note).
+# Without `s`, the capture is the actual indented block and nothing else.
 def scope_section(text):
-    m = re.search(r"(?ms)^\s*scope\s*:\s*$\n((?:[ \t]+.*\n?)*)", text or "")
+    m = re.search(r"(?m)^[ \t]*scope\s*:\s*$\n((?:[ \t]+.*\n?)*)", text or "")
     return m.group(0) if m else ""
 
 
 def graph_section(text):
-    m = re.search(r"(?ms)^\s*task_graph\s*:\s*$\n((?:[ \t]+.*\n?)*)", text or "")
+    m = re.search(r"(?m)^[ \t]*task_graph\s*:\s*$\n((?:[ \t]+.*\n?)*)", text or "")
     return m.group(0) if m else ""
 
 
 def lanes_section(text):
-    m = re.search(r"(?ms)^\s*lanes\s*:\s*$\n((?:[ \t]+.*\n?)*)", text or "")
+    m = re.search(r"(?m)^[ \t]*lanes\s*:\s*$\n((?:[ \t]+.*\n?)*)", text or "")
     return m.group(0) if m else ""
 
 
@@ -210,8 +215,14 @@ if "gate_state" in edit_text:
                       "new_string": tool_input.get("new_string", "")}]
         for e in edits or []:
             if isinstance(e, dict) and e.get("old_string"):
+                # Model the edit FAITHFULLY: replace_all replaces every
+                # occurrence. The count=1 model let a replace_all edit whose
+                # old_string also occurs above the guarded blocks mutate a
+                # task_graph dependency edge while the gate compared an
+                # unchanged reconstruction (independent review, finding 3).
+                count = -1 if e.get("replace_all") else 1
                 after = after.replace(e["old_string"],
-                                      e.get("new_string", ""), 1)
+                                      e.get("new_string", ""), count)
         if guarded_sections(current) == guarded_sections(after):
             emit("ALLOW")
 

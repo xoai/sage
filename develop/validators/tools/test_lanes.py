@@ -70,6 +70,28 @@ class ScheduleTableTest(unittest.TestCase):
         self.assertEqual(d["dispatch"], [1])
         self.assertEqual([t for t, _ in d["serialized"]], [2])
 
+    def test_bare_directory_entry_claims_its_subtree(self):
+        """Review finding 1: `Files: src/` normalizes to `src`, and a bare
+        directory must overlap every file under it — treating it as one
+        literal path dispatched coupled lanes concurrently."""
+        d = self.sched(graph(T(1, ["src"]), T(2, ["src/main.py"])))
+        self.assertEqual(d["dispatch"], [1])
+        self.assertEqual([t for t, _ in d["serialized"]], [2])
+        # …but a sibling whose name merely shares the prefix is disjoint.
+        self.assertEqual(L.claims_overlap(["src/auth"], ["src/auth.ts"]), [])
+
+    def test_cap_is_clamped_in_the_scheduler_itself(self):
+        """Review finding 8: the raw CLI --cap reached schedule()
+        unclamped — 0 starved exclusive tasks, 99 sailed past the hard
+        cap. The clamp lives in the decision function, not only in the
+        flag parser."""
+        g5 = graph(*[T(i, ["f%d" % i]) for i in range(1, 7)])
+        d = self.sched(g5, cap=99)
+        self.assertEqual(len(d["dispatch"]), 4, "hard cap holds")
+        d0 = self.sched(graph(T(1, ["a"], parallel=False)), cap=0)
+        self.assertEqual(d0["dispatch"], [1], "cap<1 clamps to 1, exclusive "
+                         "tasks are never starved")
+
     def test_overlap_with_an_inflight_lane_serializes(self):
         d = self.sched(graph(T(1, ["src/auth/**"]), T(2, ["src/auth/x.ts"])),
                        lanes=lanes_block(lane(1)))

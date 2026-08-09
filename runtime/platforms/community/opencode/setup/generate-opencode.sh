@@ -164,7 +164,11 @@ An unbound role dispatches exactly as it does today and inherits the
 session model. Never dispatch a role agent the resolver did not print: an
 agent entry without a model LOOKS routed while silently spending on the
 primary. Either way, record the serving model in the ledger entry
-(`model:` — the bound model, or `inherit`).'
+(`model:` — the bound model, or `inherit`).
+
+`--parallel` lanes change none of this: each lane dispatches the same
+named roles under the same bindings (resolve once per burst; `lanes.py
+open --model` records what served the lane).'
 
 if [ "$SKIP_AGENTS_MD" = false ]; then
   {

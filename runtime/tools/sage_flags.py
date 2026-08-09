@@ -126,12 +126,13 @@ def parse_flags(arguments, defaults=None):
                 return err(f"--parallel takes a lane count of 1 or more "
                            f"(got '{flag_value}').")
             n = int(flag_value)
-            if n > HARD_LANE_CAP:
-                lane_note = (f"--parallel={n} exceeds the hard cap; "
-                             f"clamped to {HARD_LANE_CAP}.")
-                n = HARD_LANE_CAP
             if lane_cap is None:            # first occurrence wins — the
-                lane_cap = n                # config reader's convention
+                if n > HARD_LANE_CAP:       # config reader's convention;
+                    lane_note = (           # the clamp note belongs ONLY
+                        f"--parallel={n} exceeds the hard cap; "
+                        f"clamped to {HARD_LANE_CAP}.")
+                    n = HARD_LANE_CAP       # to the occurrence that was
+                lane_cap = n                # actually adopted
         key = FLAG_TO_KEY[base]
         new_state = "positive" if base in POSITIVE_FLAGS else "negative"
         if flag_state[key] is not None and flag_state[key] != new_state:

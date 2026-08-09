@@ -849,6 +849,36 @@ class GraphTest(unittest.TestCase):
         self.assertEqual([t["id"] for t in g["tasks"]], [1, 2, 3, 4],
                          "phantom tasks in fences/comments must not parse")
 
+    def test_E9_replay_indented_code_blocks_are_not_tasks_either(self):
+        """Review finding 5: markdown's OTHER code form — the 4-space
+        indented block — also must not mint phantom nodes."""
+        self.plan.write_text(A_GRAPH_PLAN + """
+## Notes
+
+An example, as an indented code block:
+
+    - [ ] **Task 9:** phantom from an indented example
+      - **Files:** src/types.ts
+      - **Depends on:** none
+""")
+        M.scope_derive(self.m)
+        self.derive()
+        g = M.read_task_graph(self.m.read_text())
+        self.assertEqual([t["id"] for t in g["tasks"]], [1, 2, 3, 4])
+
+    def test_character_class_glob_survives_the_round_trip(self):
+        """Review finding 2: a legal fnmatch class carries a `]`, and the
+        bracket-hungry reader silently dropped the whole task — writer and
+        reader must agree on every glob the normalizer accepts."""
+        self.plan.write_text(A_GRAPH_PLAN.replace(
+            "**Files:** src/session.ts", "**Files:** src/test_[0-9].py"))
+        M.scope_derive(self.m)
+        self.derive()
+        g = M.read_task_graph(self.m.read_text())
+        self.assertEqual([t["id"] for t in g["tasks"]], [1, 2, 3, 4])
+        self.assertEqual({t["id"]: t for t in g["tasks"]}[3]["files"],
+                         ["src/test_[0-9].py"])
+
     def test_rederive_refused_without_refresh(self):
         M.scope_derive(self.m)
         self.derive()

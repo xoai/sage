@@ -314,7 +314,7 @@ dispatch behavior, not enforcement):
 | Key | Default | Meaning |
 |---|---|---|
 | `parallel_stagger_seconds` | `0` | Seconds between lane dispatches — including the one ungraded retry after an `errored` (infra/rate-limit) lane death. Burst-y opens are how rate limits happen; set this to your provider's comfort. |
-| `parallel_budget` | (unset) | Per-burst spend cap, tokens (`400000`) or currency (`"USD 5"`), tracked by the orchestrator. Exhaustion means: in-flight lanes complete, **no new starts** (`lanes.py schedule --budget-exhausted`), held tasks marked `budget-stopped` — an explicit record, never a silent truncation graded as failure. Unset = no cap. |
+| `parallel_budget` | (unset) | Per-burst spend cap, tokens (`400000`) or currency (`"USD <amount>"`), tracked by the orchestrator. Exhaustion means: in-flight lanes complete, **no new starts** (`lanes.py schedule --budget-exhausted`), held tasks marked `budget-stopped` — an explicit record, never a silent truncation graded as failure. Unset = no cap. |
 
 The per-burst ontology consult (module coupling between candidate lanes,
 via sage-memory's code graph) has no knob: it runs when sage-memory is
@@ -444,6 +444,11 @@ review_loop:
 # quality_locked: true
 # autonomous: true
 # subagents: true
+# parallel: true
+
+# Parallel-lane tuning (read by the orchestrator, A9)
+# parallel_stagger_seconds: 0
+# parallel_budget: 400000
 
 # Resume close-out economy (lean defaults, measured)
 # gate_review: combined

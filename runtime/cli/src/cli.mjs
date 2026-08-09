@@ -497,8 +497,10 @@ playbooks:
 platform: ${options.platform}
 
 # Execution
+# (task-level parallel lanes are the TOP-LEVEL \`parallel: true\` flag
+# default — see docs/configuration.md; nothing reads an execution.parallel
+# sub-key, and shipping one name-collided with the real flag)
 execution:
-  parallel: ${options.platform === 'claude-code' ? 'true' : 'false'}
   max-retries: 3
 
 # Context

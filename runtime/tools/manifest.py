@@ -1111,9 +1111,17 @@ _PSEUDO_P_RE = re.compile(r"\[\s*p\s*\]", re.I)
 
 
 def _plan_derivation_view(plan_text: str) -> str:
-    """The plan as the graph parser may read it: fenced code blocks and HTML
-    comments removed. An UNCLOSED fence or comment strips to end-of-file —
-    fail-closed beats parsing content the author marked as not-the-plan."""
+    """The plan as the graph parser may read it: fenced code blocks, HTML
+    comments, AND 4-space-indented code blocks removed. An UNCLOSED fence
+    or comment strips to end-of-file — fail-closed beats parsing content
+    the author marked as not-the-plan.
+
+    The indented-block rule is blunt on purpose: markdown's other code
+    form let an example task derive as a phantom node (review finding 5),
+    and the template's real declaration lines are 2-space bullets. A plan
+    that nonstandardly indents a Files:/Depends line 4+ spaces loses it
+    from the view and refuses loudly on the missing declaration — a loud
+    refusal, never a phantom node."""
     out, fence = [], None
     for line in plan_text.splitlines():
         s = line.strip()
@@ -1124,6 +1132,8 @@ def _plan_derivation_view(plan_text: str) -> str:
             if s.startswith(fence):
                 fence = None
             continue
+        if line[:4] == "    " and s:
+            continue                       # indented code block content
         out.append(line)
     return re.sub(r"(?s)<!--.*?(?:-->|\Z)", "", "\n".join(out))
 
@@ -1307,9 +1317,16 @@ def _graph_sha(plan_text: str) -> str:
 
 
 _TASK_GRAPH_KEY_RE = re.compile(r"^task_graph\s*:")
+# `files` is captured non-greedily up to the `], depends:` anchor, NOT with
+# [^\]]* — a legal character-class glob (`src/test_[0-9].py`) carries a `]`,
+# and the bracket-hungry version silently dropped the whole task on read
+# (independent review, finding 2: writer and reader disagreeing is the
+# two-parsers hazard again). Entries can never contain a comma — the plan
+# parser splits declarations on commas before normalizing — so the
+# split(",") below stays safe.
 _GRAPH_TASK_RE = re.compile(
     r'^-\s*\{id:\s*T(?P<id>\d+),\s*title:\s*"(?P<title>[^"]*)",\s*'
-    r'files:\s*\[(?P<files>[^\]]*)\],\s*depends:\s*\[(?P<dep>[^\]]*)\],\s*'
+    r'files:\s*\[(?P<files>.*?)\],\s*depends:\s*\[(?P<dep>[^\]]*)\],\s*'
     r'parallel:\s*(?P<par>true|false)\}\s*$')
 
 
@@ -1507,7 +1524,7 @@ def read_lanes(text: str):
         if l.strip() and not l.startswith((" ", "\t")):
             break
         s = l.strip()
-        m = re.match(r"^burst_base\s*:\s*\"?([A-Za-z0-9]*)\"?", s)
+        m = re.match(r"^burst_base\s*:\s*\"?([A-Za-z0-9._-]*)\"?", s)
         if m:
             block["burst_base"] = m.group(1)
             continue

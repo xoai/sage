@@ -26,7 +26,7 @@ enforcement**. Each one, if false, takes something specific away from Sage.
 | `native-skill-discovery` | Are description-triggered skills fetched on demand? | ADR-9's delivery model. The generator must INLINE every skill into the eager layer, which grows accordingly. |
 | `pre-tool-veto` | Can a hook **block** a tool call, with a reason the model sees? | **The product.** Rules 3 and 5 become prose, and the v1.2.1 eval measured what prose alone is worth: nothing. |
 | `post-tool-events` | Can completed tool calls be observed? | The audit trail. A degraded run stops being distinguishable from a clean one. |
-| `subagent-dispatch` | Fresh-context task delegation? | Independent review. Every reviewer is the agent that wrote the code. |
+| `subagent-dispatch` | Fresh-context task delegation? | Independent review, and `--parallel` lanes with it (lanes parallelize subagent dispatches). Every reviewer is the agent that wrote the code. |
 | `session-events` | Start/stop lifecycle? | Auto-pickup of an active cycle. |
 | `context-injection-midstream` | Can a post-tool hook hand the model context DURING a session? | The scope judge's correction channel (SG-16) — detection without it is verdicts-on-disk. Also the strongest available mechanism for E11's trigger-reliability gap, which is why it is a contract row rather than a feature flag. |
 

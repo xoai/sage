@@ -773,6 +773,25 @@ assert B23 "a transition whose old_string spans UNCHANGED lanes lines still yiel
   '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/bkl/manifest.md","old_string":"gate_state: building\nlanes:","new_string":"gate_state: gates-passed\nlanes:"}}' \
   --exit 0 --hook "$BKG"
 
+# B24 (review finding 3): the reconstruction must model replace_all
+# FAITHFULLY. A MultiEdit whose first edit is a legit gate_state flip and
+# whose second replace_all-edits a token duplicated in an unguarded line AND
+# inside task_graph would, under the count=1 model, look guarded-unchanged —
+# while the real tool rewires the dependency edge. Fixture: `depends: [T1]`
+# appears in an unguarded decoy line above the blocks and in T2's record.
+mk_decoy_bk() {
+  local d; d="$(new_project)"; set_config "$d" "hard_enforcement: true"
+  mkdir -p "$d/.sage/work/bkd"
+  printf -- '---\ncycle_id: "bkd"\nstatus: in-progress\ntier: standard\nnote: "review depends: [T1] before merge"\ngate_state: building\ntask_graph:\n  derived_from: plan@abcd1234\n  tasks:\n    - {id: T1, title: "types", files: [src/types.ts], depends: [], parallel: false}\n    - {id: T2, title: "auth", files: [src/auth.ts], depends: [T1], parallel: true}\n---\n\n# Cycle\n' \
+    > "$d/.sage/work/bkd/manifest.md"
+  echo "$d"
+}
+
+P="$(mk_decoy_bk)"
+assert B24 "a replace_all edit that ALSO rewires the guarded graph is blocked (faithful reconstruction)" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/bkd/manifest.md","old_string":"depends: [T1]","new_string":"depends: []","replace_all":true,"edits":[{"old_string":"gate_state: building","new_string":"gate_state: gates-passed"},{"old_string":"depends: [T1]","new_string":"depends: []","replace_all":true}]}}' \
+  --exit 2 --stderr "close-out" --hook "$BKG"
+
 # ── sage-secrets-gate: credentials never go into source ────────────────────
 # The weak-model campaign measured why: handed a live key, haiku-bare hardcodes
 # it 3/3 and haiku with the CONSTITUTION PARAGRAPH still hardcoded it 2/3.

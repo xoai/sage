@@ -350,6 +350,16 @@ class ParallelFlagTest(unittest.TestCase):
         self.assertIn("hard cap", r["parallel_note"])
         self.assertIsNone(r["error"])
 
+    def test_the_clamp_note_belongs_to_the_adopted_occurrence(self):
+        """Review finding 6: first-wins covers the cap AND its note — a
+        note describing a clamp that never took effect is a lying record."""
+        r = self.p("--parallel=2 --parallel=9 go")
+        self.assertEqual(r["parallel_lanes"], 2)
+        self.assertIsNone(r["parallel_note"])
+        r2 = self.p("--parallel=9 --parallel=2 go")
+        self.assertEqual(r2["parallel_lanes"], sf.HARD_LANE_CAP)
+        self.assertIn("clamped", r2["parallel_note"])
+
     def test_zero_or_garbage_lane_count_errors(self):
         for bad in ("--parallel=0", "--parallel=two", "--parallel=-1",
                     "--parallel="):

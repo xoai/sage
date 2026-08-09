@@ -1531,6 +1531,26 @@ class LaneGraderTest(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("never engaged", detail)
 
+    def test_pruned_records_cannot_launder_a_violation(self):
+        """Review finding 4: the workspace is agent-controlled. Deleting
+        the offending lane's record must not pass the disjointness audit —
+        git's merge commits are the witness the manifest cannot erase."""
+        self.lane("lane-t1", {"a.txt": "t1\n"})
+        self.lane("lane-t2", {"shared.txt": "T2\n" + "mid\n" * 8 + "bot\n"})
+        self.lane("lane-t3", {"shared.txt": "top\n" + "mid\n" * 8 + "T3\n"})
+        self.merge_lane(1, "lane-t1")
+        self.merge_lane(2, "lane-t2")
+        self.merge_lane(3, "lane-t3")   # clean merge — different region
+        # The manifest records only the two innocent lanes.
+        self.manifest([self.task(1, ["a.txt"]),
+                       self.task(2, ["shared.txt"]),
+                       self.task(3, ["shared.txt"])],
+                      [self.rec(1, "lane-t1"), self.rec(2, "lane-t2")])
+        ok, detail = G.lanes_burst_disjoint(self.ws, G.Transcript([], []), {})
+        self.assertFalse(ok)
+        self.assertIn("no merged lane record", detail)
+        self.assertIn("T3", detail)
+
     def test_merged_without_a_merge_commit_fails(self):
         self.lane("lane-t1", {"a.txt": "t1\n"})
         self.lane("lane-t2", {"b.txt": "t2\n"})
@@ -1565,6 +1585,16 @@ class LaneGraderTest(unittest.TestCase):
             {"pattern": r"pytest"})
         self.assertFalse(ok)
         self.assertIn("no lane merges", detail)
+
+    def test_mentioning_the_runner_is_not_running_it(self):
+        """Review finding 7: `echo "pytest passed"` is not a proof."""
+        tx = transcript(
+            ("tool", "Bash", {"command": "python3 sage/runtime/tools/lanes.py merge m.md --task 1"}),
+            ("tool", "Bash", {"command": "echo \"pytest: all green\""}))
+        ok, detail = G.lanes_integration_proof(
+            self.ws, tx, {"pattern": r"pytest"})
+        self.assertFalse(ok)
+        self.assertIn("integration proof missing", detail)
 
     # ── lane_record ──────────────────────────────────────────────────────
     def ledger_for_task2(self, attempts):

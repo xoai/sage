@@ -211,18 +211,25 @@ degradation line ("coupling UNCHECKED") every burst; never fake an empty
 consult, an unchecked coupling must not read as checked-and-clean.
 
 **Each lane is a worktree + branch**, created with the existing machinery —
-`sage worktree <slug>` (worktree_copy seeding, collision guard, harvest on
-remove) — from the burst base (merged HEAD). Then, per lane, this
-sub-workflow's own per-task loop runs unchanged: context packet, implementer
-dispatch with the A6 role bindings, task-reviewer dispatch, verdicts. Hooks
-fire inside lane subagents exactly as they do inline (attested, P3-T1).
+`sage worktree <slug> --from <burst-base sha>` (worktree_copy seeding,
+collision guard, harvest on remove). The `--from` is not optional garnish:
+bare `sage worktree` bases on the DEFAULT branch, and mid-cycle the
+integration checkout is on the feature branch — a lane forked from `main`
+is a lane forked from the wrong world. Then, per lane, this sub-workflow's
+own per-task loop runs unchanged: context packet, implementer dispatch with
+the A6 role bindings, task-reviewer dispatch, verdicts. Hooks fire inside
+lane subagents exactly as they do inline (attested, P3-T1).
 
 **Bookkeeping stays single-writer.** Lanes REPORT (`STATUS: DONE | BLOCKED`
 + evidence); only the orchestrator RECORDS, and only through the tool:
 
 ```bash
 python3 sage/runtime/tools/lanes.py open  <manifest> --task N --branch B --worktree DIR \
-    [--model M] --base <merged-HEAD sha> --cap <N>   # refuses what schedule would not dispatch
+    [--model M] --base <merged-HEAD sha> --repo-root . --cap <N> \
+    --couplings .sage/work/<cycle>/couplings.json
+    # refuses what schedule would not dispatch; --repo-root arms the
+    # burst-base assertion (base must BE the integration HEAD) — omit it
+    # and the pin is recorded but unproven
 python3 sage/runtime/tools/lanes.py mark  <manifest> --task N --state parked|errored|failed|budget-stopped --note "..."
 python3 sage/runtime/tools/lanes.py merge <manifest> --task N   # dependency order enforced
 ```

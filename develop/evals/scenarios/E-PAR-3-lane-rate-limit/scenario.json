@@ -70,9 +70,9 @@
     },
     {
       "grader": "git_order",
-      "describe": "the freeze was real: T3's report work landed only after T1's auth work",
-      "first": "src/auth.py",
-      "then": "src/report.py"
+      "describe": "the freeze was real: T3's report test landed only after T1's auth test (both files are task-created — the fixture's initial commit cannot satisfy this vacuously)",
+      "first": "tests/test_auth.py",
+      "then": "tests/test_report.py"
     },
     {
       "grader": "ran_command",

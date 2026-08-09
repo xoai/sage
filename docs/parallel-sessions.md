@@ -9,9 +9,11 @@ If you're skimming, the [Quickstart](#quickstart) is enough to start
 your first parallel session. The rest is for when you want to
 understand *why* it works the way it does, or to debug.
 
-> **Status:** v1.1.8. The config switch and `sage worktree` launcher
-> are platform-agnostic; the in-session collision warning is Claude
-> Code (a session-init hook).
+> **Status:** session-level machinery shipped v1.1.8 (config switch and
+> `sage worktree` launcher platform-agnostic; the in-session collision
+> warning is Claude Code, a session-init hook). The task-level
+> `--parallel` layer documented at the end is UNRELEASED mechanics —
+> deterministic tests only, no measured runs.
 > **Required:** a git repository. In a non-git project none of this
 > applies — every workflow runs exactly as it would without it.
 
