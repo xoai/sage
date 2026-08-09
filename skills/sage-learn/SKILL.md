@@ -1,0 +1,220 @@
+---
+name: sage-learn
+description: "Knowledge entries in sage-memory, Docs in .sage/docs/"
+version: 1.0.0
+author: Sage
+metadata:
+  hermes:
+    tags: [Sage, Workflow, learn]
+---
+
+## When to Use
+Load this skill when the user runs `/sage-learn` or asks to learn something (the Sage learn workflow).
+
+## Arguments
+Hermes does NOT interpolate an in-body argument token. The user's arguments/flags arrive as a SEPARATE instruction line appended to this skill invocation. Wherever the steps below refer to "the user's arguments", use the text of that appended instruction line.
+
+## Independent review (delegate_task)
+When a step calls for an independent review, invoke `delegate_task` against the `sage-reviewer` skill. Hermes delegate_task has NO toolset-restriction parameter — read-only is prompt-enforced, and you MUST verify afterward that the reviewer made no edits (e.g. `git status` unchanged) before accepting its verdict.
+
+RULES (apply to every step — non-negotiable):
+- Announce: "Sage → learn workflow." before starting work
+- Present findings to user BEFORE storing in memory
+- ONTOLOGY: After storing prose knowledge, create ontology entities for
+  structural elements (modules, services, APIs, dependencies). This builds
+  a navigable knowledge graph. Read skills/sage-ontology/SKILL.md for encoding.
+  Search ontology first to avoid duplicates.
+- Checkpoint: [A] Looks correct / [R] Some findings are wrong
+- Choices: present with [1] [2] [3] bracket notation
+- Never use code blocks for interaction (checkpoints, options, status)
+
+
+# Learn Workflow
+
+Deliberate knowledge capture. Use to onboard to a new codebase, deeply
+understand a module, or build persistent memory for a project area.
+
+## Step 0: Mode Dispatch
+
+`/learn` builds **memory** (prose knowledge). `/learn --ontology` builds the
+**ontology** (a typed entity/relationship graph) instead — it folds in the
+former `/map` workflow. Parse `the arguments the user provided alongside this skill invocation (delivered as a separate instruction line, NOT a literal token)`:
+
+- `/learn` (default) → Steps 1–N below (memory capture).
+- `/learn --ontology` → read `core/workflows/learn-modes/ontology.md` and follow
+  it; it maps modules, services, and APIs and their dependencies via the
+  `sage-ontology` skill.
+
+## Step 1: Determine Scope
+
+If a path is specified, that's the target — deep dive.
+If no path, broad scan of the whole project.
+
+Sage: What would you like to learn?
+
+[1] Broad scan — learn the project structure, stack, patterns, conventions
+[2] Deep dive — learn a specific module, service, or area
+[3] Something else — describe what you want to understand
+
+## Step 2: Search Existing Knowledge
+
+Search sage-memory for any prior knowledge about this project or area.
+Don't re-learn what's already known — build on it.
+
+If prior knowledge exists, summarize: "Sage: I already know [X] about
+this area from previous sessions. I'll focus on what's new or missing."
+
+## Step 3: Scan and Analyze
+
+### Broad Scan
+
+1. Read project structure — file tree, key directories
+2. Read README, package.json / pyproject.toml / go.mod, config files
+3. Identify tech stack, frameworks, build tools
+4. Read entry points — main modules, routing, API surface
+5. Identify architectural patterns — MVC, microservices, monolith, etc.
+6. Note conventions — naming, file organization, testing approach
+
+### Deep Dive
+
+1. Read all files in the target area
+2. Trace dependencies — what it imports, what imports it (depth 3 max)
+3. Map data flow — inputs, transformations, outputs
+4. Identify design patterns, error handling, edge cases
+5. Assess quality — strengths, risks, technical debt
+
+## Step 4: Review Findings
+
+Before storing knowledge, present key findings to the user. Wrong
+knowledge stored in memory persists into future sessions and causes
+confident wrong actions.
+
+**Findings quality checklist** — for each finding, verify:
+- **Specific?** Does it name concrete things (files, patterns, tools)?
+  "Uses microservices" is too vague. "Uses gRPC between billing and
+  auth services, REST for public API" is specific.
+- **Insight, not inventory?** Does it tell you something you can't
+  get from `ls`? "Has a src/ directory" is inventory. "All business
+  logic lives in src/domain/, handlers are thin wrappers" is insight.
+- **Actionable?** Would a future agent use this to make a better
+  decision? If not, don't store it.
+
+If a finding fails any criterion, improve it before presenting.
+
+Sage: Here's what I found about [area]:
+
+- [Key finding 1]
+- [Key finding 2]
+- [Key finding 3-5]
+
+[A] Looks correct — store in memory
+[R] Some findings are wrong — let me correct them
+
+Do NOT present vague findings and rely on the user to approve them.
+The user may click [A] without scrutiny. The quality gate is YOUR
+responsibility, not the user's.
+
+If the user corrects any findings, update before storing. Store the
+correction as a self-learning entry (Rule 6).
+
+## Step 5: Store Knowledge
+
+Store each finding by calling the `sage_memory_store` MCP tool directly.
+Each call stores one focused insight with these parameters:
+- **content** (string): detailed finding — what, why, implications
+- **title** (string): short specific title (5-15 words)
+- **tags** (array of strings): domain and area tags, e.g. ["billing", "auth"]
+- **scope** (string): "project"
+
+**MCP parameter types matter:** tags must be an actual array, not a JSON
+string. Pass ["billing", "auth"], not '["billing", "auth"]'. Same for
+all array and integer parameters across all sage-memory tools.
+
+For broad scans, aim for 10-20 calls covering:
+- Tech stack and framework choices
+- Project structure and organization
+- Key architectural patterns
+- Conventions and coding standards
+- Domain concepts and business logic
+- Notable dependencies and integrations
+
+For deep dives, aim for 5-10 calls covering:
+- Module purpose and role in the system
+- Key components and their responsibilities
+- Data flow and integration points
+- Patterns specific to this area
+- Risks, debt, or improvement opportunities
+
+Tag entries appropriately:
+- Domain tags always (e.g., `billing`, `auth`)
+- `ontology` tag for entity relationships and dependencies
+- `learning` tag for gotchas or non-obvious behavior discovered
+
+If `sage_memory_store` is not available, fall back to `.sage-memory/`
+files. For each finding, create a file using the format defined in the
+sage-memory skill's Storage Priority section. Filename = kebab-case title.
+
+### Ontology Bootstrapping
+
+After storing prose knowledge, create ontology entities for the
+structural elements you discovered. This builds a knowledge graph
+that keeps the codebase's architecture navigable across sessions.
+
+**For broad scans, create entities for:**
+- Each major module or service → `Project` entity (name, status: active)
+- Key inter-module dependencies → `depends_on` relations
+- Entry points (APIs, CLI commands, main routes) → `Document` entities
+
+**For deep dives, create entities for:**
+- The module itself → `Project` entity if not already in graph
+- Key internal components → `Task` entities (as sub-units of work)
+- Dependencies this module has on other modules → `depends_on` relations
+- Services it calls or is called by → `depends_on` relations
+
+**Keep it lightweight:**
+- Only create entities for things a future agent needs to navigate
+  (modules, services, APIs, dependencies) — not every file or function
+- Search ontology first (`sage_memory_search: tags=["ontology"]`) to
+  avoid duplicating existing entities
+- 5-15 ontology entries for broad scans, 3-8 for deep dives
+- Use the encoding format from `skills/sage-ontology/SKILL.md`
+
+## Step 6: Generate Knowledge Report
+
+Save a human-readable report to `.sage/docs/memory-{name}.md`.
+
+Follow the sage-memory skill's `references/knowledge-report.md` guide:
+- Adapt structure to content (don't force a rigid template)
+- Include mermaid diagrams when they clarify architecture or data flow
+- Focus on insights, not inventory
+- Note how many memory entries were stored
+
+## Step 7: Report Summary
+
+Sage: Learning complete — [area name]
+
+Knowledge stored:
+  • [X] memories in sage-memory
+  • Report: .sage/docs/memory-{name}.md
+
+Key findings:
+  • [Top 3-4 insights, one line each]
+
+[C] Continue — learn another area
+
+Next steps:
+  /build   — spec → plan → implement → verify
+  /research — interview → JTBD → opportunity map
+  /reflect — review what you learned, extract patterns
+
+Type a command, or describe what you want to do next.
+
+## Rules
+
+- Search before storing — don't duplicate existing knowledge.
+- Store insights, not facts readable from files.
+- One insight per memory entry — focused entries retrieve precisely.
+- Adapt depth to scope — broad scans stay high-level, deep dives
+  trace dependencies and assess quality.
+- The knowledge report is for humans. Memory entries are for the agent.
+  Both should exist for significant learning.

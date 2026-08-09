@@ -1,0 +1,17 @@
+name: sage
+version: "1.0.0"
+description: >
+  Sage framework engine for Hermes — mechanical gates (spec-gate/tdd-gate/
+  secrets-gate/config-gate/verify-gate/bookkeeping-gate via pre_tool_call
+  block; R29 degradation audit via post_tool_call) plus CLI context injection
+  via pre_llm_call and slash command delivery. Gates are INERT until a project
+  opts in via .sage/config.yaml (hard_enforcement: true) — they never
+  surprise-block an unenrolled project.
+author: "Sage (Hermes platform port)"
+
+provides_tools: []
+
+provides_hooks:
+  - pre_tool_call
+  - post_tool_call
+  - pre_llm_call

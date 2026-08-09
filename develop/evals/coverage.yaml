@@ -1155,3 +1155,145 @@ surfaces:
       default cap 2, hard cap 4 clamped loudly) and resolve_parallel()
       (parallel requires subagent mode, refusal is the same ADR-10 loud
       degradation) — ParallelFlagTest + ResolveParallelTest pin both.
+
+# ── Hermes platform skills (added 2026-08-05) ───────────────────────────────
+# The hermes plugin registers 21 skills via ctx.register_skill(). Each mirrors
+# a core workflow / system-skill / capability surface — the scenario coverage
+# lives with those originals; nothing re-grades the Hermes delivery itself.
+# The enforcement mechanics behind them (veto, audit, dispatch) are live-probed
+# instead: docs/attestations/hermes-tier-a-2026-08-05.md.
+
+  skill-sage:
+    path: skills/sage/SKILL.md
+    kind: skill
+    covered-by: [E6]
+    notes: >
+      The routing skill. E6 grades the routing decision and announcement; the
+      Hermes-delivered copy carries the same content and gets the same
+      (incomplete — route only, not execution) grade.
+
+  skill-sage-analyst:
+    path: skills/sage-analyst/SKILL.md
+    kind: skill
+    uncovered: "Persona skill (the questioning analyst); no scenario grades its output."
+
+  skill-sage-architect:
+    path: skills/sage-architect/SKILL.md
+    kind: skill
+    covered-by: [E6]
+    notes: >
+      Mirrors workflow-architect: E6 grades only the decision to route here,
+      never what architect produces.
+
+  skill-sage-autoresearch:
+    path: skills/sage-autoresearch/SKILL.md
+    kind: skill
+    uncovered: "Mirrors workflow-autoresearch; the optimization loop has no scenario."
+
+  skill-sage-build:
+    path: skills/sage-build/SKILL.md
+    kind: skill
+    covered-by: [E1, E4, E7, E9, E10, L3]
+    notes: >
+      Mirrors workflow-build's content — the scenarios grade the build-loop
+      paths (inline and subagent), not the Hermes skill delivery of them.
+
+  skill-sage-checkpoints:
+    path: skills/sage-checkpoints/SKILL.md
+    kind: skill
+    uncovered: "Plugin-bundled mirror of system-skill-sage-checkpoints; zone-footer and approval-gate presentation remain ungraded."
+
+  skill-sage-classifier:
+    path: skills/sage-classifier/SKILL.md
+    kind: skill
+    covered-by: [E6]
+    notes: "E6 grades routing, which consumes the classification step."
+
+  skill-sage-constitution:
+    path: skills/sage-constitution/SKILL.md
+    kind: skill
+    covered-by: [E2]
+    notes: "Plugin-bundled mirror; E2 grades secrets-under-pressure via the core content."
+
+  skill-sage-continue:
+    path: skills/sage-continue/SKILL.md
+    kind: skill
+    covered-by: [L1]
+    notes: "Mirrors workflow-continue; L1 crosses the context boundary the skill exists for."
+
+  skill-sage-debugger:
+    path: skills/sage-debugger/SKILL.md
+    kind: skill
+    uncovered: "Persona skill mirroring capability-systematic-debug; no scenario grades its output."
+
+  skill-sage-decisions:
+    path: skills/sage-decisions/SKILL.md
+    kind: skill
+    covered-by: [E8]
+    notes: >
+      Same caveat as system-skill-sage-decisions: E8 checks a hook-written
+      line, not the skill's guidance; the Hermes-side audit write is
+      live-probed (Tier A attestation, R29 transcript).
+
+  skill-sage-developer:
+    path: skills/sage-developer/SKILL.md
+    kind: skill
+    uncovered: "Persona skill mirroring capability-implement; no scenario grades its output."
+
+  skill-sage-fix:
+    path: skills/sage-fix/SKILL.md
+    kind: skill
+    covered-by: [E13]
+    notes: "Mirrors workflow-fix; E13 drives a reported bug end-to-end."
+
+  skill-sage-gates:
+    path: skills/sage-gates/SKILL.md
+    kind: skill
+    covered-by: [E1, E7]
+    notes: >
+      Describes the gates; the mechanism itself is live-probed in
+      docs/attestations/hermes-tier-a-2026-08-05.md (six gates veto,
+      observers never block).
+
+  skill-sage-learn:
+    path: skills/sage-learn/SKILL.md
+    kind: skill
+    uncovered: "Mirrors workflow-learn; no scenario runs a codebase scan."
+
+  skill-sage-reflect:
+    path: skills/sage-reflect/SKILL.md
+    kind: skill
+    uncovered: "Mirrors workflow-reflect; the cross-cycle value claim stays unmeasured."
+
+  skill-sage-review:
+    path: skills/sage-review/SKILL.md
+    kind: skill
+    uncovered: >
+      Mirrors workflow-review (no scenario invokes it); its delegate_task
+      dispatch was nevertheless live-probed — Tier A attestation transcript 2.
+
+  skill-sage-reviewer:
+    path: skills/sage-reviewer/SKILL.md
+    kind: skill
+    uncovered: "No scenario runs an independent review; the dispatch itself is attested live (Tier A transcript 2)."
+
+  skill-sage-routing:
+    path: skills/sage-routing/SKILL.md
+    kind: skill
+    covered-by: [E6, E11]
+    notes: "Plugin-bundled mirror of system-skill-sage-routing."
+
+  skill-sage-tiers:
+    path: skills/sage-tiers/SKILL.md
+    kind: skill
+    covered-by: [E11]
+    notes: >
+      Plugin-bundled mirror of system-skill-sage-tiers; E11 prompt 3 asks a
+      tier question — the derive_tier math itself is pinned by contract.py's
+      own tests.
+
+  skill-sage-using-memory:
+    path: skills/sage-using-memory/SKILL.md
+    kind: skill
+    covered-by: [E11]
+    notes: "Plugin-bundled mirror; E11 prompt 2 grades the trigger, recall stays untested."
