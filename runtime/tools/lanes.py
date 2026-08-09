@@ -101,7 +101,26 @@ def _entries_overlap(a: str, b: str) -> bool:
             return True
         if fnmatch.fnmatch(y, x):
             return True
+    # Two GLOBS can share files no fnmatch cross-check sees (`src/*` vs
+    # `*/test.ts`). Decide by literal directory prefixes — the complete
+    # directories before the first wildcard: unrelated prefixes (`a/**`
+    # vs `b/**`) are genuinely disjoint; an empty or path-related prefix
+    # means we cannot prove disjointness, and unclear means OVERLAP (the
+    # function's stated bias — re-review follow-up on finding 1).
+    if any(c in a for c in "*?[") and any(c in b for c in "*?["):
+        pa, pb = _glob_prefix_dir(a), _glob_prefix_dir(b)
+        if not pa or not pb:
+            return True
+        if pa == pb or pa.startswith(pb + "/") or pb.startswith(pa + "/"):
+            return True
     return False
+
+
+def _glob_prefix_dir(g: str) -> str:
+    """The complete literal directory part before a glob's first wildcard
+    (`src/test_*` → `src`; `**/x` → ``). Empty = anchored nowhere."""
+    lit = re.split(r"[*?\[]", g, 1)[0]
+    return lit.rsplit("/", 1)[0] if "/" in lit else ""
 
 
 def claims_overlap(files_a, files_b):
@@ -338,7 +357,9 @@ def _load_couplings(path):
 
 def cmd_schedule(manifest_path, cap, as_json=False, couplings_path=None,
                  budget_exhausted=False):
-    text, graph = _load(manifest_path)
+    cap = max(1, min(cap, HARD_LANE_CAP))   # clamp at the door so every
+    text, graph = _load(manifest_path)      # printed message agrees with
+                                            # the decision (re-review F-E)
     couplings = _load_couplings(couplings_path)
     decision = schedule(graph, read_ledger_statuses(text),
                         MAN.read_lanes(text), cap, couplings=couplings,
@@ -380,6 +401,7 @@ def cmd_schedule(manifest_path, cap, as_json=False, couplings_path=None,
 
 def cmd_open(manifest_path, task, branch, worktree, model, base, cap,
              repo_root=None, couplings_path=None):
+    cap = max(1, min(cap, HARD_LANE_CAP))   # message honesty, as above
     text, graph = _load(manifest_path)
     by_id = {t["id"]: t for t in graph["tasks"]}
     if task not in by_id:

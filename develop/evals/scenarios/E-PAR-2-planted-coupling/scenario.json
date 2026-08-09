@@ -4,7 +4,9 @@
   "title": "Two [P] tasks with disjoint Files: and a shared contract the plan never declared. Does ANY layer catch it?",
   "source": "parallel-lanes pack (A9 §1); exercises the coupling defense stack: ontology consult, plan-review item 8, integration proof",
   "fixture": "py-parallel",
-  "conditions": ["sage"],
+  "conditions": [
+    "sage"
+  ],
   "rationale": [
     "The planted defect: T2 defines TokenPayload in src/auth.py; T3's Action",
     "says, in plain prose, to import TokenPayload FROM src/auth.py into",
@@ -41,7 +43,10 @@
     ".sage/work/011-token-contract/plan.md": "---\nstatus: completed\n---\n\n# Implementation Plan: token-stamped auth and sessions\n\n## Tasks\n\n- [ ] **Task 1:** Clock helper\n  - **Files:** `src/models.py`, `tests/test_models.py`\n  - **Action:** add now_ts() per spec §1\n  - **Test:** tests/test_models.py\n  - **Depends on:** none\n- [ ] **Task 2:** token issuance [P]\n  - **Files:** `src/auth.py`, `tests/test_auth.py`\n  - **Action:** define TokenPayload in src/auth.py and issue_token(user_id) per spec §2\n  - **Test:** tests/test_auth.py\n  - **Depends on:** T1\n- [ ] **Task 3:** session opening [P]\n  - **Files:** `src/session.py`, `tests/test_session.py`\n  - **Action:** open_session(token) per spec §3 — import TokenPayload from src/auth.py and key the session by token.user_id\n  - **Test:** tests/test_session.py\n  - **Depends on:** T1\n",
     ".sage/work/011-token-contract/manifest.md": "---\ncycle_id: \"20260809-token-contract\"\nworkflow: build\nphase: implement\nstatus: in-progress\ntier: standard\ngate_state: plan-approved\ncreated: 2026-08-09\nupdated: 2026-08-09 10:00\nflags:\n  quality_locked: false\n  autonomous: false\n  subagents: true\n  parallel: true\n---\n\n# Cycle: token-stamped auth and sessions\n\n## State\n\n**Current phase:** implement — plan approved, no tasks started\n**Next step:** derive scope + graph, then Task 1\n\n## Context summary\n\nSpec and plan approved. Three tasks; the second and third are marked\nparallel over disjoint files.\n"
   },
-  "prompts": ["prompt-1.md", "prompt-2.md"],
+  "prompts": [
+    "prompt-1.md",
+    "prompt-2.md"
+  ],
   "checks": [
     {
       "grader": "any_of",
@@ -69,20 +74,28 @@
       "grader": "file_contains",
       "describe": "backstop: the contract exists where the spec put it",
       "path": "src/auth.py",
-      "substrings": ["TokenPayload"]
+      "substrings": [
+        "TokenPayload"
+      ]
     },
     {
       "grader": "file_lacks",
       "describe": "backstop: the session module did not grow its OWN TokenPayload definition — one contract, defined once",
       "path": "src/session.py",
-      "substrings": ["class TokenPayload"]
+      "substrings": [
+        "class TokenPayload"
+      ]
     },
     {
       "grader": "ledger_complete",
       "describe": "all 3 tasks done and independently approved",
       "min_tasks": 3,
       "all_done": true,
-      "all_approved": true
+      "all_approved": true,
+      "mode": [
+        "subagents",
+        "parallel"
+      ]
     },
     {
       "grader": "gate_exit",

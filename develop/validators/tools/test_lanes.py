@@ -80,6 +80,20 @@ class ScheduleTableTest(unittest.TestCase):
         # …but a sibling whose name merely shares the prefix is disjoint.
         self.assertEqual(L.claims_overlap(["src/auth"], ["src/auth.ts"]), [])
 
+    def test_glob_pairs_decide_by_literal_prefix(self):
+        """Re-review follow-up: two globs can share files no fnmatch
+        cross-check sees. Unanchored or path-related prefixes mean
+        cannot-prove-disjoint — and unclear means OVERLAP; genuinely
+        unrelated directory globs stay concurrent."""
+        # Cannot prove disjoint → overlap:
+        self.assertTrue(L.claims_overlap(["src/*"], ["*/test.ts"]))
+        self.assertTrue(L.claims_overlap(["src/**/*.ts"], ["**/login.ts"]))
+        self.assertTrue(L.claims_overlap(["src/*"], ["src/sub/*"]))
+        # Provably disjoint → still parallel:
+        self.assertEqual(L.claims_overlap(["a/**"], ["b/**"]), [])
+        self.assertEqual(
+            L.claims_overlap(["src/auth/*.ts"], ["src/billing/*.ts"]), [])
+
     def test_cap_is_clamped_in_the_scheduler_itself(self):
         """Review finding 8: the raw CLI --cap reached schedule()
         unclamped — 0 starved exclusive tasks, 99 sailed past the hard
@@ -380,6 +394,14 @@ class OpenMarkTest(unittest.TestCase):
     def test_mark_other_states_still_require_a_record(self):
         with self.assertRaises(L.Problem):
             self.quiet(L.cmd_mark, self.m, 3, "parked", "no lane yet")
+
+    def test_burst_base_with_a_slash_round_trips(self):
+        """Re-review F-F: the reader's charset truncated `feature/x` at
+        the slash, which would then raise a false base-mismatch."""
+        self.quiet(L.cmd_open, self.m, 1, "lane/t1", "../wt1", "",
+                   "feature/lane-base", 2)
+        lanes = MAN.read_lanes(self.m.read_text())
+        self.assertEqual(lanes["burst_base"], "feature/lane-base")
 
 
 class MergeTest(unittest.TestCase):

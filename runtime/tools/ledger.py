@@ -59,13 +59,19 @@ def parse_plan_tasks(plan_text):
     listed — which is the failure the ledger exists to make impossible.
 
     A checked bullet still belongs in the ledger (done ≠ independently
-    reviewed); `[DOC]` markers are presentation, stripped from titles; a
+    reviewed); `[DOC]` and `[P]` markers are presentation, stripped from
+    titles (the graph parser strips both — one artifact, one title); a
     duplicate id keeps its first occurrence.
     """
     tasks, seen = [], set()
     for m in TASK_RE.finditer(plan_text):
         n = int(m.group(1) or m.group(3))
-        title = re.sub(r"\s*\[DOC\]\s*$", "", (m.group(2) or m.group(4)).strip())
+        title = (m.group(2) or m.group(4)).strip()
+        while True:
+            stripped = re.sub(r"\s*\[(?:DOC|P)\]\s*$", "", title)
+            if stripped == title:
+                break
+            title = stripped
         if n in seen:
             continue
         seen.add(n)

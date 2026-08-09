@@ -282,7 +282,10 @@ surfaces:
       process hand-editing the main checkout's manifest is redirected —
       and B24's faithful replace_all reconstruction, closing the review
       finding where a MultiEdit could rewire a guarded dependency edge
-      under the count=1 model); L1 covers it end-to-end on the resume path.
+      under the count=1 model; B25/B26 from the round-two re-review: the
+      section capture survives blank lines inside a block and commented
+      headers — the de-DOTALL fix had introduced exactly that gap);
+      L1 covers it end-to-end on the resume path.
 
   hook-manifest-sync:
     path: runtime/platforms/claude-code/hooks/sage-manifest-sync.sh

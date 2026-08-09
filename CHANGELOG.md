@@ -4,6 +4,45 @@ All notable changes to Sage will be documented in this file.
 
 ## [Unreleased] — parallel implementation lanes (A6→A8→A7→A9)
 
+### Re-review (round two): the fixes reviewed as fixes — 12 more findings, closed as classes
+
+Round two sent fresh reviewers at commit a0457dc itself (a fix that
+closes the reported reproduction but not the class is a failed fix) and
+at the surfaces round one under-covered (old machinery × new blocks).
+Verdict on round one's four majors: two were closed as classes; two were
+not — and both are now:
+
+- **The disjointness witness trusted merge SUBJECTS**, which the agent
+  controls: a hand-merge titled anything else re-hid a real violation.
+  The witness is structural now — every two-parent commit whose second
+  parent landed declared files must map to a recorded lane; subjects
+  prove nothing. (Squash-merges leave no merge commit; that residual
+  belongs to ledger_attributes_commits and gate_exit, and is documented.)
+- **The de-DOTALL'd gate regexes stopped at blank lines**, silently
+  un-guarding everything below a blank line inside a block (provably
+  blocked before the change — a regression riding a fix). The section
+  body now tolerates interior blank lines and commented headers
+  (B25/B26).
+
+Round two's own catches: E-PAR/E9's ledger checks were not mode-scoped,
+so `--mode both`'s inline arm failed structurally — scoring a feature's
+absence as a loss, the harness's own named dishonesty (mode scoping now
+takes a list; a plain no-mode run still grades everything, since the
+seeded config decides behavior there). The first-match-any-indent scalar
+readers (`read_field`/`write_field`/hook `manifest_field`) let a
+ledger-first frontmatter corrupt ledger entry 1's `status:` on close-out
+— reproduced, now column-0-anchored across manifest.py and all three
+hooks. The scope-gate read the FIRST `derived_from:` anywhere, so a
+graph-before-scope manifest produced a stale warning no re-derive could
+clear — now block-scoped. Smaller: tab-indented code blocks minted
+phantom graph nodes (4-space fix was half of markdown); the
+integration-proof trivial-filter's `:` and `#` alternatives never fired
+(`\b` after punctuation); glob-vs-glob overlap now decides by literal
+prefix (unprovable-disjoint serializes, `a/**` vs `b/**` stays
+parallel); `burst_base` truncated at `/`; cap messages echoed the
+unclamped cap; ledger titles keep `[P]` no more; stale `--mode both`
+usage text. Everything reproduced before fixed, everything pinned after.
+
 ### Independent review pass: 13 verified findings fixed, none by reading code alone
 
 Two fresh-context reviewers (adversarial correctness; docs-vs-code drift)

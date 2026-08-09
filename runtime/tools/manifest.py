@@ -159,10 +159,14 @@ def write_field(text: str, name: str, value: str) -> str:
     fm, _ = split_frontmatter(text)
     if fm is None:
         raise Problem("manifest has no frontmatter")
-    pat = re.compile(r"^(?P<indent>[ \t]*)%s\s*:[^\n]*$" % re.escape(name), re.M)
+    # Column-0 only: `^[ \t]*status:` also matched a LEDGER ENTRY's status
+    # line when the tasks: block preceded the scalar, and close-out then
+    # rewrote ledger entry 1 instead of the cycle status (re-audit finding
+    # 3 — reproduced). Top-level keys are column-0 in every Sage writer.
+    pat = re.compile(r"^%s\s*:[^\n]*$" % re.escape(name), re.M)
     if not pat.search(fm):
         raise Problem(f"manifest frontmatter has no `{name}:` field")
-    new_fm = pat.sub(lambda m: f"{m.group('indent')}{name}: {value}", fm, count=1)
+    new_fm = pat.sub(f"{name}: {value}", fm, count=1)
     return text.replace(fm, new_fm, 1)
 
 
@@ -223,7 +227,7 @@ def cycle_is_active(text: str) -> bool:
     fm, _ = split_frontmatter(text)
     if fm is None:
         return False
-    m = re.search(r"^\s*status\s*:\s*\"?([A-Za-z-]+)", fm, re.M)
+    m = re.search(r"^status\s*:\s*\"?([A-Za-z-]+)", fm, re.M)
     return not (m and m.group(1).lower() in ("complete", "completed", "abandoned"))
 
 
@@ -232,7 +236,9 @@ def read_field(text: str, name: str):
     fm, _ = split_frontmatter(text)
     if fm is None:
         return None
-    m = re.search(rf"^\s*{re.escape(name)}\s*:\s*(?P<val>.*)$", fm, re.M)
+    # Column-0 only — same reasoning as write_field: a nested homonym in
+    # the ledger/lanes blocks must never answer for the top-level scalar.
+    m = re.search(rf"^{re.escape(name)}\s*:\s*(?P<val>.*)$", fm, re.M)
     if not m:
         return None
     val = m.group("val").split("#", 1)[0].strip().strip('"').strip("'").strip()
@@ -1132,8 +1138,9 @@ def _plan_derivation_view(plan_text: str) -> str:
             if s.startswith(fence):
                 fence = None
             continue
-        if line[:4] == "    " and s:
+        if (line[:4] == "    " or line[:1] == "\t") and s:
             continue                       # indented code block content
+                                           # (markdown: 4 spaces OR a tab)
         out.append(line)
     return re.sub(r"(?s)<!--.*?(?:-->|\Z)", "", "\n".join(out))
 
@@ -1524,7 +1531,7 @@ def read_lanes(text: str):
         if l.strip() and not l.startswith((" ", "\t")):
             break
         s = l.strip()
-        m = re.match(r"^burst_base\s*:\s*\"?([A-Za-z0-9._-]*)\"?", s)
+        m = re.match(r"^burst_base\s*:\s*\"?([A-Za-z0-9._/-]*)\"?", s)
         if m:
             block["burst_base"] = m.group(1)
             continue

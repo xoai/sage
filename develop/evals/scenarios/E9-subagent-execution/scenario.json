@@ -69,18 +69,30 @@
       "grader": "tree_matches",
       "describe": "the mode actually engaged (and the manifest says so)",
       "glob": ".sage/work/*/manifest.md",
-      "pattern": "execution_mode\\s*:\\s*subagent"
+      "pattern": "execution_mode\\s*:\\s*subagent",
+      "mode": [
+        "subagents",
+        "parallel"
+      ]
     },
     {
       "grader": "ledger_complete",
       "describe": "all 3 tasks done AND independently approved — not just done",
       "min_tasks": 3,
       "all_done": true,
-      "all_approved": true
+      "all_approved": true,
+      "mode": [
+        "subagents",
+        "parallel"
+      ]
     },
     {
       "grader": "ledger_attributes_commits",
-      "describe": "every done task cites a commit range, and those commits are real"
+      "describe": "every done task cites a commit range, and those commits are real",
+      "mode": [
+        "subagents",
+        "parallel"
+      ]
     },
     {
       "grader": "file_contains",

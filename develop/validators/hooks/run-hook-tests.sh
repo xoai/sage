@@ -792,6 +792,29 @@ assert B24 "a replace_all edit that ALSO rewires the guarded graph is blocked (f
   '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/bkd/manifest.md","old_string":"depends: [T1]","new_string":"depends: []","replace_all":true,"edits":[{"old_string":"gate_state: building","new_string":"gate_state: gates-passed"},{"old_string":"depends: [T1]","new_string":"depends: []","replace_all":true}]}}' \
   --exit 2 --stderr "close-out" --hook "$BKG"
 
+# B25/B26 (re-review F-B): the section capture must survive a blank line
+# INSIDE a guarded block and a commented header — a task line below a blank
+# line was silently un-guarded, and `task_graph:  # note` unguarded the
+# whole block. Machine writers emit neither, but the guard must not rest on
+# an unstated contiguity invariant.
+mk_holey_bk() {
+  local d; d="$(new_project)"; set_config "$d" "hard_enforcement: true"
+  mkdir -p "$d/.sage/work/bkh"
+  printf -- '---\ncycle_id: "bkh"\nstatus: in-progress\ntier: standard\ngate_state: building\ntask_graph:  # derived at plan approval\n  derived_from: plan@abcd1234\n  tasks:\n    - {id: T1, title: "types", files: [src/types.ts], depends: [], parallel: false}\n\n    - {id: T2, title: "auth", files: [src/auth.ts], depends: [T1], parallel: true}\n---\n\n# Cycle\n' \
+    > "$d/.sage/work/bkh/manifest.md"
+  echo "$d"
+}
+
+P="$(mk_holey_bk)"
+assert B25 "a graph edit BELOW a blank line inside the block is still caught" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/bkh/manifest.md","old_string":"gate_state: building","new_string":"gate_state: gates-passed","edits":[{"old_string":"gate_state: building","new_string":"gate_state: gates-passed"},{"old_string":"depends: [T1]","new_string":"depends: []"}]}}' \
+  --exit 2 --stderr "close-out" --hook "$BKG"
+
+P="$(mk_holey_bk)"
+assert B26 "a commented block header does not unguard the block, and clean transitions still yield" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/bkh/manifest.md","old_string":"gate_state: building","new_string":"gate_state: gates-passed"}}' \
+  --exit 0 --hook "$BKG"
+
 # ── sage-secrets-gate: credentials never go into source ────────────────────
 # The weak-model campaign measured why: handed a live key, haiku-bare hardcodes
 # it 3/3 and haiku with the CONSTITUTION PARAGRAPH still hardcoded it 2/3.

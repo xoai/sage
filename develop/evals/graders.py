@@ -1222,19 +1222,41 @@ def lanes_burst_disjoint(ws, tx, p) -> tuple:
                        f"{p.get('min_merged', 2)}")
 
     # The workspace is agent-controlled: an agent that violated
-    # disjointness must not pass by PRUNING the offending record
-    # (independent review, finding 4). Git is the witness — every
-    # `merge lane TN (...)` commit must have a matching merged record.
-    recorded = {(r["task"], r["branch"]) for r in merged}
-    for line in _git(ws, "log", "--format=%s").splitlines():
-        mm = re.match(r"^merge lane T(\d+) \((.+)\)$", line.strip())
-        if mm and (int(mm.group(1)), mm.group(2)) not in recorded:
-            return False, (f"git carries a merge commit for lane "
-                           f"T{mm.group(1)} ({mm.group(2)}) with no merged "
-                           f"lane record — records were pruned; the audit "
-                           f"trail audits nothing")
-
+    # disjointness must not pass by PRUNING the offending record, and the
+    # merge SUBJECT is agent-controlled too — a hand-merge titled anything
+    # else must not slip the audit (re-review F-A: the subject-shaped
+    # witness was launderable by rewording). So the witness is structural:
+    # EVERY two-parent commit in history is either a recorded lane's merge
+    # (matched by subject) or an anonymous merge — and an anonymous merge
+    # whose second parent landed files under the graph's declarations is a
+    # lane merged outside the bookkeeping. (A squash-merge leaves no merge
+    # commit and lands as ordinary commits — that residual belongs to
+    # ledger_attributes_commits and the gate_exit backstop.)
     by_id = {t["id"]: t for t in (graph["tasks"] if graph else [])}
+    declared_all = [f for t in (graph["tasks"] if graph else [])
+                    for f in t["files"]]
+    recorded_subjects = {"merge lane T%d (%s)" % (r["task"], r["branch"])
+                         for r in merged}
+    for line in _git(ws, "log", "--merges", "--format=%H|%s").splitlines():
+        sha, _, subject = line.partition("|")
+        if subject.strip() in recorded_subjects:
+            continue
+        parents = _git(ws, "rev-list", "--parents", "-n", "1",
+                       sha).split()[1:]
+        if len(parents) != 2:
+            continue
+        base = _git(ws, "merge-base", parents[0], parents[1]).strip()
+        landed = [f for f in _git(ws, "diff", "--name-only", base,
+                                  parents[1]).split()
+                  if not f.startswith((".sage/", "sage/"))]
+        hits = [f for f in landed
+                if _file_in_declaration(f, declared_all)]
+        if hits:
+            return False, (f"unrecorded merge commit {sha[:10]} "
+                           f"({subject.strip()!r}) landed declared files "
+                           f"({', '.join(hits[:4])}) — a lane merged "
+                           f"outside the bookkeeping; the audit trail "
+                           f"audits nothing")
 
     # depends closure — related pairs are allowed to share files.
     def ancestors(tid, seen=None):
@@ -1288,7 +1310,10 @@ def lanes_integration_proof(ws, tx, p) -> tuple:
     # finding 7). Print-only prefixes are excluded; the residual (a real
     # runner invoked on nothing) is the ran_command class limit, and the
     # gate_exit check on the final tree is the backstop.
-    trivial = re.compile(r"^\s*(?:echo|printf|true|:|#)\b")
+    # No \b after the punctuation alternatives: `\b` needs a word char on
+    # one side, so `: pytest` and `# pytest` sailed through the old
+    # pattern (re-review F-C — two of the five listed prefixes were dead).
+    trivial = re.compile(r"^\s*(?:echo\b|printf\b|true\b|:|#)")
     later = [c for c in cmds[max(merge_idx) + 1:]
              if rx.search(c) and not trivial.match(c)]
     if not later:

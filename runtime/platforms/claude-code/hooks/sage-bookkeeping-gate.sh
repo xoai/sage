@@ -128,7 +128,7 @@ try:
         text = fh.read()
     fm = re.match(r"^\s*---\s*\n(.*?)\n---\s*(?:\n|$)", text.lstrip("﻿"), re.S)
     if fm:
-        sm = re.search(r"^\s*status\s*:\s*\"?([A-Za-z-]+)", fm.group(1), re.M)
+        sm = re.search(r"^status\s*:\s*\"?([A-Za-z-]+)", fm.group(1), re.M)
         status = sm.group(1).lower() if sm else None
 except OSError:
     pass
@@ -161,19 +161,30 @@ if status in ("complete", "completed", "abandoned"):
 # newlines and each "section" greedily captured to end-of-file, so the
 # compare only worked because gate_state happens to sit above the guarded
 # blocks in the real template (independent review, finding 3 side-note).
-# Without `s`, the capture is the actual indented block and nothing else.
+# The body pattern accepts indented lines AND blank lines that are followed
+# by another indented line — a blank line INSIDE a block must not end the
+# capture (re-review F-B: it silently un-guarded everything below it), while
+# a blank line before the next top-level key still does. The header
+# tolerates a trailing comment for the same reason: a commented header is
+# still the block.
+_BLOCK_BODY = r"((?:[ \t]+.*\n?|[ \t]*\n(?=[ \t]+\S))*)"
+
+
 def scope_section(text):
-    m = re.search(r"(?m)^[ \t]*scope\s*:\s*$\n((?:[ \t]+.*\n?)*)", text or "")
+    m = re.search(r"(?m)^[ \t]*scope\s*:[ \t]*(?:#.*)?$\n" + _BLOCK_BODY,
+                  text or "")
     return m.group(0) if m else ""
 
 
 def graph_section(text):
-    m = re.search(r"(?m)^[ \t]*task_graph\s*:\s*$\n((?:[ \t]+.*\n?)*)", text or "")
+    m = re.search(r"(?m)^[ \t]*task_graph\s*:[ \t]*(?:#.*)?$\n" + _BLOCK_BODY,
+                  text or "")
     return m.group(0) if m else ""
 
 
 def lanes_section(text):
-    m = re.search(r"(?m)^[ \t]*lanes\s*:\s*$\n((?:[ \t]+.*\n?)*)", text or "")
+    m = re.search(r"(?m)^[ \t]*lanes\s*:[ \t]*(?:#.*)?$\n" + _BLOCK_BODY,
+                  text or "")
     return m.group(0) if m else ""
 
 

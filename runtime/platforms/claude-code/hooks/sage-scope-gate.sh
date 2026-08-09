@@ -181,7 +181,9 @@ def frontmatter(path):
 
 
 def field(fm, name):
-    m = re.search(r"^\s*%s\s*:\s*\"?([A-Za-z0-9_+\-\.@]+)\"?\s*(?:#.*)?$"
+    # Column-0 only — nested block homonyms never answer for a top-level
+    # scalar (re-audit finding 3).
+    m = re.search(r"^%s\s*:\s*\"?([A-Za-z0-9_+\-\.@]+)\"?\s*(?:#.*)?$"
                   % re.escape(name), fm, re.M)
     return m.group(1).lower() if m else None
 
@@ -378,7 +380,14 @@ for mpath in manifests:
         undeclared_plan.append(slug)   # empty declarations authenticate NOTHING
         continue
     recorded = ""
-    dm = re.search(r"^\s*derived_from\s*:\s*plan@([0-9a-fA-F]+)", fm, re.M)
+    # Search the scope: block ONLY — task_graph: carries its own
+    # derived_from, and a first-match-anywhere read returned the graph's
+    # pin when the blocks were hand-ordered graph-first, producing a false
+    # stale warning that no re-derive could clear (re-audit finding 2).
+    sblock = re.search(r"(?m)^scope\s*:[ \t]*(?:#.*)?$\n((?:[ \t]+.*\n?)*)",
+                       fm)
+    dm = re.search(r"^\s*derived_from\s*:\s*plan@([0-9a-fA-F]+)",
+                   sblock.group(1) if sblock else "", re.M)
     if dm:
         recorded = dm.group(1).lower()
     # Collateral: entries add-collateral could never have written are forged.

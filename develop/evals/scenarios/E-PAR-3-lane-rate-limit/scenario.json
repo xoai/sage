@@ -4,7 +4,9 @@
   "title": "A lane dies of a 429 mid-burst, and then the session ends. Errored ≠ failed, dependents freeze, siblings continue, resume reconstructs.",
   "source": "parallel-lanes pack (A9 §3/§5); exercises the errored contract, dependent freeze, and resume-with-open-lanes",
   "fixture": "py-parallel",
-  "conditions": ["sage"],
+  "conditions": [
+    "sage"
+  ],
   "rationale": [
     "The failure taxonomy is the subject. A rate-limit death is INFRA, not a",
     "graded outcome (the 1.3.3 evidence rules: token counts, not 'it stopped",
@@ -41,8 +43,19 @@
     ".sage/work/012-feature-pair/manifest.md": "---\ncycle_id: \"20260809-feature-pair\"\nworkflow: build\nphase: implement\nstatus: in-progress\ntier: standard\ngate_state: plan-approved\ncreated: 2026-08-09\nupdated: 2026-08-09 11:00\nflags:\n  quality_locked: false\n  autonomous: false\n  subagents: true\n  parallel: true\n---\n\n# Cycle: feature pair + report\n\n## State\n\n**Current phase:** implement — plan approved, no tasks started\n**Next step:** derive scope + graph, then open the burst\n\n## Context summary\n\nSpec and plan approved. T1 and T2 are parallel over disjoint modules;\nT3 depends on T1.\n"
   },
   "sessions": [
-    {"name": "burst", "prompts": ["prompt-1.md", "prompt-2.md"]},
-    {"name": "resume", "prompts": ["prompt-3.md"]}
+    {
+      "name": "burst",
+      "prompts": [
+        "prompt-1.md",
+        "prompt-2.md"
+      ]
+    },
+    {
+      "name": "resume",
+      "prompts": [
+        "prompt-3.md"
+      ]
+    }
   ],
   "checks": [
     {
@@ -86,14 +99,20 @@
       "describe": "…and the brief listed the open lanes (an unlisted worktree is work that rots)",
       "mode": "parallel",
       "session": "resume",
-      "substrings": ["OPEN LANES"]
+      "substrings": [
+        "OPEN LANES"
+      ]
     },
     {
       "grader": "ledger_complete",
       "describe": "the whole plan still lands: 3 tasks done and independently approved",
       "min_tasks": 3,
       "all_done": true,
-      "all_approved": true
+      "all_approved": true,
+      "mode": [
+        "subagents",
+        "parallel"
+      ]
     },
     {
       "grader": "gate_exit",

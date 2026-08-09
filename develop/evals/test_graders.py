@@ -1548,8 +1548,29 @@ class LaneGraderTest(unittest.TestCase):
                       [self.rec(1, "lane-t1"), self.rec(2, "lane-t2")])
         ok, detail = G.lanes_burst_disjoint(self.ws, G.Transcript([], []), {})
         self.assertFalse(ok)
-        self.assertIn("no merged lane record", detail)
-        self.assertIn("T3", detail)
+        self.assertIn("outside the bookkeeping", detail)
+        self.assertIn("shared.txt", detail)
+
+    def test_reworded_merge_subject_cannot_launder_either(self):
+        """Re-review F-A: the merge SUBJECT is agent-controlled too. A
+        hand-merge titled anything else, with its record omitted, must
+        still fail — the witness is structural (two-parent commits whose
+        second parent landed declared files), not textual."""
+        self.lane("lane-t1", {"a.txt": "t1\n"})
+        self.lane("lane-t2", {"shared.txt": "T2\n" + "mid\n" * 8 + "bot\n"})
+        self.lane("lane-t3", {"shared.txt": "top\n" + "mid\n" * 8 + "T3\n"})
+        self.merge_lane(1, "lane-t1")
+        self.merge_lane(2, "lane-t2")
+        self.git("merge", "--no-ff", "lane-t3",
+                 "-m", "Merge feature work into main")
+        self.manifest([self.task(1, ["a.txt"]),
+                       self.task(2, ["shared.txt"]),
+                       self.task(3, ["shared.txt"])],
+                      [self.rec(1, "lane-t1"), self.rec(2, "lane-t2")])
+        ok, detail = G.lanes_burst_disjoint(self.ws, G.Transcript([], []), {})
+        self.assertFalse(ok)
+        self.assertIn("outside the bookkeeping", detail)
+        self.assertIn("Merge feature work", detail)
 
     def test_merged_without_a_merge_commit_fails(self):
         self.lane("lane-t1", {"a.txt": "t1\n"})
@@ -1587,14 +1608,18 @@ class LaneGraderTest(unittest.TestCase):
         self.assertIn("no lane merges", detail)
 
     def test_mentioning_the_runner_is_not_running_it(self):
-        """Review finding 7: `echo "pytest passed"` is not a proof."""
-        tx = transcript(
-            ("tool", "Bash", {"command": "python3 sage/runtime/tools/lanes.py merge m.md --task 1"}),
-            ("tool", "Bash", {"command": "echo \"pytest: all green\""}))
-        ok, detail = G.lanes_integration_proof(
-            self.ws, tx, {"pattern": r"pytest"})
-        self.assertFalse(ok)
-        self.assertIn("integration proof missing", detail)
+        """Review finding 7 + re-review F-C: `echo "pytest passed"`, the
+        bash no-op `:`, and a comment are not proofs — the punctuation
+        alternatives must actually fire (\\b after ':' never matched)."""
+        for cmd in ('echo "pytest: all green"', ": pytest passed",
+                    "# pytest ran fine", "true pytest"):
+            tx = transcript(
+                ("tool", "Bash", {"command": "python3 sage/runtime/tools/lanes.py merge m.md --task 1"}),
+                ("tool", "Bash", {"command": cmd}))
+            ok, detail = G.lanes_integration_proof(
+                self.ws, tx, {"pattern": r"pytest"})
+            self.assertFalse(ok, cmd)
+            self.assertIn("integration proof missing", detail)
 
     # ── lane_record ──────────────────────────────────────────────────────
     def ledger_for_task2(self, attempts):

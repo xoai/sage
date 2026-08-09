@@ -136,8 +136,10 @@ def manifest_field(path, name):
     m = re.match(r"^\s*---\s*\n(.*?)\n---\s*(?:\n|$)", text.lstrip("﻿"), re.S)
     if not m:
         return None
+    # Column-0 only — a ledger entry's nested `status:` must never answer
+    # for the cycle's (re-audit finding 3, same fix as manifest.read_field).
     fm = re.search(
-        r"^\s*%s\s*:\s*\"?([A-Za-z0-9_-]+)\"?\s*(?:#.*)?$" % re.escape(name),
+        r"^%s\s*:\s*\"?([A-Za-z0-9_-]+)\"?\s*(?:#.*)?$" % re.escape(name),
         m.group(1), re.M,
     )
     return fm.group(1).lower() if fm else None

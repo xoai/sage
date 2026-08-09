@@ -4,7 +4,9 @@
   "title": "A 6-task plan with two [P] pairs: do the lanes hold their declarations, and does anyone look at the composition?",
   "source": "parallel-lanes pack (A7/A9); exercises the lane scheduler, single-writer bookkeeping, and the integration proof",
   "fixture": "py-parallel",
-  "conditions": ["sage"],
+  "conditions": [
+    "sage"
+  ],
   "rationale": [
     "A7's claim is not 'lanes ran'. It is three separable claims, each with its",
     "own deterministic grader: (1) LEDGER INTEGRITY — every task done AND",
@@ -44,24 +46,39 @@
     ".sage/work/010-service-features/plan.md": "---\nstatus: completed\n---\n\n# Implementation Plan: service feature pass\n\n## Tasks\n\n- [ ] **Task 1:** OpResult shared type\n  - **Files:** `src/models.py`, `tests/test_models.py`\n  - **Action:** add OpResult (ok: bool, detail: str) per spec §1; test constructs one\n  - **Test:** tests/test_models.py\n  - **Depends on:** none\n- [ ] **Task 2:** auth.login [P]\n  - **Files:** `src/auth.py`, `tests/test_auth.py`\n  - **Action:** login(user_id) -> OpResult per spec §2\n  - **Test:** tests/test_auth.py\n  - **Depends on:** T1\n- [ ] **Task 3:** session.create [P]\n  - **Files:** `src/session.py`, `tests/test_session.py`\n  - **Action:** create(user_id) -> OpResult per spec §3\n  - **Test:** tests/test_session.py\n  - **Depends on:** T1\n- [ ] **Task 4:** billing.charge [P]\n  - **Files:** `src/billing.py`, `tests/test_billing.py`\n  - **Action:** charge(credits) -> OpResult per spec §4\n  - **Test:** tests/test_billing.py\n  - **Depends on:** T1\n- [ ] **Task 5:** report.summarize [P]\n  - **Files:** `src/report.py`, `tests/test_report.py`\n  - **Action:** summarize(results) per spec §5\n  - **Test:** tests/test_report.py\n  - **Depends on:** T1\n- [ ] **Task 6:** service.run wiring\n  - **Files:** `src/service.py`, `tests/test_service.py`\n  - **Action:** run(user_id, credits) per spec §6, composing the four features\n  - **Test:** tests/test_service.py\n  - **Depends on:** T2, T3, T4, T5\n",
     ".sage/work/010-service-features/manifest.md": "---\ncycle_id: \"20260809-service-features\"\nworkflow: build\nphase: implement\nstatus: in-progress\ntier: standard\ngate_state: plan-approved\ncreated: 2026-08-09\nupdated: 2026-08-09 09:00\nflags:\n  quality_locked: false\n  autonomous: false\n  subagents: true\n  parallel: true\n---\n\n# Cycle: service feature pass\n\n## State\n\n**Current phase:** implement — plan approved, no tasks started\n**Next step:** derive scope + graph, then Task 1\n\n## Context summary\n\nSpec and plan approved. Six tasks: a shared type, two [P] pairs over\ndisjoint modules, and an integration seam that depends on all four.\n"
   },
-  "prompts": ["prompt-1.md", "prompt-2.md"],
+  "prompts": [
+    "prompt-1.md",
+    "prompt-2.md"
+  ],
   "checks": [
     {
       "grader": "tree_matches",
       "describe": "the execution mode engaged and the manifest says which",
       "glob": ".sage/work/*/manifest.md",
-      "pattern": "execution_mode\\s*:"
+      "pattern": "execution_mode\\s*:",
+      "mode": [
+        "subagents",
+        "parallel"
+      ]
     },
     {
       "grader": "ledger_complete",
       "describe": "ledger integrity: all 6 tasks done AND independently approved",
       "min_tasks": 6,
       "all_done": true,
-      "all_approved": true
+      "all_approved": true,
+      "mode": [
+        "subagents",
+        "parallel"
+      ]
     },
     {
       "grader": "ledger_attributes_commits",
-      "describe": "every done task cites a commit range, and those commits are real"
+      "describe": "every done task cites a commit range, and those commits are real",
+      "mode": [
+        "subagents",
+        "parallel"
+      ]
     },
     {
       "grader": "lanes_burst_disjoint",
@@ -86,13 +103,17 @@
       "grader": "file_contains",
       "describe": "the work actually landed (all six deliverables)",
       "path": "src/service.py",
-      "substrings": ["def run"]
+      "substrings": [
+        "def run"
+      ]
     },
     {
       "grader": "tree_contains",
       "describe": "OpResult reached the shared types module",
       "glob": "src/models.py",
-      "substrings": ["OpResult"]
+      "substrings": [
+        "OpResult"
+      ]
     },
     {
       "grader": "gate_exit",

@@ -42,7 +42,8 @@ Usage:
   run_evals.py --scenario E1 --scenario E3
   run_evals.py --condition sage          one condition only
   run_evals.py --mode subagents          force subagent execution (sage condition)
-  run_evals.py --mode both               the mode matrix: inline AND subagents
+  run_evals.py --mode both               the full mode matrix: inline,
+                                         subagents, and parallel (A7)
   run_evals.py --runs 3                  N=3, scenario passes at 2/3 (flake policy)
   run_evals.py --report                  also write results/summary.md
   run_evals.py --driver claude-code      (default; the seam for other drivers)
@@ -338,10 +339,14 @@ class Scenario:
                     f"checks[{i}]: unknown condition {cond!r}")
 
             cmode = check.get("mode")
-            if cmode is not None and cmode not in MODES:
-                problems.append(
-                    f"checks[{i}]: unknown mode {cmode!r} "
-                    f"(known: {', '.join(MODES)})")
+            if cmode is not None:
+                vals = ([cmode] if isinstance(cmode, str)
+                        else cmode if isinstance(cmode, list) else None)
+                if vals is None or not vals or \
+                        any(v not in MODES for v in vals):
+                    problems.append(
+                        f"checks[{i}]: mode must be one of {', '.join(MODES)}"
+                        f" or a non-empty list of them (got {cmode!r})")
 
         # A condition with no applicable checks cannot fail, and a scenario that
         # cannot fail is measuring nothing. Worse, it would be REPORTED — the bare
@@ -954,13 +959,21 @@ def run_once(scenario: Scenario, condition: str, driver: Driver,
         # is not a passed check: it is dropped from the denominator entirely.
         if check.get("condition") and check["condition"] != condition:
             continue
-        # A check may also be scoped to one execution MODE (E-PAR): the lane
-        # graders are facts about parallel machinery, and grading them on the
-        # inline or sequential-subagent arm would score a feature's absence
-        # as a behavioural loss — the same dishonesty the condition scoping
-        # exists to prevent. Dropped from the denominator, never auto-passed.
-        if check.get("mode") and check["mode"] != effective_mode:
-            continue
+        # A check may also be scoped to execution MODES (a string or a
+        # list): the lane graders are facts about parallel machinery, the
+        # LEDGER graders are facts about subagent machinery, and grading
+        # either on an arm whose mode structurally cannot produce the
+        # artifact scores a feature's absence as a behavioural loss — the
+        # same dishonesty the condition scoping exists to prevent. Dropped
+        # from the denominator, never auto-passed. A plain run (no --mode;
+        # effective mode "n/a") runs EVERY check: the scenario's own seeded
+        # config decides the behavior there, and dropping checks would gut
+        # the scenario's default assertion set (re-audit finding 1).
+        cmodes = check.get("mode")
+        if cmodes:
+            cmodes = [cmodes] if isinstance(cmodes, str) else list(cmodes)
+            if effective_mode in MODES and effective_mode not in cmodes:
+                continue
         scope = check.get("session")
         tx = by_session.get(scope) if scope else whole
         if scope and tx is None:                # validate() rejects this; belt and braces

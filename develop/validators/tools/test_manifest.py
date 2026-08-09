@@ -850,8 +850,9 @@ class GraphTest(unittest.TestCase):
                          "phantom tasks in fences/comments must not parse")
 
     def test_E9_replay_indented_code_blocks_are_not_tasks_either(self):
-        """Review finding 5: markdown's OTHER code form — the 4-space
-        indented block — also must not mint phantom nodes."""
+        """Review finding 5 + re-review F-D: markdown's OTHER code forms —
+        the 4-space indented block AND the tab-indented block — must not
+        mint phantom nodes."""
         self.plan.write_text(A_GRAPH_PLAN + """
 ## Notes
 
@@ -860,6 +861,12 @@ An example, as an indented code block:
     - [ ] **Task 9:** phantom from an indented example
       - **Files:** src/types.ts
       - **Depends on:** none
+
+And a tab-indented one:
+
+\t- [ ] **Task 8:** phantom from a tab-indented example
+\t  - **Files:** src/types.ts
+\t  - **Depends on:** none
 """)
         M.scope_derive(self.m)
         self.derive()
