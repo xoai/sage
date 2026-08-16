@@ -35,6 +35,7 @@ Usage:
     review.py disposition-batch <ledger.json> [F-003 F-007 ...] \\
                       [--severity cosmetic] --action defer|reject|fix-now \\
                       [--reason TEXT] [--ticket REF]
+    review.py open-instance <ledger.json> --checkpoint spec|plan|code|qa
     review.py close-round <ledger.json> --iteration N \\
                       [--suite-evidence TEXT] [--gates-evidence TEXT]
     review.py check-diff  <ledger.json> --finding F-003 --commit SHA
@@ -176,7 +177,26 @@ CONFIG_DEFAULTS = {
     "phase_a_scope": "all",      # all restores/keeps: verify every open
                                  # entry ("fixed" scopes to Sage-Fix-claimed;
                                  # flip is a measured decision — E17)
+    "fix_now_blocking_only": True,   # False restores: any open entry buys a
+                                     # round (the field's advisory-stop
+                                     # -never-stops pathology)
+    "late_finding_disposition": "defer",  # "open" restores: rounds>1
+                                          # non-blocking findings intake
+                                          # open (the late-nit treadmill)
 }
+
+
+def instance_rounds(history) -> list:
+    """The round records of the CURRENT instance: everything after the
+    last {"instance": ...} marker. No marker = the whole history is one
+    instance (legacy ledgers, byte-identical behavior)."""
+    rounds = []
+    for h in history or []:
+        if "instance" in h:
+            rounds = []
+        else:
+            rounds.append(h)
+    return rounds
 
 _BLOCK_RE = re.compile(r"^review_loop:\s*$", re.MULTILINE)
 _ITEM_RE = re.compile(r"^\s{2}([a-z_]+):\s*([^\s#]+)")
@@ -351,7 +371,8 @@ def intake(ledger_path: pathlib.Path, findings: list, iteration: int,
         by_fingerprint.setdefault(entry["anchor"]["fingerprint"], []).append(entry)
 
     report = {"new": [], "merged": [], "capped": [], "disputed": [],
-              "citation_unresolved": [], "citation_skipped": []}
+              "citation_unresolved": [], "citation_skipped": [],
+              "auto_deferred": []}
     for i, raw in enumerate(findings):
         _validate_finding(raw, i)
         fp = fingerprint_region(repo_root, raw["anchor"]["file"],
@@ -426,6 +447,17 @@ def intake(ledger_path: pathlib.Path, findings: list, iteration: int,
             report["citation_unresolved"].append(entry["id"])
         elif citation_skipped:
             report["citation_skipped"].append(entry["id"])
+        # Late-nit treadmill breaker: a non-blocking finding discovered
+        # after round 1 never blocked and must not extend the loop — it
+        # intakes as a pending defer ticketed to the cycle's cleanup.md
+        # (recorded, sealed at the stop, fixed after the loop as ordinary
+        # work). New criticals/majors are untouched — they still block.
+        if (iteration > 1 and not settled
+                and severity in ("substantive", "cosmetic")
+                and config.get("late_finding_disposition",
+                               "defer") == "defer"):
+            entry["disposition"] = {"action": "defer", "ticket": "cleanup.md"}
+            report["auto_deferred"].append(entry["id"])
         if settled:
             entry["relitigates"] = settled[0]["id"]
             report["disputed"].append(entry["id"])
@@ -506,12 +538,29 @@ def attach_witness(ledger_path: pathlib.Path, finding_id: str, ref: str,
     save_ledger(ledger_path, ledger)
 
 
-def _apply_disposition(entry: dict, action: str, reason, ticket) -> None:
+def _apply_disposition(entry: dict, action: str, reason, ticket,
+                       config=None) -> None:
     """The disposition rules, applied in memory — callers own load/save,
     so a batch stays atomic (validation failures leave nothing written)."""
+    config = config or {}
     if entry["status"] not in OPEN_STATUSES and entry["status"] != "disputed":
         raise Problem(f"{entry['id']} is {entry['status']} — dispositions "
                       "apply to open, not-fixed, or disputed entries")
+    if (action == "fix-now"
+            and config.get("fix_now_blocking_only", True)
+            and entry["status"] != "disputed"
+            and entry["severity"] not in ("critical", "major")):
+        # fix-now buys a review round; the field showed non-blocking
+        # entries buying rounds converted every advisory stop into
+        # CONTINUE. Non-blocking findings are deferred or rejected here
+        # and fixed AFTER the loop exits, as ordinary work.
+        raise Problem(
+            f"{entry['id']} is {entry['severity']} — fix-now buys a review "
+            "round, a purchase only critical/major or disputed entries may "
+            "make. Use defer (--ticket cleanup.md) or reject, via "
+            "`review.py disposition` or `disposition-batch`, and fix it "
+            "after the loop exits. (Human override: "
+            "review_loop.fix_now_blocking_only: false)")
     if action == "defer":
         if not ticket:
             raise Problem("defer requires --ticket — a deferral without a "
@@ -526,19 +575,20 @@ def _apply_disposition(entry: dict, action: str, reason, ticket) -> None:
 
 
 def disposition(ledger_path: pathlib.Path, finding_id: str, action: str,
-                reason, ticket) -> None:
+                reason, ticket, config=None) -> None:
     """Record the decision about a remaining entry. defer/reject are
     PENDING until close-round seals the round — the verdict is computed
     over what the round actually found, then the paperwork settles.
-    fix-now keeps the entry open and buys exactly one more round."""
+    fix-now keeps the entry open and buys exactly one more round (for
+    blocking or disputed entries only, unless the knob restores it)."""
     ledger = load_ledger(ledger_path)
     entry = find_entry(ledger, finding_id)
-    _apply_disposition(entry, action, reason, ticket)
+    _apply_disposition(entry, action, reason, ticket, config)
     save_ledger(ledger_path, ledger)
 
 
 def disposition_batch(ledger_path: pathlib.Path, ids: list, severity,
-                      action: str, reason, ticket) -> list:
+                      action: str, reason, ticket, config=None) -> list:
     """One decision recorded across many entries — RR-7 kept (every entry
     still gets its own ledger record), the N interactive round-trips
     collapsed to one. Selection is explicit IDs and/or a severity filter
@@ -565,9 +615,23 @@ def disposition_batch(ledger_path: pathlib.Path, ids: list, severity,
         raise Problem("disposition-batch selected no entries — name IDs, or "
                       "pick a --severity with open/not-fixed/disputed entries")
     for entry in selected:
-        _apply_disposition(entry, action, reason, ticket)
+        _apply_disposition(entry, action, reason, ticket, config)
     save_ledger(ledger_path, ledger)
     return [e["id"] for e in selected]
+
+
+def open_instance(ledger_path: pathlib.Path, checkpoint: str) -> None:
+    """Mark the start of a checkpoint loop instance. Cap, stall, and the
+    derived iteration are computed per instance from here on — one ledger
+    can carry spec, plan, code, and QA loops without their bookkeeping
+    bleeding into each other (the field ran exit records at iter=13
+    against a cap of 5)."""
+    if ledger_path.is_file():
+        ledger = load_ledger(ledger_path)
+    else:
+        ledger = new_ledger(slug_of(ledger_path))
+    ledger["history"].append({"instance": checkpoint})
+    save_ledger(ledger_path, ledger)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -577,6 +641,17 @@ def disposition_batch(ledger_path: pathlib.Path, ids: list, severity,
 def close_round(ledger_path: pathlib.Path, iteration: int, config: dict,
                 suite_evidence=None, gates_evidence=None) -> dict:
     ledger = load_ledger(ledger_path)
+    # Instance-relative iteration: with markers present, the ledger is
+    # the authority — a mismatch is a bookkeeping error, fail closed.
+    # Markerless ledgers keep legacy behavior: iteration accepted as
+    # given (validating there would break pre-instance flows).
+    if any("instance" in h for h in ledger["history"]):
+        derived = len(instance_rounds(ledger["history"])) + 1
+        if iteration != derived:
+            raise Problem(
+                f"--iteration {iteration} does not match this instance — "
+                f"the ledger says round {derived} (rounds are counted per "
+                "instance since the last open-instance marker)")
     sf = _load_sage_flags()
     decision = sf.decide({}, iteration, [],
                          ledger={"findings": ledger["findings"],
@@ -609,6 +684,7 @@ def close_round(ledger_path: pathlib.Path, iteration: int, config: dict,
     # that the verdict they were counted under is on the record. Disputed
     # entries seal the same way — their disposition is the human decision
     # the guard exists to force.
+    sealed_deferred = []
     if action != "CONTINUE":
         for entry in ledger["findings"]:
             if entry["status"] not in OPEN_STATUSES + ("disputed",):
@@ -616,13 +692,44 @@ def close_round(ledger_path: pathlib.Path, iteration: int, config: dict,
             d = entry.get("disposition")
             if isinstance(d, dict) and d.get("action") == "defer":
                 entry["status"] = "deferred"
+                sealed_deferred.append(entry)
             elif isinstance(d, dict) and d.get("action") == "reject":
                 entry["status"] = "rejected"
 
     save_ledger(ledger_path, ledger)
+    if sealed_deferred:
+        _write_cleanup(ledger_path, iteration, sealed_deferred)
     if action != "CONTINUE":
         _write_exit_record(ledger_path, ledger, iteration, decision)
     return decision
+
+
+def _write_cleanup(ledger_path: pathlib.Path, iteration: int,
+                   entries: list) -> None:
+    """The deferral ticket, written by the tool itself: every entry sealed
+    `deferred` lands in the cycle's cleanup.md with enough context to fix
+    it after the loop — a deferral without a ticket is a deletion with
+    extra steps, so the ticket file is machine-owned like decisions.md."""
+    path = ledger_path.resolve().parent / "cleanup.md"
+    lines = []
+    if not path.exists():
+        lines.append("# Cleanup — deferred review findings "
+                     "[machine-written by review.py]\n")
+    lines.append("\n## sealed at round %d — %s\n" % (
+        iteration, datetime.date.today().isoformat()))
+    for e in entries:
+        a = e["anchor"]
+        lines.append("- %s [%s] %s (%s:%s-%s)\n" % (
+            e["id"], e["severity"], e["claim"], a["file"],
+            a["region"][0], a["region"][1]))
+        if e.get("exit_criteria"):
+            lines.append("  - exit: %s\n" % e["exit_criteria"])
+    try:
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.writelines(lines)
+    except OSError as exc:
+        print(f"✗ could not write cleanup ticket {path}: {exc}",
+              file=sys.stderr)
 
 
 def _dispositions_summary(ledger: dict) -> str:
@@ -733,7 +840,7 @@ def check_diff(ledger_path: pathlib.Path, finding_id: str, commit: str,
                       "finding's anchor is not a license")
     anchor = entry["anchor"]
     if iteration is None:
-        iteration = len(ledger.get("history", [])) + 1
+        iteration = len(instance_rounds(ledger.get("history", []))) + 1
 
     message = _git(repo_root, "show", "-s", "--format=%B", commit)
     trailers = parse_trailers(message)
@@ -913,9 +1020,14 @@ def report(ledger_path: pathlib.Path) -> str:
             lines.append("       disputed@%d: %s" % (last["iteration"],
                                                      last["evidence"]))
     if ledger["history"]:
+        parts = []
+        for h in ledger["history"]:
+            if "instance" in h:
+                parts.append("[%s]" % h["instance"])
+            else:
+                parts.append("%d:%s" % (h["iteration"], h["result"]))
         lines.append("")
-        lines.append("rounds: " + " → ".join(
-            "%d:%s" % (h["iteration"], h["result"]) for h in ledger["history"]))
+        lines.append("rounds: " + " → ".join(parts))
     return "\n".join(lines)
 
 
@@ -986,6 +1098,7 @@ def main(argv=None) -> int:
     d.add_argument("--action", required=True, choices=list(DISPOSITIONS))
     d.add_argument("--reason")
     d.add_argument("--ticket")
+    d.add_argument("--config", default=None)
 
     b = add("disposition-batch", "one disposition across many entries, "
                                  "atomically (IDs and/or --severity)")
@@ -994,6 +1107,11 @@ def main(argv=None) -> int:
     b.add_argument("--action", required=True, choices=list(DISPOSITIONS))
     b.add_argument("--reason")
     b.add_argument("--ticket")
+    b.add_argument("--config", default=None)
+
+    oi = add("open-instance", "mark the start of a checkpoint loop instance "
+                              "(cap/stall/iteration count per instance)")
+    oi.add_argument("--checkpoint", required=True)
 
     c = add("close-round", "compute the round verdict from ledger facts")
     c.add_argument("--iteration", type=int, required=True)
@@ -1036,14 +1154,19 @@ def main(argv=None) -> int:
                            args.kind, args.status)
             print(f"✓ {args.finding_id} witness → {args.ref} ({args.status})")
         elif args.cmd == "disposition":
+            config = _resolve_config(args, args.ledger)
             disposition(args.ledger, args.finding_id, args.action,
-                        args.reason, args.ticket)
+                        args.reason, args.ticket, config)
             print(f"✓ {args.finding_id} → {args.action}")
         elif args.cmd == "disposition-batch":
+            config = _resolve_config(args, args.ledger)
             done = disposition_batch(args.ledger, args.finding_ids,
                                      args.severity, args.action,
-                                     args.reason, args.ticket)
+                                     args.reason, args.ticket, config)
             print(json.dumps({"dispositioned": done, "action": args.action}))
+        elif args.cmd == "open-instance":
+            open_instance(args.ledger, args.checkpoint)
+            print(f"✓ instance opened: {args.checkpoint}")
         elif args.cmd == "close-round":
             config = _resolve_config(args, args.ledger)
             print(json.dumps(close_round(args.ledger, args.iteration, config,

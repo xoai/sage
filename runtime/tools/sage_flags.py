@@ -320,8 +320,17 @@ def _decide_v2(iteration, ledger):
     counts = _open_counts(findings)
     blocking_counts = _open_counts(blocking)
     current_weight = weight(blocking_counts)
-    history = ledger.get("history", [])
-    stalls = _trailing_stalls([weight(h.get("counts", {})) for h in history],
+    # Cap and stall are per checkpoint instance: only the rounds after the
+    # last {"instance": ...} marker count. A marker is never a zero-weight
+    # round (that fabricated phantom stalls), and a markerless history is
+    # one instance — legacy ledgers byte-identical.
+    rounds = []
+    for h in ledger.get("history", []):
+        if "instance" in h:
+            rounds = []
+        else:
+            rounds.append(h)
+    stalls = _trailing_stalls([weight(h.get("counts", {})) for h in rounds],
                               current_weight)
     disputed_live = ([f for f in findings if f.get("status") == "disputed"
                       and not f.get("relitigates")] if disputed_guard else [])

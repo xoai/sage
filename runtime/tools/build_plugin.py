@@ -116,6 +116,10 @@ FILE_MAP = {
     "hooks/scripts/sage-hallucination-check.sh": "core/gates/scripts/sage-hallucination-check.sh",
     "hooks/scripts/sage-spec-check.sh": "core/gates/scripts/sage-spec-check.sh",
     "hooks/scripts/sage-verify.sh": "core/gates/scripts/sage-verify.sh",
+    # sage-verify.sh sources this sibling at runtime — mapping the script
+    # without its dependency ships a gate that breaks on install
+    # (test_sourced_siblings_ship_with_their_scripts pins the class).
+    "hooks/scripts/sage-bounded.sh": "core/gates/scripts/sage-bounded.sh",
     "hooks/scripts/sage-visual-gate.sh": "core/gates/scripts/sage-visual-gate.sh",
     "hooks/scripts/sage-spec-gate.sh": "runtime/platforms/claude-code/hooks/sage-spec-gate.sh",
     "hooks/scripts/sage-degradation-log.sh": "runtime/platforms/claude-code/hooks/sage-degradation-log.sh",

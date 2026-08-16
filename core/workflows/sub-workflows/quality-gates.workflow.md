@@ -179,19 +179,23 @@ missing interactive states, AI slop indicators. 15 seconds max.
 Independent sub-agent verification of implementation against spec.
 Runs as part of the gate sequence, not by agent discretion.
 
-**On resume close-out** (a cycle resumed via `manifest.py resume`): Gate 8 is
-**folded into the one combined reviewer** — its independent-verification-against-spec
-job is exactly the combined reviewer's Gate 1, and dispatching a second sub-agent
-to re-check the same thing is the duplication the resume profile flagged. Do not
-spawn a separate Auto-QA sub-agent on resume close-out; the combined reviewer
-carries the spec-verification verdict. (First-session builds still run Gate 8 as
-below — that session has no prior independent read to fold into.)
+**Gate 8 is folded into the independent review — ALWAYS, not only on
+resume close-out.** Its independent-verification-against-spec job is
+exactly the spec-review verdict the combined reviewer (or, under
+`gate_review: per-gate`, the dedicated Gate-1 reviewer) already
+returns; dispatching a second sub-agent to re-check the same thing was
+the duplication the resume profile flagged, and the field showed
+first-session builds paying a whole second loop instance for it
+(loop-field-economics, 2026-08-16). Do not spawn a separate Auto-QA
+sub-agent; the reviewer that carries the Gate-1 verdict carries the
+spec-verification verdict, and its findings are presented under the
+Gate 8 heading with the same [R] Fix / [P] Proceed / [D] Discuss
+options.
 
-**Activation conditions (ALL must be true):**
+**Activation conditions for the folded verdict (ALL must be true):**
 1. Task tool is available
 2. Scope is Standard or Comprehensive (Lightweight tasks skip)
 3. `auto_qa` ≠ false in `.sage/config.yaml`
-4. NOT a resume close-out (see above — folded into the combined reviewer there)
 
 Skip handling — a skipped QA that leaves no trace reads as a QA that passed,
 so a Task-tool skip is LOUD (R29):
@@ -202,11 +206,12 @@ so a Task-tool skip is LOUD (R29):
 - Condition 3 false (`auto_qa: false`) → skip with the one-line "disabled" note.
 
 **When active:**
-1. Announce: "⚡ Running implementation QA (sub-agent)..."
-2. Read `sage/core/capabilities/review/auto-qa/SKILL.md`.
-3. Gather changed file list, spec path, plan path, test files.
-4. Spawn sub-agent with the Implementation QA prompt.
-5. Present findings inline.
+1. Ensure the Gate 1–3 reviewer's prompt includes the auto-QA criteria
+   (read `sage/core/capabilities/review/auto-qa/SKILL.md` for them —
+   changed files, spec path, plan path, test files travel in that one
+   dispatch).
+2. Present the reviewer's spec-verification findings inline under the
+   Gate 8 heading. No second sub-agent.
 
 **Advisory.** Gate 8 findings are warnings and recommendations.
 A failure does NOT block the build — it produces findings with
@@ -214,7 +219,8 @@ A failure does NOT block the build — it produces findings with
 be presented to the user before Step 8.
 
 **Fix-and-recheck:** If user picks [R], fix the specific issues
-(file:line provided), then re-run Gate 8 (max 2 iterations).
+(file:line provided), then re-verify the fix through the same folded
+reviewer (max 2 iterations) — never a fresh dedicated QA dispatch.
 
 ## Rules
 

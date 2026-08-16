@@ -81,6 +81,41 @@ echo ""
 
 # ── 3. Every shell script parses under bash 3.2 ───────────────────────
 echo "── Check 3: bash -n syntax check on all shell scripts ──"
+# ── Bounded-execution helper: EXERCISED, not just parsed ──
+# The watchdog is the one gate mechanism whose failure mode is a hang;
+# parsing proves nothing about kill/wait semantics under bash 3.2.
+echo "── sage-bounded.sh under this bash ──"
+if . core/gates/scripts/sage-bounded.sh 2>/dev/null; then
+  SB_TMP=$(mktemp -d "${TMPDIR:-/tmp}/sb32-XXXXXX" 2>/dev/null) || SB_TMP=""
+  if [ -n "$SB_TMP" ]; then
+    sb_start=$(date +%s)
+    sage_bounded_run "$SB_TMP/out" "$SB_TMP/sentinel" 1 "$SB_TMP" sleep 30
+    sb_rc=$?
+    sb_elapsed=$(( $(date +%s) - sb_start ))
+    if [ -f "$SB_TMP/sentinel" ] && [ "$sb_rc" -ne 0 ] && [ "$sb_elapsed" -lt 20 ]; then
+      echo "  ✓ watchdog kills a hung command (rc=$sb_rc, ${sb_elapsed}s) and writes the sentinel"
+    else
+      echo "  ✗ watchdog failed (rc=$sb_rc, elapsed=${sb_elapsed}s, sentinel=$([ -f "$SB_TMP/sentinel" ] && echo yes || echo no))"
+      fail=1
+    fi
+    sage_bounded_run "$SB_TMP/out2" "$SB_TMP/sentinel2" 30 "$SB_TMP" true
+    if [ $? -eq 0 ] && [ ! -f "$SB_TMP/sentinel2" ]; then
+      echo "  ✓ fast command unaffected"
+    else
+      echo "  ✗ fast path broken"
+      fail=1
+    fi
+    rm -rf "$SB_TMP"
+  else
+    echo "  ✗ could not create a temp dir for the exercise"
+    fail=1
+  fi
+else
+  echo "  ✗ sage-bounded.sh failed to source"
+  fail=1
+fi
+echo ""
+
 syntax_ok=1
 # bin/sage has no .sh extension — check it explicitly.
 for f in bin/sage $(find . -name '*.sh' \

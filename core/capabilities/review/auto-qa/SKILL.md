@@ -86,7 +86,14 @@ skip with: "Auto-QA timed out. Run the QA command manually for full testing."
 
 ## Gathering Context for the Sub-Agent
 
-Before spawning the sub-agent, gather:
+**Default dispatch: FOLDED.** This capability's verdict rides the
+Gate 1–3 independent reviewer (see quality-gates.workflow.md, Gate 8)
+— the criteria and context below travel in THAT one dispatch. Spawn a
+dedicated QA sub-agent only when the folded path is unavailable; a
+first-session build paying a second loop instance to re-ask the Gate-1
+question was the field duplication the fold removes.
+
+Before dispatching (folded or dedicated), gather:
 
 1. **Spec path** — `.sage/work/*/spec.md`
 2. **Plan path** — `.sage/work/*/plan.md`

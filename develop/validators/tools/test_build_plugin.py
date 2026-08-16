@@ -102,6 +102,34 @@ class BuildPluginTest(unittest.TestCase):
                              (REPO_ROOT / src_rel).read_bytes(),
                              f"{plugin_rel} != {src_rel}")
 
+    def test_sourced_siblings_ship_with_their_scripts(self):
+        """A mapped script that sources a sibling — `. "$(... dirname
+        BASH_SOURCE ...)/x.sh"` — ships BROKEN unless the sibling rides
+        the same FILE_MAP directory. `--check` cannot see this class: it
+        verifies mapped sources exist, not that their sourced
+        dependencies ship (found live: sage-verify.sh sourcing
+        sage-bounded.sh, mapped alone)."""
+        import re
+        for plugin_rel, src_rel in build_plugin.FILE_MAP.items():
+            if not src_rel.endswith(".sh"):
+                continue
+            text = (REPO_ROOT / src_rel).read_text(encoding="utf-8")
+            for line in text.splitlines():
+                stripped = line.strip()
+                if not stripped.startswith(". ") or "BASH_SOURCE" not in stripped:
+                    continue
+                m = re.search(r'/([A-Za-z0-9._-]+\.sh)"?\s*$', stripped)
+                if not m:
+                    continue
+                sibling = m.group(1)
+                want = str(pathlib.PurePosixPath(plugin_rel).parent
+                           / sibling)
+                self.assertIn(
+                    want, build_plugin.FILE_MAP,
+                    f"{src_rel} sources sibling {sibling}; the plugin "
+                    f"ships {plugin_rel} without {want} — the gate would "
+                    f"break on install")
+
     def test_marketplace_pins_the_dist_branch(self):
         """Without a ref the source resolves to main, which has no plugin tree."""
         out = self._build()

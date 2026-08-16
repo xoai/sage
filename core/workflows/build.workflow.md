@@ -450,9 +450,10 @@ If quality-gates cannot be loaded, follow these minimum rules:
 run full test suite, paste output, verify implementation matches spec,
 check for hallucinated imports or APIs.
 
-Quality gates now include Gate 8 (Auto-QA) which runs automatically
-as part of the gate sequence when Task tool is available. See
-`quality-gates.workflow.md` for the full sequence including Gate 8.
+Quality gates include Gate 8 (Auto-QA), whose verdict rides the
+Gate 1–3 independent reviewer — one dispatch, never a second QA
+sub-agent. See `quality-gates.workflow.md` for the full sequence
+including the folded Gate 8.
 
 ## Step 8: Review and Close
 

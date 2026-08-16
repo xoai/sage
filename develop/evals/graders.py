@@ -1072,16 +1072,34 @@ def review_loop(ws, tx, p) -> tuple:
     history = ledger.get("history", [])
     problems = []
 
-    if "max_rounds" in p and len(history) > p["max_rounds"]:
-        problems.append(f"{len(history)} rounds > cap {p['max_rounds']}")
+    # One ledger may carry several checkpoint instances ({"instance": ...}
+    # markers). The cap and the monotonicity claim are PER INSTANCE — the
+    # field's real multi-instance ledgers were false-flagged when the
+    # second instance's round 1 read as a climb from the first's terminal
+    # zero, and markers counted as rounds.
+    instances, _cur = [], []
+    for h in history:
+        if "instance" in h:
+            instances.append(_cur)
+            _cur = []
+        else:
+            _cur.append(h)
+    instances.append(_cur)
+
+    if "max_rounds" in p:
+        biggest = max(len(seg) for seg in instances)
+        if biggest > p["max_rounds"]:
+            problems.append(f"{biggest} rounds > cap {p['max_rounds']}")
 
     if p.get("monotone_open_weight"):
-        seq = [sum(weights[k] * h.get("counts", {}).get(k, 0)
-                   for k in weights) for h in history]
-        drops = [i for i in range(1, len(seq)) if seq[i] > seq[i - 1]]
-        if drops:
-            problems.append(f"open-weight climbed at round(s) "
-                            f"{', '.join(str(i + 1) for i in drops)}: {seq}")
+        for seg in instances:
+            seq = [sum(weights[k] * h.get("counts", {}).get(k, 0)
+                       for k in weights) for h in seg]
+            drops = [i for i in range(1, len(seq)) if seq[i] > seq[i - 1]]
+            if drops:
+                problems.append(f"open-weight climbed at round(s) "
+                                f"{', '.join(str(i + 1) for i in drops)}: "
+                                f"{seq}")
 
     if p.get("exit_record"):
         decisions = path.parent / "decisions.md"

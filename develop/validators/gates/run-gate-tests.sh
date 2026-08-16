@@ -303,6 +303,36 @@ run_case G7 "passing pytest suite passes" \
   --requires pytest \
   -- "$FIX/verify/passing-pytest"
 
+# ── Bounded verification (field lesson: a hung suite spun the orchestrator
+# for hours; a timeout is a FAIL with evidence, never a hang, never a skip).
+run_case G7b "hung suite is killed at SAGE_VERIFY_TIMEOUT and FAILS with evidence" \
+  --script "$V" --exit 1 --contains "TIMED OUT" --contains "exceeded" \
+  --requires pytest \
+  --env SAGE_VERIFY_TIMEOUT=2 \
+  -- "$FIX/verify/hanging-pytest"
+
+run_case G7c "fast suite is unaffected by the watchdog" \
+  --script "$V" --exit 0 --contains "PASS" \
+  --requires pytest \
+  --env SAGE_VERIFY_TIMEOUT=60 \
+  -- "$FIX/verify/passing-pytest"
+
+run_case G7d "JS runners get CI=true (watch modes never engage)" \
+  --script "$V" --exit 0 \
+  --requires npm \
+  -- "$FIX/verify/npm-ci-env"
+
+run_case G8b "go runner gets -timeout injected when GOFLAGS carries none" \
+  --script "$V" --exit 0 --contains "timeout=120s" \
+  --requires go \
+  -- "$FIX/verify/passing-go"
+
+run_case G8c "a project GOFLAGS -timeout wins — no injection" \
+  --script "$V" --exit 0 --not-contains "timeout=120s" \
+  --requires go \
+  --env GOFLAGS=-timeout=300s \
+  -- "$FIX/verify/passing-go"
+
 # Asserting on the test's name proves the gate failed because the SUITE failed,
 # not because the runner itself blew up.
 run_case G8 "failing pytest suite fails, with captured evidence" \
