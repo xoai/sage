@@ -2,6 +2,109 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [Unreleased] — review-loop hardening: the disputed hole closed, declarations validated, ceremony scaled to severity
+
+An independent review of the v2 review loop (spec + evidence in the
+cycle's private work dir) found the controller's edges softer than its
+core: a disputed critical could vanish into STOP_CLEAN, and both
+severity escape hatches — citations and witnesses — were self-declared.
+The architecture stands; the edges are now enforced.
+
+- **Disputed findings can no longer vanish (the S2 hole).** A
+  Phase-A-disputed entry — `--cannot-reproduce` or `DISPUTED-STANDS`,
+  no `relitigates` field — used to drop out of `OPEN_STATUSES` and the
+  verdict with it: a sole disputed critical closed STOP_CLEAN 0/0/0/0
+  with no human decision, which also made cannot-reproduce the fixer's
+  cheapest path past any blocking finding. Now it never drives CONTINUE
+  (the v1 runaway stays closed) but blocks every STOP until it gets a
+  disposition; sealing covers it; the exit record carries `disputed=`;
+  `report` renders the Phase-A evidence. Intake-disputed re-raises
+  (`relitigates` set) keep their by-design non-blocking behavior.
+  Restore knob: `review_loop.disputed_disposition: false`.
+- **Citations must resolve to sustain critical/major.** Intake resolves
+  `cited_rule` against the cycle's spec/plan and the constitution
+  (per-kind source selection); an unresolvable citation counts as no
+  citation for capping and is flagged `citation_unresolved`. Fail-soft
+  in one direction only: no source of the cited kind on disk = check
+  skipped, loudly, never a cap for missing context. Restore knob:
+  `review_loop.citation_check: false`.
+- **`disposition-batch`: one decision across many entries, atomically.**
+  Explicit IDs and/or `--severity` selector; defers share one cleanup
+  ticket; every entry keeps its own ledger record — RR-7 kept, the N
+  interactive round-trips collapsed to one.
+- **The fix round's ceremony now scales with severity (docs).** Blocking
+  findings get witness-first, one-commit-per-finding, and check-diff;
+  substantive/cosmetic entries settle at STOP via dispositions instead
+  of being fixed inside the loop by default.
+- **`Sage-Fix` may name several findings.** check-diff widens scope to
+  the union of the named findings' anchors ∪ witnesses ∪ collateral —
+  a loosening only to entries the ledger holds; unknown trailer IDs are
+  advisory; single-ID commits are byte-identical (pinned by the
+  existing suite).
+- **`phase_a_scope` knob (default `all`, unchanged behavior).** `fixed`
+  scopes Phase A to Sage-Fix-claimed entries plus one full pass on the
+  stopping round; the flip is a measured decision (E17 guards ledger
+  amnesia).
+- The four review capabilities' output contract now states the rule the
+  code enforces — witness OR resolving citation, else substantive — in
+  place of witness-required prose the tool never enforced.
+
+An independent review of the hardening itself (same session, fresh
+pass) closed four more edges before anything shipped:
+
+- **`disputed_disposition` joined the config-gate's review floor** —
+  without that, flipping the knob was the fixer's cheapest escape past
+  a blocking finding; the gate now blocks `disputed_disposition: false`
+  while v2 is active, on both the Edit/Write path and the coarse Bash
+  matcher (C11b/C11c pin it).
+- **fix-now now buys EXACTLY one round, as documented.** The
+  disposition used to survive a NOT-FIXED / cannot-reproduce verdict,
+  and fix_now preempts both the stall check and the cap — an unbounded
+  loop. Any Phase-A verdict now spends it.
+- **`Sage-Fix: F-001, F-002` parses** — a comma-separated trailer used
+  to drop the suffixed token, silently narrowing scope and
+  manufacturing a spurious advisory plus a machine major.
+- **Settled findings don't widen check-diff scope** — a trailer naming
+  a fixed/rejected/deferred ID no longer licenses touching its anchor
+  (advisory recorded); and `adr`-kind citations resolve against the
+  cycle's own markdown docs, so architect-mode citations aren't
+  spuriously capped.
+
+A third pass attacked the second round's own fixes (the newest, least-
+reviewed code — the 1.3.18 lesson) and closed two more:
+
+- **The review-floor booleans joined the contradictory-duplicate
+  guard.** The config-gate reads flags first-occurrence while
+  `review.py` reads last-block-wins — so appending a duplicate
+  `witness_capping: false` (or `disputed_disposition: false`) after an
+  existing `true` passed the gate yet disarmed the floor. Pre-existing
+  for `witness_capping`; both keys now trip the reader-divergence check
+  (C11d/C11e).
+- **check-diff refuses a settled invocation.** The trailer path already
+  declined to widen scope through settled findings; invoking
+  `check-diff --finding` on a fixed/rejected/deferred entry was the
+  same smuggling channel through the front door — now fails closed
+  (fixes apply to open/not-fixed/disputed entries).
+
+A mutation audit then tested the tests themselves: six mutants, each
+reverting one load-bearing decision (the disputed-pending requirement,
+the relitigates discriminator, the citation cap, the settled-scope
+exclusion, the source resolver, the broadened STOP refusal). Five died
+to exactly the intended pins; the survivor — the belt-and-braces STOP
+refusal, unreachable through the decision table — gained a direct
+stub-driven test, so every claimed behavior now kills its own revert.
+
+A fourth pass attacked round three's fixes and found no code defect —
+the convergence signal. It verified by execution: value-form reader
+agreement across both config readers (the one divergence, uppercase
+`FALSE`, over-blocks — the gate's conservative direction, not a
+bypass); legacy pre-hardening ledgers inherit the disputed guard; a
+re-raised Phase-A-disputed finding merges without escaping its
+disposition. One stale hook header comment fixed. Accepted residuals,
+documented at the code: witness self-declaration at intake (disciplined
+by materialize-or-cannot-reproduce, which now has teeth); E16–E18
+agentic re-runs remain budget-gated.
+
 ## [1.3.18] — parallel implementation lanes: the plan's structure becomes machine state, and lanes are code-scheduled (A6→A8→A7→A9)
 
 ### Re-review (round four): the rebuilds attacked, two fresh classes closed, convergence reached

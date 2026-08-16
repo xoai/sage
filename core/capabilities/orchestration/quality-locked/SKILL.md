@@ -236,9 +236,14 @@ interaction) still applies on both paths.
 What changes and why: the reviewer loses the verdict — findings are
 structured evidence, the decision is computed by
 `sage/runtime/tools/review.py` + `sage_flags.py` from ledger facts. A
-finding that cites nothing and demonstrates nothing is capped at
-substantive on intake and never blocks. Findings, once recorded, cannot
-be forgotten or silently re-raised.
+finding that cites nothing (or whose citation resolves against no
+spec/plan/constitution source — intake checks) and demonstrates nothing
+is capped at substantive on intake and never blocks. Findings, once
+recorded, cannot be forgotten or silently re-raised — including
+disputed ones: a Phase-A-disputed entry (cannot-reproduce, or
+DISPUTED-STANDS) never drives another round, but it must receive a
+disposition before any STOP records (`review_loop.disputed_disposition:
+false` restores the old vanish).
 
 Per iteration (1..cap, default cap 5 — `review_loop.iteration_cap`):
 
@@ -271,15 +276,17 @@ Per iteration (1..cap, default cap 5 — `review_loop.iteration_cap`):
                     capability), increment, loop.
    - STOP_CLEAN:    exit loop, continue the workflow.
    - STOP_ADVISORY / STOP_CAP: close-round REFUSES to record until every
-                    open entry has a disposition. Present the remaining
-                    entries (`review.py report`) with the disposition
-                    menu below, record each choice via
-                    `review.py disposition`, then close-round again.
+                    open AND every Phase-A-disputed entry has a
+                    disposition. Present the remaining entries
+                    (`review.py report`) with the disposition menu
+                    below, record the choices — `review.py disposition`
+                    per entry, or ONE `review.py disposition-batch` for
+                    several sharing a decision — then close-round again.
    - ESCALATE:      render `review.py report`, present the escalation
                     prompt. The controller does not spend past a stall.
 ```
 
-Disposition menu (per remaining open entry, RR-7):
+Disposition menu (per remaining open or disputed entry, RR-7):
 
 ```
 [F] Fix now — one more fix round for this finding (converts the stop
@@ -288,11 +295,24 @@ Disposition menu (per remaining open entry, RR-7):
     red-marked in the suite
 [X] Reject — requires a reason, recorded; re-raising it later needs
     the anchor to have actually changed
+[B] Batch — one decision across several entries:
+    `review.py disposition-batch <ledger> [F-ids...] [--severity
+    substantive|cosmetic] --action defer --ticket <one cleanup ticket>`
+    (or `--action reject --reason ...`). Every entry still gets its own
+    ledger record; only the round-trips collapse.
 ```
 
 ### Fix round (v2) — witness-first, one finding one commit
 
-On CONTINUE, fix open findings in severity order. Per finding:
+On CONTINUE, fix the BLOCKING findings — criticals, and majors beyond
+`major_budget` — in severity order; the witness-first ceremony below is
+theirs. Substantive and cosmetic entries are NOT fixed inside the loop
+by default: they stay open and are settled at STOP with dispositions
+(the `[B]` batch path collapses N of them into one command — defers
+share one cleanup ticket). Fixing a substantive anyway is allowed when
+it shares an anchor or commit with a blocking fix (cluster rule, step
+3); ceremony must scale with severity, not with count. Per blocking
+finding:
 
 1. **Materialize the witness before touching code.** `witness.kind:
    test` — run it, confirm red at HEAD. `repro`/`trace` — write the
@@ -302,8 +322,10 @@ On CONTINUE, fix open findings in severity order. Per finding:
    it (red or green as the code warrants; an empty test cell over green
    code is still a fix). If the witness cannot be reproduced at HEAD:
    `review.py verify <ledger> --iteration N --cannot-reproduce <F-id>
-   --evidence "<run output>"` — bounced to the controller, never
-   silently skipped. (The tdd-gate already blocks a source edit without
+   --evidence "<run output>"` — bounced to the controller as a Phase-A
+   dispute that must be dispositioned before any STOP records, never
+   silently skipped and never a way out: a disputed finding does not
+   vanish from the verdict. (The tdd-gate already blocks a source edit without
    a test in scope; witness-first is that rule's loop-shaped
    application.)
 2. **Collateral safety (advisory):** when the packet's blast radius
@@ -311,8 +333,11 @@ On CONTINUE, fix open findings in severity order. Per finding:
    behavior with 1–3 asserts first (`tests/review/<F-id>-sentinel.*`).
    You cannot avoid breaking what nothing observes; sentinels are the
    cheapest observer.
-3. **Fix, then commit — ONE commit per finding** (cluster only findings
-   sharing an anchor), with trailers:
+3. **Fix, then commit — ONE commit per finding** (cluster findings only
+   when one change genuinely closes them together — then `Sage-Fix`
+   names ALL of them, e.g. `Sage-Fix: F-003 F-007`, and check-diff
+   widens scope to the union of their anchors ∪ witnesses), with
+   trailers:
 
    ```
    Sage-Fix: F-003

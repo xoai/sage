@@ -249,6 +249,251 @@ class CloseRoundTest(LedgerCase):
             R.disposition(self.ledger, "F-001", "reject", None, None)
 
 
+class DisputedGuardLedgerTest(LedgerCase):
+    """The S2 hole, end to end (brief: evidence/verify_review_claims.py).
+    A finding the fixer cannot reproduce, or the reviewer stands by, is
+    contested — it must reach a human as a disposition, never vanish
+    into STOP_CLEAN."""
+
+    def witnessed_critical(self):
+        return raw_finding(severity="critical",
+                           witness={"kind": "test",
+                                    "ref": "tests/review/F-001.test.ts",
+                                    "status": "red"})
+
+    def test_cannot_reproduce_blocks_stop_until_disposition(self):
+        self.intake([self.witnessed_critical()])
+        R.cannot_reproduce(self.ledger, "F-001", "witness green at HEAD", 2)
+        with self.assertRaises(R.Problem) as ctx:
+            R.close_round(self.ledger, 2, self.config)
+        self.assertIn("F-001", str(ctx.exception))
+        data = json.loads(self.ledger.read_text(encoding="utf-8"))
+        self.assertEqual(data["history"], [])       # refusal records nothing
+
+    def test_disputed_stands_blocks_stop_until_disposition(self):
+        self.intake([self.witnessed_critical()])
+        R.verify(self.ledger, [{"id": "F-001", "verdict": "DISPUTED-STANDS",
+                                "evidence": "boundary is reachable"}], 2)
+        with self.assertRaises(R.Problem):
+            R.close_round(self.ledger, 2, self.config)
+
+    def test_disposition_unblocks_seals_and_logs_disputed_field(self):
+        self.intake([self.witnessed_critical()])
+        R.cannot_reproduce(self.ledger, "F-001", "witness green at HEAD", 2)
+        R.disposition(self.ledger, "F-001", "defer", None, "TICKET-3")
+        decision = R.close_round(self.ledger, 2, self.config)
+        self.assertEqual(decision["action"], "STOP_ADVISORY")
+        self.assertEqual(self.entries()[0]["status"], "deferred")
+        record = (self.ledger.parent / "decisions.md").read_text(encoding="utf-8")
+        self.assertIn("disputed=", record)
+        self.assertIn("F-001:defer", record)
+
+    def test_report_renders_phase_a_evidence(self):
+        self.intake([self.witnessed_critical()])
+        R.cannot_reproduce(self.ledger, "F-001", "pytest: 1 passed at HEAD", 2)
+        self.assertIn("cannot reproduce: pytest: 1 passed at HEAD",
+                      R.report(self.ledger))
+
+    def test_guard_off_restores_prior_behavior(self):
+        cfg = dict(self.config, disputed_disposition=False)
+        self.intake([self.witnessed_critical()], config=cfg)
+        R.cannot_reproduce(self.ledger, "F-001", "witness green at HEAD", 2)
+        self.assertEqual(R.close_round(self.ledger, 2, cfg)["action"],
+                         "STOP_CLEAN")
+
+
+class FixNowExpiryTest(LedgerCase):
+    """fix-now buys EXACTLY one more round — the docstring's promise.
+    Sticky fix-now was an unbounded loop: the disposition survived a
+    NOT-FIXED verdict, and fix_now preempts both the stall check and the
+    cap, so a fix that kept failing bought rounds forever."""
+
+    def test_not_fixed_spends_the_bought_round(self):
+        self.intake([raw_finding(severity="substantive")])
+        R.disposition(self.ledger, "F-001", "fix-now", None, None)
+        self.assertEqual(R.close_round(self.ledger, 1, self.config)["action"],
+                         "CONTINUE")               # the bought round
+        R.verify(self.ledger, [{"id": "F-001", "verdict": "NOT-FIXED",
+                                "evidence": "still reproduces"}], 2)
+        self.assertIsNone(self.entries()[0]["disposition"])
+        with self.assertRaises(R.Problem):         # human decides anew,
+            R.close_round(self.ledger, 2, self.config)   # not CONTINUE forever
+
+    def test_cannot_reproduce_spends_the_bought_round(self):
+        self.intake([raw_finding(severity="substantive")])
+        R.disposition(self.ledger, "F-001", "fix-now", None, None)
+        R.close_round(self.ledger, 1, self.config)
+        R.cannot_reproduce(self.ledger, "F-001", "no repro at HEAD", 2)
+        self.assertIsNone(self.entries()[0]["disposition"])
+
+    def test_fixed_still_clears_it(self):
+        self.intake([raw_finding(severity="substantive")])
+        R.disposition(self.ledger, "F-001", "fix-now", None, None)
+        R.verify(self.ledger, [{"id": "F-001", "verdict": "FIXED",
+                                "evidence": "witness green"}], 2)
+        self.assertIsNone(self.entries()[0]["disposition"])
+
+
+class StopRefusalBeltAndBracesTest(LedgerCase):
+    """close_round refuses ANY stop verdict carrying pending dispositions
+    — including STOP_CLEAN, which today's decision table cannot produce
+    in that state (the disputed guard reroutes it to STOP_ADVISORY).
+    The broadened refusal defends against a FUTURE decide() change or a
+    new action; a mutation audit found it otherwise unpinned, and a
+    claimed behavior with a surviving mutant is an unpinned claim. The
+    stub bypasses the table to reach the impossible state directly."""
+
+    def test_stop_clean_with_pending_dispositions_refused(self):
+        self.intake([raw_finding(severity="substantive")])
+
+        class StubFlags:
+            @staticmethod
+            def decide(counts, iteration, history, ledger=None):
+                return {"counts": {"critical": 0, "major": 0,
+                                   "substantive": 0, "cosmetic": 0},
+                        "action": "STOP_CLEAN",
+                        "dispositions_required": ["F-001"],
+                        "disputed_pending": [], "fix_now": [],
+                        "open_ids": [], "stalled": False,
+                        "cap_reached": False, "weight": 0}
+
+        real = R._load_sage_flags
+        R._load_sage_flags = lambda: StubFlags
+        self.addCleanup(setattr, R, "_load_sage_flags", real)
+        with self.assertRaises(R.Problem):
+            R.close_round(self.ledger, 1, self.config)
+        data = json.loads(self.ledger.read_text(encoding="utf-8"))
+        self.assertEqual(data["history"], [])       # nothing recorded
+
+
+class CitationTest(LedgerCase):
+    """RR-3.1 hardened: a citation that resolves nowhere is no citation.
+    Fail-soft — with no source of the cited kind on disk, the check
+    disables itself loudly rather than capping a legitimate finding."""
+
+    def spec(self, text="## Requirements\n\n§4.2 refresh tokens rotate "
+                        "on every use\n"):
+        (self.ledger.parent / "spec.md").write_text(text, encoding="utf-8")
+
+    def test_resolvable_spec_citation_keeps_severity(self):
+        self.spec()
+        self.intake([raw_finding(severity="critical", cited="spec §4.2")])
+        self.assertEqual(self.entries()[0]["severity"], "critical")
+
+    def test_unresolvable_citation_caps(self):
+        self.spec()
+        rep = self.intake([raw_finding(severity="critical", cited="spec §77.7")])
+        entry = self.entries()[0]
+        self.assertEqual(entry["severity"], "substantive")
+        self.assertEqual(entry["severity_as_reported"], "critical")
+        self.assertTrue(entry["citation_unresolved"])
+        self.assertEqual(rep["citation_unresolved"], [entry["id"]])
+        self.assertEqual(rep["capped"], [entry["id"]])
+
+    def test_witness_rescues_unresolvable_citation(self):
+        self.spec()
+        self.intake([raw_finding(severity="critical", cited="spec §77.7",
+                                 witness={"kind": "test",
+                                          "ref": "tests/review/F-001.py",
+                                          "status": "red"})])
+        self.assertEqual(self.entries()[0]["severity"], "critical")
+
+    def test_no_source_of_cited_kind_skips_loudly(self):
+        rep = self.intake([raw_finding(severity="critical", cited="spec §77.7")])
+        self.assertEqual(self.entries()[0]["severity"], "critical")
+        self.assertEqual(rep["citation_skipped"], ["F-001"])
+
+    def test_constitution_citation_resolves(self):
+        (self.root / ".sage" / "constitution.md").write_text(
+            "api.3: all queries parameterized\n", encoding="utf-8")
+        self.intake([raw_finding(severity="major", cited="constitution:api.3")])
+        self.assertEqual(self.entries()[0]["severity"], "major")
+
+    def test_check_off_restores_unvalidated(self):
+        self.spec()
+        cfg = dict(self.config, citation_check=False)
+        self.intake([raw_finding(severity="critical", cited="spec §77.7")],
+                    config=cfg)
+        self.assertEqual(self.entries()[0]["severity"], "critical")
+
+    def test_adr_citations_resolve_against_cycle_docs(self):
+        # Architect mode cites ADRs; their filenames vary, so the adr
+        # kind resolves against every markdown doc in the cycle dir —
+        # a real ADR reference holds severity, a bogus one caps.
+        (self.ledger.parent / "adr-storage.md").write_text(
+            "ADR-7 chosen: event sourcing\n", encoding="utf-8")
+        rep = self.intake([raw_finding(severity="major", cited="adr ADR-7"),
+                           raw_finding(severity="major", cited="adr ADR-99",
+                                       claim="phantom decision", region=(2, 3))])
+        self.assertEqual(self.entries()[0]["severity"], "major")
+        self.assertEqual(self.entries()[1]["severity"], "substantive")
+        self.assertEqual(rep["citation_unresolved"], [self.entries()[1]["id"]])
+
+
+class BatchDispositionTest(LedgerCase):
+    """RR-7 kept, the round-trips collapsed: every entry still gets a
+    recorded decision; N interactive disposition calls become one."""
+
+    def seed(self):
+        self.intake([
+            raw_finding(claim="c1", severity="cosmetic", region=(1, 2)),
+            raw_finding(claim="c2", severity="cosmetic", region=(2, 3)),
+            raw_finding(claim="c3", severity="cosmetic", region=(3, 4)),
+            raw_finding(claim="s1", severity="substantive", region=(1, 4)),
+        ])
+
+    def test_severity_selector_rejects_all_cosmetics(self):
+        self.seed()
+        out = R.disposition_batch(self.ledger, [], "cosmetic", "reject",
+                                  "style-only, no behavior change", None)
+        self.assertEqual(out, ["F-001", "F-002", "F-003"])
+        for e in self.entries()[:3]:
+            self.assertEqual(e["disposition"]["action"], "reject")
+        self.assertIsNone(self.entries()[3]["disposition"])
+
+    def test_ids_share_one_ticket_and_close_round_seals(self):
+        self.seed()
+        R.disposition_batch(self.ledger, ["F-001", "F-002", "F-003"], None,
+                            "reject", "nits", None)
+        out = R.disposition_batch(self.ledger, ["F-004"], None, "defer",
+                                  None, "TICKET-12")
+        self.assertEqual(out, ["F-004"])
+        decision = R.close_round(self.ledger, 1, self.config)
+        self.assertEqual(decision["action"], "STOP_ADVISORY")
+        self.assertEqual([e["status"] for e in self.entries()],
+                         ["rejected", "rejected", "rejected", "deferred"])
+
+    def test_batch_is_atomic_on_bad_input(self):
+        self.seed()
+        with self.assertRaises(R.Problem):
+            R.disposition_batch(self.ledger, ["F-001", "F-999"], None,
+                                "reject", "r", None)
+        self.assertTrue(all(e["disposition"] is None for e in self.entries()))
+        with self.assertRaises(R.Problem):
+            R.disposition_batch(self.ledger, ["F-001"], None, "defer",
+                                None, None)
+        self.assertTrue(all(e["disposition"] is None for e in self.entries()))
+
+    def test_empty_selection_fails_closed(self):
+        self.seed()
+        with self.assertRaises(R.Problem):
+            R.disposition_batch(self.ledger, [], None, "reject", "r", None)
+        with self.assertRaises(R.Problem):
+            R.disposition_batch(self.ledger, [], "critical", "reject", "r",
+                                None)
+
+    def test_cli_subcommand(self):
+        self.seed()
+        proc = subprocess.run(
+            [sys.executable, str(REVIEW_PY), "disposition-batch",
+             str(self.ledger), "--severity", "cosmetic", "--action", "reject",
+             "--reason", "style only"],
+            capture_output=True, text=True)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(json.loads(proc.stdout)["dispositioned"],
+                         ["F-001", "F-002", "F-003"])
+
+
 class FailClosedTest(LedgerCase):
     def test_malformed_ledger(self):
         self.ledger.write_text("{not json", encoding="utf-8")

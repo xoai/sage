@@ -99,10 +99,13 @@ v2 — the default since the flip criteria were measured (E16–18 N=3,
 calibration recall/precision 1.0) — puts the review-revise verdict in code:
 reviewer findings land in a machine-owned ledger (`runtime/tools/review.py`,
 at `.sage/work/<slug>/review-ledger.json`) and `sage_flags.py` computes every
-CONTINUE/ESCALATE/STOP from ledger facts. Findings that cite nothing and
-demonstrate nothing are capped at substantive and never block. Projects
-initialized before the flip are pinned to `mode: v1` by `sage update`
-(nothing changes mid-initiative); delete the pin or set `v2` to opt in.
+CONTINUE/ESCALATE/STOP from ledger facts. Findings that cite nothing (or
+whose citation resolves against no spec/plan/constitution source) and
+demonstrate nothing are capped at substantive and never block — and a
+finding the fixer disputes cannot vanish: it stops the loop until a human
+dispositions it. Projects initialized before the flip are pinned to
+`mode: v1` by `sage update` (nothing changes mid-initiative); delete the
+pin or set `v2` to opt in.
 
 | Key | Default | Effect | Restore v1 behavior |
 |---|---|---|---|
@@ -113,7 +116,15 @@ initialized before the flip are pinned to `mode: v1` by `sage update`
 | `witness_capping` | `true` | Uncited + unwitnessed critical/major stored as substantive. | `false` (severity as reported) |
 | `scope_check` | `true` | Fix commits checked against the finding's anchor scope. | `false` |
 | `review_model` | `inherit` | `cheap` routes checklist passes down-model — savings **unclaimed** until measured. | `inherit` |
+| `disputed_disposition` | `true` | Phase-A-disputed entries (cannot-reproduce / DISPUTED-STANDS) need a disposition before any STOP. | `false` (disputed entries vanish from the verdict) |
+| `citation_check` | `true` | Citations must resolve to sustain critical/major; no source of the cited kind = skipped loudly. | `false` (citations unvalidated) |
+| `phase_a_scope` | `all` | Phase A verifies every open entry; `fixed` scopes to Sage-Fix-claimed entries (flip awaits E17). | `all` |
+
+Non-blocking findings settle in one command instead of N:
+`review.py disposition-batch <ledger> [F-ids...] [--severity cosmetic]
+--action reject --reason ...` (defers share one `--ticket`); every entry
+keeps its own ledger record.
 
 While `hard_enforcement: true` and `mode: v2`, the config-gate treats
-`mode` and `witness_capping` as enforcement keys: an agent cannot soften
+`mode`, `witness_capping`, and `disputed_disposition` as enforcement keys: an agent cannot soften
 its own review floor (a human edits the file outside the agent).

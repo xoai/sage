@@ -39,7 +39,7 @@ CAPABILITIES = {
 }
 
 NO_VERDICT_LINE = "You do not decide the loop; you report findings."
-WITNESS_TEXT = "A critical or major must come with a witness"
+WITNESS_TEXT = "A critical or major must carry a witness"
 CALIBRATION_TEXT = ("An empty finding list is a valid, creditable outcome; "
                     "you are scored\n> on precision, not volume.")
 VERDICT_TOKENS = ("VERDICT:", "ACCEPT", "REVISE", "RESULT: PASS")

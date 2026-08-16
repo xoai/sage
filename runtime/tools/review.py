@@ -32,6 +32,9 @@ Usage:
                       [--kind test|repro|trace] [--status red|green|n/a]
     review.py disposition <ledger.json> F-003 --action defer|reject|fix-now \\
                       [--reason TEXT] [--ticket REF]
+    review.py disposition-batch <ledger.json> [F-003 F-007 ...] \\
+                      [--severity cosmetic] --action defer|reject|fix-now \\
+                      [--reason TEXT] [--ticket REF]
     review.py close-round <ledger.json> --iteration N \\
                       [--suite-evidence TEXT] [--gates-evidence TEXT]
     review.py check-diff  <ledger.json> --finding F-003 --commit SHA
@@ -167,6 +170,12 @@ CONFIG_DEFAULTS = {
     "witness_capping": True,     # False restores: severity as reported
     "scope_check": True,         # False restores: no diff-scope check
     "review_model": "inherit",   # inherit restores: no model routing
+    "disputed_disposition": True,  # False restores: disputed entries
+                                   # vanish from the verdict (the S2 hole)
+    "citation_check": True,      # False restores: citations unvalidated
+    "phase_a_scope": "all",      # all restores/keeps: verify every open
+                                 # entry ("fixed" scopes to Sage-Fix-claimed;
+                                 # flip is a measured decision — E17)
 }
 
 _BLOCK_RE = re.compile(r"^review_loop:\s*$", re.MULTILINE)
@@ -279,6 +288,57 @@ def _has_witness(raw: dict) -> bool:
     return kind in ("test", "repro", "trace")
 
 
+# ── Citation resolution (RR-3.1 hardened) ──────────────────────────────
+# A citation that resolves nowhere is no citation: without this, a bogus
+# "spec §99.9" sustained a blocking critical the cap was built to catch.
+# Fail-soft in one direction only — when no source of the cited KIND is
+# on disk, the check disables itself loudly rather than capping a
+# legitimate finding for missing context.
+
+_CITE_PREFIX_RE = re.compile(r"^(spec|plan|constitution|adr)\b[\s:§#.-]*",
+                             re.IGNORECASE)
+
+
+def _citation_sources(cited: str, ledger_dir: pathlib.Path,
+                      repo_root: pathlib.Path) -> list:
+    """Source files this citation could resolve against, selected by the
+    artifact kind it names. Empty means: nothing to check against."""
+    kind = (cited or "").strip().lower()
+    spec_sources = [ledger_dir / "spec.md", ledger_dir / "plan.md"]
+    constitution_sources = [repo_root / ".sage" / "constitution.md"]
+    const_dir = repo_root / ".sage" / "constitution"
+    if const_dir.is_dir():
+        constitution_sources.extend(sorted(const_dir.glob("**/*.md")))
+    if kind.startswith("constitution"):
+        candidates = constitution_sources
+    elif kind.startswith(("spec", "plan")):
+        candidates = spec_sources
+    elif kind.startswith("adr"):
+        # ADR filenames vary by cycle — any markdown doc in the cycle dir.
+        candidates = sorted(ledger_dir.glob("*.md"))
+    else:
+        candidates = spec_sources + constitution_sources
+    return [p for p in candidates if p.is_file()]
+
+
+def _citation_resolves(cited: str, sources: list) -> bool:
+    """The citation's reference token appears in a source, on a token
+    boundary — 'spec §4.2' resolves against a spec containing '§4.2';
+    '§99.9' against nothing does not. Mechanical, deliberately lenient."""
+    ref = _CITE_PREFIX_RE.sub("", cited.strip()).strip().lstrip("§#").strip()
+    if not ref:
+        return False
+    pattern = re.compile(r"(?<![\w.])" + re.escape(ref.lower()))
+    for path in sources:
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace").lower()
+        except OSError:
+            continue
+        if pattern.search(text):
+            return True
+    return False
+
+
 def intake(ledger_path: pathlib.Path, findings: list, iteration: int,
            artifact: str, repo_root: pathlib.Path, config: dict) -> dict:
     if ledger_path.is_file():
@@ -290,7 +350,8 @@ def intake(ledger_path: pathlib.Path, findings: list, iteration: int,
     for entry in ledger["findings"]:
         by_fingerprint.setdefault(entry["anchor"]["fingerprint"], []).append(entry)
 
-    report = {"new": [], "merged": [], "capped": [], "disputed": []}
+    report = {"new": [], "merged": [], "capped": [], "disputed": [],
+              "citation_unresolved": [], "citation_skipped": []}
     for i, raw in enumerate(findings):
         _validate_finding(raw, i)
         fp = fingerprint_region(repo_root, raw["anchor"]["file"],
@@ -303,12 +364,24 @@ def intake(ledger_path: pathlib.Path, findings: list, iteration: int,
         witness.setdefault("status", "n/a")
 
         # RR-3.1 — severity capping: a critical/major that cites nothing and
-        # demonstrates nothing is an opinion; opinions never block.
+        # demonstrates nothing is an opinion; opinions never block. A
+        # citation that resolves nowhere counts as nothing cited — checked
+        # only when a source of the cited kind exists (fail-soft, loud).
         severity_as_reported = raw["severity"]
         severity = severity_as_reported
+        cited = raw.get("cited_rule")
+        citation_unresolved = citation_skipped = False
+        if (config.get("citation_check", True) and cited
+                and severity_as_reported in ("critical", "major")):
+            sources = _citation_sources(cited, ledger_path.resolve().parent,
+                                        repo_root)
+            if not sources:
+                citation_skipped = True
+            elif not _citation_resolves(cited, sources):
+                citation_unresolved = True
         if (config.get("witness_capping", True)
                 and severity in ("critical", "major")
-                and not raw.get("cited_rule")
+                and (not cited or citation_unresolved)
                 and not _has_witness(raw)):
             severity = "substantive"
 
@@ -348,6 +421,11 @@ def intake(ledger_path: pathlib.Path, findings: list, iteration: int,
             "verifications": [],
             "disposition": None,
         }
+        if citation_unresolved:
+            entry["citation_unresolved"] = True
+            report["citation_unresolved"].append(entry["id"])
+        elif citation_skipped:
+            report["citation_skipped"].append(entry["id"])
         if settled:
             entry["relitigates"] = settled[0]["id"]
             report["disputed"].append(entry["id"])
@@ -389,8 +467,11 @@ def verify(ledger_path: pathlib.Path, results: list, iteration: int) -> list:
                                        "verdict": res["verdict"],
                                        "evidence": res["evidence"]})
         entry["status"] = VERDICT_TO_STATUS[res["verdict"]]
-        if res["verdict"] == "FIXED" and entry.get("disposition") == "fix-now":
-            entry["disposition"] = None          # the bought round paid off
+        if entry.get("disposition") == "fix-now":
+            # fix-now buys EXACTLY one round; any Phase-A verdict means it
+            # was spent. Sticky fix-now was an unbounded loop — it preempts
+            # both the stall check and the cap.
+            entry["disposition"] = None
         touched.append(entry["id"])
     save_ledger(ledger_path, ledger)
     return touched
@@ -408,6 +489,8 @@ def cannot_reproduce(ledger_path: pathlib.Path, finding_id: str,
                                    "verdict": "DISPUTED-STANDS",
                                    "evidence": "cannot reproduce: " + evidence})
     entry["status"] = "disputed"
+    if entry.get("disposition") == "fix-now":
+        entry["disposition"] = None    # the bought round was spent (see verify)
     save_ledger(ledger_path, ledger)
 
 
@@ -423,17 +506,12 @@ def attach_witness(ledger_path: pathlib.Path, finding_id: str, ref: str,
     save_ledger(ledger_path, ledger)
 
 
-def disposition(ledger_path: pathlib.Path, finding_id: str, action: str,
-                reason, ticket) -> None:
-    """Record the decision about a remaining entry. defer/reject are
-    PENDING until close-round seals the round — the verdict is computed
-    over what the round actually found, then the paperwork settles.
-    fix-now keeps the entry open and buys exactly one more round."""
-    ledger = load_ledger(ledger_path)
-    entry = find_entry(ledger, finding_id)
+def _apply_disposition(entry: dict, action: str, reason, ticket) -> None:
+    """The disposition rules, applied in memory — callers own load/save,
+    so a batch stays atomic (validation failures leave nothing written)."""
     if entry["status"] not in OPEN_STATUSES and entry["status"] != "disputed":
-        raise Problem(f"{finding_id} is {entry['status']} — dispositions apply "
-                      "to open, not-fixed, or disputed entries")
+        raise Problem(f"{entry['id']} is {entry['status']} — dispositions "
+                      "apply to open, not-fixed, or disputed entries")
     if action == "defer":
         if not ticket:
             raise Problem("defer requires --ticket — a deferral without a "
@@ -445,16 +523,56 @@ def disposition(ledger_path: pathlib.Path, finding_id: str, action: str,
         entry["disposition"] = {"action": "reject", "reason": reason}
     else:                                        # fix-now
         entry["disposition"] = "fix-now"         # stays open; buys one round
+
+
+def disposition(ledger_path: pathlib.Path, finding_id: str, action: str,
+                reason, ticket) -> None:
+    """Record the decision about a remaining entry. defer/reject are
+    PENDING until close-round seals the round — the verdict is computed
+    over what the round actually found, then the paperwork settles.
+    fix-now keeps the entry open and buys exactly one more round."""
+    ledger = load_ledger(ledger_path)
+    entry = find_entry(ledger, finding_id)
+    _apply_disposition(entry, action, reason, ticket)
     save_ledger(ledger_path, ledger)
+
+
+def disposition_batch(ledger_path: pathlib.Path, ids: list, severity,
+                      action: str, reason, ticket) -> list:
+    """One decision recorded across many entries — RR-7 kept (every entry
+    still gets its own ledger record), the N interactive round-trips
+    collapsed to one. Selection is explicit IDs and/or a severity filter
+    over entries a disposition can apply to; defers share one ticket.
+    Atomic: any invalid selection or rule violation writes nothing."""
+    ledger = load_ledger(ledger_path)
+    selected, seen = [], set()
+    for fid in ids or []:
+        entry = find_entry(ledger, fid)          # unknown ID fails closed
+        if entry["id"] not in seen:
+            seen.add(entry["id"])
+            selected.append(entry)
+    if severity:
+        if severity not in SEVERITIES:
+            raise Problem(f"unknown severity {severity!r} (one of "
+                          f"{', '.join(SEVERITIES)})")
+        for entry in ledger["findings"]:
+            if (entry["severity"] == severity and entry["id"] not in seen
+                    and (entry["status"] in OPEN_STATUSES
+                         or entry["status"] == "disputed")):
+                seen.add(entry["id"])
+                selected.append(entry)
+    if not selected:
+        raise Problem("disposition-batch selected no entries — name IDs, or "
+                      "pick a --severity with open/not-fixed/disputed entries")
+    for entry in selected:
+        _apply_disposition(entry, action, reason, ticket)
+    save_ledger(ledger_path, ledger)
+    return [e["id"] for e in selected]
 
 
 # ═══════════════════════════════════════════════════════════════════════
 # close-round — the verdict is computed, recorded, and logged (RR-6/RR-7)
 # ═══════════════════════════════════════════════════════════════════════
-
-def open_entries(ledger: dict) -> list:
-    return [e for e in ledger["findings"] if e["status"] in OPEN_STATUSES]
-
 
 def close_round(ledger_path: pathlib.Path, iteration: int, config: dict,
                 suite_evidence=None, gates_evidence=None) -> dict:
@@ -467,13 +585,15 @@ def close_round(ledger_path: pathlib.Path, iteration: int, config: dict,
     action = decision["action"]
 
     # RR-7 — a STOP is a decision about every remaining open entry, not an
-    # exhaustion. Refuse to record it until each one has a disposition.
+    # exhaustion — and a Phase-A-disputed entry is a contested one, not a
+    # resolved one. Refuse to record any STOP until each has a disposition.
     # (ESCALATE records first — it is the request FOR the human's decision.)
-    if action in ("STOP_ADVISORY", "STOP_CAP") and decision["dispositions_required"]:
+    if action.startswith("STOP") and decision["dispositions_required"]:
         raise Problem(
             f"{action} needs a disposition (defer/reject/fix-now) for: "
             + ", ".join(decision["dispositions_required"])
-            + " — run `review.py disposition` per entry, then close-round again")
+            + " — run `review.py disposition` per entry (or "
+            + "`disposition-batch` for several), then close-round again")
 
     record = {"iteration": iteration, "counts": decision["counts"],
               "result": action}
@@ -486,9 +606,13 @@ def close_round(ledger_path: pathlib.Path, iteration: int, config: dict,
     ledger["history"].append(record)
 
     # Seal the round: pending defer/reject settlements become status now
-    # that the verdict they were counted under is on the record.
+    # that the verdict they were counted under is on the record. Disputed
+    # entries seal the same way — their disposition is the human decision
+    # the guard exists to force.
     if action != "CONTINUE":
-        for entry in open_entries(ledger):
+        for entry in ledger["findings"]:
+            if entry["status"] not in OPEN_STATUSES + ("disputed",):
+                continue
             d = entry.get("disposition")
             if isinstance(d, dict) and d.get("action") == "defer":
                 entry["status"] = "deferred"
@@ -517,12 +641,13 @@ def _write_exit_record(ledger_path: pathlib.Path, ledger: dict,
     """One decisions.md line per exit, written by the tool itself — the
     degradation-log rule: the record is taken, not requested."""
     counts = decision["counts"]
-    line = ("- [%s] review-loop %s: %s iter=%d open=%d/%d/%d/%d "
+    disputed = sum(1 for e in ledger["findings"] if e["status"] == "disputed")
+    line = ("- [%s] review-loop %s: %s iter=%d open=%d/%d/%d/%d disputed=%d "
             "dispositions=%s [auto-logged by review.py]\n") % (
         datetime.date.today().isoformat(), decision["action"],
         ledger.get("slug", slug_of(ledger_path)), iteration,
         counts["critical"], counts["major"], counts["substantive"],
-        counts["cosmetic"], _dispositions_summary(ledger))
+        counts["cosmetic"], disputed, _dispositions_summary(ledger))
     decisions = ledger_path.resolve().parent / "decisions.md"
     try:
         with open(decisions, "a", encoding="utf-8") as fh:
@@ -602,8 +727,11 @@ def check_diff(ledger_path: pathlib.Path, finding_id: str, commit: str,
 
     ledger = load_ledger(ledger_path)
     entry = find_entry(ledger, finding_id)
+    if entry["status"] not in OPEN_STATUSES + ("disputed",):
+        raise Problem(f"{finding_id} is {entry['status']} — fixes apply to "
+                      "open, not-fixed, or disputed entries; a settled "
+                      "finding's anchor is not a license")
     anchor = entry["anchor"]
-    witness_ref = (entry.get("witness") or {}).get("ref")
     if iteration is None:
         iteration = len(ledger.get("history", [])) + 1
 
@@ -612,6 +740,31 @@ def check_diff(ledger_path: pathlib.Path, finding_id: str, commit: str,
     hunks = parse_hunks(_git(repo_root, "show", "--unified=0", "--format=",
                              "--no-color", commit))
 
+    # Sage-Fix may name several findings (clustered fixes): scope widens
+    # to the UNION of the named findings' anchors/witnesses — a loosening
+    # only to entries the ledger actually holds, never beyond it. The
+    # invoked --finding is always in scope; unknown trailer IDs are
+    # advisory like any other trailer defect.
+    fix_ids, unknown_ids, settled_ids = [], [], []
+    for value in trailers.get("Fix", []):
+        for tok in re.split(r"[\s,;]+", value):
+            if re.fullmatch(r"F-\d+", tok) and tok not in fix_ids:
+                fix_ids.append(tok)
+    scoped = [entry]
+    for fid in fix_ids:
+        if fid == finding_id:
+            continue
+        matches = [e for e in ledger["findings"] if e["id"] == fid]
+        if not matches:
+            unknown_ids.append(fid)
+        elif matches[0]["status"] in OPEN_STATUSES + ("disputed",):
+            scoped.append(matches[0])
+        else:
+            # A settled finding's anchor is not a license — widening scope
+            # through a fixed/rejected/deferred ID would be a smuggling
+            # channel.
+            settled_ids.append("%s (%s)" % (fid, matches[0]["status"]))
+
     # RR-21 — trailer shape, advisory severity.
     trailer_findings = []
     missing = [k for k in REQUIRED_TRAILERS if k not in trailers]
@@ -619,9 +772,19 @@ def check_diff(ledger_path: pathlib.Path, finding_id: str, commit: str,
         trailer_findings.append("commit %s is missing trailer(s): %s"
                                 % (commit[:12],
                                    ", ".join("Sage-" + k for k in missing)))
-    if trailers.get("Fix") and trailers["Fix"][0].split()[0] != finding_id:
+    if fix_ids and finding_id not in fix_ids:
         trailer_findings.append("commit %s Sage-Fix names %s, not %s"
-                                % (commit[:12], trailers["Fix"][0], finding_id))
+                                % (commit[:12], " ".join(fix_ids), finding_id))
+    elif trailers.get("Fix") and not fix_ids:
+        trailer_findings.append("commit %s Sage-Fix carries no finding ID "
+                                "(%r)" % (commit[:12], trailers["Fix"][0]))
+    if unknown_ids:
+        trailer_findings.append("commit %s Sage-Fix names unknown finding(s): "
+                                "%s" % (commit[:12], ", ".join(unknown_ids)))
+    if settled_ids:
+        trailer_findings.append("commit %s Sage-Fix names settled finding(s): "
+                                "%s — scope not widened"
+                                % (commit[:12], ", ".join(settled_ids)))
 
     collateral = []
     for value in trailers.get("Collateral", []):
@@ -638,9 +801,26 @@ def check_diff(ledger_path: pathlib.Path, finding_id: str, commit: str,
                 return True
         return False
 
+    witness_refs = [r for r in ((e.get("witness") or {}).get("ref")
+                                for e in scoped) if r]
+    witness_prefixes = ["tests/review/" + e["id"] for e in scoped]
+    anchors = [(e["anchor"]["file"], int(e["anchor"]["region"][0]),
+                int(e["anchor"]["region"][1])) for e in scoped]
+
     def is_witness_path(path):
-        return (witness_ref and path == witness_ref) or \
-            path.startswith("tests/review/" + finding_id)
+        return path in witness_refs or \
+            any(path.startswith(p) for p in witness_prefixes)
+
+    def in_anchor(path, old_start, old_end, old_count):
+        for afile, start, end in anchors:
+            if path != afile:
+                continue
+            if old_count == 0:                 # pure insertion at old_start
+                if start - 1 <= old_start <= end:
+                    return True
+            elif old_start >= start and old_end <= end:
+                return True
+        return False
 
     violations, license_needed = [], []
     a_start, a_end = int(anchor["region"][0]), int(anchor["region"][1])
@@ -653,12 +833,8 @@ def check_diff(ledger_path: pathlib.Path, finding_id: str, commit: str,
         if is_test_path(path):
             license_needed.append(path)        # RR-24: needs Sage-License
             continue
-        if path == anchor["file"]:
-            if old_count == 0:                 # pure insertion at point old_start
-                if a_start - 1 <= old_start <= a_end:
-                    continue
-            elif old_start >= a_start and old_end <= a_end:
-                continue
+        if in_anchor(path, old_start, old_end, old_count):
+            continue
         if in_collateral(path, old_start, old_end):
             continue
         violations.append({"file": path,
@@ -715,8 +891,10 @@ def report(ledger_path: pathlib.Path) -> str:
         lines.append("no findings recorded")
     for e in ledger["findings"]:
         cap = ("" if e["severity"] == e.get("severity_as_reported", e["severity"])
-               else " (reported %s, capped: no citation, no witness)"
-               % e["severity_as_reported"])
+               else " (reported %s, capped: %s, no witness)"
+               % (e["severity_as_reported"],
+                  "citation did not resolve" if e.get("citation_unresolved")
+                  else "no citation"))
         w = e.get("witness") or {}
         d = e.get("disposition")
         lines.append("%s  %-11s %-10s %s%s" % (
@@ -727,6 +905,13 @@ def report(ledger_path: pathlib.Path) -> str:
             " (%s)" % w["ref"] if w.get("ref") else "",
             "  disposition %s" % (d if isinstance(d, str)
                                   else d.get("action")) if d else ""))
+        if e.get("relitigates"):
+            lines.append("       relitigates %s (fingerprint unchanged — "
+                         "the guard, not a live dispute)" % e["relitigates"])
+        elif e["status"] == "disputed" and e.get("verifications"):
+            last = e["verifications"][-1]
+            lines.append("       disputed@%d: %s" % (last["iteration"],
+                                                     last["evidence"]))
     if ledger["history"]:
         lines.append("")
         lines.append("rounds: " + " → ".join(
@@ -802,6 +987,14 @@ def main(argv=None) -> int:
     d.add_argument("--reason")
     d.add_argument("--ticket")
 
+    b = add("disposition-batch", "one disposition across many entries, "
+                                 "atomically (IDs and/or --severity)")
+    b.add_argument("finding_ids", nargs="*")
+    b.add_argument("--severity", choices=list(SEVERITIES))
+    b.add_argument("--action", required=True, choices=list(DISPOSITIONS))
+    b.add_argument("--reason")
+    b.add_argument("--ticket")
+
     c = add("close-round", "compute the round verdict from ledger facts")
     c.add_argument("--iteration", type=int, required=True)
     c.add_argument("--config", default=None)
@@ -846,6 +1039,11 @@ def main(argv=None) -> int:
             disposition(args.ledger, args.finding_id, args.action,
                         args.reason, args.ticket)
             print(f"✓ {args.finding_id} → {args.action}")
+        elif args.cmd == "disposition-batch":
+            done = disposition_batch(args.ledger, args.finding_ids,
+                                     args.severity, args.action,
+                                     args.reason, args.ticket)
+            print(json.dumps({"dispositioned": done, "action": args.action}))
         elif args.cmd == "close-round":
             config = _resolve_config(args, args.ledger)
             print(json.dumps(close_round(args.ledger, args.iteration, config,

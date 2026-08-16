@@ -192,6 +192,158 @@ class CheckDiffCase(unittest.TestCase):
         self.assertIn('"in_scope": false', proc.stdout)
 
 
+class MultiFindingCommitTest(unittest.TestCase):
+    """RR-23, union scope: one commit may close several findings when the
+    Sage-Fix trailer names them all — scope widens to the union of the
+    named findings' anchors, witnesses, and collateral, never beyond it.
+    Single-ID commits keep byte-identical semantics (the CheckDiffCase
+    suite above is the pin)."""
+
+    MULTI_TRAILERS = ("Sage-Fix: F-001 F-002\n"
+                      "Sage-Cause: two bounds unchecked\n"
+                      "Sage-Change: reject both\n"
+                      "Sage-Risk: callers now raise\n")
+    SINGLE_TRAILERS = ("Sage-Fix: F-001\nSage-Cause: bound never checked\n"
+                       "Sage-Change: reject percent > 100\n"
+                       "Sage-Risk: callers passing 150 now raise\n")
+
+    def setUp(self):
+        self.root = pathlib.Path(tempfile.mkdtemp(prefix="review-multi-"))
+        self.addCleanup(shutil.rmtree, self.root, ignore_errors=True)
+        (self.root / ".sage" / "work" / "20260815-fix").mkdir(parents=True)
+        (self.root / "src").mkdir()
+        (self.root / "src" / "cart.py").write_text(SRC, encoding="utf-8")
+        self.git("init", "-q")
+        self.commit_all("seed")
+        self.ledger = (self.root / ".sage" / "work" / "20260815-fix"
+                       / "review-ledger.json")
+        self.config = dict(R.CONFIG_DEFAULTS, mode="v2")
+        R.intake(self.ledger, [{
+            "pass": "input-hostility", "severity": "major",
+            "cited_rule": "spec §2.1",
+            "anchor": {"file": "src/cart.py", "region": [1, 4]},
+            "claim": "percent over 100 is not rejected",
+            "witness": {"kind": "test", "ref": "tests/review/F-001.py",
+                        "status": "red"},
+            "exit_criteria": "percent > 100 raises ValueError",
+        }, {
+            "pass": "input-hostility", "severity": "major",
+            "cited_rule": "spec §2.2",
+            "anchor": {"file": "src/cart.py", "region": [7, 8]},
+            "claim": "helper return value is a magic number",
+            "witness": {"kind": "test", "ref": "tests/review/F-002.py",
+                        "status": "red"},
+            "exit_criteria": "helper derives the value",
+        }], 1, "code", self.root, self.config)
+
+    def git(self, *args):
+        subprocess.run(["git"] + list(args), cwd=str(self.root), check=True,
+                       capture_output=True)
+
+    def commit_all(self, message):
+        self.git("add", "-A")
+        subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t",
+                        "commit", "-q", "-m", message], cwd=str(self.root),
+                       check=True, capture_output=True)
+        out = subprocess.run(["git", "rev-parse", "HEAD"], cwd=str(self.root),
+                             capture_output=True, text=True, check=True)
+        return out.stdout.strip()
+
+    def check(self, sha):
+        return R.check_diff(self.ledger, "F-001", sha, self.root, self.config)
+
+    def entries(self):
+        return json.loads(self.ledger.read_text(encoding="utf-8"))["findings"]
+
+    def touch_both(self):
+        (self.root / "src" / "cart.py").write_text(
+            SRC.replace('raise ValueError("negative")',
+                        'raise ValueError("negative")\n'
+                        '    if percent > 100:\n'
+                        '        raise ValueError("over 100")')
+               .replace("return 42", "return 43"),
+            encoding="utf-8")
+
+    def test_union_scope_passes_both_anchors(self):
+        self.touch_both()
+        sha = self.commit_all("fix both\n\n" + self.MULTI_TRAILERS)
+        result = self.check(sha)
+        self.assertTrue(result["in_scope"])
+        self.assertEqual(result["trailer_findings"], [])
+        self.assertEqual(len(self.entries()), 2)     # no machine finding
+
+    def test_single_id_trailer_still_rejects_second_anchor(self):
+        self.touch_both()
+        sha = self.commit_all("fix\n\n" + self.SINGLE_TRAILERS)
+        result = self.check(sha)
+        self.assertFalse(result["in_scope"])
+
+    def test_second_findings_witness_needs_no_license(self):
+        (self.root / "tests" / "review").mkdir(parents=True)
+        (self.root / "tests" / "review" / "F-002.py").write_text(
+            "def test_helper():\n    pass\n", encoding="utf-8")
+        sha = self.commit_all("witness for F-002\n\n" + self.MULTI_TRAILERS)
+        result = self.check(sha)
+        self.assertTrue(result["license_ok"])
+        self.assertTrue(result["in_scope"])
+
+    def test_unknown_trailer_id_is_advisory(self):
+        self.touch_both()
+        sha = self.commit_all("fix\n\nSage-Fix: F-001 F-999 F-002\n"
+                              "Sage-Cause: x\nSage-Change: y\nSage-Risk: z\n")
+        result = self.check(sha)
+        self.assertTrue(result["in_scope"])          # known ids cover the hunks
+        self.assertTrue(any("F-999" in t for t in result["trailer_findings"]))
+
+    def test_comma_separated_trailer_ids_parse(self):
+        # "Sage-Fix: F-001, F-002" must behave exactly like the
+        # space-separated form — a dropped "F-001," token used to narrow
+        # the scope AND manufacture a spurious mismatch advisory.
+        self.touch_both()
+        sha = self.commit_all("fix both\n\nSage-Fix: F-001, F-002\n"
+                              "Sage-Cause: x\nSage-Change: y\nSage-Risk: z\n")
+        result = self.check(sha)
+        self.assertTrue(result["in_scope"])
+        self.assertEqual(result["trailer_findings"], [])
+
+    def test_settled_finding_does_not_widen_scope(self):
+        # A trailer naming an already-settled finding must not license
+        # touching its anchor — that would be a smuggling channel.
+        data = json.loads(self.ledger.read_text(encoding="utf-8"))
+        data["findings"][1]["status"] = "rejected"
+        self.ledger.write_text(json.dumps(data), encoding="utf-8")
+        (self.root / "src" / "cart.py").write_text(
+            SRC.replace("return 42", "return 43"), encoding="utf-8")
+        sha = self.commit_all("fix\n\n" + self.MULTI_TRAILERS)
+        result = self.check(sha)
+        self.assertFalse(result["in_scope"])
+        self.assertTrue(any("settled" in t for t in result["trailer_findings"]))
+
+    def test_settled_invocation_fails_closed(self):
+        # The trailer path refuses settled scope; the invocation must
+        # too — check-diff on a rejected finding is off-protocol (fixes
+        # apply to open/not-fixed/disputed entries) and would otherwise
+        # be the same smuggling channel through the front door.
+        data = json.loads(self.ledger.read_text(encoding="utf-8"))
+        data["findings"][0]["status"] = "rejected"
+        self.ledger.write_text(json.dumps(data), encoding="utf-8")
+        (self.root / "src" / "cart.py").write_text(
+            SRC.replace('"negative"', '"neg"'), encoding="utf-8")
+        sha = self.commit_all("fix\n\n" + self.SINGLE_TRAILERS)
+        with self.assertRaises(R.Problem) as ctx:
+            self.check(sha)
+        self.assertIn("rejected", str(ctx.exception))
+
+    def test_invoked_id_absent_from_trailer_is_advisory(self):
+        (self.root / "src" / "cart.py").write_text(
+            SRC.replace("return 42", "return 43"), encoding="utf-8")
+        sha = self.commit_all("fix\n\nSage-Fix: F-002\nSage-Cause: x\n"
+                              "Sage-Change: y\nSage-Risk: z\n")
+        result = self.check(sha)
+        self.assertTrue(result["in_scope"])          # trailer-named F-002 covers it
+        self.assertTrue(any("F-001" in t for t in result["trailer_findings"]))
+
+
 class TrailerParserTest(unittest.TestCase):
     def test_parses_all_keys_and_repeats(self):
         t = R.parse_trailers(
