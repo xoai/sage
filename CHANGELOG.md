@@ -2,6 +2,23 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [1.3.21] — watchdog cleanup-order fix: a fast-failing suite is a FAIL, never a "timeout"
+
+One fix, shipped immediately because v1.3.20's flagship carries it:
+the bounded-verification cleanup swept the watcher's sleep BEFORE
+killing the watcher, which let the watcher subshell advance and write
+a spurious sentinel — mislabeling fast-FAILING suites as timeouts
+(exit codes were always correct; the diagnosis hint — "raise
+verify_timeout" — pointed at the wrong cause). The order is now
+kill-watcher-first (orphaned sleeps are harmless by construction: the
+watcher runs on /dev/null and cannot hold the caller's pipe), and the
+watcher bails unless the runner is still alive. Caught flaky (2 of 3
+runs) by the bash-3.2 docker smoke — AFTER the v1.3.20 tag, because
+the release chain piped the smoke through `tail`, swallowing its exit
+code. Stable 5/5 after the fix. Process lesson recorded with the
+work: pipeline exit codes in release batteries, and a validator that
+only runs locally is a validator the tag can outrun.
+
 ## [1.3.20] — loop field economics: an advisory stop actually stops, and verification is bounded
 
 Field investigation of three production projects (ledger histories, git
