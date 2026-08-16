@@ -2,7 +2,7 @@
 
 All notable changes to Sage will be documented in this file.
 
-## [Unreleased] — loop field economics: an advisory stop actually stops, and verification is bounded
+## [1.3.20] — loop field economics: an advisory stop actually stops, and verification is bounded
 
 Field investigation of three production projects (ledger histories, git
 timing, config forensics) found where loop wall-clock actually goes —
