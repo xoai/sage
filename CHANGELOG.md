@@ -2,6 +2,69 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [Unreleased] — loop field economics: an advisory stop actually stops, and verification is bounded
+
+Field investigation of three production projects (ledger histories, git
+timing, config forensics) found where loop wall-clock actually goes —
+and it was not where v1.3.19 looked. The heavy loops were DOCUMENT
+loops; the round-extender was the disposition menu's economics; and the
+"main agent loading for hours after a subagent stopped" was an
+unbounded `go test -race` behind an SPA build at round close. Every
+change below is field-derived; the E16–E18 re-run is the release
+acceptance for the economics claims (until it runs, they are
+field-derived, not eval-measured).
+
+- **fix-now buys rounds for blocking or disputed entries only.** The
+  field's agents picked fix-now for cosmetics because it was the only
+  disposition needing no reason and no ticket — converting every
+  advisory stop into another full round (pancake closed round 2 at
+  0/0/1/2 open yet recorded CONTINUE; finhub's exit record:
+  `F-022:fix-now`). The tool now refuses it on open
+  substantive/cosmetic entries, naming the alternatives. Restore knob:
+  `review_loop.fix_now_blocking_only: false`.
+- **Late non-blocking findings auto-defer.** Rounds >1 discoveries of
+  substantive/cosmetic findings intake as pending defers ticketed
+  `cleanup.md` — recorded, non-blocking, sealed at the stop — and
+  close-round WRITES the ticket file itself (machine-owned, like
+  decisions.md). The fix→new-nit→fix treadmill ends at the tool; new
+  criticals/majors still block. Restore knob:
+  `review_loop.late_finding_disposition: open`.
+- **Instance-aware ledger.** `review.py open-instance --checkpoint
+  <name>` marks each checkpoint loop's start; the derived iteration,
+  the cap, and stall detection count per instance (field ledgers hit
+  exit records at iter=13 against a cap of 5, and a marker no longer
+  reads as a zero-weight round fabricating phantom stalls). Markerless
+  ledgers keep legacy behavior byte-identically. The eval grader
+  learned the same semantics — per-instance max_rounds and
+  monotonicity — which also fixes a pre-existing false-flag on real
+  multi-instance ledgers.
+- **Bounded verification, wired to the actual hang site.**
+  `sage-verify.sh` runs suite AND build under a portable watchdog
+  (`verify_timeout`, default 600s; env `SAGE_VERIFY_TIMEOUT` wins;
+  bash-3.2-safe, no GNU timeout, no `wait -n` — mechanics documented in
+  the new `sage-bounded.sh`, which the bash-3.2 docker smoke now
+  EXERCISES, not just parses). Timeout = sentinel AND nonzero rc — a
+  FAIL with the output tail as evidence, never a hang, never a skip. Go
+  suites get `-timeout=120s` unless the project's GOFLAGS carries one;
+  JS runners run under `CI=true`. And the quality-locked round-close
+  closing proof is BOUND to the gate script — the field hang was a raw
+  `make test` at round close that no gate watchdog reached.
+- **Document rounds cost document money.** Rounds whose fixes touched
+  only spec/plan/adr artifacts record `doc-only round: <files>` instead
+  of running the code suite (the field ran four full suites for one
+  spec review).
+- **Gate 8 (auto-QA) folds into the independent review always** — not
+  only on resume close-out; a first-session build was paying a whole
+  second loop instance to re-ask the Gate-1 question.
+- **Subagent exit hygiene.** Implementer and reviewer templates mandate
+  zero leftover processes (single-run suites, `CI=true`, kill what you
+  start); the orchestrator sweeps for leaked processes after every
+  Task return.
+- Knob/gate audit done up front this cycle: none of the three new knobs
+  weakens enforcement when softened (each makes loops longer or gates
+  stricter), so none joins the config-gate floor; all are
+  single-reader, so no first-wins/last-wins divergence exists to bomb.
+
 ## [1.3.19] — review-loop hardening: the disputed hole closed, declarations validated, ceremony scaled to severity
 
 Vendored fallback refreshed from sage-memory 0.13.2. The refresh

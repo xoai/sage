@@ -438,6 +438,11 @@ surfaces:
     covered-by: [E1, E4]
     notes: "Both assert exit 0 on the final tree via the gate_exit grader."
 
+  gate-bounded:
+    path: core/gates/scripts/sage-bounded.sh
+    kind: gate
+    uncovered: "Watchdog sourced by sage-verify.sh; deterministically exercised by gate cases G7b-G8c and the bash-3.2 docker smoke (timeout path executed, not parsed). An agentic hang-a-suite eval buys little over the kill-path proof; rides E1/E4 through sage-verify.sh."
+
   gate-hallucination-check:
     path: core/gates/scripts/sage-hallucination-check.sh
     kind: gate

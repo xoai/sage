@@ -288,7 +288,28 @@ review_loop:
                             # false restores unvalidated citations
   phase_a_scope: all        # all (default) | fixed — verify only Sage-Fix-
                             # claimed entries per round; flip awaits E17
+  fix_now_blocking_only: true   # fix-now buys rounds for critical/major or
+                                # disputed entries only; false restores
+                                # any-entry round-buying (the field's
+                                # advisory-stop-never-stops pathology)
+  late_finding_disposition: defer  # rounds>1 non-blocking findings
+                                   # auto-defer to cleanup.md (machine-
+                                   # written at the stop); open restores
+                                   # the late-nit treadmill
 ```
+
+One ledger, several checkpoint loops: `review.py open-instance <ledger>
+--checkpoint <spec|plan|code|qa>` marks each loop's start, and cap,
+stall, and the round number count per instance (markerless ledgers keep
+legacy whole-history behavior).
+
+`verify_timeout` (top-level, gates family — not in the `review_loop:`
+block) bounds Gate 5's suite and build runs: default 600 seconds, env
+`SAGE_VERIFY_TIMEOUT` wins over config. Expiry is a FAIL with the
+output tail as evidence — a hanging test is a defect surfaced, never a
+silent hang, never a skip. Go suites get `-timeout=120s` injected
+unless the project's `GOFLAGS` already carries one; JS runners run
+under `CI=true` so watch modes never engage.
 
 Non-blocking findings settle in one command instead of N: `review.py
 disposition-batch <ledger> [F-ids...] [--severity cosmetic] --action

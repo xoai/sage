@@ -119,6 +119,12 @@ pin or set `v2` to opt in.
 | `disputed_disposition` | `true` | Phase-A-disputed entries (cannot-reproduce / DISPUTED-STANDS) need a disposition before any STOP. | `false` (disputed entries vanish from the verdict) |
 | `citation_check` | `true` | Citations must resolve to sustain critical/major; no source of the cited kind = skipped loudly. | `false` (citations unvalidated) |
 | `phase_a_scope` | `all` | Phase A verifies every open entry; `fixed` scopes to Sage-Fix-claimed entries (flip awaits E17). | `all` |
+| `fix_now_blocking_only` | `true` | fix-now buys rounds only for critical/major or disputed entries — a cosmetic can't extend the loop. | `false` (any open entry buys a round) |
+| `late_finding_disposition` | `defer` | Rounds >1 non-blocking findings auto-defer to `cleanup.md` (machine-written at the stop). | `open` (the late-nit treadmill) |
+
+`verify_timeout` (TOP-LEVEL key, not in this block) bounds Gate 5's
+suite/build runs — default 600s, env `SAGE_VERIFY_TIMEOUT` overrides; a
+hung suite becomes a FAIL with evidence instead of an hours-long grind.
 
 Non-blocking findings settle in one command instead of N:
 `review.py disposition-batch <ledger> [F-ids...] [--severity cosmetic]

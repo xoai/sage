@@ -247,6 +247,52 @@ class DisputedGuardTest(unittest.TestCase):
         self.assertEqual(d["action"], "STOP_CLEAN")
 
 
+class InstanceSlicingTest(unittest.TestCase):
+    """Cap and stall are per checkpoint instance: `_decide_v2` slices
+    history after the last {"instance": ...} marker and never treats a
+    marker as a zero-weight round (which would fabricate stalls)."""
+
+    MAJ1 = {"critical": 0, "major": 1, "substantive": 0, "cosmetic": 0}
+    MAJ2 = {"critical": 0, "major": 2, "substantive": 0, "cosmetic": 0}
+
+    def test_stall_does_not_cross_a_marker(self):
+        # The real field shape: the previous instance ENDS clean (weight
+        # 0), then a marker, then the new instance's first dirty round.
+        # Unsliced, the terminal 0 + marker 0 read as two trailing
+        # non-improvements — a phantom ESCALATE on round 1.
+        clean = {"critical": 0, "major": 0, "substantive": 0, "cosmetic": 0}
+        history = [
+            {"iteration": 1, "counts": self.MAJ1, "result": "CONTINUE"},
+            {"iteration": 2, "counts": clean, "result": "STOP_CLEAN"},
+            {"instance": "plan"},
+        ]
+        d = sf.decide({}, 1, [], ledger=counts_ledger(major=1,
+                                                      history=history))
+        self.assertEqual(d["action"], "CONTINUE")        # not ESCALATE
+
+    def test_stall_within_instance_still_escalates(self):
+        history = [
+            {"instance": "plan"},
+            {"iteration": 1, "counts": self.MAJ1, "result": "CONTINUE"},
+            {"iteration": 2, "counts": self.MAJ1, "result": "CONTINUE"},
+        ]
+        d = sf.decide({}, 3, [], ledger=counts_ledger(major=1,
+                                                      history=history))
+        self.assertEqual(d["action"], "ESCALATE")
+
+    def test_marker_is_not_a_zero_weight_round(self):
+        # Unsliced, the marker reads as weight 0 between 6 and 3 — two
+        # trailing non-improvements and a phantom ESCALATE.
+        history = [
+            {"iteration": 1, "counts": self.MAJ2, "result": "CONTINUE"},
+            {"instance": "code"},
+            {"iteration": 1, "counts": self.MAJ1, "result": "CONTINUE"},
+        ]
+        d = sf.decide({}, 2, [], ledger=counts_ledger(major=1,
+                                                      history=history))
+        self.assertEqual(d["action"], "CONTINUE")
+
+
 class R6V1ByteIdenticalTest(unittest.TestCase):
     """The ledger-absent path is the existing decide(), untouched. The full
     corpus lives in develop/validators/tools/test_sage_flags.py; these pin

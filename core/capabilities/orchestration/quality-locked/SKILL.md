@@ -32,7 +32,7 @@ normally fires):
 | /build | After spec [A] | spec review |
 | /build | After plan [A] | plan review |
 | /build | Gate 3 (during quality gates) | code quality review |
-| /build | After gates pass | auto-QA |
+| /build | After gates pass | auto-QA — FOLDED into the Gate 3 loop's reviewer (quality-gates workflow); never a separate loop instance |
 | /architect | After design [A] | ADR review |
 | /architect | After plan [A] | plan review |
 | /fix | After diagnosis [A] | root cause review |
@@ -248,6 +248,13 @@ false` restores the old vanish).
 Per iteration (1..cap, default cap 5 — `review_loop.iteration_cap`):
 
 ```
+0. FIRST round of each checkpoint only: open the instance —
+     python3 sage/runtime/tools/review.py open-instance \
+       .sage/work/<slug>/review-ledger.json --checkpoint <spec|plan|code|qa>
+   One ledger carries every checkpoint's loop; cap, stall, and the
+   round number count WITHIN the instance (field ledgers hit exit
+   records at iter=13 against a cap of 5 before this existed).
+
 1. Assemble the input packet (template in the review capability's
    "Input packet (v2)" section) and dispatch the review sub-agent.
 
@@ -290,9 +297,13 @@ Disposition menu (per remaining open or disputed entry, RR-7):
 
 ```
 [F] Fix now — one more fix round for this finding (converts the stop
-    back into CONTINUE for it)
-[D] Defer — ticketed; requires a ticket/issue ref, witness test stays
-    red-marked in the suite
+    back into CONTINUE for it). BLOCKING or DISPUTED entries only —
+    the tool refuses it on a substantive/cosmetic (a non-blocking
+    finding buying rounds was the field's advisory-stop-never-stops
+    pathology; human override: review_loop.fix_now_blocking_only: false)
+[D] Defer — ticketed; requires a ticket/issue ref — `cleanup.md` is the
+    canonical cycle ticket (close-round writes the file itself); witness
+    test stays red-marked in the suite
 [X] Reject — requires a reason, recorded; re-raising it later needs
     the anchor to have actually changed
 [B] Batch — one decision across several entries:
@@ -301,6 +312,17 @@ Disposition menu (per remaining open or disputed entry, RR-7):
     (or `--action reject --reason ...`). Every entry still gets its own
     ledger record; only the round-trips collapse.
 ```
+
+Rounds >1 non-blocking discoveries never reach this menu: intake
+auto-defers them to `cleanup.md` on arrival
+(`review_loop.late_finding_disposition: open` restores the old flow) —
+the fix→new-nit→fix treadmill ends at the tool. Round-1
+substantives/cosmetics DO reach the menu; settle them in ONE command:
+`review.py disposition-batch <ledger> --severity substantive --action
+defer --ticket cleanup.md` (same for `cosmetic`, or `--action reject
+--reason ...`). close-round writes `cleanup.md` itself at the sealing
+stop; deferred findings are fixed AFTER the loop exits, as ordinary
+work with ordinary commits.
 
 ### Fix round (v2) — witness-first, one finding one commit
 
@@ -361,11 +383,19 @@ finding:
    silent, raise a spec finding and pause the code fix behind its
    disposition. `review_loop.scope_check: false` restores v1.
 5. **Per commit:** run the finding's witness + targeted tests for
-   touched files. **Per round close:** full suite + deterministic gates
-   on the fixed HEAD — the closing proof, never trimmed — and record it:
-   `review.py close-round ... --suite-evidence "<summary>"
-   --gates-evidence "<exits>"`, so the next Phase A verifies against
-   facts already on file.
+   touched files. **Per round close:** the closing proof runs THROUGH
+   the bounded gate script — `bash .sage/gates/scripts/sage-verify.sh
+   --quiet` plus the other deterministic gates on the fixed HEAD, NEVER
+   the raw runner (a raw `make test` at round close is exactly the
+   unbounded hang the watchdog exists to catch; the script's summary
+   line is the evidence) — and record it: `review.py close-round ...
+   --suite-evidence "<the script's summary line>" --gates-evidence
+   "<exits>"`, so the next Phase A verifies against facts already on
+   file. Rounds whose fixes touched ONLY spec/plan/adr artifacts run
+   document checks instead of the code suite — record
+   `--suite-evidence "doc-only round: <files>"` (free text; a code
+   suite proves nothing about a prose edit, and the field ran four
+   full suites for one spec review).
 
 Witness tests are permanent: they land with the fix, run in the suite
 thereafter, and are never deleted on STOP — a deferred finding's

@@ -97,6 +97,15 @@ failure this whole structure exists to prevent.
 
 # Rules
 
+## Exit hygiene — your return must leave zero processes
+
+Before returning, kill EVERY process you started: dev servers,
+watchers, emulators, database containers. Run suites in single-run
+mode (`CI=true`; never a watch mode). A process you leak outlives your
+return and becomes the orchestrator's hang — the field measured hours
+of main-agent grind traced to exactly this. If a step needs a server,
+start it, use it, kill it, in the same step.
+
 ## The evidence block is not a formality
 
 WHEN: An implementer subagent reports.

@@ -121,6 +121,14 @@ task that may already be half-done.
 
 The implementer returns `STATUS: DONE | BLOCKED` plus an evidence block.
 
+**First, sweep for leftovers.** A subagent's return does not prove its
+processes exited — check for anything it leaked (dev servers, watch-mode
+runners, emulators; `ps` for node/go/pytest processes older than the
+dispatch) and kill it before proceeding. A leaked process holds pipes
+and grinds the orchestrator for hours while every subagent box reads
+"completed" — the field measured exactly this. The templates mandate
+exit hygiene; this sweep is the trust-but-verify half.
+
 **BLOCKED** → record `status: blocked` and the reason. If the orchestrator can
 resolve it (a missing decision, an ambiguity in the task), resolve it and
 re-dispatch. If it cannot, this is one of the two things that may interrupt

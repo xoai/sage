@@ -58,6 +58,12 @@ if ! command -v python3 >/dev/null 2>&1; then
   unverifiable "python3 is required to detect the test runner"
 fi
 
+# Bounded execution: runner and build run under a watchdog so a hanging
+# suite becomes a FAIL with evidence instead of an hours-long grind
+# (mechanics + portability constraints documented in sage-bounded.sh).
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/sage-bounded.sh"
+VERIFY_TIMEOUT=$(sage_bounded_timeout "$ROOT")
+
 # ── Step 1: Detect test runner ──
 #
 # Detection reads package.json as JSON. It used to grep for the substring
@@ -68,7 +74,7 @@ fi
 # bash 3.2 mis-parses a heredoc nested inside a command substitution.
 PY_DETECT=$(mktemp "${TMPDIR:-/tmp}/sage-gate5-XXXXXX") || \
   unverifiable "could not create a temporary file"
-trap 'rm -f "$PY_DETECT"' EXIT
+trap 'rm -f "$PY_DETECT" "$PY_DETECT".out-* "$PY_DETECT".sentinel-*' EXIT
 
 cat > "$PY_DETECT" <<'PYEOF'
 import json
@@ -202,7 +208,14 @@ elif os.path.isfile(os.path.join(root, 'pubspec.yaml')):
 
 elif os.path.isfile(os.path.join(root, 'go.mod')):
     emit('RUNNER', 'go-test')
-    for a in ('go', 'test', './...', '-v'):
+    go_args = ['go', 'test', './...', '-v']
+    # Go's default lets a hung test binary run 10 minutes PER PACKAGE.
+    # Inject a per-binary limit — additive, never overriding: a project
+    # that sets -timeout in GOFLAGS wins (command line beats GOFLAGS in
+    # go, so injecting here would silently override it).
+    if '-timeout' not in os.environ.get('GOFLAGS', ''):
+        go_args.append('-timeout=120s')
+    for a in go_args:
         emit('ARG', a)
     emit('PRECHECK', 'go')
     emit('PRECHECK', 'version')
@@ -259,10 +272,29 @@ vlog ""
 # a hazard the moment detection reads anything from project config.
 vlog "── Running tests ──"
 
-TEST_OUTPUT=$(cd "$ROOT" && ${TEST_ARGV[@]+"${TEST_ARGV[@]}"} 2>&1)
-TEST_RC=$?
+# JS runners default to watch mode in a TTY-adjacent world; CI=true is
+# the additive, runner-native "run once and exit" switch.
+RUN_PREFIX=()
+case "$TEST_RUNNER" in
+  vitest|jest|mocha|npm-test) RUN_PREFIX=(env CI=true) ;;
+esac
 
-if [ "$TEST_RC" -ne 0 ]; then
+TEST_SENTINEL="$PY_DETECT.sentinel-test"
+sage_bounded_run "$PY_DETECT.out-test" "$TEST_SENTINEL" \
+  "$VERIFY_TIMEOUT" "$ROOT" \
+  ${RUN_PREFIX[@]+"${RUN_PREFIX[@]}"} ${TEST_ARGV[@]+"${TEST_ARGV[@]}"}
+TEST_RC=$?
+TEST_OUTPUT=$(cat "$PY_DETECT.out-test" 2>/dev/null)
+
+if [ -f "$TEST_SENTINEL" ] && [ "$TEST_RC" -ne 0 ]; then
+  log "❌ TESTS TIMED OUT — suite exceeded ${VERIFY_TIMEOUT}s; the watchdog killed it"
+  log "   A hanging test is a defect surfaced, not hidden. If the suite is"
+  log "   legitimately slower, raise verify_timeout in .sage/config.yaml."
+  log ""
+  log "── Test output (last 40 lines) ──"
+  printf '%s\n' "$TEST_OUTPUT" | tail -40
+  PASS=false
+elif [ "$TEST_RC" -ne 0 ]; then
   log "❌ TESTS FAILED (exit code: $TEST_RC)"
   log ""
   log "── Test output (last 40 lines) ──"
@@ -281,8 +313,16 @@ vlog ""
 vlog "── Build check ──"
 BUILD_NOTE="no build step"
 if [ ${#BUILD_ARGV[@]} -gt 0 ]; then
-  BUILD_OUTPUT=$(cd "$ROOT" && ${BUILD_ARGV[@]+"${BUILD_ARGV[@]}"} 2>&1)
-  if [ $? -ne 0 ]; then
+  BUILD_SENTINEL="$PY_DETECT.sentinel-build"
+  sage_bounded_run "$PY_DETECT.out-build" "$BUILD_SENTINEL" \
+    "$VERIFY_TIMEOUT" "$ROOT" ${BUILD_ARGV[@]+"${BUILD_ARGV[@]}"}
+  BUILD_RC=$?
+  BUILD_OUTPUT=$(cat "$PY_DETECT.out-build" 2>/dev/null)
+  if [ -f "$BUILD_SENTINEL" ] && [ "$BUILD_RC" -ne 0 ]; then
+    log "❌ BUILD TIMED OUT — exceeded ${VERIFY_TIMEOUT}s (${BUILD_ARGV[*]+"${BUILD_ARGV[*]}"})"
+    printf '%s\n' "$BUILD_OUTPUT" | tail -20
+    PASS=false
+  elif [ "$BUILD_RC" -ne 0 ]; then
     log "❌ BUILD FAILED (${BUILD_ARGV[*]+"${BUILD_ARGV[*]}"})"
     printf '%s\n' "$BUILD_OUTPUT" | tail -20
     PASS=false

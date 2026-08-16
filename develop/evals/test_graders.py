@@ -1375,6 +1375,37 @@ class ReviewLoopGraderTest(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("4 rounds", detail)
 
+    def seg(self, *majors):
+        """A history segment (fresh instance numbering)."""
+        return [{"iteration": i + 1,
+                 "counts": {"critical": 0, "major": m, "substantive": 0,
+                            "cosmetic": 0},
+                 "result": "CONTINUE"} for i, m in enumerate(majors)]
+
+    def test_two_instance_ledger_passes_per_instance_cap(self):
+        # The finhub m8 shape: 4-round spec instance, marker, 3-round plan
+        # instance. Cap is PER INSTANCE (largest = 4 ≤ 5); the second
+        # instance's round-1 weight is not a climb from the first
+        # instance's terminal round; markers are never rounds.
+        history = (self.seg(4, 3, 2, 1) + [{"instance": "plan"}]
+                   + self.seg(2, 1, 0))
+        self.ledger(history=history)
+        ok, detail = self.check(max_rounds=5, monotone_open_weight=True)
+        self.assertTrue(ok, detail)
+
+    def test_six_round_single_instance_fails_cap(self):
+        self.ledger(history=self.hist(6, 5, 4, 3, 2, 1))
+        ok, detail = self.check(max_rounds=5)
+        self.assertFalse(ok)
+        self.assertIn("6 rounds", detail)
+
+    def test_within_instance_climb_still_fails(self):
+        history = self.seg(1) + [{"instance": "code"}] + self.seg(1, 3)
+        self.ledger(history=history)
+        ok, detail = self.check(monotone_open_weight=True)
+        self.assertFalse(ok)
+        self.assertIn("climbed", detail)
+
     def test_weight_climb_fails_monotone(self):
         self.ledger(history=self.hist(1, 3))
         ok, detail = self.check(monotone_open_weight=True)

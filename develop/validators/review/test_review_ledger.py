@@ -306,10 +306,17 @@ class FixNowExpiryTest(LedgerCase):
     """fix-now buys EXACTLY one more round — the docstring's promise.
     Sticky fix-now was an unbounded loop: the disposition survived a
     NOT-FIXED verdict, and fix_now preempts both the stall check and the
-    cap, so a fix that kept failing bought rounds forever."""
+    cap, so a fix that kept failing bought rounds forever. (Purchases here
+    ride DISPUTED entries — under fix_now_blocking_only, open non-blocking
+    entries can no longer buy at all; see FixNowEligibilityTest.)"""
+
+    def disputed_entry(self):
+        self.intake([raw_finding(severity="substantive")])
+        R.verify(self.ledger, [{"id": "F-001", "verdict": "DISPUTED-STANDS",
+                                "evidence": "reviewer stands by it"}], 1)
 
     def test_not_fixed_spends_the_bought_round(self):
-        self.intake([raw_finding(severity="substantive")])
+        self.disputed_entry()
         R.disposition(self.ledger, "F-001", "fix-now", None, None)
         self.assertEqual(R.close_round(self.ledger, 1, self.config)["action"],
                          "CONTINUE")               # the bought round
@@ -320,18 +327,89 @@ class FixNowExpiryTest(LedgerCase):
             R.close_round(self.ledger, 2, self.config)   # not CONTINUE forever
 
     def test_cannot_reproduce_spends_the_bought_round(self):
-        self.intake([raw_finding(severity="substantive")])
+        self.disputed_entry()
         R.disposition(self.ledger, "F-001", "fix-now", None, None)
         R.close_round(self.ledger, 1, self.config)
         R.cannot_reproduce(self.ledger, "F-001", "no repro at HEAD", 2)
         self.assertIsNone(self.entries()[0]["disposition"])
 
     def test_fixed_still_clears_it(self):
-        self.intake([raw_finding(severity="substantive")])
+        self.disputed_entry()
         R.disposition(self.ledger, "F-001", "fix-now", None, None)
         R.verify(self.ledger, [{"id": "F-001", "verdict": "FIXED",
                                 "evidence": "witness green"}], 2)
         self.assertIsNone(self.entries()[0]["disposition"])
+
+
+class FixNowEligibilityTest(LedgerCase):
+    """fix-now buys review rounds — a purchase only blocking or disputed
+    entries may make. The field data behind the rule: agents picked
+    fix-now for cosmetics because it was the only disposition needing no
+    reason and no ticket, converting every advisory stop into another
+    full round (pancake round 2 closed 0/0/1/2 open yet recorded
+    CONTINUE; finhub's exit record: F-022:fix-now)."""
+
+    def test_open_substantive_cannot_fix_now(self):
+        self.intake([raw_finding(severity="substantive")])
+        with self.assertRaises(R.Problem) as ctx:
+            R.disposition(self.ledger, "F-001", "fix-now", None, None)
+        msg = str(ctx.exception)
+        for hint in ("defer", "reject", "disposition-batch",
+                     "fix_now_blocking_only"):
+            self.assertIn(hint, msg)
+        self.assertIsNone(self.entries()[0]["disposition"])
+
+    def test_open_cosmetic_cannot_fix_now(self):
+        self.intake([raw_finding(severity="cosmetic")])
+        with self.assertRaises(R.Problem):
+            R.disposition(self.ledger, "F-001", "fix-now", None, None)
+
+    def test_blocking_and_disputed_still_can(self):
+        self.intake([raw_finding(severity="major",
+                                 witness={"kind": "test", "ref": "t.py",
+                                          "status": "red"}),
+                     raw_finding(claim="second claim", severity="substantive",
+                                 region=(2, 3))])
+        R.verify(self.ledger, [{"id": "F-002", "verdict": "DISPUTED-STANDS",
+                                "evidence": "stands"}], 2)
+        R.disposition(self.ledger, "F-001", "fix-now", None, None)  # major
+        R.disposition(self.ledger, "F-002", "fix-now", None, None)  # disputed
+        self.assertEqual(self.entries()[0]["disposition"], "fix-now")
+        self.assertEqual(self.entries()[1]["disposition"], "fix-now")
+
+    def test_batch_fix_now_on_cosmetics_refused_atomically(self):
+        self.intake([raw_finding(claim="c1", severity="cosmetic",
+                                 region=(1, 2)),
+                     raw_finding(claim="c2", severity="cosmetic",
+                                 region=(2, 3))])
+        with self.assertRaises(R.Problem):
+            R.disposition_batch(self.ledger, [], "cosmetic", "fix-now",
+                                None, None)
+        self.assertTrue(all(e["disposition"] is None for e in self.entries()))
+
+    def test_knob_off_restores_round_buying(self):
+        cfg = dict(self.config, fix_now_blocking_only=False)
+        self.intake([raw_finding(severity="substantive")], config=cfg)
+        R.disposition(self.ledger, "F-001", "fix-now", None, None, config=cfg)
+        self.assertEqual(self.entries()[0]["disposition"], "fix-now")
+
+    def test_advisory_stop_cannot_become_continue(self):
+        # The pancake round-2 shape: 0/0/1/2 open. No disposition path may
+        # yield CONTINUE; batch defer/reject leads to the recorded stop.
+        self.intake([
+            raw_finding(claim="one substantive", severity="substantive",
+                        region=(1, 2)),
+            raw_finding(claim="nit one", severity="cosmetic", region=(2, 3)),
+            raw_finding(claim="nit two", severity="cosmetic", region=(3, 4))])
+        for fid in ("F-001", "F-002", "F-003"):
+            with self.assertRaises(R.Problem):
+                R.disposition(self.ledger, fid, "fix-now", None, None)
+        R.disposition_batch(self.ledger, [], "substantive", "defer",
+                            None, "cleanup.md")
+        R.disposition_batch(self.ledger, [], "cosmetic", "reject",
+                            "style only", None)
+        decision = R.close_round(self.ledger, 2, self.config)
+        self.assertEqual(decision["action"], "STOP_ADVISORY")
 
 
 class StopRefusalBeltAndBracesTest(LedgerCase):
@@ -364,6 +442,180 @@ class StopRefusalBeltAndBracesTest(LedgerCase):
             R.close_round(self.ledger, 1, self.config)
         data = json.loads(self.ledger.read_text(encoding="utf-8"))
         self.assertEqual(data["history"], [])       # nothing recorded
+
+
+class AutoDeferTest(LedgerCase):
+    """Rounds >1 discoveries that never blocked must not extend the loop:
+    they intake as pending defers ticketed `cleanup.md` — recorded,
+    non-blocking, sealed at the stop — and close-round writes the ticket
+    file itself (machine-owned, like decisions.md). The field treadmill:
+    fix → new diff → new nits → fix-now → repeat (finhub round 2 found 7
+    new substantives; pancake found new cosmetics in rounds 2 AND 3)."""
+
+    def first_round(self):
+        self.intake([raw_finding(severity="major",
+                                 witness={"kind": "test", "ref": "t.py",
+                                          "status": "red"})])
+
+    def late_nit(self, claim="late nit", region=(2, 3)):
+        return raw_finding(claim=claim, severity="substantive", region=region)
+
+    def test_late_substantive_auto_defers(self):
+        self.first_round()
+        rep = self.intake([self.late_nit()], iteration=2)
+        entry = self.entries()[1]
+        self.assertEqual(entry["disposition"],
+                         {"action": "defer", "ticket": "cleanup.md"})
+        self.assertEqual(rep["auto_deferred"], [entry["id"]])
+        self.assertEqual(entry["status"], "open")    # pending until sealed
+
+    def test_late_major_still_blocks(self):
+        self.first_round()
+        rep = self.intake([raw_finding(claim="late major", region=(2, 3),
+                                       severity="major",
+                                       witness={"kind": "test", "ref": "t2.py",
+                                                "status": "red"})],
+                          iteration=2)
+        self.assertIsNone(self.entries()[1]["disposition"])
+        self.assertEqual(rep["auto_deferred"], [])
+        self.assertEqual(R.close_round(self.ledger, 2, self.config)["action"],
+                         "CONTINUE")
+
+    def test_round_one_never_auto_defers(self):
+        self.intake([raw_finding(severity="substantive")])
+        self.assertIsNone(self.entries()[0]["disposition"])
+
+    def test_auto_deferred_never_blocks_or_requires_disposition(self):
+        self.first_round()
+        R.verify(self.ledger, [{"id": "F-001", "verdict": "FIXED",
+                                "evidence": "witness green"}], 2)
+        self.intake([self.late_nit()], iteration=2)
+        decision = R.close_round(self.ledger, 2, self.config)
+        self.assertEqual(decision["action"], "STOP_ADVISORY")
+        self.assertEqual(decision["dispositions_required"], [])
+
+    def test_sealing_stop_writes_cleanup_md(self):
+        self.first_round()
+        R.verify(self.ledger, [{"id": "F-001", "verdict": "FIXED",
+                                "evidence": "witness green"}], 2)
+        self.intake([self.late_nit()], iteration=2)
+        R.close_round(self.ledger, 2, self.config)
+        cleanup = self.ledger.parent / "cleanup.md"
+        text = cleanup.read_text(encoding="utf-8")
+        self.assertIn("F-002", text)
+        self.assertIn("late nit", text)
+        self.assertIn("src/auth.ts:2-3", text)
+        self.assertIn("token value differs", text)   # exit_criteria
+        self.assertEqual(self.entries()[1]["status"], "deferred")
+        # a later stop APPENDS rather than overwriting
+        self.intake([self.late_nit(claim="second wave", region=(3, 4))],
+                    iteration=3)
+        R.close_round(self.ledger, 3, self.config)
+        text2 = cleanup.read_text(encoding="utf-8")
+        self.assertIn("late nit", text2)
+        self.assertIn("second wave", text2)
+
+    def test_re_raise_merges_into_auto_deferred(self):
+        self.first_round()
+        self.intake([self.late_nit()], iteration=2)
+        rep = self.intake([self.late_nit(claim="Late NIT!")], iteration=3)
+        self.assertEqual(len(self.entries()), 2)
+        self.assertEqual(rep["merged"], [self.entries()[1]["id"]])
+        self.assertEqual(self.entries()[1]["raised_count"], 2)
+
+    def test_relitigation_re_raise_is_never_auto_deferred(self):
+        # A settled-fingerprint re-raise at iteration >1 lands as
+        # intake-disputed (the guard's record) — auto-defer must NOT
+        # claim it: a defer disposition would seal it `deferred`,
+        # erasing its guard identity and polluting cleanup.md with
+        # re-litigation noise. (Mutation audit: dropping `not settled`
+        # from the auto-defer condition survived the suite before this.)
+        self.intake([raw_finding(severity="substantive",
+                                 cited="spec §4.2")])
+        data = json.loads(self.ledger.read_text(encoding="utf-8"))
+        data["findings"][0]["status"] = "rejected"
+        self.ledger.write_text(json.dumps(data), encoding="utf-8")
+        self.intake([raw_finding(severity="substantive",
+                                 cited="spec §4.2")], iteration=2)
+        entry = self.entries()[1]
+        self.assertEqual(entry["status"], "disputed")
+        self.assertEqual(entry["relitigates"], "F-001")
+        self.assertIsNone(entry["disposition"])
+
+    def test_knob_open_restores(self):
+        cfg = dict(self.config, late_finding_disposition="open")
+        self.intake([raw_finding(severity="major",
+                                 witness={"kind": "test", "ref": "t.py",
+                                          "status": "red"})], config=cfg)
+        self.intake([self.late_nit()], iteration=2, config=cfg)
+        self.assertIsNone(self.entries()[1]["disposition"])
+
+
+class InstanceLedgerTest(LedgerCase):
+    """One ledger, several checkpoint loops: cap and stall are
+    per-instance (memchain's exit records ran iter=7/9/11/13 against a
+    cap of 5). Markerless ledgers keep legacy behavior byte-identically —
+    including accepting any --iteration unvalidated."""
+
+    def blocking(self, claim="b", region=(1, 2)):
+        return raw_finding(claim=claim, severity="major", region=region,
+                           witness={"kind": "test", "ref": "t.py",
+                                    "status": "red"})
+
+    def test_open_instance_marker_and_derived_iteration(self):
+        self.intake([self.blocking()])
+        R.close_round(self.ledger, 1, self.config)          # CONTINUE
+        R.open_instance(self.ledger, "plan")
+        R.verify(self.ledger, [{"id": "F-001", "verdict": "FIXED",
+                                "evidence": "green"}], 1)
+        d = R.close_round(self.ledger, 1, self.config)      # derived = 1
+        self.assertEqual(d["action"], "STOP_CLEAN")
+        hist = json.loads(self.ledger.read_text(encoding="utf-8"))["history"]
+        self.assertEqual([h.get("instance") for h in hist if "instance" in h],
+                         ["plan"])
+
+    def test_mismatched_iteration_fails_closed_when_markers_exist(self):
+        self.intake([self.blocking()])
+        R.open_instance(self.ledger, "code")
+        with self.assertRaises(R.Problem) as ctx:
+            R.close_round(self.ledger, 5, self.config)      # derived is 1
+        # The refusal must be THE mismatch refusal — a mutation audit
+        # showed `!=` weakened to `<` sliding through because STOP_CAP's
+        # disposition refusal also raises Problem here.
+        self.assertIn("does not match", str(ctx.exception))
+
+    def test_markerless_accepts_any_iteration(self):
+        self.intake([self.blocking()])
+        R.verify(self.ledger, [{"id": "F-001", "verdict": "FIXED",
+                                "evidence": "green"}], 13)
+        d = R.close_round(self.ledger, 13, self.config)     # memchain shape
+        self.assertEqual(d["action"], "STOP_CLEAN")
+
+    def test_cap_counts_rounds_in_this_instance_only(self):
+        self.intake([self.blocking()])
+        data = json.loads(self.ledger.read_text(encoding="utf-8"))
+        counts = {"critical": 0, "major": 1, "substantive": 0, "cosmetic": 0}
+        data["history"] = [{"iteration": i, "counts": counts,
+                            "result": "CONTINUE"} for i in range(1, 7)]
+        data["history"].append({"instance": "qa"})
+        self.ledger.write_text(json.dumps(data), encoding="utf-8")
+        d = R.close_round(self.ledger, 1, self.config)      # fresh instance
+        self.assertEqual(d["action"], "CONTINUE")           # not STOP_CAP
+
+    def test_report_renders_markers(self):
+        self.intake([self.blocking()])
+        R.close_round(self.ledger, 1, self.config)
+        R.open_instance(self.ledger, "plan")
+        self.assertIn("[plan]", R.report(self.ledger))
+
+    def test_instance_rounds_helper(self):
+        rounds = [{"iteration": 1, "result": "CONTINUE", "counts": {}},
+                  {"instance": "plan"},
+                  {"iteration": 1, "result": "CONTINUE", "counts": {}},
+                  {"iteration": 2, "result": "STOP_CLEAN", "counts": {}}]
+        self.assertEqual(len(R.instance_rounds(rounds)), 2)
+        self.assertEqual(len(R.instance_rounds(rounds[:1])), 1)
+        self.assertEqual(len(R.instance_rounds([])), 0)
 
 
 class CitationTest(LedgerCase):
