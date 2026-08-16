@@ -63,6 +63,11 @@ sage_bounded_run() {
   # exact hang this helper exists to prevent.
   (
     sleep "$_sb_limit"
+    # A watcher that outlives our cleanup kill must not sentinel a
+    # finished runner: bail unless the runner is still alive. (The
+    # residual instant between this check and the write is absorbed by
+    # the consumer contract — timeout = sentinel AND nonzero rc.)
+    kill -0 "$_sb_pid" 2>/dev/null || exit 0
     : > "$_sb_sentinel"
     kill -TERM "$_sb_pid" 2>/dev/null
     if command -v pkill >/dev/null 2>&1; then
@@ -77,12 +82,15 @@ sage_bounded_run() {
   _sb_watcher=$!
   wait "$_sb_pid"
   _sb_rc=$?
-  # Sweep the watcher's children BEFORE killing it — kill the parent
-  # first and its sleep reparents to init, where pkill -P finds nothing.
-  if command -v pkill >/dev/null 2>&1; then
-    pkill -P "$_sb_watcher" 2>/dev/null
-  fi
+  # Kill the WATCHER first — sweeping its sleep first lets the subshell
+  # advance and write a spurious sentinel (a fast suite then misgrades
+  # as a timeout; caught flaky in the bash-3.2 smoke). A sleep orphaned
+  # by the kill is harmless: the watcher runs on /dev/null, so nothing
+  # it leaks can hold the caller's pipe, and it expires on its own.
   kill "$_sb_watcher" 2>/dev/null
+  if command -v pkill >/dev/null 2>&1; then
+    pkill -P "$_sb_watcher" 2>/dev/null    # best-effort tidy-up
+  fi
   wait "$_sb_watcher" 2>/dev/null
   return "$_sb_rc"
 }
