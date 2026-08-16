@@ -297,13 +297,23 @@ def _decide_v2(iteration, ledger):
     CONTINUE (the controller does not spend past either); only then do
     blocking findings drive another round.
 
+    Disputed entries (RR-19 hardened): a Phase-A-disputed entry — status
+    `disputed` with no `relitigates` field — is contested, not resolved.
+    It never drives CONTINUE (that would hand the reviewer back the
+    verdict), but it forces a disposition before any STOP: the pre-fix
+    controller let a cannot-reproduce'd critical vanish into STOP_CLEAN.
+    Intake-disputed re-raises (`relitigates` set) stay non-blocking by
+    design — sampling noise loses to the record.
+
     Verdicts: CONTINUE | ESCALATE | STOP_CAP | STOP_ADVISORY | STOP_CLEAN.
     """
     cfg = dict(V2_DEFAULTS)
+    config = ledger.get("config") or {}
     for key in V2_DEFAULTS:
-        value = (ledger.get("config") or {}).get(key)
+        value = config.get(key)
         if isinstance(value, int) and not isinstance(value, bool):
             cfg[key] = value
+    disputed_guard = config.get("disputed_disposition", True) is not False
     findings = ledger.get("findings", [])
     open_entries = [f for f in findings if f.get("status") in OPEN_STATUSES]
     blocking = [f for f in open_entries if not _is_pending_settlement(f)]
@@ -313,9 +323,14 @@ def _decide_v2(iteration, ledger):
     history = ledger.get("history", [])
     stalls = _trailing_stalls([weight(h.get("counts", {})) for h in history],
                               current_weight)
-    fix_now = [f["id"] for f in blocking if f.get("disposition") == "fix-now"]
+    disputed_live = ([f for f in findings if f.get("status") == "disputed"
+                      and not f.get("relitigates")] if disputed_guard else [])
+    disputed_pending = [f["id"] for f in disputed_live
+                        if not f.get("disposition")]
+    fix_now = [f["id"] for f in blocking + disputed_live
+               if f.get("disposition") == "fix-now"]
 
-    if not open_entries:
+    if not open_entries and not disputed_live:
         action = "STOP_CLEAN"
     elif fix_now:
         action = "CONTINUE"                        # a human bought this round
@@ -328,15 +343,17 @@ def _decide_v2(iteration, ledger):
     elif blocking_counts["major"] > cfg["major_budget"]:
         action = "CONTINUE"
     else:
-        action = "STOP_ADVISORY"                   # substantive/cosmetic only
+        action = "STOP_ADVISORY"     # substantive/cosmetic/disputed only
 
     return {
         "counts": counts,
         "weight": current_weight,
         "open_ids": [f["id"] for f in open_entries],
         "fix_now": fix_now,
+        "disputed_pending": disputed_pending,
         "dispositions_required": [f["id"] for f in open_entries
-                                  if not f.get("disposition")],
+                                  if not f.get("disposition")]
+                                 + disputed_pending,
         "stalled": stalls >= cfg["escalate_after_stalls"],
         "cap_reached": iteration >= cfg["iteration_cap"],
         "action": action,

@@ -1073,6 +1073,28 @@ assert C11 "witness_capping true→false while the v2 loop is active is blocked"
   --exit 2 --stderr "enforcement" --hook "$CG"
 
 P="$(mk_v2_review)"
+assert C11b "disputed_disposition true→false while the v2 loop is active is blocked (the disputed guard IS the floor — flipping it restores the vanish)" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/config.yaml","old_string":"  witness_capping: true","new_string":"  witness_capping: true\n  disputed_disposition: false"}}' \
+  --exit 2 --stderr "enforcement" --hook "$CG"
+
+P="$(mk_v2_review)"
+assert C11c "disputed_disposition: false via a Bash redirect is the same softening — blocked" "$P" \
+  '{"tool_name":"Bash","tool_input":{"command":"echo \"  disputed_disposition: false\" >> .sage/config.yaml"}}' \
+  --exit 2 --stderr "enforcement" --hook "$CG"
+
+P="$(mk_v2_review)"
+assert C11d "a contradictory witness_capping duplicate (true stays, false appended) is the reader-divergence bomb — first-wins read_flag stays armed while last-wins review.py disarms; blocked" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/config.yaml","old_string":"  witness_capping: true","new_string":"  witness_capping: true\nreview_loop:\n  witness_capping: false"}}' \
+  --exit 2 --stderr "enforcement" --hook "$CG"
+
+P="$(mk_enforced 'review_loop:
+  mode: v2
+  disputed_disposition: true')"
+assert C11e "a contradictory disputed_disposition duplicate is the same bomb — blocked" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/config.yaml","old_string":"  disputed_disposition: true","new_string":"  disputed_disposition: true\nreview_loop:\n  disputed_disposition: false"}}' \
+  --exit 2 --stderr "enforcement" --hook "$CG"
+
+P="$(mk_v2_review)"
 assert C12 "tuning a NON-floor review knob (iteration_cap) is allowed" "$P" \
   '{"tool_name":"Edit","tool_input":{"file_path":".sage/config.yaml","old_string":"  mode: v2","new_string":"  mode: v2\n  iteration_cap: 3"}}' \
   --exit 0 --hook "$CG"

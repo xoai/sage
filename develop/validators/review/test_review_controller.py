@@ -192,15 +192,59 @@ class CleanAndSettledTest(unittest.TestCase):
              finding("F-003", "major", status="deferred")]))
         self.assertEqual(d["action"], "STOP_CLEAN")
 
-    def test_disputed_does_not_count_open(self):
-        d = sf.decide({}, 1, [], ledger=ledger(
-            [finding("F-001", "critical", status="disputed", witnessed=True)]))
-        self.assertEqual(d["action"], "STOP_CLEAN")
-
     def test_not_fixed_counts_open(self):
         d = sf.decide({}, 2, [], ledger=ledger(
             [finding("F-001", "major", status="not-fixed", witnessed=True)]))
         self.assertEqual(d["action"], "CONTINUE")
+
+
+class DisputedGuardTest(unittest.TestCase):
+    """A Phase-A-disputed entry is contested, not resolved. It must not
+    drive CONTINUE (that would hand the reviewer back the verdict the v2
+    design took away), and it must not vanish from the verdict either —
+    the S2 hole: cannot-reproduce on a sole critical used to yield
+    STOP_CLEAN 0/0/0/0 with no human decision. The `relitigates` field
+    discriminates: intake-disputed re-raises keep their by-design
+    non-blocking behavior (the guard); Phase-A-disputed entries force a
+    disposition at every STOP (the fix)."""
+
+    def test_phase_a_disputed_critical_cannot_stop_clean(self):
+        d = sf.decide({}, 1, [], ledger=ledger(
+            [finding("F-001", "critical", status="disputed", witnessed=True)]))
+        self.assertEqual(d["action"], "STOP_ADVISORY")
+        self.assertEqual(d["dispositions_required"], ["F-001"])
+        self.assertEqual(d["disputed_pending"], ["F-001"])
+        self.assertEqual(d["counts"]["critical"], 0)   # never drives CONTINUE
+
+    def test_relitigation_disputed_still_stops_clean(self):
+        f = finding("F-001", "critical", status="disputed", witnessed=True)
+        f["relitigates"] = "F-000"
+        d = sf.decide({}, 1, [], ledger=ledger([f]))
+        self.assertEqual(d["action"], "STOP_CLEAN")
+        self.assertEqual(d["dispositions_required"], [])
+        self.assertEqual(d["disputed_pending"], [])
+
+    def test_disputed_fix_now_buys_a_round(self):
+        f = finding("F-001", "critical", status="disputed", witnessed=True,
+                    disposition="fix-now")
+        d = sf.decide({}, 1, [], ledger=ledger([f]))
+        self.assertEqual(d["action"], "CONTINUE")
+        self.assertIn("F-001", d["fix_now"])
+
+    def test_disputed_pending_defer_stops_advisory_not_clean(self):
+        # Symmetric with an open entry whose defer awaits sealing: decided,
+        # not yet sealed — the stop is ADVISORY, and close-round seals it.
+        f = finding("F-001", "critical", status="disputed", witnessed=True,
+                    disposition={"action": "defer", "ticket": "T-9"})
+        d = sf.decide({}, 1, [], ledger=ledger([f]))
+        self.assertEqual(d["action"], "STOP_ADVISORY")
+        self.assertEqual(d["dispositions_required"], [])
+
+    def test_guard_off_restores_prior_behavior(self):
+        d = sf.decide({}, 1, [], ledger=ledger(
+            [finding("F-001", "critical", status="disputed", witnessed=True)],
+            config={"disputed_disposition": False}))
+        self.assertEqual(d["action"], "STOP_CLEAN")
 
 
 class R6V1ByteIdenticalTest(unittest.TestCase):

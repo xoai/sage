@@ -216,17 +216,19 @@ Include verbatim in the sub-agent prompt:
 > You do not decide the loop; you report findings. The decision is
 > computed from them.
 >
-> A critical or major must come with a witness: a failing test you
-> wrote and ran, a concrete repro (input → observed → expected), or an
-> execution trace. If you cannot demonstrate it, report it — it will be
-> recorded as substantive. This is not a penalty; it is the definition
-> of the severities.
+> A critical or major must carry a witness — a failing test you wrote
+> and ran, a concrete repro (input → observed → expected), or an
+> execution trace — or a citation that resolves: a spec clause,
+> constitution rule, or requirement that actually exists. Citations are
+> checked mechanically against the cycle's spec/plan and the
+> constitution; one that resolves nowhere counts as no citation. A
+> finding with neither witness nor resolving citation is recorded as
+> substantive. This is not a penalty; it is the definition of the
+> severities.
 >
 > An empty finding list is a valid, creditable outcome; you are scored
-> on precision, not volume. Every critical/major must cite the spec
-> clause, constitution rule, or requirement it violates — a finding
-> that cites nothing is capped at substantive automatically, so spend
-> your effort on citations and witnesses, not on quantity.
+> on precision, not volume. Spend your effort on witnesses and
+> resolvable citations, not on quantity.
 
 Findings are ONE fenced ```json block — an array of objects (prose
 outside it is not parsed):
@@ -266,10 +268,18 @@ Sequential checklist passes in one dispatch; tag each finding's `pass`:
 
 ### Two-phase (rounds >1)
 
-Phase A: verify each open/not-fixed ledger entry (`FIXED | NOT-FIXED |
-DISPUTED-STANDS`, evidence required; test witnesses run at current
-HEAD). Phase B: hunt the revision delta plus Phase-A anchors only —
-the whole-artifact pass happened at round 1.
+Phase A: verify ledger entries (`FIXED | NOT-FIXED | DISPUTED-STANDS`,
+evidence required; test witnesses run at current HEAD). Scope follows
+`review_loop.phase_a_scope`: `all` (default) verifies every open and
+not-fixed entry; `fixed` verifies only entries a fix commit claimed via
+`Sage-Fix` trailers since the last round, plus one full pass on the
+stopping round — the default stays `all` pending measurement (E17
+guards ledger amnesia). A `DISPUTED-STANDS` verdict — or a fixer's
+`--cannot-reproduce` — does not clear an entry: it becomes a Phase-A
+dispute that must receive a disposition (defer / reject / fix-now)
+before any STOP records; it never vanishes from the verdict. Phase B:
+hunt the revision delta plus Phase-A anchors only — the whole-artifact
+pass happened at round 1.
 
 ### Input packet (v2)
 

@@ -6,8 +6,9 @@
 # `hard_enforcement: true`, an agent Edit/Write to .sage/config.yaml that would
 # reduce any gate's effective-enabled state (flip hard_enforcement true→false,
 # add a *_gate: false opt-out, remove tdd_enforcement: true; with the v2
-# review loop active, flip review_loop mode v2→v1 or witness_capping
-# true→false — an agent must not soften its own review floor; with the scope
+# review loop active, flip review_loop mode v2→v1, witness_capping
+# true→false, or disputed_disposition true→false — an agent must not soften
+# its own review floor; with the scope
 # gate armed, lower scope_gate's rank or flip implicit_test_scope, or flip
 # scope_judge true→false — an agent must not soften its own scope floor,
 # SG-3) exits 2. Also
@@ -118,6 +119,14 @@ def witness_capping(text):
     return read_flag(text, "witness_capping") is not False   # default on
 
 
+def disputed_guard(text):
+    """review_loop.disputed_disposition — default on. Flipping it false
+    restores the pre-hardening vanish (a cannot-reproduce'd critical
+    closing STOP_CLEAN), which is exactly the escape a pressured fixer
+    would reach for; while v2 is active the knob is the floor."""
+    return read_flag(text, "disputed_disposition") is not False
+
+
 def scope_mode(text):
     """The scope_gate mode. Absent → off (the gate SHIPS off; the default
     flips only when 30-§3's numbers land)."""
@@ -155,6 +164,8 @@ def weaker(before, after):
             return True
         if witness_capping(before) and not witness_capping(after):
             return True
+        if disputed_guard(before) and not disputed_guard(after):
+            return True
     # The scope floor (SG-3): lowering scope_gate's rank is an agent widening
     # its own permitted diff. And while the scope gate is armed, the
     # implicit_test_scope knob belongs to the human — flipping it EITHER way
@@ -174,7 +185,11 @@ def weaker(before, after):
     # Introducing a contradictory duplicate of an enforcement flag is
     # weakening even though first-wins readers don't move: any last-wins
     # reader (three sibling gates historically) reads the appended value.
-    for key in (MASTER,) + OPT_OUT + OPT_IN:
+    # The review-floor booleans are in the list because review.py itself
+    # is a last-wins reader (documented duplicate-key convention) while
+    # this gate reads first-wins — the exact divergence the bomb exploits.
+    for key in (MASTER,) + OPT_OUT + OPT_IN + ("witness_capping",
+                                               "disputed_disposition"):
         if not contradictory_flag(before, key) and contradictory_flag(after, key):
             return True
     # Same rule for the ranked scope_gate: a file saying both standard+ and
@@ -263,7 +278,8 @@ if tool == "Bash":
         r"(?:%s|secrets_gate|verify_gate)\s*:?\s*false" % re.escape(MASTER),
         cmd, re.I)
     review_off = review_mode(current, absent="v1") == "v2" and re.search(
-        r"witness_capping\s*:?\s*false|mode\s*:?\s*v1", cmd, re.I)
+        r"witness_capping\s*:?\s*false|disputed_disposition\s*:?\s*false"
+        r"|mode\s*:?\s*v1", cmd, re.I)
     scope_off = (scope_mode(current) != "off" and re.search(
         r"scope_gate\s*:?\s*\"?off|implicit_test_scope\s*:?\s*(true|false)",
         cmd, re.I))

@@ -279,10 +279,28 @@ review_loop:
   witness_capping: true     # false restores severity-as-reported
   scope_check: true         # false restores v1 (no diff-scope check on fixes)
   review_model: inherit     # inherit | cheap (savings unclaimed until measured)
+  disputed_disposition: true  # a Phase-A-disputed entry (cannot-reproduce /
+                              # DISPUTED-STANDS) needs a disposition before any
+                              # STOP; false restores the vanish-into-STOP_CLEAN
+  citation_check: true      # citations must resolve against spec/plan/
+                            # constitution to sustain critical/major; fail-soft
+                            # (no sources on disk = check skipped, loudly);
+                            # false restores unvalidated citations
+  phase_a_scope: all        # all (default) | fixed — verify only Sage-Fix-
+                            # claimed entries per round; flip awaits E17
 ```
 
-An *absent* block reads as v2; `mode` and `witness_capping` are part of the
-enforcement floor while v2 is active.
+Non-blocking findings settle in one command instead of N: `review.py
+disposition-batch <ledger> [F-ids...] [--severity cosmetic] --action
+reject --reason ...` (or `--action defer --ticket <one cleanup
+ticket>`). Every entry keeps its own ledger record; only the
+round-trips collapse.
+
+An *absent* block reads as v2; `mode`, `witness_capping`, and
+`disputed_disposition` are part of the enforcement floor while v2 is active
+(the config-gate blocks an agent softening any of them — flipping the
+disputed guard off restores the vanish, which is exactly the escape a
+pressured fixer would reach for).
 
 Reviewer model on opencode: `review_model` governs claude-code; on
 opencode the reviewer's model is bound the same way the judge's is — by
