@@ -1,15 +1,17 @@
 ---
 name: sage-self-learning
 description: >
-  Captures agent mistakes, corrections, and discovered gotchas so they are
-  not repeated. Use when: (1) a command or operation fails unexpectedly,
-  (2) the user corrects the agent, (3) the agent discovers non-obvious
-  behavior through debugging, (4) an API or tool behaves differently than
+  Detects mistakes, stores prevention rules, promotes them across scope —
+  the 'experience' layer for any AI agent that recurringly hits the same
+  bugs, miscommunications, or wrong-tool choices across sessions. Use
+  when: (1) a command or operation fails unexpectedly, (2) the user
+  corrects the agent, (3) the agent discovers non-obvious behavior
+  through debugging, (4) an API or tool behaves differently than
   expected, (5) a better approach is found for a recurring task. Also
   searches past learnings before starting tasks to avoid known pitfalls.
   Activate alongside the sage-memory skill — they share the same MCP
-  backend but serve different purposes (sage-memory = codebase
-  knowledge, sage-self-learning = agent mistakes and gotchas).
+  backend but serve different purposes (sage-memory = durable context,
+  sage-self-learning = agent mistakes and gotchas).
 version: "1.2.0"
 type: process
 ---
@@ -285,6 +287,43 @@ replaces it as active knowledge. The graph edge preserves the audit trail.
 **With files:** Rename the original file to `lrn-INVALID-<name>.md` and
 add `status: invalidated` to its frontmatter. Create the correction as
 a new file.
+
+### When a memory is a paraphrase of an older one (0.12.0+)
+
+When `sage_memory_store` returns a `suggested_links` entry with
+`confidence: "near_duplicate"`, the new content is a semantic
+paraphrase of an existing memory (cosine similarity ≥ 0.95
+against the existing memory's embedding). Decide one of:
+
+- **Link via `supersedes`** if the new wording is more accurate or
+  current:
+  ```
+  sage_memory_link(
+    source_id: "<new_id>",
+    target_id: "<older_id>",
+    relation: "supersedes"
+  )
+  ```
+  Future `sage_memory_search` results will surface the older
+  memory with `superseded_by: <new_id>` so agents can prefer the
+  newer one. The older memory is NOT filtered or down-ranked —
+  transparency over silent hiding.
+
+- **Merge content** if the old phrasing carries useful detail the
+  new one lost: `sage_memory_update(id: "<older_id>",
+  content: "<merged_text>")` then `sage_memory_delete(id: "<new_id>")`.
+
+- **Keep both** if they cover meaningfully different angles (rare
+  at cosine ≥ 0.95). No action needed; both stay active.
+
+**`supersedes` vs `corrects` — pick the right one:**
+- `corrects` + `status: invalidated` (see "When a Learning Causes
+  a Bug" above) is for memories that are *factually wrong* —
+  outdated library names, broken patterns, contradicted
+  conventions. The original is hidden from future search.
+- `supersedes` is for *semantic paraphrase* where both versions
+  are valid but the newer is preferred. Both stay visible;
+  the older carries a pointer to the newer.
 
 ### Search Before Store (Semantic Reinforcement)
 

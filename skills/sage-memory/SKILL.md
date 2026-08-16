@@ -1,12 +1,14 @@
 ---
 name: sage-memory
 description: >
-  Integrates sage-memory into Sage workflows. Teaches the agent when to
-  remember (store findings during work), when to recall (search memory at
-  session start and task start), and how to learn (structured knowledge
-  capture via sage learn). Use when the user mentions memory, remember,
-  recall, learn, capture knowledge, onboard to codebase, or when starting
-  any session where sage-memory MCP tools are available.
+  Captures and recalls durable context for AI agents — architecture
+  decisions, user preferences, debugging insights, conventions, anything
+  worth remembering across sessions. Teaches the agent when to remember
+  (store findings during work), when to recall (search memory at session
+  start and task start), and how to learn (structured knowledge capture
+  via sage learn). Use when the user mentions memory, remember, recall,
+  learn, capture knowledge, onboard to codebase, or when starting any
+  session where sage-memory MCP tools are available.
 version: "1.2.0"
 type: process
 ---
@@ -49,15 +51,6 @@ with the current project root path. If it responds, use MCP for the rest
 of the session. If the call fails or the tool doesn't exist, fall back to
 `.sage-memory/` files. Don't announce either outcome — just use whichever
 works.
-
-**In a git worktree, pass the MAIN checkout root, not the worktree path.**
-sage-memory keys its project database by the path you pass, and the worktree's
-own `.sage-memory/` is a separate empty store. Point at the main checkout —
-`dirname "$(git rev-parse --git-common-dir)"` — so reads and writes land in the
-one shared store. The DB is a single SQLite file: it is never copied into a
-worktree or harvested back (a SQLite file cannot be merged). The Sage
-session-init hook surfaces the exact `set_project(<main root>)` call when it
-detects a worktree.
 
 ## File Fallback Format
 

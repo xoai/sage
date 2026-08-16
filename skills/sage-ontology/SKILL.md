@@ -1,13 +1,17 @@
 ---
 name: sage-ontology
 description: >
-  Typed knowledge graph stored in sage-memory. Use when creating or querying
-  structured entities (Person, Project, Task, Event, Document), linking
-  related objects, checking dependencies, planning multi-step actions as
-  graph transformations, or when skills need to share structured state.
-  Trigger on "remember that X is Y", "what do I know about", "link X to Y",
-  "show dependencies", "what blocks X", entity CRUD, cross-skill data
-  access, or any request involving structured relationships between things.
+  Typed knowledge graph for any AI agent that needs structure — entity
+  relationships, dependency chains, code-symbol graphs (with 0.11+
+  scan-codebase), task/project links, supersession chains. Use when
+  creating or querying structured entities (Person, Project, Task, Event,
+  Document, or code symbols from scan-codebase), linking related objects,
+  checking dependencies, planning multi-step actions as graph
+  transformations, or when skills need to share structured state. Trigger
+  on "remember that X is Y", "what do I know about", "link X to Y", "show
+  dependencies", "what blocks X", "what depends on X", entity CRUD,
+  cross-skill data access, or any request involving structured
+  relationships between things.
 version: "1.2.0"
 type: process
 ---

@@ -4,6 +4,14 @@ All notable changes to Sage will be documented in this file.
 
 ## [Unreleased] — review-loop hardening: the disputed hole closed, declarations validated, ceremony scaled to severity
 
+Vendored fallback refreshed from sage-memory 0.13.2. The refresh
+clobbers the worktree DB-keying paragraph the vendored sage-memory
+SKILL carried (a sage-side hand-edit never upstreamed — the documented
+anti-pattern); the behavior itself is unaffected (the session-init hook
+surfaces the `set_project(<main root>)` call in worktrees). The
+paragraph needs an upstream PR to sage-memory's
+`src/sage_memory/skills/` to return durably.
+
 An independent review of the v2 review loop (spec + evidence in the
 cycle's private work dir) found the controller's edges softer than its
 core: a disputed critical could vanish into STOP_CLEAN, and both
