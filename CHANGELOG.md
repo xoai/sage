@@ -2,7 +2,7 @@
 
 All notable changes to Sage will be documented in this file.
 
-## [Unreleased] — review-loop hardening: the disputed hole closed, declarations validated, ceremony scaled to severity
+## [1.3.19] — review-loop hardening: the disputed hole closed, declarations validated, ceremony scaled to severity
 
 Vendored fallback refreshed from sage-memory 0.13.2. The refresh
 clobbers the worktree DB-keying paragraph the vendored sage-memory
