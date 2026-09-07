@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-build_plugin.py — generate the Claude Code plugin from single sources.
+build_plugin.py — generate platform plugin artifacts from single sources.
 
 The plugin used to live at tools/sage-claude-plugin/ as a hand-synced second
 copy of every skill, gate script, and template (ADR-5). Drift was structural —
@@ -30,6 +30,7 @@ Usage:
   build_plugin.py --out DIR       build into DIR
   build_plugin.py --check         build and verify the artifact is well-formed,
                                   reproducible, and faithful to its sources
+  build_plugin.py --target hermes build the full framework as a Hermes plugin
 
 Exit: 0 = built / check passed | 1 = build error or failed check | 2 = bad invocation
 
@@ -39,7 +40,9 @@ from __future__ import annotations
 
 import argparse
 import filecmp
+import hashlib
 import json
+import os
 import pathlib
 import re
 import shutil
@@ -49,12 +52,103 @@ import tempfile
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 OVERLAY = REPO_ROOT / "runtime" / "plugin-overlay"
+HERMES_PLATFORM = REPO_ROOT / "runtime" / "platforms" / "community" / "hermes"
+HERMES_OVERLAY = HERMES_PLATFORM / "plugin-overlay"
+HERMES_TOPOLOGY = HERMES_PLATFORM / "setup" / "topology.json"
 SKILLS = REPO_ROOT / "skills"
 SYSTEM_SKILLS = REPO_ROOT / "core" / "system-skills"
 INSTRUCTIONS_BODY = REPO_ROOT / "runtime" / "platforms" / "_shared" / "instructions-body.sh"
 CONSTITUTION_SH = REPO_ROOT / "runtime" / "platforms" / "_shared" / "constitution.sh"
 
 VERSION_PLACEHOLDER = "{{VERSION}}"
+DEFAULT_TARGET = "claude"
+BUILD_TARGETS = (DEFAULT_TARGET, "hermes")
+HERMES_TOPOLOGY_SCHEMA_VERSION = 1
+HERMES_BUILD_OWNER = "runtime/tools/build_plugin.py"
+HERMES_SOURCE_BYTE_POLICY = "canonical_utf8_lf_git_index_blob"
+HERMES_SOURCE_IDENTITY_HASH_POLICY = "source_sha256_byte_identity"
+HERMES_BEHAVIORAL_ADAPTATION_HASH_POLICY = "behavioral_adaptation"
+HERMES_FRAMEWORK_SOURCE_POLICY = "complete_git_tracked_or_release_tree"
+HERMES_FRAMEWORK_MANIFEST_NAME = ".sage-framework-manifest.json"
+HERMES_FRAMEWORK_MANIFEST_SCHEMA = "sage.hermes.framework-package"
+HERMES_FRAMEWORK_EXCLUDED_ROOTS = frozenset({
+    ".git",
+    ".sage",
+    ".sage-memory",
+    ".serena",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".tox",
+    ".nox",
+    "__pycache__",
+    "dist",
+    "htmlcov",
+    "node_modules",
+    "target",
+})
+HERMES_FRAMEWORK_PROJECTED_ROOT_FILES = frozenset({
+    HERMES_FRAMEWORK_MANIFEST_NAME,
+    "memory_namespace.py",
+    "profile_binding.py",
+})
+HERMES_PACKAGE_CLASSIFICATIONS = frozenset({
+    "hermes_shell_hook",
+    "hermes_plugin_callback",
+    "workflow_on_demand_gate",
+})
+HERMES_NON_PACKAGE_CLASSIFICATIONS = frozenset({
+    "intentionally_unsupported",
+    "not_applicable",
+})
+HERMES_WINDOWS_RESERVED_COMPONENTS = frozenset({
+    "aux",
+    "clock$",
+    "con",
+    "conin$",
+    "conout$",
+    "nul",
+    "prn",
+    *(f"com{index}" for index in range(1, 10)),
+    *(f"lpt{index}" for index in range(1, 10)),
+})
+HERMES_WINDOWS_UNSAFE_COMPONENT_CHARS = frozenset('<>:"|?*')
+HERMES_NON_IDENTITY_GIT_ATTRIBUTES = ("filter", "working-tree-encoding")
+
+
+def bash_path(path: pathlib.Path) -> str:
+    """Return a path Bash can consume on both POSIX and Windows hosts."""
+    return str(path).replace("\\", "/")
+
+
+def _resolve_bash() -> str:
+    """Prefer Git Bash on Windows; the System32 WSL shim cannot read MSYS drive paths."""
+    explicit = os.environ.get("SAGE_BASH_EXE")
+    if explicit:
+        return explicit
+
+    if os.name == "nt":
+        candidates = []
+        git_exe = shutil.which("git")
+        if git_exe:
+            git_root = pathlib.Path(git_exe).resolve().parent.parent
+            candidates.extend((git_root / "bin" / "bash.exe",
+                               git_root / "usr" / "bin" / "bash.exe"))
+        for env_name, suffix in (
+            ("ProgramFiles", ("Git", "bin", "bash.exe")),
+            ("LOCALAPPDATA", ("Programs", "Git", "bin", "bash.exe")),
+        ):
+            base = os.environ.get(env_name)
+            if base:
+                candidates.append(pathlib.Path(base).joinpath(*suffix))
+        for candidate in candidates:
+            if candidate.is_file():
+                return str(candidate)
+
+    return shutil.which("bash") or "bash"
+
+
+BASH = _resolve_bash()
 
 # The branch the release workflow publishes the built tree to. The marketplace
 # entry must pin this as its `ref` — without it, `source` resolves to the default
@@ -77,7 +171,8 @@ SKILLS_NOT_IN_PLUGIN = frozenset({
     "autoresearch",
     # The hermes-platform skill set — workflow mirrors, persona skills, and the
     # Sage-about-Sage system skills the Hermes plugin registers via
-    # ctx.register_skill() (runtime/platforms/community/hermes/__init__.py).
+    # ctx.register_skill() (the repo-root __init__.py — Hermes ships the
+    # plugin at the repo root, not under runtime/platforms/community/hermes/).
     # They ship to Hermes users through that plugin; they are not part of the
     # claude-code plugin this builder produces.
     "sage", "sage-analyst", "sage-architect", "sage-autoresearch", "sage-build",
@@ -162,6 +257,562 @@ def copy_file(src: pathlib.Path, dst: pathlib.Path):
     shutil.copy2(src, dst)
 
 
+def canonical_hermes_source_bytes(src: pathlib.Path) -> bytes:
+    """Return the bytes Git stores for a manifest-owned source.
+
+    Windows may materialize the same tracked text as CRLF.  Hermes topology
+    hashes and package artifacts deliberately use canonical UTF-8/LF for text
+    and unchanged bytes for binary files, matching Git blob semantics without
+    depending on checkout configuration.
+    """
+    try:
+        raw = src.read_bytes()
+    except OSError as exc:
+        raise BuildError(f"cannot read Hermes package source {src}: {exc}")
+    try:
+        raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return raw
+    canonical = raw.replace(b"\r\n", b"\n")
+    if b"\r" in canonical:
+        raise BuildError(
+            f"Hermes package source contains a lone CR outside Git LF semantics: {src}"
+        )
+    return canonical
+
+
+def copy_hermes_source(src: pathlib.Path, dst: pathlib.Path) -> None:
+    """Copy one manifest source using its canonical package-byte authority."""
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    dst.write_bytes(canonical_hermes_source_bytes(src))
+    shutil.copystat(src, dst)
+
+
+def _require_hermes_hash_policy(row: dict, owner: str, expected: str) -> None:
+    actual = row.get("hash_policy")
+    if actual != expected:
+        raise BuildError(
+            f"Hermes topology {owner}.hash_policy must be "
+            f"{expected!r}, got {actual!r}"
+        )
+
+
+def load_hermes_topology() -> dict:
+    """Load the Hermes source-to-package ownership manifest."""
+    try:
+        topology = json.loads(HERMES_TOPOLOGY.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        raise BuildError(
+            f"Hermes topology not found: {HERMES_TOPOLOGY.relative_to(REPO_ROOT)}"
+        )
+    except json.JSONDecodeError as exc:
+        raise BuildError(f"Hermes topology is not valid JSON: {exc}")
+
+    schema_version = topology.get("schema_version")
+    if (
+        type(schema_version) is not int
+        or schema_version != HERMES_TOPOLOGY_SCHEMA_VERSION
+    ):
+        raise BuildError(
+            "Hermes topology schema_version "
+            f"{schema_version!r} is unsupported; expected "
+            f"{HERMES_TOPOLOGY_SCHEMA_VERSION}"
+        )
+    if topology.get("platform") != "hermes":
+        raise BuildError("Hermes topology must declare platform 'hermes'")
+    if topology.get("source_byte_policy") != HERMES_SOURCE_BYTE_POLICY:
+        raise BuildError(
+            "Hermes topology source_byte_policy must be "
+            f"{HERMES_SOURCE_BYTE_POLICY!r}"
+        )
+    if not isinstance(topology.get("hooks"), list):
+        raise BuildError("Hermes topology must declare a hooks list")
+    if not isinstance(topology.get("adapter"), dict):
+        raise BuildError("Hermes topology must declare an adapter object")
+    if not isinstance(topology.get("plugin_files"), list):
+        raise BuildError("Hermes topology must declare a plugin_files list")
+    framework = topology.get("framework_package")
+    if framework is not None and not isinstance(framework, dict):
+        raise BuildError("Hermes topology framework_package must be an object")
+
+    _require_hermes_hash_policy(
+        topology["adapter"],
+        "adapter",
+        HERMES_SOURCE_IDENTITY_HASH_POLICY,
+    )
+    for index, row in enumerate(topology["plugin_files"]):
+        if not isinstance(row, dict):
+            raise BuildError(
+                f"Hermes topology plugin_files row {index} must be an object"
+            )
+        _require_hermes_hash_policy(
+            row,
+            f"plugin_files[{row.get('id', index)}]",
+            HERMES_SOURCE_IDENTITY_HASH_POLICY,
+        )
+    for index, row in enumerate(topology["hooks"]):
+        if not isinstance(row, dict):
+            raise BuildError(f"Hermes topology hook row {index} must be an object")
+        classification = row.get("classification")
+        if classification not in HERMES_PACKAGE_CLASSIFICATIONS:
+            continue
+        expected_hash_policy = (
+            HERMES_BEHAVIORAL_ADAPTATION_HASH_POLICY
+            if classification == "hermes_plugin_callback"
+            else HERMES_SOURCE_IDENTITY_HASH_POLICY
+        )
+        _require_hermes_hash_policy(
+            row,
+            f"hooks[{row.get('id', index)}]",
+            expected_hash_policy,
+        )
+    return topology
+
+
+def _relative_manifest_path(value: object, field: str) -> pathlib.PurePosixPath:
+    """Validate a manifest path before it reaches the filesystem."""
+    if not isinstance(value, str) or not value:
+        raise BuildError(f"Hermes topology field {field} must be a non-empty string")
+    if "\\" in value:
+        raise BuildError(f"Hermes topology field {field} must use POSIX separators: {value}")
+    path = pathlib.PurePosixPath(value)
+    windows_path = pathlib.PureWindowsPath(value)
+    if (
+        path.is_absolute()
+        or bool(windows_path.drive)
+        or ".." in path.parts
+        or "." in path.parts
+    ):
+        raise BuildError(f"Hermes topology field {field} escapes its root: {value}")
+    if value != path.as_posix():
+        raise BuildError(
+            f"Hermes topology field {field} must already be normalized: {value}"
+        )
+    return path
+
+
+def _windows_package_target_key(
+    target: pathlib.PurePosixPath,
+    field: str,
+) -> str:
+    """Validate a target under Win32 filename rules and return its alias key."""
+    normalized_parts = []
+    for component in target.parts:
+        if component.endswith((".", " ")):
+            raise BuildError(
+                f"Hermes topology field {field} has a Windows-unsafe trailing "
+                f"dot or space: {component!r}"
+            )
+        unsafe = [
+            char
+            for char in component
+            if ord(char) < 32 or char in HERMES_WINDOWS_UNSAFE_COMPONENT_CHARS
+        ]
+        if unsafe:
+            detail = "colon/ADS" if ":" in unsafe else "filename character"
+            raise BuildError(
+                f"Hermes topology field {field} has a Windows-unsafe {detail}: "
+                f"{component!r}"
+            )
+        device_stem = component.split(".", 1)[0].casefold()
+        if device_stem in HERMES_WINDOWS_RESERVED_COMPONENTS:
+            raise BuildError(
+                f"Hermes topology field {field} uses a reserved Windows device "
+                f"name: {component!r}"
+            )
+        normalized_parts.append(component.rstrip(" .").casefold())
+    return "/".join(normalized_parts)
+
+
+def _framework_source_is_excluded(relative: pathlib.PurePosixPath) -> bool:
+    if any(part in HERMES_FRAMEWORK_EXCLUDED_ROOTS for part in relative.parts):
+        return True
+    if relative.suffix in (".pyc", ".pyo"):
+        return True
+    return (
+        len(relative.parts) == 1
+        and relative.name in HERMES_FRAMEWORK_PROJECTED_ROOT_FILES
+    )
+
+
+def _read_framework_source_manifest():
+    """Return verified canonical source paths from an installed full plugin."""
+
+    manifest_path = REPO_ROOT / HERMES_FRAMEWORK_MANIFEST_NAME
+    if not manifest_path.is_file():
+        return None
+    try:
+        document = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise BuildError(f"Hermes framework manifest is unreadable: {exc}")
+    if not isinstance(document, dict) or set(document) != {
+        "files",
+        "schema",
+        "schema_version",
+        "source_policy",
+    }:
+        raise BuildError("Hermes framework manifest has an invalid document shape")
+    if document.get("schema") != HERMES_FRAMEWORK_MANIFEST_SCHEMA:
+        raise BuildError("Hermes framework manifest has an unsupported schema")
+    if type(document.get("schema_version")) is not int or document["schema_version"] != 1:
+        raise BuildError("Hermes framework manifest has an unsupported schema version")
+    if document.get("source_policy") != HERMES_FRAMEWORK_SOURCE_POLICY:
+        raise BuildError("Hermes framework manifest has an unsupported source policy")
+    rows = document.get("files")
+    if not isinstance(rows, list) or not rows:
+        raise BuildError("Hermes framework manifest files must be a nonempty array")
+
+    paths = []
+    for index, row in enumerate(rows):
+        label = f"Hermes framework manifest files[{index}]"
+        if not isinstance(row, dict) or set(row) != {"path", "sha256"}:
+            raise BuildError(f"{label} must contain exactly path and sha256")
+        relative = _relative_manifest_path(row.get("path"), f"{label}.path")
+        if _framework_source_is_excluded(relative):
+            raise BuildError(f"{label}.path names generated local state: {relative}")
+        expected_hash = row.get("sha256")
+        if not isinstance(expected_hash, str) or not re.fullmatch(
+            r"[0-9a-f]{64}", expected_hash
+        ):
+            raise BuildError(f"{label}.sha256 must be one lowercase SHA-256")
+        source = REPO_ROOT / relative.as_posix()
+        if not source.is_file() or source.is_symlink():
+            raise BuildError(f"{label}.path is missing or unsafe: {relative}")
+        actual_hash = hashlib.sha256(canonical_hermes_source_bytes(source)).hexdigest()
+        if actual_hash != expected_hash:
+            raise BuildError(
+                f"Hermes framework source drift for {relative}: "
+                f"expected {expected_hash}, actual {actual_hash}"
+            )
+        paths.append(relative.as_posix())
+    if len(paths) != len(set(paths)):
+        raise BuildError("Hermes framework manifest contains duplicate source paths")
+    return sorted(paths)
+
+
+def _hermes_framework_source_paths() -> list:
+    """Return the complete canonical framework tree without local state.
+
+    A Git checkout uses the index as the release manifest, so untracked state
+    such as ``.serena`` can never leak into the package.  A verified release
+    archive has no Git metadata, so its extracted file tree is the manifest;
+    only known local/build-state roots and Hermes projection files are ignored.
+    """
+
+    proc = subprocess.run(
+        ["git", "-C", str(REPO_ROOT), "ls-files", "--cached", "-z"],
+        capture_output=True,
+    )
+    if proc.returncode == 0:
+        candidates = [
+            pathlib.PurePosixPath(os.fsdecode(path))
+            for path in proc.stdout.split(b"\0")
+            if path
+        ]
+    else:
+        manifested = _read_framework_source_manifest()
+        if manifested is not None:
+            return manifested
+        candidates = [
+            pathlib.PurePosixPath(path.relative_to(REPO_ROOT).as_posix())
+            for path in REPO_ROOT.rglob("*")
+            if path.is_file()
+        ]
+
+    included = []
+    for relative in candidates:
+        if not relative.parts:
+            continue
+        if _framework_source_is_excluded(relative):
+            continue
+        included.append(relative.as_posix())
+    return sorted(set(included))
+
+
+def hermes_framework_manifest_bytes() -> bytes:
+    rows = []
+    for source_key in _hermes_framework_source_paths():
+        source = REPO_ROOT / source_key
+        rows.append(
+            {
+                "path": source_key,
+                "sha256": hashlib.sha256(
+                    canonical_hermes_source_bytes(source)
+                ).hexdigest(),
+            }
+        )
+    document = {
+        "schema": HERMES_FRAMEWORK_MANIFEST_SCHEMA,
+        "schema_version": 1,
+        "source_policy": HERMES_FRAMEWORK_SOURCE_POLICY,
+        "files": rows,
+    }
+    return (json.dumps(document, sort_keys=True, indent=2) + "\n").encode("utf-8")
+
+
+def hermes_file_map() -> dict:
+    """Return package target -> canonical source for the full Hermes package."""
+    topology = load_hermes_topology()
+    file_map = {}
+    normalized_targets = {}
+
+    def require_build_owner(row: dict, owner: str) -> None:
+        actual = row.get("build_owner")
+        if actual != HERMES_BUILD_OWNER:
+            raise BuildError(
+                f"Hermes topology {owner}.build_owner must be "
+                f"{HERMES_BUILD_OWNER!r}, got {actual!r}"
+            )
+
+    def add(
+        target_value: object,
+        source_value: object,
+        expected_hash: object,
+        owner: str,
+    ) -> None:
+        target = _relative_manifest_path(target_value, f"{owner}.package_target")
+        source = _relative_manifest_path(source_value, f"{owner}.package_source")
+        target_key = target.as_posix()
+        source_key = source.as_posix()
+        if target_key in file_map:
+            if file_map[target_key] == source_key:
+                return
+            raise BuildError(f"duplicate Hermes package target: {target_key}")
+        normalized_target = _windows_package_target_key(
+            target,
+            f"{owner}.package_target",
+        )
+        if normalized_target in normalized_targets:
+            raise BuildError(
+                "Hermes package targets collide on Windows/casefold filesystems: "
+                f"{normalized_targets[normalized_target]} and {target_key}"
+            )
+        source_path = REPO_ROOT / source_key
+        try:
+            resolved_repo = REPO_ROOT.resolve(strict=True)
+            resolved_source = source_path.resolve(strict=True)
+        except (FileNotFoundError, OSError, RuntimeError):
+            raise BuildError(f"Hermes package source missing: {source_key}")
+        try:
+            resolved_source.relative_to(resolved_repo)
+        except ValueError:
+            raise BuildError(
+                "Hermes package source resolves outside the repository: "
+                f"{source_key} -> {resolved_source}"
+            )
+        if source_path.is_symlink():
+            raise BuildError(
+                f"Hermes package source must not be a symlink: {source_key}"
+            )
+        if not resolved_source.is_file():
+            raise BuildError(f"Hermes package source is not a file: {source_key}")
+        if expected_hash is not None:
+            actual_hash = hashlib.sha256(
+                canonical_hermes_source_bytes(resolved_source)
+            ).hexdigest()
+            if not isinstance(expected_hash, str) or actual_hash != expected_hash:
+                raise BuildError(
+                    f"Hermes topology hash for {source_key} is stale: "
+                    f"expected {expected_hash!r}, actual {actual_hash}"
+                )
+        file_map[target_key] = source_key
+        normalized_targets[normalized_target] = target_key
+
+    framework = topology.get("framework_package")
+    if framework is not None:
+        require_build_owner(framework, "framework_package")
+        if framework.get("source_policy") != HERMES_FRAMEWORK_SOURCE_POLICY:
+            raise BuildError(
+                "Hermes topology framework_package.source_policy must be "
+                f"{HERMES_FRAMEWORK_SOURCE_POLICY!r}"
+            )
+        package_root = _relative_manifest_path(
+            framework.get("package_target"),
+            "framework_package.package_target",
+        )
+        if package_root.as_posix() != "plugins/sage":
+            raise BuildError(
+                "Hermes topology framework_package.package_target must be "
+                "'plugins/sage'"
+            )
+        manifest_target = _relative_manifest_path(
+            framework.get("manifest_target"),
+            "framework_package.manifest_target",
+        )
+        if manifest_target.as_posix() != (
+            "plugins/sage/" + HERMES_FRAMEWORK_MANIFEST_NAME
+        ):
+            raise BuildError(
+                "Hermes topology framework_package.manifest_target must be "
+                f"'plugins/sage/{HERMES_FRAMEWORK_MANIFEST_NAME}'"
+            )
+        for source_key in _hermes_framework_source_paths():
+            add(
+                (package_root / pathlib.PurePosixPath(source_key)).as_posix(),
+                source_key,
+                None,
+                "framework_package",
+            )
+
+    adapter = topology["adapter"]
+    require_build_owner(adapter, "adapter")
+    add(
+        adapter.get("package_target"),
+        adapter.get("source"),
+        adapter.get("source_sha256"),
+        "adapter",
+    )
+
+    for index, row in enumerate(topology["plugin_files"]):
+        if not isinstance(row, dict):
+            raise BuildError(
+                f"Hermes topology plugin_files row {index} must be an object"
+            )
+        owner = f"plugin_files[{row.get('id', index)}]"
+        require_build_owner(row, owner)
+        add(
+            row.get("package_target"),
+            row.get("source"),
+            row.get("source_sha256"),
+            owner,
+        )
+
+    known = HERMES_PACKAGE_CLASSIFICATIONS | HERMES_NON_PACKAGE_CLASSIFICATIONS
+    for index, row in enumerate(topology["hooks"]):
+        if not isinstance(row, dict):
+            raise BuildError(f"Hermes topology hook row {index} must be an object")
+        classification = row.get("classification")
+        if classification not in known:
+            raise BuildError(
+                f"Hermes topology hook {row.get('id', index)!r} has unknown "
+                f"classification {classification!r}"
+            )
+        if classification in HERMES_PACKAGE_CLASSIFICATIONS:
+            owner = f"hooks[{row.get('id', index)}]"
+            require_build_owner(row, owner)
+            add(
+                row.get("package_target"),
+                row.get("package_source"),
+                row.get("package_source_sha256"),
+                f"hooks[{row.get('id', index)}]",
+            )
+
+    if HERMES_OVERLAY.is_dir():
+        declared_sources = set(file_map.values())
+        unowned = [
+            path.relative_to(REPO_ROOT).as_posix()
+            for path in sorted(HERMES_OVERLAY.rglob("*"))
+            if path.is_file()
+            and "__pycache__" not in path.parts
+            and not path.name.endswith(".pyc")
+            and path.relative_to(REPO_ROOT).as_posix() not in declared_sources
+        ]
+        if unowned:
+            raise BuildError(
+                "Hermes plugin overlay holds unmanifested build inputs: "
+                + ", ".join(unowned)
+            )
+
+    untracked = _untracked_repo_paths(file_map.values())
+    if untracked:
+        raise BuildError(
+            "Hermes declared package source is not tracked by git: "
+            + ", ".join(untracked)
+        )
+    symlinks = _git_symlink_repo_paths(file_map.values())
+    if symlinks:
+        raise BuildError(
+            "Hermes declared package source must not be a Git symlink: "
+            + ", ".join(symlinks)
+        )
+    non_identity_attributes = _git_non_identity_attributes(file_map.values())
+    if non_identity_attributes:
+        raise BuildError(
+            "Hermes declared package source has a content-transforming Git "
+            "attribute incompatible with canonical byte identity: "
+            + ", ".join(non_identity_attributes)
+        )
+
+    return file_map
+
+
+def _untracked_repo_paths(paths) -> list:
+    """Return repository-relative paths absent from Git's tracked index."""
+    proc = subprocess.run(
+        ["git", "-C", str(REPO_ROOT), "ls-files", "--cached", "-z"],
+        capture_output=True,
+    )
+    if proc.returncode != 0:
+        return []
+    tracked = {
+        pathlib.PurePosixPath(os.fsdecode(path)).as_posix()
+        for path in proc.stdout.split(b"\0")
+        if path
+    }
+    return sorted(set(paths) - tracked)
+
+
+def _git_symlink_repo_paths(paths) -> list:
+    """Return declared sources recorded with Git's symlink index mode."""
+    proc = subprocess.run(
+        ["git", "-C", str(REPO_ROOT), "ls-files", "--stage", "-z"],
+        capture_output=True,
+    )
+    if proc.returncode != 0:
+        return []
+    modes = {}
+    for entry in proc.stdout.split(b"\0"):
+        metadata, separator, encoded_path = entry.partition(b"\t")
+        if not separator:
+            continue
+        mode = metadata.split(b" ", 1)[0]
+        path = pathlib.PurePosixPath(os.fsdecode(encoded_path)).as_posix()
+        modes[path] = os.fsdecode(mode)
+    return sorted(
+        path for path in set(paths) if modes.get(path) == "120000"
+    )
+
+
+def _git_non_identity_attributes(paths) -> list:
+    """Return declared sources with clean/smudge or encoding transforms."""
+    path_list = sorted(set(paths))
+    if not path_list:
+        return []
+    # An installed Sage framework is copied from verified release bytes and
+    # intentionally has no Git metadata. Attribute transforms can only affect a
+    # checkout, so there is nothing to inspect in that distribution shape.
+    if not (REPO_ROOT / ".git").exists():
+        return []
+    proc = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(REPO_ROOT),
+            "check-attr",
+            "-z",
+            "--stdin",
+            *HERMES_NON_IDENTITY_GIT_ATTRIBUTES,
+        ],
+        input=b"\0".join(os.fsencode(path) for path in path_list) + b"\0",
+        capture_output=True,
+    )
+    if proc.returncode != 0:
+        raise BuildError(
+            "cannot verify canonical Git attributes for Hermes package sources: "
+            + proc.stderr.decode("utf-8", errors="replace").strip()
+        )
+    fields = proc.stdout.split(b"\0")
+    violations = []
+    for index in range(0, len(fields) - 1, 3):
+        encoded_path, encoded_attribute, encoded_value = fields[index : index + 3]
+        path = os.fsdecode(encoded_path)
+        attribute = os.fsdecode(encoded_attribute)
+        value = os.fsdecode(encoded_value)
+        if value not in {"unspecified", "unset"}:
+            violations.append(f"{path} ({attribute}={value})")
+    return sorted(violations)
+
+
 NAVIGATOR_FRONTMATTER = """---
 name: sage-navigator
 description: >
@@ -191,9 +842,10 @@ def build_navigator() -> str:
         'set -eu\n'
         'source "%s"\n'
         'source "%s"\n'
-        'emit_instructions_body\n' % (INSTRUCTIONS_BODY, CONSTITUTION_SH)
+        'emit_instructions_body\n' % (bash_path(INSTRUCTIONS_BODY),
+                                      bash_path(CONSTITUTION_SH))
     )
-    proc = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+    proc = subprocess.run([BASH, "-c", script], capture_output=True, text=True)
     if proc.returncode != 0:
         raise BuildError("could not emit the instructions body for the navigator:\n"
                          + proc.stderr[-800:])
@@ -205,9 +857,9 @@ def build_navigator() -> str:
     # each principle naming the mechanism that enforces it, exactly as the eager
     # layer does.
     const = subprocess.run(
-        ["bash", "-c",
+        [BASH, "-c",
          'source "%s"; build_constitution_section "%s" "/nonexistent"'
-         % (CONSTITUTION_SH, REPO_ROOT / "core")],
+         % (bash_path(CONSTITUTION_SH), bash_path(REPO_ROOT / "core"))],
         capture_output=True, text=True)
     if const.returncode != 0:
         raise BuildError("constitution merge failed:\n" + const.stderr[-400:])
@@ -225,7 +877,36 @@ def copy_file_text(text: str, dst: pathlib.Path) -> None:
     dst.write_text(text, encoding="utf-8")
 
 
-def build(out: pathlib.Path) -> None:
+def build(out: pathlib.Path, target: str = DEFAULT_TARGET) -> None:
+    """Build one explicit platform artifact; Claude remains the default."""
+    if target == DEFAULT_TARGET:
+        _build_claude(out)
+    elif target == "hermes":
+        _build_hermes(out)
+    else:
+        raise BuildError(
+            f"unknown plugin build target {target!r}; choose from {', '.join(BUILD_TARGETS)}"
+        )
+
+
+def _build_hermes(out: pathlib.Path) -> None:
+    """Build the complete Sage framework as a Hermes plugin package."""
+    file_map = hermes_file_map()
+    if out.exists():
+        shutil.rmtree(out)
+    out.mkdir(parents=True)
+    for package_target, source in sorted(file_map.items()):
+        copy_hermes_source(
+            REPO_ROOT / source,
+            out / pathlib.PurePosixPath(package_target),
+        )
+    if load_hermes_topology().get("framework_package") is not None:
+        manifest = out / "plugins" / "sage" / HERMES_FRAMEWORK_MANIFEST_NAME
+        manifest.parent.mkdir(parents=True, exist_ok=True)
+        manifest.write_bytes(hermes_framework_manifest_bytes())
+
+
+def _build_claude(out: pathlib.Path) -> None:
     version = read_version()
     if out.exists():
         shutil.rmtree(out)
@@ -292,11 +973,12 @@ def build(out: pathlib.Path) -> None:
             continue
         rel = f.relative_to(OVERLAY)
         dst = out / rel
-        text = f.read_text(encoding="utf-8", errors="replace")
-        if VERSION_PLACEHOLDER in text:
-            text = text.replace(VERSION_PLACEHOLDER, version)
+        content = f.read_bytes()
+        placeholder = VERSION_PLACEHOLDER.encode("utf-8")
+        if placeholder in content:
+            content = content.replace(placeholder, version.encode("utf-8"))
         dst.parent.mkdir(parents=True, exist_ok=True)
-        dst.write_text(text, encoding="utf-8")
+        dst.write_bytes(content)
 
     # Every declared skill must have materialized from one layer or the other.
     for name in sorted(PLUGIN_SKILLS | SYSTEM_SKILL_NAMES):
@@ -365,7 +1047,55 @@ def _diff(a: pathlib.Path, b: pathlib.Path, rel: str, out: list):
         _diff(a / name, b / name, f"{rel}{name}/", out)
 
 
-def audit(tree: pathlib.Path) -> list:
+def audit(tree: pathlib.Path, target: str = DEFAULT_TARGET) -> list:
+    """Audit one platform artifact against the matching source contract."""
+    if target == DEFAULT_TARGET:
+        return _audit_claude(tree)
+    if target == "hermes":
+        return _audit_hermes(tree)
+    return [f"unknown plugin audit target {target!r}"]
+
+
+def _audit_hermes(tree: pathlib.Path) -> list:
+    """Reject missing, changed, or unmanifested Hermes package bytes."""
+    problems = []
+    try:
+        file_map = hermes_file_map()
+    except BuildError as exc:
+        return [str(exc)]
+
+    actual_files = {
+        path.relative_to(tree).as_posix()
+        for path in tree.rglob("*")
+        if path.is_file()
+    }
+    has_framework = load_hermes_topology().get("framework_package") is not None
+    manifest_relative = "plugins/sage/" + HERMES_FRAMEWORK_MANIFEST_NAME
+    expected_files = set(file_map)
+    if has_framework:
+        expected_files.add(manifest_relative)
+
+    for rel in sorted(actual_files - expected_files):
+        problems.append(f"unmanifested file in Hermes artifact: {rel}")
+    for rel in sorted(expected_files - actual_files):
+        problems.append(f"manifested Hermes package target is missing: {rel}")
+    for rel in sorted((actual_files & expected_files) - {manifest_relative}):
+        source = REPO_ROOT / file_map[rel]
+        artifact = tree / pathlib.PurePosixPath(rel)
+        if canonical_hermes_source_bytes(source) != artifact.read_bytes():
+            problems.append(f"Hermes package target {rel} differs from {file_map[rel]}")
+    manifest = tree / pathlib.PurePosixPath(manifest_relative)
+    if (
+        has_framework
+        and manifest.is_file()
+        and manifest.read_bytes() != hermes_framework_manifest_bytes()
+    ):
+        problems.append("Hermes framework package manifest differs from canonical sources")
+
+    return problems
+
+
+def _audit_claude(tree: pathlib.Path) -> list:
     """Verify a built tree is well-formed and faithful to its sources.
 
     No committed mirror exists to diff against any more, so these are the
@@ -494,39 +1224,62 @@ def audit(tree: pathlib.Path) -> list:
     return problems
 
 
-def check() -> int:
+def check(target: str = DEFAULT_TARGET) -> int:
     a = pathlib.Path(tempfile.mkdtemp(prefix="sage-plugin-a-"))
     b = pathlib.Path(tempfile.mkdtemp(prefix="sage-plugin-b-"))
     try:
-        build(a)
-        build(b)
-        problems = audit(a)
+        build(a, target=target)
+        build(b, target=target)
+        problems = audit(a, target=target)
         # A build that is not reproducible cannot be reviewed by its inputs.
         drift: list = []
         _diff(a, b, "", drift)
         if drift:
             problems.append("build is not reproducible — two runs differ:")
             problems.extend(drift)
-        skills = sorted(p.name for p in (a / "skills").iterdir() if p.is_dir())
+        if target == DEFAULT_TARGET:
+            artifact_count = len(
+                [p for p in (a / "skills").iterdir() if p.is_dir()]
+            )
+            artifact_label = "skills"
+        else:
+            artifact_count = len([p for p in a.rglob("*") if p.is_file()])
+            artifact_label = "manifested files"
     finally:
         shutil.rmtree(a, ignore_errors=True)
         shutil.rmtree(b, ignore_errors=True)
 
     if problems:
-        print("✗ the generated plugin does not satisfy its contract:")
+        if target == DEFAULT_TARGET:
+            print("✗ the generated plugin does not satisfy its contract:")
+        else:
+            print("✗ the Hermes manifest-owned package artifact is invalid:")
         for line in problems:
             print(f"  {line}")
         print()
-        print("FAIL — correct the source side (skills/, core/, runtime/plugin-overlay/).")
+        if target == DEFAULT_TARGET:
+            print("FAIL — correct the source side (skills/, core/, runtime/plugin-overlay/).")
+        else:
+            print(f"FAIL — correct the source side for the {target} target.")
         return 1
 
-    print(f"OK — plugin builds clean: {len(skills)} skills, "
-          f"{len(FILE_MAP)} mapped files, version {read_version()}.")
+    if target == DEFAULT_TARGET:
+        print(f"OK — plugin builds clean: {artifact_count} skills, "
+              f"{len(FILE_MAP)} mapped files, version {read_version()}.")
+    else:
+        print("OK — Hermes manifest-owned package artifact verified: "
+              f"{artifact_count} {artifact_label}, version {read_version()}.")
     return 0
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Generate the Claude Code plugin.")
+    parser = argparse.ArgumentParser(description="Generate a Sage plugin artifact.")
+    parser.add_argument(
+        "--target",
+        choices=BUILD_TARGETS,
+        default=DEFAULT_TARGET,
+        help="artifact target (default: claude)",
+    )
     parser.add_argument("--check", action="store_true",
                         help="build and verify the artifact against its contract")
     parser.add_argument("--out", type=pathlib.Path, default=None,
@@ -535,10 +1288,18 @@ def main() -> int:
 
     try:
         if args.check:
-            return check()
-        out = args.out or (REPO_ROOT / "dist" / "sage-claude-plugin")
-        build(out)
-        print(f"OK — built plugin into {out}")
+            return check(target=args.target)
+        default_dir = (
+            "sage-claude-plugin"
+            if args.target == DEFAULT_TARGET
+            else f"sage-{args.target}-plugin"
+        )
+        out = args.out or (REPO_ROOT / "dist" / default_dir)
+        build(out, target=args.target)
+        if args.target == DEFAULT_TARGET:
+            print(f"OK — built plugin into {out}")
+        else:
+            print(f"OK — built the full Sage framework as a Hermes plugin into {out}")
         return 0
     except BuildError as exc:
         print(f"✗ {exc}", file=sys.stderr)

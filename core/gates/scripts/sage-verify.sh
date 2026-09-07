@@ -227,7 +227,8 @@ else:
 finish()
 PYEOF
 
-DETECTED=$(python3 "$PY_DETECT" "$ROOT")
+DETECTED=$(python3 "$(python_path "$PY_DETECT")" "$(python_path "$ROOT")" | \
+           tr -d '\015')
 if [ $? -ne 0 ]; then
   unverifiable "test-runner detection failed"
 fi

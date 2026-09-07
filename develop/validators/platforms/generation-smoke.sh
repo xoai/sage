@@ -6,6 +6,8 @@
 #     further exercised by the gate/hook/reference CI jobs.
 #   community (antigravity, codex, gemini-cli, opencode) — generation-smoke
 #     only: the generator runs and emits its instructions file.
+#   hermes — the manifest-driven package target is smoked here; bound-profile
+#     generation is exercised by its dedicated profile fixtures.
 #
 # This job proves each generator at least runs and writes output. It does NOT
 # exercise the community quality chain (there isn't one — see each STATUS.md).
@@ -46,6 +48,7 @@ for entry in $CASES; do
   ( cd "$target" && git init -q . 2>/dev/null || true )
 
   out=$( cd "$target" && SAGE_HOME="$HOME_DIR" \
+         HERMES_HOME="$HOME_DIR/hermes" \
          bash "$REPO_ROOT/bin/sage" init --no-memory --platform "$platform" 2>&1 )
   rc=$?
 
@@ -60,6 +63,36 @@ for entry in $CASES; do
   fi
   rm -rf "$(dirname "$target")"
 done
+
+# ── Hermes package target: topology-owned bytes only ──
+hermes_root="$(mktemp -d)"
+hermes_out="$hermes_root/artifact"
+hermes_log="$hermes_root/build.log"
+# Native Windows python3 cannot parse MSYS /g/... or /tmp/... paths — it
+# resolves them against the current drive (G:\g\..., G:\tmp\...). Hand the
+# native interpreter native paths; bash-side existence checks keep MSYS form.
+if command -v cygpath >/dev/null 2>&1; then
+  build_script_arg="$(cygpath -m "$REPO_ROOT")/runtime/tools/build_plugin.py"
+  hermes_out_arg="$(cygpath -m "$hermes_out")"
+else
+  build_script_arg="$REPO_ROOT/runtime/tools/build_plugin.py"
+  hermes_out_arg="$hermes_out"
+fi
+if python3 "$build_script_arg" \
+    --target hermes --out "$hermes_out_arg" >"$hermes_log" 2>&1 \
+  && [ -f "$hermes_out/plugins/sage/__init__.py" ] \
+  && [ ! -e "$hermes_out/.claude" ] \
+  && [ ! -e "$hermes_out/.claude-plugin" ] \
+  && [ ! -e "$hermes_out/CLAUDE.md" ] \
+  && [ ! -e "$hermes_out/workspace/SOUL.md" ]; then
+  N_PASS=$((N_PASS + 1))
+  printf '  [PASS]  %-14s → manifest-driven package artifact\n' "hermes"
+else
+  N_FAIL=$((N_FAIL + 1))
+  printf '  [FAIL]  %-14s manifest-driven package target\n' "hermes"
+  tail -8 "$hermes_log" 2>/dev/null | sed 's/^/          | /'
+fi
+rm -rf "$hermes_root"
 
 # ── Opencode content pin: reviewer-binding note ──
 # The task tool routes by agent name, and only a named agent carries a

@@ -124,10 +124,11 @@ Every pack install records what it actually got:
 }
 ```
 
-Commit it. `sage/skills/skills.json` already records *a* source, but for a local
-install it records an **absolute path on your machine** — which is not portable and
-is not a version. It cannot answer *"is your sage-product the same as mine"*. This
-can.
+Commit it. The skill registry (`sage/skills/skills.json`, or
+`.sage/skills.json` in a receipt-bound Hermes workspace) already records *a*
+source, but for a local install it records an **absolute path on your machine** —
+which is not portable and is not a version. It cannot answer *"is your
+sage-product the same as mine"*. This can.
 
 ### The pack that is not skills
 

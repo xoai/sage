@@ -55,6 +55,41 @@ BUDGETS = REPO_ROOT / "develop" / "validators" / "budgets.yaml"
 CHARS_PER_TOKEN = 4      # documented heuristic; see the module docstring
 
 
+def bash_path(path: pathlib.Path) -> str:
+    """Return a path Bash can consume on both POSIX and Windows hosts."""
+    return str(path).replace("\\", "/")
+
+
+def resolve_bash() -> str:
+    """Prefer Git Bash on Windows; System32 bash.exe is the WSL launcher."""
+    explicit = os.environ.get("SAGE_BASH_EXE")
+    if explicit:
+        return explicit
+
+    if os.name == "nt":
+        candidates = []
+        git_exe = shutil.which("git")
+        if git_exe:
+            git_root = pathlib.Path(git_exe).resolve().parent.parent
+            candidates.extend((git_root / "bin" / "bash.exe",
+                               git_root / "usr" / "bin" / "bash.exe"))
+        for env_name, suffix in (
+            ("ProgramFiles", ("Git", "bin", "bash.exe")),
+            ("LOCALAPPDATA", ("Programs", "Git", "bin", "bash.exe")),
+        ):
+            base = os.environ.get(env_name)
+            if base:
+                candidates.append(pathlib.Path(base).joinpath(*suffix))
+        for candidate in candidates:
+            if candidate.is_file():
+                return str(candidate)
+
+    return shutil.which("bash") or "bash"
+
+
+BASH = resolve_bash()
+
+
 class BudgetError(Exception):
     pass
 
@@ -109,9 +144,9 @@ def generate_project(home: pathlib.Path, dest: pathlib.Path,
     subprocess.run(["git", "init", "-q"], cwd=proj, check=True)
 
     proc = subprocess.run(
-        ["bash", str(SAGE_BIN), "init", "--preset", "base", "--platform", platform],
+        [BASH, bash_path(SAGE_BIN), "init", "--preset", "base", "--platform", platform],
         cwd=proj, capture_output=True, text=True, stdin=subprocess.DEVNULL,
-        env={**os.environ, "SAGE_HOME": str(home)},
+        env={**os.environ, "SAGE_HOME": bash_path(home)},
     )
     if proc.returncode != 0:
         raise BudgetError(f"sage init --platform {platform} failed:\n"

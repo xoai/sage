@@ -615,7 +615,8 @@ def sage_init(ws: pathlib.Path) -> None:
     sage_bin = REPO_ROOT / "bin" / "sage"
     env = dict(os.environ, SAGE_HOME=str(home))
     proc = subprocess.run(
-        ["bash", str(sage_bin), "init", "--preset", "base"],
+        [graders.bash_executable(), graders.bash_path(sage_bin),
+         "init", "--preset", "base"],
         cwd=ws, env=env, capture_output=True, text=True,
         stdin=subprocess.DEVNULL,
     )

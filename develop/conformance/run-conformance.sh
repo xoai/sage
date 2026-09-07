@@ -153,7 +153,7 @@ if printf '%s' "$LEVELS" | grep -q 1; then
 
   mkdir -p "$WORK/home"
   # Vendor the framework the way context_budget.py does — measure what a user gets.
-  ( cd "$REPO_ROOT" && tar --exclude=.git --exclude=node_modules --exclude=__pycache__ \
+  ( cd "$REPO_ROOT" && tar --exclude=.git --exclude=node_modules --exclude=__pycache__ --exclude=.pytest_cache --exclude=.ruff_cache \
       --exclude=dist --exclude=.sage -cf - . ) | ( mkdir -p "$WORK/home/framework" && tar -xf - -C "$WORK/home/framework" )
 
   mkdir -p "$WORK/proj"

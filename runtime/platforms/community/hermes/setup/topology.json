@@ -1,0 +1,878 @@
+{
+  "schema_version": 1,
+  "platform": "hermes",
+  "source_byte_policy": "canonical_utf8_lf_git_index_blob",
+  "gateway_bundle": null,
+  "gateway_bundle_policy": "Core Sage lifecycle, context, gating, and result transformation use profile config shell hooks or plugin callbacks; no gateway-only bundle is installed.",
+  "framework_package": {
+    "canonical_source": ".",
+    "build_owner": "runtime/tools/build_plugin.py",
+    "package_target": "plugins/sage",
+    "manifest_target": "plugins/sage/.sage-framework-manifest.json",
+    "install_target": "plugins/sage",
+    "source_policy": "complete_git_tracked_or_release_tree",
+    "hash_policy": "per_file_canonical_git_blob_identity",
+    "update_policy": "transactional_replace_managed_tree",
+    "runtime_consumer": "Sage CLI, framework updater, and Hermes plugin runtime",
+    "acceptance_test": "develop/validators/tools/test_build_plugin.py",
+    "support_status": "verified"
+  },
+  "adapter": {
+    "source": "runtime/platforms/community/hermes/hooks/sage-hermes-gate.sh",
+    "source_sha256": "63b1e250383dfaae919578aa62da266921ee11e89faa2e1a190374512340df7d",
+    "build_owner": "runtime/tools/build_plugin.py",
+    "package_target": "hooks/sage-hermes-gate.sh",
+    "install_target": "hooks/sage-hermes-gate.sh",
+    "runtime_consumer": "Hermes profile config shell-hook commands",
+    "hash_policy": "source_sha256_byte_identity",
+    "update_policy": "replace_managed",
+    "acceptance_test": "develop/conformance/probes/test_hermes_bash_fix_probe.py",
+    "support_status": "planned",
+    "failure_contract": [
+      "missing_target",
+      "missing_python",
+      "missing_mktemp",
+      "malformed_response"
+    ]
+  },
+  "plugin_files": [
+    {
+      "id": "sage-plugin-manifest",
+      "source": "plugin.yaml",
+      "source_sha256": "fe0c7a271bf95ac030cf4ca47635db42af8585ab06509688084111d65a0e0bc2",
+      "build_owner": "runtime/tools/build_plugin.py",
+      "package_target": "plugins/sage/plugin.yaml",
+      "install_target": "plugins/sage/plugin.yaml",
+      "runtime_consumer": "Hermes profile plugin discovery and capability metadata",
+      "hash_policy": "source_sha256_byte_identity",
+      "update_policy": "replace_managed",
+      "acceptance_test": "develop/validators/platforms/test_hermes_plugin_lifecycle.py",
+      "failure_contract": "missing_or_malformed_manifest_disables_plugin",
+      "support_status": "verified"
+    },
+    {
+      "id": "sage-profile-binding-authority",
+      "source": "runtime/platforms/community/hermes/setup/profile_binding.py",
+      "source_sha256": "e2229dd8cc8ec7f74925521014c6adb858c1ff3335f10abd9e352dba4d642568",
+      "build_owner": "runtime/tools/build_plugin.py",
+      "package_target": "plugins/sage/profile_binding.py",
+      "install_target": "plugins/sage/profile_binding.py",
+      "runtime_consumer": "Sage plugin paired profile-config and install-receipt authority",
+      "hash_policy": "source_sha256_byte_identity",
+      "update_policy": "replace_managed",
+      "acceptance_test": "develop/validators/platforms/test_hermes_plugin_lifecycle.py",
+      "failure_contract": "missing_or_mismatched_authority_disables_plugin_visibly",
+      "support_status": "verified"
+    },
+    {
+      "id": "sage-memory-namespace",
+      "source": "runtime/platforms/community/hermes/plugin-overlay/memory_namespace.py",
+      "source_sha256": "e9063d206de028ff3beb6cbecb0be5b178cb83ac01e13a169383a22ad17fee4d",
+      "build_owner": "runtime/tools/build_plugin.py",
+      "package_target": "plugins/sage/memory_namespace.py",
+      "install_target": "plugins/sage/memory_namespace.py",
+      "runtime_consumer": "Sage plugin strict per-workspace memory namespace",
+      "hash_policy": "source_sha256_byte_identity",
+      "update_policy": "replace_managed",
+      "acceptance_test": "develop/validators/platforms/test_hermes_memory_isolation.py",
+      "failure_contract": "wrong_or_missing_namespace_fails_visibly",
+      "support_status": "verified"
+    }
+  ],
+  "plugin_callbacks": {
+    "support_status": "verified",
+    "required": [
+      "on_session_start",
+      "pre_llm_call",
+      "transform_tool_result"
+    ],
+    "optional": [
+      "pre_verify"
+    ],
+    "forbidden_gate_duplicates": [
+      "pre_tool_call",
+      "post_tool_call"
+    ]
+  },
+  "subsystems": [
+    {
+      "id": "shared-framework",
+      "canonical_source": "VERSION",
+      "build_owner": "bin/sage",
+      "installed_target": "shared-framework",
+      "runtime_consumer": "Sage bootstrap CLI only, never profile state",
+      "update_policy": "independent_framework_upgrade",
+      "support_status": "verified",
+      "acceptance_test": "develop/validators/tools/test_sage_init.py",
+      "reason": "Framework-only upgrade is verified not to mutate a receipt-bound Hermes profile."
+    },
+    {
+      "id": "project-runtime-workflows",
+      "canonical_source": "core",
+      "build_owner": "runtime/tools/build_plugin.py",
+      "installed_target": "workspace/sage",
+      "runtime_consumer": "Bound workspace workflows, hooks, gates, and deterministic tools",
+      "update_policy": "replace_managed",
+      "support_status": "verified",
+      "acceptance_test": "develop/validators/platforms/test_hermes_workspace_layout.py",
+      "reason": "The complete bound runtime is staged, atomically promoted, and stale-managed content is removed."
+    },
+    {
+      "id": "instructions-constitution",
+      "canonical_source": "runtime/platforms/_shared/instructions-body.sh",
+      "build_owner": "bin/sage",
+      "installed_target": "workspace/.hermes.md",
+      "runtime_consumer": "Hermes bound-workspace project instruction loader",
+      "update_policy": "replace_managed",
+      "support_status": "verified",
+      "acceptance_test": "develop/validators/platforms/test_hermes_profile_installer.py",
+      "reason": "Transactional install manages workspace instructions without touching profile identity files."
+    },
+    {
+      "id": "project-state",
+      "canonical_source": null,
+      "build_owner": "bin/sage",
+      "installed_target": "workspace/.sage",
+      "runtime_consumer": "Bound profile-workspace cycle and gate state",
+      "update_policy": "preserve_user_state",
+      "support_status": "verified",
+      "acceptance_test": "develop/validators/platforms/test_hermes_memory_isolation.py",
+      "reason": "Bound project state rejects ancestor, sibling, and collection-global fallback."
+    },
+    {
+      "id": "mechanical-hook-logic",
+      "canonical_source": "runtime/platforms/claude-code/hooks",
+      "build_owner": "runtime/tools/build_plugin.py",
+      "installed_target": "hooks/sage-*.sh",
+      "runtime_consumer": "Selected profile config shell-hook registry",
+      "update_policy": "replace_managed_byte_identical",
+      "support_status": "verified",
+      "acceptance_test": "develop/validators/platforms/test_hermes_hook_policy.py",
+      "reason": "The selected profile receives the exact flat seven-blocker and four-observer registry."
+    },
+    {
+      "id": "authoritative-hook-context",
+      "canonical_source": "runtime/platforms/community/hermes/hooks/sage-hermes-gate.sh",
+      "build_owner": "runtime/tools/build_plugin.py",
+      "installed_target": "profile-config-hook-payload",
+      "runtime_consumer": "Shell adapter scope normalization using immutable Hermes target plans",
+      "update_policy": "additive_host_contract",
+      "support_status": "verified",
+      "acceptance_test": "develop/validators/platforms/test_hermes_hook_policy.py",
+      "reason": "One host-resolved immutable target plan is normalized and transported fail closed."
+    },
+    {
+      "id": "hermes-plugin",
+      "canonical_source": "__init__.py",
+      "build_owner": "runtime/tools/build_plugin.py",
+      "installed_target": "plugins/sage",
+      "runtime_consumer": "Hermes PluginContext callback, tool, command, and skill registry",
+      "update_policy": "replace_managed",
+      "support_status": "verified",
+      "acceptance_test": "develop/validators/platforms/test_hermes_plugin_lifecycle.py",
+      "reason": "Lifecycle callbacks, exact collision-free commands, eight tools, and skills are registered from one frozen plugin binding."
+    },
+    {
+      "id": "plugin-result-transformation",
+      "canonical_source": "__init__.py",
+      "build_owner": "runtime/tools/build_plugin.py",
+      "installed_target": "plugins/sage/__init__.py",
+      "runtime_consumer": "Hermes transform_tool_result callback before the next model turn",
+      "update_policy": "replace_managed",
+      "support_status": "verified",
+      "acceptance_test": "develop/validators/platforms/test_hermes_plugin_lifecycle.py",
+      "reason": "Task 15 proves corrective context delivery rather than observational post hooks."
+    },
+    {
+      "id": "core-persona-skills",
+      "canonical_source": "skills",
+      "build_owner": "runtime/tools/build_plugin.py",
+      "installed_target": "workspace/sage/skills",
+      "runtime_consumer": "Hermes native skill registry including sage-debugger",
+      "update_policy": "replace_managed_canonical_collision_owner",
+      "support_status": "verified",
+      "acceptance_test": "develop/validators/platforms/test_hermes_plugin_lifecycle.py",
+      "reason": "Tasks 9 and 15 provide canonical bound-runtime bytes and real selected-profile discovery."
+    },
+    {
+      "id": "optional-packs",
+      "canonical_source": "runtime/tools/skill_manager.py",
+      "build_owner": "bin/sage",
+      "installed_target": "skills",
+      "runtime_consumer": "Selected Hermes profile skill discovery and bound workspace packs lock",
+      "update_policy": "receipt_managed_selected_profile_only",
+      "support_status": "verified",
+      "acceptance_test": "develop/conformance/probes/test_hermes_two_profile_windows.py",
+      "reason": "Pack add and remove are verified against one selected profile with sibling/global byte identity."
+    },
+    {
+      "id": "quality-gates",
+      "canonical_source": "core/gates",
+      "build_owner": "runtime/tools/build_plugin.py",
+      "installed_target": "workspace/sage/core/gates",
+      "runtime_consumer": "Hermes native sage_run_gates and four deterministic bound-workspace gate tools",
+      "update_policy": "replace_managed",
+      "support_status": "verified",
+      "acceptance_test": "develop/validators/platforms/test_hermes_plugin_lifecycle.py",
+      "reason": "The plugin registers exactly five gate tools whose handlers close over the frozen workspace binding."
+    },
+    {
+      "id": "memory-mcp-tools",
+      "canonical_source": "runtime/tools",
+      "build_owner": "runtime/tools/build_plugin.py",
+      "installed_target": "workspace/.sage-memory",
+      "runtime_consumer": "Hermes native project-only memory set/store/search tools",
+      "update_policy": "preserve_database_replace_program_bytes",
+      "support_status": "verified",
+      "acceptance_test": "develop/validators/platforms/test_hermes_plugin_lifecycle.py",
+      "reason": "The plugin registers three memory tools and verifies every session uses the exact bound workspace database."
+    },
+    {
+      "id": "goal-mode-metadata",
+      "canonical_source": "runtime/tools/manifest.py",
+      "build_owner": "runtime/tools/build_plugin.py",
+      "installed_target": "workspace/.sage/work",
+      "runtime_consumer": "Resume, delegation, review, autoresearch, and autonomy state",
+      "update_policy": "preserve_user_state",
+      "support_status": "verified",
+      "acceptance_test": "develop/validators/platforms/test_hermes_metadata_runtime.py",
+      "reason": "Bound runtime metadata preserves autonomous and quality-locked flags and degrades unsupported execution honestly."
+    },
+    {
+      "id": "install-run-metadata",
+      "canonical_source": "runtime/platforms/community/hermes/setup/topology.json",
+      "build_owner": "bin/sage",
+      "installed_target": "workspace/.sage/receipts",
+      "runtime_consumer": "Profile install, update, doctor, rollback, and uninstall transactions",
+      "update_policy": "atomic_receipt_journal",
+      "support_status": "verified",
+      "acceptance_test": "develop/validators/platforms/test_hermes_profile_installer.py",
+      "reason": "Atomic journals, ownership hashes, crash recovery, rollback, and selective removal are verified."
+    }
+  ],
+  "hooks": [
+    {
+      "id": "sage-session-init.sh",
+      "classification": "hermes_shell_hook",
+      "sources": [
+        {
+          "surface": "claude_project",
+          "path": "runtime/platforms/claude-code/hooks/sage-session-init.sh",
+          "sha256": "d99975450cbf45e988c8d5112ff6df61db0387cd426b0092ae53a9fceae67d68",
+          "claude_event": "SessionStart",
+          "claude_matcher": "startup|resume|clear|compact"
+        }
+      ],
+      "build_owner": "runtime/tools/build_plugin.py",
+      "package_source": "runtime/platforms/claude-code/hooks/sage-session-init.sh",
+      "package_source_sha256": "d99975450cbf45e988c8d5112ff6df61db0387cd426b0092ae53a9fceae67d68",
+      "package_target": "hooks/sage-session-init.sh",
+      "install_target": "hooks/sage-session-init.sh",
+      "runtime_consumer": "Hermes selected-profile on_session_start shell-hook registry",
+      "hash_policy": "source_sha256_byte_identity",
+      "update_policy": "replace_managed",
+      "acceptance_test": "develop/validators/platforms/test_hermes_profile_installer.py",
+      "failure_contract": "missing_or_unregistered_session_hook_fails_install_validation",
+      "support_status": "verified",
+      "callback": {
+        "type": "config_shell_hook",
+        "event": "on_session_start",
+        "matcher": null,
+        "fail_closed": false
+      },
+      "event": "on_session_start",
+      "fail_closed": false
+    },
+    {
+      "id": "session-context-injection",
+      "classification": "hermes_plugin_callback",
+      "sources": [
+        {
+          "surface": "claude_plugin",
+          "path": "runtime/plugin-overlay/hooks/scripts/sage-session-init.sh",
+          "sha256": "06331468c61705aae345b75fcdeb29b08527c4ada244633d63f8ea56f1c839d9",
+          "claude_event": "SessionStart",
+          "claude_matcher": null
+        }
+      ],
+      "build_owner": "runtime/tools/build_plugin.py",
+      "package_source": "__init__.py",
+      "package_source_sha256": "1d3686c8c0a6e5963528032a6dca2b5352efb0f09589f7d66703867f949aa171",
+      "package_target": "plugins/sage/__init__.py",
+      "install_target": "plugins/sage/__init__.py",
+      "runtime_consumer": "Hermes PluginContext session/context callback registry",
+      "hash_policy": "behavioral_adaptation",
+      "update_policy": "replace_managed",
+      "acceptance_test": "develop/validators/platforms/test_hermes_plugin_lifecycle.py",
+      "failure_contract": "paired_profile_authority_fail_closed",
+      "support_status": "verified",
+      "callback": {
+        "type": "plugin_callbacks",
+        "events": [
+          "on_session_start",
+          "pre_llm_call"
+        ]
+      },
+      "event": null,
+      "fail_closed": null
+    },
+    {
+      "id": "sage-spec-gate.sh",
+      "classification": "hermes_shell_hook",
+      "sources": [
+        {
+          "surface": "claude_project",
+          "path": "runtime/platforms/claude-code/hooks/sage-spec-gate.sh",
+          "sha256": "a0a17a19817bba4ea8a867b2bccea14cfa6acd1be0adcdcc8d51bc2ae7477f29",
+          "claude_event": "PreToolUse",
+          "claude_matcher": "Edit|Write|MultiEdit"
+        },
+        {
+          "surface": "claude_plugin",
+          "path": "runtime/platforms/claude-code/hooks/sage-spec-gate.sh",
+          "sha256": "a0a17a19817bba4ea8a867b2bccea14cfa6acd1be0adcdcc8d51bc2ae7477f29",
+          "claude_event": "PreToolUse",
+          "claude_matcher": "Edit|Write|MultiEdit"
+        }
+      ],
+      "build_owner": "runtime/tools/build_plugin.py",
+      "package_source": "runtime/platforms/claude-code/hooks/sage-spec-gate.sh",
+      "package_source_sha256": "a0a17a19817bba4ea8a867b2bccea14cfa6acd1be0adcdcc8d51bc2ae7477f29",
+      "package_target": "hooks/sage-spec-gate.sh",
+      "install_target": "hooks/sage-spec-gate.sh",
+      "runtime_consumer": "Hermes agent.shell_hooks via selected profile config.yaml",
+      "hash_policy": "source_sha256_byte_identity",
+      "update_policy": "replace_managed",
+      "acceptance_test": "develop/validators/hooks/run-hook-tests.sh",
+      "failure_contract": "adapter_fail_closed",
+      "support_status": "verified",
+      "callback": {
+        "type": "config_shell_hook",
+        "event": "pre_tool_call",
+        "matcher": "write_file|patch",
+        "fail_closed": true
+      },
+      "event": "pre_tool_call",
+      "fail_closed": true
+    },
+    {
+      "id": "sage-tdd-gate.sh",
+      "classification": "hermes_shell_hook",
+      "sources": [
+        {
+          "surface": "claude_project",
+          "path": "runtime/platforms/claude-code/hooks/sage-tdd-gate.sh",
+          "sha256": "824972fcc7ce91d9547abafdf02af09c7fc61f75407e03b5c7f07b7309664365",
+          "claude_event": "PreToolUse",
+          "claude_matcher": "Edit|Write|MultiEdit"
+        },
+        {
+          "surface": "claude_plugin",
+          "path": "runtime/platforms/claude-code/hooks/sage-tdd-gate.sh",
+          "sha256": "824972fcc7ce91d9547abafdf02af09c7fc61f75407e03b5c7f07b7309664365",
+          "claude_event": "PreToolUse",
+          "claude_matcher": "Edit|Write|MultiEdit"
+        }
+      ],
+      "build_owner": "runtime/tools/build_plugin.py",
+      "package_source": "runtime/platforms/claude-code/hooks/sage-tdd-gate.sh",
+      "package_source_sha256": "824972fcc7ce91d9547abafdf02af09c7fc61f75407e03b5c7f07b7309664365",
+      "package_target": "hooks/sage-tdd-gate.sh",
+      "install_target": "hooks/sage-tdd-gate.sh",
+      "runtime_consumer": "Hermes agent.shell_hooks via selected profile config.yaml",
+      "hash_policy": "source_sha256_byte_identity",
+      "update_policy": "replace_managed",
+      "acceptance_test": "develop/validators/hooks/run-hook-tests.sh",
+      "failure_contract": "adapter_fail_closed",
+      "support_status": "verified",
+      "callback": {
+        "type": "config_shell_hook",
+        "event": "pre_tool_call",
+        "matcher": "write_file|patch",
+        "fail_closed": true
+      },
+      "event": "pre_tool_call",
+      "fail_closed": true
+    },
+    {
+      "id": "sage-bookkeeping-gate.sh",
+      "classification": "hermes_shell_hook",
+      "sources": [
+        {
+          "surface": "claude_project",
+          "path": "runtime/platforms/claude-code/hooks/sage-bookkeeping-gate.sh",
+          "sha256": "077e7a8ba4f2e4881924256f55867656153d6bc2911d724c59b8c26f5a056143",
+          "claude_event": "PreToolUse",
+          "claude_matcher": "Edit|Write|MultiEdit"
+        },
+        {
+          "surface": "claude_plugin",
+          "path": "runtime/platforms/claude-code/hooks/sage-bookkeeping-gate.sh",
+          "sha256": "077e7a8ba4f2e4881924256f55867656153d6bc2911d724c59b8c26f5a056143",
+          "claude_event": "PreToolUse",
+          "claude_matcher": "Edit|Write|MultiEdit"
+        }
+      ],
+      "build_owner": "runtime/tools/build_plugin.py",
+      "package_source": "runtime/platforms/claude-code/hooks/sage-bookkeeping-gate.sh",
+      "package_source_sha256": "077e7a8ba4f2e4881924256f55867656153d6bc2911d724c59b8c26f5a056143",
+      "package_target": "hooks/sage-bookkeeping-gate.sh",
+      "install_target": "hooks/sage-bookkeeping-gate.sh",
+      "runtime_consumer": "Hermes agent.shell_hooks via selected profile config.yaml",
+      "hash_policy": "source_sha256_byte_identity",
+      "update_policy": "replace_managed",
+      "acceptance_test": "develop/validators/hooks/run-hook-tests.sh",
+      "failure_contract": "adapter_fail_closed",
+      "support_status": "verified",
+      "callback": {
+        "type": "config_shell_hook",
+        "event": "pre_tool_call",
+        "matcher": "write_file|patch",
+        "fail_closed": true
+      },
+      "event": "pre_tool_call",
+      "fail_closed": true
+    },
+    {
+      "id": "sage-secrets-gate.sh",
+      "classification": "hermes_shell_hook",
+      "sources": [
+        {
+          "surface": "claude_project",
+          "path": "runtime/platforms/claude-code/hooks/sage-secrets-gate.sh",
+          "sha256": "205674a5bdc5c23bcf0021512f524ec8996955a942ebbd10b2bea9ecea42007f",
+          "claude_event": "PreToolUse",
+          "claude_matcher": "Edit|Write|MultiEdit"
+        },
+        {
+          "surface": "claude_plugin",
+          "path": "runtime/platforms/claude-code/hooks/sage-secrets-gate.sh",
+          "sha256": "205674a5bdc5c23bcf0021512f524ec8996955a942ebbd10b2bea9ecea42007f",
+          "claude_event": "PreToolUse",
+          "claude_matcher": "Edit|Write|MultiEdit"
+        }
+      ],
+      "build_owner": "runtime/tools/build_plugin.py",
+      "package_source": "runtime/platforms/claude-code/hooks/sage-secrets-gate.sh",
+      "package_source_sha256": "205674a5bdc5c23bcf0021512f524ec8996955a942ebbd10b2bea9ecea42007f",
+      "package_target": "hooks/sage-secrets-gate.sh",
+      "install_target": "hooks/sage-secrets-gate.sh",
+      "runtime_consumer": "Hermes agent.shell_hooks via selected profile config.yaml",
+      "hash_policy": "source_sha256_byte_identity",
+      "update_policy": "replace_managed",
+      "acceptance_test": "develop/validators/hooks/run-hook-tests.sh",
+      "failure_contract": "adapter_fail_closed",
+      "support_status": "verified",
+      "callback": {
+        "type": "config_shell_hook",
+        "event": "pre_tool_call",
+        "matcher": "write_file|patch",
+        "fail_closed": true
+      },
+      "event": "pre_tool_call",
+      "fail_closed": true
+    },
+    {
+      "id": "sage-verify-gate.sh",
+      "classification": "hermes_shell_hook",
+      "sources": [
+        {
+          "surface": "claude_project",
+          "path": "runtime/platforms/claude-code/hooks/sage-verify-gate.sh",
+          "sha256": "5ae42f827ba08439f9616122dedab9b1ba4fea2edbeecf4673c33ddc74978827",
+          "claude_event": "PreToolUse",
+          "claude_matcher": "Bash"
+        },
+        {
+          "surface": "claude_plugin",
+          "path": "runtime/platforms/claude-code/hooks/sage-verify-gate.sh",
+          "sha256": "5ae42f827ba08439f9616122dedab9b1ba4fea2edbeecf4673c33ddc74978827",
+          "claude_event": "PreToolUse",
+          "claude_matcher": "Bash"
+        }
+      ],
+      "build_owner": "runtime/tools/build_plugin.py",
+      "package_source": "runtime/platforms/claude-code/hooks/sage-verify-gate.sh",
+      "package_source_sha256": "5ae42f827ba08439f9616122dedab9b1ba4fea2edbeecf4673c33ddc74978827",
+      "package_target": "hooks/sage-verify-gate.sh",
+      "install_target": "hooks/sage-verify-gate.sh",
+      "runtime_consumer": "Hermes agent.shell_hooks via selected profile config.yaml",
+      "hash_policy": "source_sha256_byte_identity",
+      "update_policy": "replace_managed",
+      "acceptance_test": "develop/validators/hooks/run-hook-tests.sh",
+      "failure_contract": "adapter_fail_closed",
+      "support_status": "verified",
+      "callback": {
+        "type": "config_shell_hook",
+        "event": "pre_tool_call",
+        "matcher": "terminal",
+        "fail_closed": true
+      },
+      "event": "pre_tool_call",
+      "fail_closed": true
+    },
+    {
+      "id": "sage-config-gate.sh",
+      "classification": "hermes_shell_hook",
+      "sources": [
+        {
+          "surface": "claude_project",
+          "path": "runtime/platforms/claude-code/hooks/sage-config-gate.sh",
+          "sha256": "67d61b309207dff0586622431ad5cd62751ebc0237c3e38beaa3e9af0052868e",
+          "claude_event": "PreToolUse",
+          "claude_matcher": "Bash|Edit|Write|MultiEdit"
+        },
+        {
+          "surface": "claude_plugin",
+          "path": "runtime/platforms/claude-code/hooks/sage-config-gate.sh",
+          "sha256": "67d61b309207dff0586622431ad5cd62751ebc0237c3e38beaa3e9af0052868e",
+          "claude_event": "PreToolUse",
+          "claude_matcher": "Bash|Edit|Write|MultiEdit"
+        }
+      ],
+      "build_owner": "runtime/tools/build_plugin.py",
+      "package_source": "runtime/platforms/claude-code/hooks/sage-config-gate.sh",
+      "package_source_sha256": "67d61b309207dff0586622431ad5cd62751ebc0237c3e38beaa3e9af0052868e",
+      "package_target": "hooks/sage-config-gate.sh",
+      "install_target": "hooks/sage-config-gate.sh",
+      "runtime_consumer": "Hermes agent.shell_hooks via selected profile config.yaml",
+      "hash_policy": "source_sha256_byte_identity",
+      "update_policy": "replace_managed",
+      "acceptance_test": "develop/validators/hooks/run-hook-tests.sh",
+      "failure_contract": "adapter_fail_closed",
+      "support_status": "verified",
+      "callback": {
+        "type": "config_shell_hook",
+        "event": "pre_tool_call",
+        "matcher": "write_file|patch|terminal",
+        "fail_closed": true
+      },
+      "event": "pre_tool_call",
+      "fail_closed": true
+    },
+    {
+      "id": "sage-scope-gate.sh",
+      "classification": "hermes_shell_hook",
+      "sources": [
+        {
+          "surface": "claude_project",
+          "path": "runtime/platforms/claude-code/hooks/sage-scope-gate.sh",
+          "sha256": "42191204b9884d54213688d2dc4e49f3bbc64cf307ca8703ad3f7e18b1efd322",
+          "claude_event": "PreToolUse",
+          "claude_matcher": "Edit|Write|MultiEdit"
+        }
+      ],
+      "build_owner": "runtime/tools/build_plugin.py",
+      "package_source": "runtime/platforms/claude-code/hooks/sage-scope-gate.sh",
+      "package_source_sha256": "42191204b9884d54213688d2dc4e49f3bbc64cf307ca8703ad3f7e18b1efd322",
+      "package_target": "hooks/sage-scope-gate.sh",
+      "install_target": "hooks/sage-scope-gate.sh",
+      "runtime_consumer": "Hermes agent.shell_hooks via selected profile config.yaml",
+      "hash_policy": "source_sha256_byte_identity",
+      "update_policy": "replace_managed",
+      "acceptance_test": "develop/validators/hooks/run-hook-tests.sh",
+      "failure_contract": "adapter_fail_closed",
+      "support_status": "verified",
+      "callback": {
+        "type": "config_shell_hook",
+        "event": "pre_tool_call",
+        "matcher": "write_file|patch",
+        "fail_closed": true
+      },
+      "event": "pre_tool_call",
+      "fail_closed": true
+    },
+    {
+      "id": "sage-verify-tracker.sh",
+      "classification": "hermes_shell_hook",
+      "sources": [
+        {
+          "surface": "claude_project",
+          "path": "runtime/platforms/claude-code/hooks/sage-verify-tracker.sh",
+          "sha256": "564ce89c4c21d51842a5c6051b4b9c1931a32c59e1b08817c59ecfacddbb4982",
+          "claude_event": "PostToolUse",
+          "claude_matcher": "Bash|Edit|Write|MultiEdit"
+        },
+        {
+          "surface": "claude_plugin",
+          "path": "runtime/platforms/claude-code/hooks/sage-verify-tracker.sh",
+          "sha256": "564ce89c4c21d51842a5c6051b4b9c1931a32c59e1b08817c59ecfacddbb4982",
+          "claude_event": "PostToolUse",
+          "claude_matcher": "Bash|Edit|Write|MultiEdit"
+        }
+      ],
+      "build_owner": "runtime/tools/build_plugin.py",
+      "package_source": "runtime/platforms/claude-code/hooks/sage-verify-tracker.sh",
+      "package_source_sha256": "564ce89c4c21d51842a5c6051b4b9c1931a32c59e1b08817c59ecfacddbb4982",
+      "package_target": "hooks/sage-verify-tracker.sh",
+      "install_target": "hooks/sage-verify-tracker.sh",
+      "runtime_consumer": "Hermes agent.shell_hooks via selected profile config.yaml",
+      "hash_policy": "source_sha256_byte_identity",
+      "update_policy": "replace_managed",
+      "acceptance_test": "develop/validators/hooks/run-hook-tests.sh",
+      "failure_contract": "adapter_visible_nonblocking",
+      "support_status": "verified",
+      "callback": {
+        "type": "config_shell_hook",
+        "event": "post_tool_call",
+        "matcher": "write_file|patch|terminal",
+        "fail_closed": false
+      },
+      "event": "post_tool_call",
+      "fail_closed": false
+    },
+    {
+      "id": "sage-degradation-log.sh",
+      "classification": "hermes_shell_hook",
+      "sources": [
+        {
+          "surface": "claude_project",
+          "path": "runtime/platforms/claude-code/hooks/sage-degradation-log.sh",
+          "sha256": "af643d425867c5a7df8196470dbd7385a78abb8d37152c26362b86faee11e32d",
+          "claude_event": "PostToolUse",
+          "claude_matcher": "Write|Edit"
+        },
+        {
+          "surface": "claude_plugin",
+          "path": "runtime/platforms/claude-code/hooks/sage-degradation-log.sh",
+          "sha256": "af643d425867c5a7df8196470dbd7385a78abb8d37152c26362b86faee11e32d",
+          "claude_event": "PostToolUse",
+          "claude_matcher": "Write|Edit"
+        }
+      ],
+      "build_owner": "runtime/tools/build_plugin.py",
+      "package_source": "runtime/platforms/claude-code/hooks/sage-degradation-log.sh",
+      "package_source_sha256": "af643d425867c5a7df8196470dbd7385a78abb8d37152c26362b86faee11e32d",
+      "package_target": "hooks/sage-degradation-log.sh",
+      "install_target": "hooks/sage-degradation-log.sh",
+      "runtime_consumer": "Hermes agent.shell_hooks via selected profile config.yaml",
+      "hash_policy": "source_sha256_byte_identity",
+      "update_policy": "replace_managed",
+      "acceptance_test": "develop/validators/hooks/run-hook-tests.sh",
+      "failure_contract": "adapter_visible_nonblocking",
+      "support_status": "verified",
+      "callback": {
+        "type": "config_shell_hook",
+        "event": "post_tool_call",
+        "matcher": "write_file|patch",
+        "fail_closed": false
+      },
+      "event": "post_tool_call",
+      "fail_closed": false
+    },
+    {
+      "id": "sage-manifest-sync.sh",
+      "classification": "hermes_shell_hook",
+      "sources": [
+        {
+          "surface": "claude_project",
+          "path": "runtime/platforms/claude-code/hooks/sage-manifest-sync.sh",
+          "sha256": "aefa90bb309f9bb8549c30374e4ac8c15ff1b099024b77bf2c85573d27d3abe5",
+          "claude_event": "PostToolUse",
+          "claude_matcher": "Write|Edit"
+        },
+        {
+          "surface": "claude_plugin",
+          "path": "runtime/platforms/claude-code/hooks/sage-manifest-sync.sh",
+          "sha256": "aefa90bb309f9bb8549c30374e4ac8c15ff1b099024b77bf2c85573d27d3abe5",
+          "claude_event": "PostToolUse",
+          "claude_matcher": "Write|Edit"
+        }
+      ],
+      "build_owner": "runtime/tools/build_plugin.py",
+      "package_source": "runtime/platforms/claude-code/hooks/sage-manifest-sync.sh",
+      "package_source_sha256": "aefa90bb309f9bb8549c30374e4ac8c15ff1b099024b77bf2c85573d27d3abe5",
+      "package_target": "hooks/sage-manifest-sync.sh",
+      "install_target": "hooks/sage-manifest-sync.sh",
+      "runtime_consumer": "Hermes agent.shell_hooks via selected profile config.yaml",
+      "hash_policy": "source_sha256_byte_identity",
+      "update_policy": "replace_managed",
+      "acceptance_test": "develop/validators/hooks/run-hook-tests.sh",
+      "failure_contract": "adapter_visible_nonblocking",
+      "support_status": "verified",
+      "callback": {
+        "type": "config_shell_hook",
+        "event": "post_tool_call",
+        "matcher": "write_file|patch",
+        "fail_closed": false
+      },
+      "event": "post_tool_call",
+      "fail_closed": false
+    },
+    {
+      "id": "sage-scope-journal.sh",
+      "classification": "hermes_shell_hook",
+      "sources": [
+        {
+          "surface": "claude_project",
+          "path": "runtime/platforms/claude-code/hooks/sage-scope-journal.sh",
+          "sha256": "9acfbc9b94b457677707e786aa6f82288b0ec8aa18f275b76291d1f9751f8503",
+          "claude_event": "PostToolUse",
+          "claude_matcher": "Bash|Edit|Write|MultiEdit"
+        }
+      ],
+      "build_owner": "runtime/tools/build_plugin.py",
+      "package_source": "runtime/platforms/claude-code/hooks/sage-scope-journal.sh",
+      "package_source_sha256": "9acfbc9b94b457677707e786aa6f82288b0ec8aa18f275b76291d1f9751f8503",
+      "package_target": "hooks/sage-scope-journal.sh",
+      "install_target": "hooks/sage-scope-journal.sh",
+      "runtime_consumer": "Hermes agent.shell_hooks via selected profile config.yaml",
+      "hash_policy": "source_sha256_byte_identity",
+      "update_policy": "replace_managed",
+      "acceptance_test": "develop/validators/hooks/run-hook-tests.sh",
+      "failure_contract": "adapter_visible_nonblocking",
+      "support_status": "verified",
+      "callback": {
+        "type": "config_shell_hook",
+        "event": "post_tool_call",
+        "matcher": "write_file|patch|terminal",
+        "fail_closed": false
+      },
+      "event": "post_tool_call",
+      "fail_closed": false
+    },
+    {
+      "id": "sage-hallucination-check.sh",
+      "classification": "workflow_on_demand_gate",
+      "sources": [
+        {
+          "surface": "claude_plugin",
+          "path": "core/gates/scripts/sage-hallucination-check.sh",
+          "sha256": "df331bdce0f737dfff3bdd56f488a8552512a7147aa2b18a47ed8c912a7e3763",
+          "claude_event": null,
+          "claude_matcher": null
+        }
+      ],
+      "build_owner": "runtime/tools/build_plugin.py",
+      "package_source": "core/gates/scripts/sage-hallucination-check.sh",
+      "package_source_sha256": "df331bdce0f737dfff3bdd56f488a8552512a7147aa2b18a47ed8c912a7e3763",
+      "package_target": "workspace/sage/core/gates/scripts/sage-hallucination-check.sh",
+      "install_target": "workspace/sage/core/gates/scripts/sage-hallucination-check.sh",
+      "runtime_consumer": "Sage workflow quality-gate runner",
+      "hash_policy": "source_sha256_byte_identity",
+      "update_policy": "replace_managed",
+      "acceptance_test": "develop/validators/gates/run-gate-tests.sh",
+      "failure_contract": "three_state_gate_exit",
+      "support_status": "verified",
+      "callback": null,
+      "event": null,
+      "fail_closed": null
+    },
+    {
+      "id": "sage-spec-check.sh",
+      "classification": "workflow_on_demand_gate",
+      "sources": [
+        {
+          "surface": "claude_plugin",
+          "path": "core/gates/scripts/sage-spec-check.sh",
+          "sha256": "4e62649730c75201529d9a1302e8c3b106a884fa5554ce0c1e769037318a1b8f",
+          "claude_event": null,
+          "claude_matcher": null
+        }
+      ],
+      "build_owner": "runtime/tools/build_plugin.py",
+      "package_source": "core/gates/scripts/sage-spec-check.sh",
+      "package_source_sha256": "4e62649730c75201529d9a1302e8c3b106a884fa5554ce0c1e769037318a1b8f",
+      "package_target": "workspace/sage/core/gates/scripts/sage-spec-check.sh",
+      "install_target": "workspace/sage/core/gates/scripts/sage-spec-check.sh",
+      "runtime_consumer": "Sage workflow quality-gate runner",
+      "hash_policy": "source_sha256_byte_identity",
+      "update_policy": "replace_managed",
+      "acceptance_test": "develop/validators/gates/run-gate-tests.sh",
+      "failure_contract": "three_state_gate_exit",
+      "support_status": "verified",
+      "callback": null,
+      "event": null,
+      "fail_closed": null
+    },
+    {
+      "id": "sage-verify.sh",
+      "classification": "workflow_on_demand_gate",
+      "sources": [
+        {
+          "surface": "claude_plugin",
+          "path": "core/gates/scripts/sage-verify.sh",
+          "sha256": "1cc1eb7d8324d187b29822caaa40f1d38765e8ebdcd36f75ef17fef6478493f0",
+          "claude_event": "PostToolUse",
+          "claude_matcher": "Write|Edit"
+        }
+      ],
+      "build_owner": "runtime/tools/build_plugin.py",
+      "package_source": "core/gates/scripts/sage-verify.sh",
+      "package_source_sha256": "1cc1eb7d8324d187b29822caaa40f1d38765e8ebdcd36f75ef17fef6478493f0",
+      "package_target": "workspace/sage/core/gates/scripts/sage-verify.sh",
+      "install_target": "workspace/sage/core/gates/scripts/sage-verify.sh",
+      "runtime_consumer": "Sage workflow quality-gate runner",
+      "hash_policy": "source_sha256_byte_identity",
+      "update_policy": "replace_managed",
+      "acceptance_test": "develop/validators/gates/run-gate-tests.sh",
+      "failure_contract": "three_state_gate_exit",
+      "support_status": "verified",
+      "callback": null,
+      "event": null,
+      "fail_closed": null
+    },
+    {
+      "id": "sage-visual-gate.sh",
+      "classification": "workflow_on_demand_gate",
+      "sources": [
+        {
+          "surface": "claude_plugin",
+          "path": "core/gates/scripts/sage-visual-gate.sh",
+          "sha256": "56831bc178730d31685aaa87302e4f94af026b7615bf272a0cb9f80dc7f6812a",
+          "claude_event": null,
+          "claude_matcher": null
+        }
+      ],
+      "build_owner": "runtime/tools/build_plugin.py",
+      "package_source": "core/gates/scripts/sage-visual-gate.sh",
+      "package_source_sha256": "56831bc178730d31685aaa87302e4f94af026b7615bf272a0cb9f80dc7f6812a",
+      "package_target": "workspace/sage/core/gates/scripts/sage-visual-gate.sh",
+      "install_target": "workspace/sage/core/gates/scripts/sage-visual-gate.sh",
+      "runtime_consumer": "Sage workflow quality-gate runner",
+      "hash_policy": "source_sha256_byte_identity",
+      "update_policy": "replace_managed",
+      "acceptance_test": "develop/validators/gates/run-gate-tests.sh",
+      "failure_contract": "three_state_gate_exit",
+      "support_status": "verified",
+      "callback": null,
+      "event": null,
+      "fail_closed": null
+    }
+  ],
+  "plugin_capabilities": {
+    "support_status": "verified",
+    "commands": [
+      "sage",
+      "sage-build",
+      "sage-fix",
+      "sage-architect",
+      "sage-analyze",
+      "sage-learn",
+      "sage-map",
+      "sage-qa",
+      "sage-reflect",
+      "sage-research",
+      "sage-review",
+      "sage-status",
+      "sage-design",
+      "sage-design-review",
+      "sage-continue",
+      "sage-autoresearch"
+    ],
+    "tools": [
+      "sage_run_gates",
+      "sage_spec_check",
+      "sage_hallucination_check",
+      "sage_verify",
+      "sage_visual_gate",
+      "sage_memory_set_project",
+      "sage_memory_store",
+      "sage_memory_search"
+    ],
+    "binding_policy": "one validated frozen PluginBinding per register(ctx); every callback, command handler, and tool handler closes over it",
+    "cwd_policy": "tool subprocess cwd is exactly binding.workspace_root; cwd/workspace/project/profile/state/memory overrides and path escapes are rejected",
+    "memory_database": "<workspace>/.sage-memory/memory.db",
+    "acceptance_test": "develop/validators/platforms/test_hermes_plugin_lifecycle.py"
+  }
+}

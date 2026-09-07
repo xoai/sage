@@ -92,5 +92,9 @@ except OSError:
 sys.exit(0)
 PYEOF
 
-python3 "$PY" 2>/dev/null || true
+PY_ARG="$PY"
+if command -v cygpath >/dev/null 2>&1; then
+  PY_ARG="$(cygpath -m "$PY")"
+fi
+python3 "$PY_ARG" 2>/dev/null || true
 exit 0

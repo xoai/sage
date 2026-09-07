@@ -1,1109 +1,1738 @@
-"""sage-gates — Sage mechanical gates as a Hermes plugin.
+"""Profile-bound Sage lifecycle integration for Hermes.
 
-Ported from the claude-code POSIX hooks (runtime/platforms/claude-code/hooks/)
-to Hermes's plugin surface:
-
-  pre_tool_call  -> spec-gate (Rule 3), tdd-gate (Rule 1), secrets-gate
-  post_tool_call -> R29 degradation audit (decisions.md written by code)
-
-Hermes block contract (verified against hermes_cli/plugins.py):
-  return {"action": "block", "message": "..."} from pre_tool_call and the tool
-  call is vetoed; `message` becomes the tool result the model sees. Anything
-  else (None, {}, exceptions) lets the call proceed.
-
-HOOKS ARE GUARDS, NOT GATES: every code path here fails OPEN on internal
-error — a broken hook must never brick the editor. Gates opt in via
-.sage/config.yaml (hard_enforcement: true is the master switch), exactly like
-the claude-code hooks, so this plugin never surprise-blocks a project that
-has not asked for enforcement.
-
-Hermes tool mapping (verified against the live tool schemas):
-  write_file -> args["path"], args["content"]
-  patch      -> args["path"], args["new_string"] (replace mode),
-                args["patch"] (V4A patch mode — new_text is the patch body)
-Everything else (terminal, execute_code, …) is not gated — the same documented
-hole the claude-code hooks have (they matched Edit|Write|MultiEdit only).
+The installed plugin is intentionally a thin native adapter.  Its only path
+authority is the profile that physically contains this file, reconciled with
+that profile's selected config and install receipt.  Mechanical gate ownership
+remains in Hermes hooks installed at the profile root; this module does not
+register Python ``pre_tool_call`` or ``post_tool_call`` gates.
 """
 
 from __future__ import annotations
 
-import datetime
-import glob
+import hashlib
+import importlib.util
+import json
+import logging
 import os
-import re
+import pathlib
+import shutil
+import stat
 import subprocess
+import sys
+from dataclasses import dataclass
+from types import MappingProxyType
+from typing import Any, Callable, Dict, Mapping, Optional, Set, Tuple
+from urllib.parse import unquote, urlparse
 
-# ── Shared classification ────────────────────────────────────────────────────
 
-SKIP_PREFIX = (".sage/", "sage/", ".claude/", ".hermes/", "node_modules/",
-               "vendor/", ".git/")
+LOGGER = logging.getLogger(__name__)
+# Single source of truth: the VERSION file at the plugin root. The runtime
+# version check (_validate_runtime) requires workspace/sage/VERSION to equal
+# this constant; deriving it here ends the 1.3.18/1.3.21 drift class
+# (2026-08-30 diagnosis: "plugin.yaml version lag").
+with open(
+    pathlib.Path(__file__).absolute().parent / "VERSION", encoding="utf-8"
+) as _version_file:
+    PLUGIN_VERSION = _version_file.read().strip()
 
-SOURCE_EXT = {
-    ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".py", ".go", ".rs",
-    ".java", ".rb", ".php", ".c", ".cc", ".cpp", ".cxx", ".h", ".hpp",
-    ".cs", ".swift", ".kt", ".kts", ".dart", ".vue", ".svelte", ".scala",
-    ".ex", ".exs", ".sh", ".bash", ".zsh", ".sql", ".css", ".scss",
-    ".sass", ".less", ".html", ".htm", ".m", ".mm", ".r", ".jl", ".lua",
-    ".pl",
-}
+MAX_AUTHORITY_BYTES = 1024 * 1024
+MAX_CONTEXT_BYTES = 2 * 1024 * 1024
 
-TEST_RE = re.compile(
-    r"(^|/)tests?/|(^|/)__tests__/|(^|/)spec/"
-    r"|(^|/)test_[^/]+$|[^/]*_test\.[a-z]+$"
-    r"|[^/]*\.(test|spec)\.[a-z]+$",
-    re.I,
+SUPPORTED_SKILLS = (
+    "sage",
+    "sage-analyst",
+    "sage-architect",
+    "sage-autoresearch",
+    "sage-build",
+    "sage-checkpoints",
+    "sage-classifier",
+    "sage-constitution",
+    "sage-continue",
+    "sage-debugger",
+    "sage-decisions",
+    "sage-developer",
+    "sage-fix",
+    "sage-gates",
+    "sage-learn",
+    "sage-reflect",
+    "sage-review",
+    "sage-reviewer",
+    "sage-routing",
+    "sage-tiers",
+    "sage-using-memory",
 )
 
-KNOWN_STATES = {
-    "pre-spec", "spec-approved", "plan-approved",
-    "building", "gates-passed", "complete",
+REGISTERED_HOOKS = (
+    "on_session_start",
+    "pre_llm_call",
+    "transform_tool_result",
+    "pre_verify",
+)
+
+RUNTIME_TOOLS = (
+    "scope_judge.py",
+    "manifest.py",
+    "skill_manager.py",
+    "sage_flags.py",
+    "memory_sync.py",
+)
+
+# Slash commands are deliberately NOT registered (2026-09-01, Willie's bug):
+# Hermes prints a plugin *command*'s return value to the user (cli.py
+# `_cprint(str(result))`; gateway returns it as the reply) — it never reaches
+# the model. ctx.register_skill() exposes the 21 namespaced skill_view entries;
+# the installer's skills.external_dirs entry separately enables Hermes' native
+# /sage-* skill commands, which DO load into the model turn. The registration
+# alone does not enable native slash discovery. Registering the same names as
+# commands double-listed them in the picker and let the command win
+# dispatch, pasting the skill body as chat output instead of running it.
+# Compatibility aliases (/sage-status -> sage-continue, etc.) are gone; the
+# canonical skill names are the commands.
+COMMAND_SPECS: Tuple[Tuple[str, str, str, str], ...] = ()
+
+REGISTERED_COMMANDS = tuple(row[0] for row in COMMAND_SPECS)
+REGISTERED_TOOLS = (
+    "sage_run_gates",
+    "sage_spec_check",
+    "sage_hallucination_check",
+    "sage_verify",
+    "sage_visual_gate",
+    "sage_memory_set_project",
+    "sage_memory_store",
+    "sage_memory_search",
+)
+
+_FORBIDDEN_AUTHORITY_ARGUMENTS = frozenset(
+    {
+        "cwd",
+        "workspace",
+        "workspace_root",
+        "project",
+        "project_root",
+        "profile",
+        "profile_root",
+        "state_root",
+        "memory_root",
+        "memory_db",
+        "memory_db_path",
+        "hermes_home",
+    }
+)
+
+DEFAULT_GATE_MODES = {
+    "fix": {
+        "mandatory": ["hallucination-check", "verification"],
+        "optional": ["spec-compliance"],
+        "skipped": ["constitution-compliance", "code-quality"],
+    },
+    "build": {
+        "mandatory": [
+            "spec-compliance",
+            "constitution-compliance",
+            "code-quality",
+            "hallucination-check",
+            "verification",
+        ],
+        "optional": [],
+        "skipped": [],
+    },
+    "architect": {
+        "mandatory": [
+            "spec-compliance",
+            "constitution-compliance",
+            "code-quality",
+            "hallucination-check",
+            "verification",
+        ],
+        "optional": [],
+        "skipped": [],
+    },
+}
+GATE_ORDER = {
+    "spec-compliance": 1,
+    "constitution-compliance": 2,
+    "code-quality": 3,
+    "hallucination-check": 4,
+    "verification": 5,
+    "visual-verification": 6,
+    "auto-qa": 8,
+}
+GATE_ALIASES = {
+    "spec": "spec-compliance",
+    "spec-check": "spec-compliance",
+    "hallucination": "hallucination-check",
+    "verify": "verification",
+    "visual": "visual-verification",
+    "visual-gate": "visual-verification",
+    "visual-check": "visual-verification",
+}
+AGENT_REVIEW_GATES = {
+    "constitution-compliance": "Review the active bound-workspace constitution.",
+    "code-quality": "Run the code-quality review; no deterministic script owns this verdict.",
+    "auto-qa": "Run Auto-QA when the active workflow requires it.",
+}
+SCRIPT_REVIEW_NOTES = {
+    "spec-compliance": "Perform adversarial spec review before considering Gate 1 complete.",
+    "hallucination-check": "Check non-obvious hallucinations the script cannot decide.",
+    "verification": "Verify acceptance criteria beyond the test-runner output.",
+    "visual-verification": "Review captured screenshots for visual correctness.",
 }
 
-QA_TERMINAL = {
-    "passed", "skipped-no-subagent", "skipped-disabled",
-    "skipped-timeout", "waived",
+
+def _object_schema(properties=None, required=None):
+    return {
+        "type": "object",
+        "properties": properties or {},
+        "required": required or [],
+        "additionalProperties": False,
+    }
+
+
+TOOL_SCHEMAS = {
+    "sage_run_gates": {
+        "name": "sage_run_gates",
+        "description": "Run deterministic Sage gates for one bound-workspace workflow mode.",
+        "parameters": _object_schema(
+            {
+                "mode": {"type": "string", "enum": ["fix", "build", "architect"]},
+                "plan_file": {"type": "string"},
+                "task_number": {"type": "integer", "minimum": 1},
+                "target": {"type": "string"},
+                "visual_url": {"type": "string"},
+                "visual_output_dir": {"type": "string"},
+                "optional_gates": {"type": "array", "items": {"type": "string"}},
+                "include_optional": {"type": "boolean"},
+            },
+            ["mode"],
+        ),
+    },
+    "sage_spec_check": {
+        "name": "sage_spec_check",
+        "description": "Run Sage Gate 1 against one plan task inside the bound workspace.",
+        "parameters": _object_schema(
+            {
+                "plan_file": {"type": "string"},
+                "task_number": {"type": "integer", "minimum": 1},
+            },
+            ["plan_file", "task_number"],
+        ),
+    },
+    "sage_hallucination_check": {
+        "name": "sage_hallucination_check",
+        "description": "Run Sage Gate 4 inside the bound workspace.",
+        "parameters": _object_schema({"target": {"type": "string"}}),
+    },
+    "sage_verify": {
+        "name": "sage_verify",
+        "description": "Run Sage Gate 5 against the bound workspace.",
+        "parameters": _object_schema(),
+    },
+    "sage_visual_gate": {
+        "name": "sage_visual_gate",
+        "description": "Run Sage Gate 6 and write evidence only inside the bound workspace.",
+        "parameters": _object_schema(
+            {"url": {"type": "string"}, "output_dir": {"type": "string"}},
+            ["url"],
+        ),
+    },
+    "sage_memory_set_project": {
+        "name": "sage_memory_set_project",
+        "description": "Select the already-bound workspace memory database; no project override is accepted.",
+        "parameters": _object_schema(),
+    },
+    "sage_memory_store": {
+        "name": "sage_memory_store",
+        "description": "Store project-only knowledge in the bound workspace database.",
+        "parameters": _object_schema(
+            {
+                "title": {"type": "string"},
+                "content": {"type": "string"},
+                "tags": {"type": "array", "items": {"type": "string"}},
+                "scope": {"type": "string", "enum": ["project"]},
+            },
+            ["title", "content"],
+        ),
+    },
+    "sage_memory_search": {
+        "name": "sage_memory_search",
+        "description": "Search only the bound workspace memory database.",
+        "parameters": _object_schema(
+            {
+                "query": {"type": "string"},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 50},
+                "filter_tags": {"type": "array", "items": {"type": "string"}},
+                "tags": {"type": "array", "items": {"type": "string"}},
+            },
+            ["query"],
+        ),
+    },
 }
 
-DEGRADED = {
-    "skipped-no-subagent":
-        "auto-QA skipped (no sub-agent dispatch on this platform) — "
-        "completion accepted without independent QA.",
-    "skipped-disabled":
-        "auto-QA skipped (auto_qa disabled in .sage/config.yaml) — "
-        "completion accepted without independent QA.",
-    "skipped-timeout":
-        "auto-QA skipped (sub-agent timed out) — "
-        "completion accepted without independent QA.",
-    "waived":
-        "auto-QA waived by the user — completion accepted without "
-        "independent QA.",
-}
 
-DEGLOG_MARK = "[auto-logged by sage-gates post_tool_call]"
-
-# sk-ant- MUST precede sk-: the generic sk- pattern would otherwise match
-# first and mislabel Anthropic keys.
-SECRET_PATTERNS = [
-    (r"\bsk-ant-[A-Za-z0-9_-]{16,}", "an Anthropic API key"),
-    (r"\bsk-[A-Za-z0-9_-]{16,}", "an sk-… API key"),
-    (r"\bAKIA[0-9A-Z]{16}\b", "an AWS access key id"),
-    (r"\bgh[pos]_[A-Za-z0-9]{20,}", "a GitHub token"),
-    (r"\bgithub_pat_[A-Za-z0-9_]{20,}", "a GitHub fine-grained token"),
-    (r"\bxox[baprs]-[A-Za-z0-9-]{10,}", "a Slack token"),
-    (r"\bAIza[0-9A-Za-z_-]{30,}", "a Google API key"),
-]
-
-# Hermes edit tools → how to pull (path, incoming new text) out of args.
-_EDIT_TOOLS = ("write_file", "patch")
+class PluginAuthorityError(RuntimeError):
+    """The installed profile cannot prove exclusive authority for Sage."""
 
 
-# ── Small helpers ────────────────────────────────────────────────────────────
+def _load_profile_binding_module():
+    """Import packaged authority bytes, with a repo-collection fallback only.
 
-def _allow():
-    return None
+    Pytest imports a repository-root ``__init__.py`` as a top-level module,
+    where relative imports have no package parent.  The fallback keeps that
+    collection mode working without allowing an installed plugin to escape to
+    repository sources when its packaged authority module is absent.
+    """
 
+    if __package__:
+        from . import profile_binding as module
 
-def _block(gate, message, project_root, rel):
-    """A block is an enforcement event: it gets an audit line, then the veto."""
+        return module
+
+    source = (
+        pathlib.Path(__file__).resolve().parent
+        / "runtime"
+        / "platforms"
+        / "community"
+        / "hermes"
+        / "setup"
+        / "profile_binding.py"
+    )
+    if not source.is_file():
+        raise ImportError("repository profile_binding fallback is unavailable")
+    name = "_sage_repo_profile_binding_%s" % hashlib.sha256(
+        os.fspath(source).encode("utf-8")
+    ).hexdigest()[:16]
+    spec = importlib.util.spec_from_file_location(name, source)
+    if spec is None or spec.loader is None:
+        raise ImportError("cannot load repository profile_binding fallback")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
     try:
-        _log_block(project_root, gate, rel, message)
+        spec.loader.exec_module(module)
     except Exception:
-        pass  # never let auditing break enforcement
-    return {"action": "block", "message": message}
+        sys.modules.pop(name, None)
+        raise
+    return module
 
 
-def _log_block(project_root, gate, rel, message):
-    log_dir = os.path.join(project_root, ".sage", "gates")
-    os.makedirs(log_dir, exist_ok=True)
-    ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    first = (message or "").splitlines()[0][:160]
-    with open(os.path.join(log_dir, "gate-blocks.log"), "a",
-              encoding="utf-8") as fh:
-        fh.write("%s [%s] %s — %s\n" % (ts, gate, rel, first))
+_PROFILE_BINDING_MODULE = _load_profile_binding_module()
+BindingError = _PROFILE_BINDING_MODULE.BindingError
+ProfileBinding = _PROFILE_BINDING_MODULE.ProfileBinding
 
 
-def _target(tool_name, args):
-    """(path, new_text) for a gated Hermes edit call, or (None, None)."""
-    if tool_name not in _EDIT_TOOLS or not isinstance(args, dict):
-        return None, None
-    path = args.get("path") or args.get("file_path") or ""
-    if not isinstance(path, str) or not path.strip():
-        return None, None
-    blobs = []
-    for key in ("content", "new_string"):
-        v = args.get(key)
-        if isinstance(v, str):
-            blobs.append(v)
-    for e in args.get("edits") or []:
-        if isinstance(e, dict) and isinstance(e.get("new_string"), str):
-            blobs.append(e["new_string"])
-    v = args.get("patch")  # V4A patch mode: the patch body carries new content
-    if isinstance(v, str):
-        blobs.append(v)
-    return path.strip(), "\n".join(blobs)
+def _load_memory_namespace_module():
+    if __package__:
+        from . import memory_namespace as module
 
-
-def _resolve(project_root, file_path):
-    abspath = file_path if os.path.isabs(file_path) else os.path.join(
-        project_root, file_path)
-    abspath = os.path.normpath(abspath)
+        return module
+    source = (
+        pathlib.Path(__file__).resolve().parent
+        / "runtime"
+        / "platforms"
+        / "community"
+        / "hermes"
+        / "plugin-overlay"
+        / "memory_namespace.py"
+    )
+    if not source.is_file():
+        raise ImportError("repository memory_namespace fallback is unavailable")
+    name = "_sage_repo_memory_namespace_%s" % hashlib.sha256(
+        os.fspath(source).encode("utf-8")
+    ).hexdigest()[:16]
+    spec = importlib.util.spec_from_file_location(name, source)
+    if spec is None or spec.loader is None:
+        raise ImportError("cannot load repository memory_namespace fallback")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
     try:
-        rel = os.path.relpath(abspath, project_root)
+        spec.loader.exec_module(module)
+    except Exception:
+        sys.modules.pop(name, None)
+        raise
+    return module
+
+
+_MEMORY_NAMESPACE_MODULE = _load_memory_namespace_module()
+MemoryNamespaceError = _MEMORY_NAMESPACE_MODULE.MemoryNamespaceError
+
+
+@dataclass(frozen=True)
+class PluginBinding:
+    """One validated immutable authority captured once by ``register(ctx)``."""
+
+    authority: Any
+    workspace_root: pathlib.Path
+    runtime_root: pathlib.Path
+    context: str
+    skill_paths: Mapping[str, pathlib.Path]
+    command_texts: Mapping[str, str]
+    gate_scripts: Mapping[str, pathlib.Path]
+    gate_modes_path: pathlib.Path
+    bash_executable: str
+    scope_judge: Any
+    sage_flags: Any
+    memory_namespace: Any
+
+
+def _path_key(path: pathlib.Path) -> str:
+    return os.path.normcase(os.path.normpath(os.fspath(path)))
+
+
+def _same_path(left: pathlib.Path, right: pathlib.Path) -> bool:
+    return _path_key(left) == _path_key(right)
+
+
+def _contains(root: pathlib.Path, target: pathlib.Path) -> bool:
+    try:
+        common = os.path.commonpath((_path_key(root), _path_key(target)))
     except ValueError:
-        return abspath, None  # different drive on Windows — outside project
-    if rel.startswith(".."):
-        return abspath, None
-    return abspath, rel.replace(os.sep, "/")
-
-
-def _config(project_root):
-    """(.sage exists, {flag: value}) — only explicit `true` opts enforcement in."""
-    sage_dir = os.path.join(project_root, ".sage")
-    flags = {}
-    if not os.path.isdir(sage_dir):
-        return None, flags
-    config = os.path.join(sage_dir, "config.yaml")
-    if os.path.isfile(config):
-        try:
-            with open(config, encoding="utf-8", errors="replace") as fh:
-                for line in fh:
-                    m = re.match(r"\s*([a-z_]+)\s*:\s*(true|false)\b", line, re.I)
-                    if m:
-                        key = m.group(1).lower()
-                        # FIRST occurrence wins — same direction the gate's
-                        # _cfg_read_flag() reads. A duplicate key with both
-                        # values is a reader-divergence bomb; the config-gate
-                        # refuses to create one, and both readers agreeing on
-                        # first-wins means a stray duplicate cannot disarm the
-                        # gates even if one appears.
-                        if key not in flags:
-                            flags[key] = (m.group(2).lower() == "true")
-        except OSError:
-            pass
-    return sage_dir, flags
-
-
-def _find_project_root(abspath):
-    """Nearest ancestor of the target file containing .sage — the gate follows
-    the FILE, not the shell's cwd. Falls back to the process cwd when it is
-    itself a Sage project (relative-path edits from inside the project).
-    Returns None when neither is a Sage project (gates inert)."""
-    cur = os.path.dirname(abspath)
-    while True:
-        if os.path.isdir(os.path.join(cur, ".sage")):
-            return cur
-        parent = os.path.dirname(cur)
-        if parent == cur:
-            break
-        cur = parent
-    cwd = os.path.abspath(os.getcwd())
-    if os.path.isdir(os.path.join(cwd, ".sage")):
-        return cwd
-    return None
-
-
-def _is_test(path):
-    if any(path.startswith(p) for p in SKIP_PREFIX):
         return False
-    return bool(TEST_RE.search(path))
+    return common == _path_key(root)
 
 
-def _is_source(path):
-    if any(path.startswith(p) for p in SKIP_PREFIX):
-        return False
-    return os.path.splitext(path)[1].lower() in SOURCE_EXT
+def _is_reparse(stat_result: os.stat_result) -> bool:
+    attributes = getattr(stat_result, "st_file_attributes", 0)
+    reparse_flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
+    return bool(attributes & reparse_flag)
 
 
-def _manifest_field(text, name):
-    m = re.match(r"^\s*---\s*\n(.*?)\n---\s*(?:\n|$)", text.lstrip("﻿"), re.S)
-    if not m:
-        return None
-    fm = re.search(
-        r"^\s*%s\s*:\s*\"?([A-Za-z0-9_-]+)\"?\s*(?:#.*)?$" % re.escape(name),
-        m.group(1), re.M)
-    return fm.group(1).lower() if fm else None
-
-
-def _manifest_gate_state(path):
+def _require_plain_directory(
+    path: pathlib.Path,
+    *,
+    owner: Optional[pathlib.Path] = None,
+    label: str,
+) -> pathlib.Path:
     try:
-        with open(path, encoding="utf-8", errors="replace") as fh:
-            text = fh.read()
-    except OSError:
-        return ("unreadable", None)
-    text = text.lstrip("﻿")
-    if not text.lstrip().startswith("---"):
-        return ("absent", None)
-    m = re.match(r"^\s*---\s*\n(.*?)\n---\s*(?:\n|$)", text, re.S)
-    if not m:
-        return ("corrupt", None)
-    fm = re.search(
-        r"^\s*gate_state\s*:\s*\"?([A-Za-z0-9_-]+)\"?\s*(?:#.*)?$",
-        m.group(1), re.M)
-    if not fm:
-        return ("absent", None)
-    val = fm.group(1).lower()
-    if val not in KNOWN_STATES:
-        return ("corrupt", None)
-    return ("ok", val)
+        info = path.lstat()
+        canonical = path.resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        raise PluginAuthorityError(
+            "%s is unavailable or cannot be resolved: %s" % (label, exc)
+        ) from exc
+    if not stat.S_ISDIR(info.st_mode):
+        raise PluginAuthorityError("%s is not a directory" % label)
+    if path.is_symlink() or _is_reparse(info) or not _same_path(path, canonical):
+        raise PluginAuthorityError(
+            "%s must be a physical canonical directory, not a link or reparse point"
+            % label
+        )
+    if owner is not None and not _contains(owner, canonical):
+        raise PluginAuthorityError("%s escapes its bound owner" % label)
+    return canonical
 
 
-def _parse_ledger(text):
-    """The subagent task ledger from a manifest's frontmatter (R101).
-
-    None = no `tasks:` block (guard disabled); [] = ledger present and empty.
-    """
-    m = re.match(r"^\s*---\s*\n(.*?)\n---\s*(?:\n|$)", text.lstrip("﻿"), re.S)
-    if not m:
-        return None
-    block = m.group(1)
-    if not re.search(r"^\s*tasks\s*:", block, re.M):
-        return None
-    tasks, in_ledger, current = [], False, None
-    for line in block.splitlines():
-        if re.match(r"^\s*tasks\s*:", line):
-            in_ledger = True
-            continue
-        if not in_ledger:
-            continue
-        if line.strip() and not line.startswith((" ", "\t", "-")):
-            break
-        item = re.match(r"^\s*-\s*(.*)$", line)
-        if item:
-            if current:
-                tasks.append(current)
-            current = {}
-            rest = item.group(1).strip()
-            if rest:
-                kv = re.match(r"^([A-Za-z_]+)\s*:\s*\"?([^\"#]*)\"?", rest)
-                if kv:
-                    current[kv.group(1).lower()] = kv.group(2).strip().lower()
-            continue
-        if current is not None:
-            kv = re.match(r"^\s+([A-Za-z_]+)\s*:\s*\"?([^\"#]*)\"?", line)
-            if kv:
-                current[kv.group(1).lower()] = kv.group(2).strip().lower()
-    if current:
-        tasks.append(current)
-    return tasks
-
-
-def _git(project_root, *args):
+def _read_plain_text(
+    path: pathlib.Path,
+    *,
+    owner: pathlib.Path,
+    label: str,
+    max_bytes: int,
+) -> str:
     try:
-        p = subprocess.run(["git", "-C", project_root, *args],
-                           capture_output=True, text=True, timeout=5)
-        return p.stdout if p.returncode == 0 else ""
-    except (OSError, subprocess.SubprocessError):
-        return ""
-
-
-# ── Gate 1: secrets-gate (hardcoded credentials in source) ───────────────────
-
-def _secrets_gate(project_root, rel, new_text):
-    base = os.path.basename(rel)
-    parts = rel.split("/")
-
-    # Class 1: live-marked keys — blocked EVERYWHERE except .env*/.gitignore.
-    if not (base.startswith(".env") or base == ".gitignore"):
-        m = re.search(r"\b[A-Za-z]{2,8}_(?:live|prod|secret)_[A-Za-z0-9]{12,}",
-                      new_text)
-        if m:
-            return "a live-marked key (%s…)" % m.group(0)[:12]
-        if re.search(r"-----BEGIN [A-Z ]*PRIVATE KEY-----", new_text):
-            return "a private key block"
-
-    # Class 2: provider-shaped tokens — blocked in SOURCE only.
-    if base.startswith(".env") or base.endswith(
-            (".md", ".txt", ".lock", ".pem.example")):
-        return None
-    if any(p in ("examples", "fixtures", "tests", "test", ".sage", "sage",
-                 ".claude", ".hermes", "node_modules") for p in parts):
-        return None
-    for pat, what in SECRET_PATTERNS:
-        if re.search(pat, new_text):
-            return what
-    return None
-
-
-# ── Gate 2: spec-gate (Rule 3 — pre-spec cycles block source edits) ─────────
-
-def _spec_gate(project_root, sage_dir, abspath, rel, new_text):
-    # ── Completion guard (R25): manifest edits, checked before anything else ──
-    work_root = os.path.normpath(os.path.join(sage_dir, "work"))
-    is_manifest = os.path.basename(abspath) == "manifest.md"
-    under_work = False
-    if is_manifest:
-        try:
-            under_work = os.path.commonpath([abspath, work_root]) == work_root
-        except ValueError:
-            under_work = False
-
-    if is_manifest and under_work:
-        slug = os.path.basename(os.path.dirname(abspath))
-
-        # ── Ledger guard (R101): subagent cycles need done+approved tasks ──
-        if re.search(r"gate_state\s*:\s*\"?gates-passed\b", new_text or "", re.I):
-            ledger = _parse_ledger(new_text or "")
-            if ledger is None:
-                try:
-                    with open(abspath, encoding="utf-8", errors="replace") as fh:
-                        ledger = _parse_ledger(fh.read())
-                except OSError:
-                    ledger = None
-            mode = None
-            if os.path.isfile(abspath):
-                try:
-                    with open(abspath, encoding="utf-8", errors="replace") as fh:
-                        mode = _manifest_field(fh.read(), "execution_mode")
-                except OSError:
-                    mode = None
-            if mode is None:
-                m = re.search(r"^\s*execution_mode\s*:\s*\"?([A-Za-z0-9_-]+)",
-                              new_text or "", re.M)
-                mode = m.group(1).lower() if m else None
-            if mode == "subagent" and ledger is None:
-                return (
-                    'Sage spec-gate: cannot set gate_state: gates-passed on "%s" —\n'
-                    "the cycle is in subagent execution and has NO task ledger.\n\n"
-                    "R101: subagent mode's entire claim is that every task was "
-                    "implemented by a fresh context and independently reviewed by "
-                    "another. The ledger is the only record of that. A cycle with no "
-                    "ledger is not a cycle that passed review — it is a cycle with no "
-                    "evidence it was reviewed at all.\n\n"
-                    "Write the `tasks:` block, or set execution_mode: inline and stop "
-                    "claiming the subagent chain ran." % slug)
-            if ledger is not None:
-                bad = [(t.get("id", "?"), t.get("status") or "?", t.get("review") or "?")
-                       for t in ledger
-                       if (t.get("status") or "").strip() != "done"
-                       or (t.get("review") or "").strip() != "approved"]
-                if bad:
-                    rows = "\n".join("  task %s — status: %s, review: %s" % r
-                                     for r in bad[:8])
-                    return (
-                        'Sage spec-gate: cannot set gate_state: gates-passed on "%s" —\n'
-                        "%d ledger task(s) are not done+approved:\n\n%s\n\n"
-                        "R101: in subagent execution, a task is finished when an "
-                        "INDEPENDENT reviewer approved it, not when the implementer "
-                        "said it was done. gates-passed asserts the quality chain ran. "
-                        "Finish or fix the tasks above, or record why they are "
-                        "abandoned — but do not claim the chain ran on tasks it "
-                        "never saw." % (slug, len(bad), rows))
-
-        # ── Rule 5 + QA disposition (R29): completing a cycle ──
-        if re.search(r"(?:gate_state|status)\s*:\s*\"?complete\b",
-                     new_text or "", re.I):
-            cur_kind, cur_state = _manifest_gate_state(abspath)
-            if cur_kind == "ok" and cur_state not in ("gates-passed", "complete"):
-                return (
-                    'Sage spec-gate: cannot mark cycle "%s" complete — gate_state is\n'
-                    '"%s", not gates-passed. Rule 5: run the quality gates and verify\n'
-                    "before claiming done. Run the gates, set gate_state: gates-passed,\n"
-                    "then complete." % (slug, cur_state))
-            qa_state = None
-            if os.path.isfile(abspath):
-                try:
-                    with open(abspath, encoding="utf-8", errors="replace") as fh:
-                        qa_state = _manifest_field(fh.read(), "qa")
-                except OSError:
-                    qa_state = None
-            new_qa = re.search(
-                r"^\s*qa\s*:\s*\"?([A-Za-z0-9_-]+)\"?\s*(?:#.*)?$",
-                new_text or "", re.M)
-            if new_qa:
-                qa_state = new_qa.group(1).lower()
-            if cur_kind == "ok" and qa_state is not None \
-                    and qa_state not in QA_TERMINAL:
-                return (
-                    'Sage spec-gate: cannot mark cycle "%s" complete — qa is "%s".\n'
-                    "R29: a completion must say what happened to independent QA; it may\n"
-                    "not stay silent about it. Set one of:\n"
-                    "  qa: passed                 auto-QA ran and passed\n"
-                    "  qa: skipped-no-subagent    no sub-agent dispatch on this platform\n"
-                    "  qa: skipped-disabled       auto_qa is off in .sage/config.yaml\n"
-                    "  qa: skipped-timeout        the sub-agent timed out\n"
-                    "  qa: waived                 the user accepted completion without it\n"
-                    "Any value but `passed` is logged to .sage/decisions.md "
-                    "automatically." % (slug, qa_state))
-        return None  # manifest edits that pass the guards are never gated
-
-    # ── Rule 3: source edits while any active cycle is pre-spec ──
-    first = rel.split("/")[0]
-    if first in (".sage", "sage", ".hermes"):
-        return None
-    if not _is_source(rel):
-        return None
-
-    manifests = sorted(glob.glob(os.path.join(sage_dir, "work", "*", "manifest.md")))
-    pre_spec = []
-    for mpath in manifests:
-        kind, state = _manifest_gate_state(mpath)
-        if kind in ("corrupt", "unreadable", "absent"):
-            continue
-        if state == "complete":
-            continue
-        if state == "pre-spec":
-            pre_spec.append(os.path.basename(os.path.dirname(mpath)))
-
-    if pre_spec:
-        slug = pre_spec[0]
-        msg = (
-            'Sage spec-gate: cycle "%s" is pre-spec. Rule 3: spec.md must exist and\n'
-            "be approved before implementation. Write .sage/work/%s/spec.md and get\n"
-            "[A] approval, or set tier: tier1 in the manifest if this is genuinely\n"
-            "trivial, or set hard_enforcement: false in .sage/config.yaml to disable.\n"
-            "(Blocked edit: %s)" % (slug, slug, rel))
-        if len(pre_spec) > 1:
-            msg += "\nOther pre-spec cycles: " + ", ".join(pre_spec[1:])
-        return msg
-    return None
-
-
-# ── Gate 3: tdd-gate (Rule 1 — tests before code) ────────────────────────────
-
-def _tdd_gate(project_root, sage_dir, rel):
-    if _is_test(rel):
-        return None  # writing the test IS the point
-
-    # A tier1 cycle is exempt: genuinely trivial work opts out of the process.
-    for mpath in glob.glob(os.path.join(sage_dir, "work", "*", "manifest.md")):
-        try:
-            with open(mpath, encoding="utf-8", errors="replace") as fh:
-                head = fh.read(2048)
-        except OSError:
-            continue
-        state = _manifest_field(head, "gate_state")
-        if state and state.lower() == "complete":
-            continue
-        tier = _manifest_field(head, "tier")
-        if tier and tier.lower() == "tier1":
-            return None
-
-    if not _git(project_root, "rev-parse", "--git-dir").strip():
-        return None  # not a git repo — nothing to compare against, fail open
-
-    tracked = _git(project_root, "ls-files")
-    if not any(_is_test(p) for p in tracked.splitlines() if p.strip()):
-        return None  # no test suite at all — nothing to be test-first about yet
-
-    # ALLOW 1: a test is already written but not committed.
-    for line in _git(project_root, "status", "--porcelain").splitlines():
-        if len(line) < 4:
-            continue
-        path = line[3:].split(" -> ")[-1].strip().strip('"')
-        if path and _is_test(path.replace(os.sep, "/")):
-            return None
-
-    # ALLOW 2: the previous commit was the RED commit — a test, and only a test.
-    head_files = [p.strip() for p in
-                  _git(project_root, "show", "--name-only", "--format=", "HEAD")
-                  .splitlines() if p.strip()]
-    if head_files:
-        tests_in_head = [p for p in head_files if _is_test(p.replace(os.sep, "/"))]
-        source_in_head = [p for p in head_files
-                          if _is_source(p.replace(os.sep, "/"))
-                          and not _is_test(p.replace(os.sep, "/"))]
-        if tests_in_head and not source_in_head:
-            return None
-
-    return (
-        "Sage TDD gate: tests before code — no test has been written for this change.\n"
-        "Constitution principle 1: every behavior has a test written BEFORE the\n"
-        "implementation. Write a test that FAILS without this change, then make it pass.\n"
-        '"It is only one number", "it is just config" and "the tests already cover it"\n'
-        "are the excuses this rule exists to refuse — measured, they were used in 3 runs\n"
-        "out of 3.\n\n"
-        "Blocked edit: %s\n\n"
-        "To proceed, do ONE of:\n"
-        "  - write or update a test (that is the intended path)\n"
-        "  - set `tier: tier1` on the active manifest, if this is genuinely trivial\n"
-        "  - set `tdd_enforcement: false` in .sage/config.yaml to disable this gate"
-        % rel)
-
-
-# ── Gate 4: bookkeeping-gate (close-out economy, one-command writer) ─────────
-
-def _bookkeeping_gate(project_root, sage_dir, abspath, rel, new_text):
-    # Only a cycle's manifest.md / decisions.md, and only if it already exists.
-    m = re.match(r"^\.sage/work/([^/]+)/(manifest\.md|decisions\.md)$", rel)
-    if not m:
-        return None
-    if not os.path.isfile(abspath):
-        return None  # creation is authoring, not bookkeeping
-
-    # Only while that cycle is ACTIVE.
-    manifest_path = os.path.join(project_root, ".sage", "work", m.group(1),
-                                 "manifest.md")
-    status = None
+        info = path.lstat()
+        canonical = path.resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        raise PluginAuthorityError("%s is unavailable: %s" % (label, exc)) from exc
+    if not stat.S_ISREG(info.st_mode):
+        raise PluginAuthorityError("%s is not a regular file" % label)
+    if path.is_symlink() or _is_reparse(info) or not _same_path(path, canonical):
+        raise PluginAuthorityError(
+            "%s must be a physical canonical file, not a link or reparse point"
+            % label
+        )
+    if not _contains(owner, canonical):
+        raise PluginAuthorityError("%s escapes its bound owner" % label)
+    if info.st_size > max_bytes:
+        raise PluginAuthorityError("%s exceeds the bounded read limit" % label)
     try:
-        with open(manifest_path, encoding="utf-8", errors="replace") as fh:
-            status = _manifest_field(fh.read(), "status")
-    except OSError:
+        data = path.read_bytes()
+        if len(data) > max_bytes:
+            raise PluginAuthorityError("%s exceeds the bounded read limit" % label)
+        return data.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise PluginAuthorityError("%s is not valid UTF-8" % label) from exc
+    except OSError as exc:
+        raise PluginAuthorityError("%s cannot be read: %s" % (label, exc)) from exc
+
+
+def _reject_duplicate_pairs(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise PluginAuthorityError("duplicate authority key: %s" % key)
+        result[key] = value
+    return result
+
+
+def _load_receipt(text: str) -> Mapping[str, Any]:
+    try:
+        value = json.loads(text, object_pairs_hook=_reject_duplicate_pairs)
+    except PluginAuthorityError:
+        raise
+    except (TypeError, ValueError) as exc:
+        raise PluginAuthorityError("install receipt is not valid JSON: %s" % exc) from exc
+    if not isinstance(value, dict):
+        raise PluginAuthorityError("install receipt must be a mapping")
+    if value.get("schema_version") != 1:
+        raise PluginAuthorityError("install receipt schema_version must be 1")
+    return value
+
+
+def _load_yaml_mapping(text: str, label: str) -> Mapping[str, Any]:
+    try:
+        import yaml
+        from yaml.resolver import BaseResolver
+    except ImportError as exc:
+        raise PluginAuthorityError(
+            "%s requires the Hermes PyYAML dependency" % label
+        ) from exc
+
+    class UniqueKeyLoader(yaml.SafeLoader):
         pass
-    if status in ("complete", "completed", "abandoned"):
-        return None
 
-    # gate_state transitions are APPROVAL flow — the spec-gate's completion
-    # guard already polices them. Yield to it.
-    if "gate_state" in (new_text or ""):
-        return None
+    def construct_mapping(loader, node, deep=False):
+        result = {}
+        for key_node, value_node in node.value:
+            key = loader.construct_object(key_node, deep=deep)
+            try:
+                duplicate = key in result
+            except TypeError as exc:
+                raise PluginAuthorityError(
+                    "%s contains an unhashable key" % label
+                ) from exc
+            if duplicate:
+                raise PluginAuthorityError(
+                    "%s contains duplicate key: %s" % (label, key)
+                )
+            result[key] = loader.construct_object(value_node, deep=deep)
+        return result
 
-    return (
-        "sage-bookkeeping-gate: don't hand-edit %s during an active cycle — apply "
-        "the whole update in ONE pass instead (this is the close-out economy's "
-        "bookkeeping rule, made mechanical):\n\n"
-        "  python3 sage/runtime/tools/manifest.py close-out "
-        ".sage/work/%s/manifest.md \\\n"
-        "    --summary \"...\" --next-step \"...\" --decision \"...\" "
-        "--complete-task N \\\n"
-        "    [--phase X] [--status blocked --blocked-on \"the question, the "
-        "options, whose call\"]\n\n"
-        "One command writes the manifest prose, prepends decisions (Rule 7), and "
-        "checks plan boxes. gate_state and updated: are machine-owned — never set "
-        "them by hand. Compose everything first, then run it once."
-        % (rel, m.group(1)))
-
-
-# ── Gate 5: config-gate (the meta-gate — no self-disarmament) ────────────────
-
-_CONFIG_BLOCK_MSG = (
-    "sage-config-gate: this would turn OFF enforcement that is currently on — "
-    "an agent under enforcement cannot disable its own gates.\n\n"
-    "If enforcement genuinely needs to change, a human edits .sage/config.yaml "
-    "directly (outside the agent). If a gate is blocking legitimate work, fix "
-    "the work it is pointing at — that is what it is for.")
-
-_CFG_MASTER = "hard_enforcement"
-_CFG_OPT_OUT = ("secrets_gate", "verify_gate")
-_CFG_OPT_IN = ("tdd_enforcement",)
-
-
-def _cfg_read_flag(text, key):
-    m = re.search(r"(?mi)^\s*%s\s*:\s*(true|false)\b" % re.escape(key), text or "")
-    return None if not m else (m.group(1).lower() == "true")
-
-
-def _cfg_enabled(text, key):
-    v = _cfg_read_flag(text, key)
-    if key == _CFG_MASTER or key in _CFG_OPT_IN:
-        return v is True
-    return v is not False
-
-
-def _cfg_review_mode(text, absent="v2"):
-    blocks = re.findall(r"(?m)^review_loop:[ \t]*$((?:\n[ \t]+.*)*)", text or "")
-    for block in reversed(blocks):
-        mm = re.search(r"(?mi)^[ \t]+mode[ \t]*:[ \t]*(\S+)", block)
-        if mm:
-            return mm.group(1).lower()
-    return absent
-
-
-def _cfg_witness_capping(text):
-    return _cfg_read_flag(text, "witness_capping") is not False
-
-
-def _cfg_contradictory_flag(text, key):
-    """The same key with BOTH values in one file is a reader-divergence
-    bomb: first-wins readers stay armed while last-wins readers disarm.
-    Ported from the canonical sage-config-gate.sh (round-2 review). A config
-    in that state may not be CREATED through this gate."""
-    vals = {v.lower() for v in re.findall(
-        r"(?mi)^\s*%s\s*:\s*(true|false)\b" % re.escape(key), text or "")}
-    return len(vals) > 1
-
-
-def _cfg_weaker(before, after):
-    for key in (_CFG_MASTER,) + _CFG_OPT_OUT + _CFG_OPT_IN:
-        if _cfg_enabled(before, key) and not _cfg_enabled(after, key):
-            return True
-    # Introducing a contradictory duplicate of an enforcement flag is
-    # weakening even though first-wins readers don't move: any last-wins
-    # reader reads the appended value. Same rule as the canonical gate.
-    for key in (_CFG_MASTER,) + _CFG_OPT_OUT + _CFG_OPT_IN:
-        if (not _cfg_contradictory_flag(before, key)
-                and _cfg_contradictory_flag(after, key)):
-            return True
-    if _cfg_review_mode(before) == "v2":
-        if _cfg_review_mode(after) != "v2":
-            return True
-        if _cfg_witness_capping(before) and not _cfg_witness_capping(after):
-            return True
-    return False
-
-
-def _config_gate(project_root, sage_dir, tool_name, args, path, new_text):
-    config_path = os.path.normpath(os.path.join(sage_dir, "config.yaml"))
-    if not os.path.isfile(config_path):
-        return None
+    UniqueKeyLoader.add_constructor(BaseResolver.DEFAULT_MAPPING_TAG, construct_mapping)
     try:
-        with open(config_path, encoding="utf-8", errors="replace") as fh:
-            current = fh.read()
-    except OSError:
-        return None
-
-    # Only active while enforcement is currently ON.
-    if not _cfg_enabled(current, _CFG_MASTER):
-        return None
-
-    # ── write_file / patch: reconstruct the resulting file and compare ──
-    if tool_name in _EDIT_TOOLS:
-        abspath = path if os.path.isabs(path) else os.path.normpath(
-            os.path.join(os.path.abspath(os.getcwd()), path))
-        if os.path.normpath(abspath) != config_path:
-            return None
-        after = None
-        if tool_name == "write_file":
-            after = args.get("content") if isinstance(args.get("content"), str) else None
-        else:  # patch — apply old→new replacements onto current
-            after = current
-            edits = []
-            if isinstance(args.get("new_string"), str):
-                edits.append((args.get("old_string", ""), args["new_string"]))
-            for e in args.get("edits") or []:
-                if isinstance(e, dict):
-                    edits.append((e.get("old_string", ""), e.get("new_string", "")))
-            body = args.get("patch")
-            if isinstance(body, str):
-                # V4A patch mode: approximate by pairing -/+ lines in order.
-                # CAVEAT (maintainer review 2026-08-05): a reordered patch can
-                # mispair and slip a weakening past this reconstruction. The
-                # main write_file path and the contradictory-flag check are the
-                # real defense; this stays fail-open by design.
-                removals, additions = [], []
-                for ln in body.splitlines():
-                    if ln.startswith("-") and not ln.startswith("---"):
-                        removals.append(ln[1:])
-                    elif ln.startswith("+") and not ln.startswith("+++"):
-                        additions.append(ln[1:])
-                for old, new in zip(removals, additions):
-                    edits.append((old, new))
-            for old, new in edits:
-                if old:
-                    after = after.replace(old, new, 1)
-        if after is not None and _cfg_weaker(current, after):
-            return _CONFIG_BLOCK_MSG
-        return None
-
-    # ── terminal: catch the obvious write-the-switch-off evasions ──
-    if tool_name == "terminal":
-        cmd = str(args.get("command") or "")
-        names_config = re.search(r"\.sage/config\.ya?ml", cmd) is not None
-        writes = re.search(r">\s*[^|]*\.sage/config\.ya?ml|"
-                           r"\bsed\b[^\n]*-i|\btee\b[^\n]*\.sage/config\.ya?ml", cmd)
-        turns_off = re.search(
-            r"(?:%s|secrets_gate|verify_gate)\s*:?\s*false" % re.escape(_CFG_MASTER),
-            cmd, re.I)
-        review_off = _cfg_review_mode(current, absent="v1") == "v2" and re.search(
-            r"witness_capping\s*:?\s*false|mode\s*:?\s*v1", cmd, re.I)
-        if names_config and writes and (turns_off or review_off):
-            return _CONFIG_BLOCK_MSG
-    return None
+        value = yaml.load(text, Loader=UniqueKeyLoader)
+    except PluginAuthorityError:
+        raise
+    except yaml.YAMLError as exc:
+        raise PluginAuthorityError(
+            "%s is not valid YAML: %s" % (label, exc)
+        ) from exc
+    if not isinstance(value, dict):
+        raise PluginAuthorityError("%s must be a mapping" % label)
+    return value
 
 
-# ── Gate 6: verify-gate + verify-tracker (Rule 5, commit-time evidence) ──────
-
-_CODE_EXT = (".py", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".go", ".rs",
-             ".java", ".rb", ".dart", ".c", ".cc", ".cpp", ".h", ".swift", ".kt")
-
-_TEST_CMD_RE = re.compile(
-    r"\b(pytest|py\.test|unittest|jest|vitest|mocha|ava|npm\s+(run\s+)?test|"
-    r"yarn\s+(run\s+)?test|pnpm\s+(run\s+)?test|cargo\s+test|go\s+test|ctest|"
-    r"mvn\s+(test|verify)|gradle(w)?\s+test|mix\s+test|rspec|phpunit|"
-    r"dotnet\s+test)\b", re.I)
+def _load_config(text: str) -> Mapping[str, Any]:
+    return _load_yaml_mapping(text, "selected profile config")
 
 
-def _verify_state_path(sage_dir):
-    return os.path.join(sage_dir, "tmp", "verify-state")
+def _installed_roots() -> Tuple[pathlib.Path, pathlib.Path, pathlib.Path, str]:
+    source = pathlib.Path(__file__).absolute()
+    plugin_root = source.parent
+    if plugin_root.name != "sage" or plugin_root.parent.name != "plugins":
+        raise PluginAuthorityError(
+            "installed plugin must live at <collection>/profiles/<id>/plugins/sage"
+        )
+    profile_root = plugin_root.parent.parent
+    profiles_root = profile_root.parent
+    collection_root = profiles_root.parent
+    if profiles_root.name != "profiles" or not profile_root.name:
+        raise PluginAuthorityError(
+            "installed plugin path does not identify one Hermes profile"
+        )
+    collection = _require_plain_directory(collection_root, label="collection_root")
+    profiles = _require_plain_directory(
+        profiles_root, owner=collection, label="profiles_root"
+    )
+    profile = _require_plain_directory(
+        profile_root, owner=profiles, label="installed profile_root"
+    )
+    plugins = _require_plain_directory(
+        plugin_root.parent, owner=profile, label="installed plugins_root"
+    )
+    plugin = _require_plain_directory(
+        plugin_root, owner=plugins, label="installed plugin_root"
+    )
+    _read_plain_text(
+        source,
+        owner=plugin,
+        label="installed plugin entrypoint",
+        max_bytes=MAX_CONTEXT_BYTES,
+    )
+    return collection, profile, plugin, profile.name
 
 
-def _verify_read_state(sage_dir):
-    out = {}
-    try:
-        with open(_verify_state_path(sage_dir), encoding="utf-8",
-                  errors="replace") as fh:
-            for line in fh:
-                k, _, v = line.strip().partition("=")
-                if k and v.isdigit():
-                    out[k] = int(v)
-    except OSError:
-        pass
-    return out
+def _active_profile_root(expected: pathlib.Path) -> pathlib.Path:
+    raw = os.environ.get("HERMES_HOME")
+    if not raw:
+        raise PluginAuthorityError(
+            "active HERMES_HOME is required for selected-profile authority"
+        )
+    supplied = pathlib.Path(raw)
+    if not supplied.is_absolute():
+        raise PluginAuthorityError("active HERMES_HOME must be an absolute path")
+    active = _require_plain_directory(supplied, label="active HERMES_HOME")
+    if not _same_path(active, expected):
+        raise PluginAuthorityError(
+            "installed plugin profile and active HERMES_HOME do not match"
+        )
+    return active
 
 
-def _verify_write_state(sage_dir, key):
-    import time as _t
-    state_path = _verify_state_path(sage_dir)
-    os.makedirs(os.path.dirname(state_path), exist_ok=True)
-    state = _verify_read_state(sage_dir)
-    state[key] = int(_t.time())
-    lines = "".join("%s=%d\n" % (k, v) for k, v in sorted(state.items()))
-    tmp = state_path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as fh:
-        fh.write(lines)
-    os.replace(tmp, state_path)
+def _enabled_for_selected_profile(config: Mapping[str, Any]) -> None:
+    plugins = config.get("plugins")
+    enabled = plugins.get("enabled") if isinstance(plugins, dict) else None
+    if not isinstance(enabled, list) or "sage" not in enabled:
+        raise PluginAuthorityError(
+            "selected profile config does not enable the sage plugin"
+        )
 
 
-def _verify_gate(project_root, sage_dir, args):
-    cmd = str(args.get("command") or "")
-    if "git" not in cmd or not re.search(r"\bgit\b[^|\n;]*\bcommit\b", cmd):
-        return None
-    # The command ITSELF running tests is the verify-then-commit discipline.
-    if _TEST_CMD_RE.search(cmd):
-        return None
-    state = _verify_read_state(sage_dir)
-    if not state:
-        return None  # no tracker evidence — older install or docs session
-    last_edit = state.get("last_source_edit", 0)
-    last_test = state.get("last_test_run", 0)
-    # Staged diff touching no code file → docs-only commit.
-    staged = _git(project_root, "diff", "--cached", "--name-only")
-    code_staged = [p for p in staged.splitlines()
-                   if os.path.splitext(p.strip())[1].lower() in _CODE_EXT]
-    if staged and not code_staged:
-        return None
-    if last_edit and last_test >= last_edit:
-        return None  # tests ran AFTER the last source edit — the point
-    return (
-        "sage-verify-gate: source changed after the last test run — the "
-        "verify-before-claiming rule, made mechanical.\n\n"
-        "The recorded evidence (.sage/tmp/verify-state) says: last source edit "
-        "is NEWER than the last test run. Run the tests first, then commit — or "
-        "chain them: `pytest && git commit` is the discipline, not a violation.\n"
-        "If the project has no suite, add one test for the thing you changed; if "
-        "this gate misfires, a human sets verify_gate: false in .sage/config.yaml.")
+def _project_plugins_enabled() -> bool:
+    return os.environ.get("HERMES_ENABLE_PROJECT_PLUGINS", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
 
-# ── manifest-sync delegation (R120 — the manifest advances, never forges) ────
-
-def _resolve_runtime_tool(project_root, *parts):
-    candidates = [
-        os.path.join(project_root, "sage", "runtime", *parts),
-        os.path.join(os.environ.get("SAGE_HOME", ""), "framework", "runtime", *parts),
-        os.path.join(os.path.expanduser("~"), ".sage", "framework", "runtime", *parts),
-    ]
-    for c in candidates:
-        if c and os.path.isfile(c):
-            return c
-    return None
-
-
-def _manifest_sync(project_root, sage_dir, wrote_path):
-    tool = _resolve_runtime_tool(project_root, "tools", "manifest.py")
-    if not tool:
+def _reject_project_collision(
+    plugin_root: pathlib.Path,
+    workspace_root: pathlib.Path,
+) -> None:
+    if not _project_plugins_enabled():
         return
-    import glob as _g
-    for manifest in _g.glob(os.path.join(sage_dir, "work", "*", "manifest.md")):
-        try:
-            subprocess.run(
-                ["python3", tool, "advance", manifest, "--wrote", wrote_path],
-                capture_output=True, timeout=10)
-        except (OSError, subprocess.SubprocessError):
-            pass
-
-
-# ── Hermes hook entry points ─────────────────────────────────────────────────
-
-def _on_pre_tool_call(tool_name=None, args=None, **_kwargs):
+    candidate = workspace_root / ".hermes" / "plugins" / "sage"
+    if not candidate.exists():
+        return
     try:
-        path, new_text = _target(tool_name, args)
-        cwd = os.path.abspath(os.getcwd())
-
-        # Terminal calls carry no path — config-gate's evasion half and the
-        # verify-gate still apply. Resolve the project from cwd for those.
-        if tool_name == "terminal":
-            if not isinstance(args, dict):
-                return _allow()
-            project_root = _find_project_root(os.path.join(cwd, ".probe"))
-            if project_root is None:
-                return _allow()
-            sage_dir, flags = _config(project_root)
-            if sage_dir is None:
-                return _allow()
-            msg = _config_gate(project_root, sage_dir, tool_name, args, "", "")
-            if msg:
-                return _block("config-gate", msg, project_root, ".sage/config.yaml")
-            if flags.get("hard_enforcement") is True \
-                    and flags.get("verify_gate", True) is not False:
-                msg = _verify_gate(project_root, sage_dir, args)
-                if msg:
-                    return _block("verify-gate", msg, project_root, "git commit")
-            return _allow()
-
-        if not path:
-            return _allow()
-        abspath = path if os.path.isabs(path) else os.path.normpath(
-            os.path.join(cwd, path))
-        project_root = _find_project_root(abspath)
-        if project_root is None:
-            return _allow()  # not a Sage project
-        sage_dir, flags = _config(project_root)
-        if sage_dir is None:
-            return _allow()
-
-        # config-gate (the meta-gate) — guards the switches themselves; fires
-        # only while hard_enforcement is currently true, and has no opt-out.
-        msg = _config_gate(project_root, sage_dir, tool_name, args, path,
-                           new_text or "")
-        if msg:
-            return _block("config-gate", msg, project_root,
-                          os.path.join(".sage", "config.yaml"))
-
-        if flags.get("hard_enforcement") is not True:
-            return _allow()  # enforcement is opt-in, never a surprise
-
-        _abspath, rel = _resolve(project_root, abspath)
-        if rel is None:
-            return _allow()  # outside the project
-
-        # secrets-gate: master switch on + not individually disabled.
-        if new_text and flags.get("secrets_gate", True) is not False:
-            what = _secrets_gate(project_root, rel, new_text)
-            if what:
-                return _block("secrets-gate", (
-                    "sage-secrets-gate: this edit hardcodes %s into %s — credentials "
-                    "never go into files (constitution: secrets).\n\n"
-                    "Instead: read it from the environment (os.environ / process.env) "
-                    "or a gitignored config (.env), and reference the variable here. "
-                    "If a placeholder is genuinely needed, use an obvious fake like "
-                    "\"YOUR_API_KEY\"." % (what, rel)), project_root, rel)
-
-        # bookkeeping-gate: hand-edits to an active cycle's manifest/decisions
-        # redirect to the one-command close-out writer.
-        if flags.get("bookkeeping_gate", True) is not False:
-            msg = _bookkeeping_gate(project_root, sage_dir, abspath, rel,
-                                    new_text or "")
-            if msg:
-                return _block("bookkeeping-gate", msg, project_root, rel)
-
-        # spec-gate (Rule 3 + completion guards)
-        msg = _spec_gate(project_root, sage_dir, abspath, rel, new_text or "")
-        if msg:
-            return _block("spec-gate", msg, project_root, rel)
-
-        # tdd-gate (Rule 1) — separate opt-in flag, same as claude-code.
-        if flags.get("tdd_enforcement") is True and _is_source(rel) \
-                and not _is_test(rel):
-            msg = _tdd_gate(project_root, sage_dir, rel)
-            if msg:
-                return _block("tdd-gate", msg, project_root, rel)
-
-        return _allow()
-    except Exception:
-        return _allow()  # hooks fail OPEN — never brick the editor
+        collision = candidate.resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        raise PluginAuthorityError(
+            "enabled project plugin collision cannot be resolved: %s" % exc
+        ) from exc
+    if not _same_path(collision, plugin_root):
+        raise PluginAuthorityError(
+            "enabled project plugin collision for key 'sage'; disable project "
+            "plugins or remove the duplicate before loading the profile plugin"
+        )
 
 
-def _on_post_tool_call(tool_name=None, args=None, **_kwargs):
-    """Observers: verify-tracker (evidence), manifest-sync (R120 advance),
-    R29 degradation audit. None of these may raise or block — ever."""
+def _authorize_profile():
+    collection, profile, plugin, profile_id = _installed_roots()
+    _active_profile_root(profile)
+    workspace = _require_plain_directory(
+        profile / "workspace", owner=profile, label="bound workspace_root"
+    )
     try:
-        cwd = os.path.abspath(os.getcwd())
+        expected = ProfileBinding.from_explicit(
+            collection_root=collection,
+            profile_id=profile_id,
+            profile_root=profile,
+            workspace_root=workspace,
+        )
+    except BindingError as exc:
+        raise PluginAuthorityError("installed profile binding is invalid: %s" % exc) from exc
+    if not _same_path(expected.plugin_root, plugin):
+        raise PluginAuthorityError(
+            "installed plugin path does not match the derived profile binding"
+        )
 
-        # ── verify-tracker: record evidence for the commit-time gate ──
-        if tool_name == "terminal" and isinstance(args, dict):
-            cmd = str(args.get("command") or "")
-            root = _find_project_root(os.path.join(cwd, ".probe"))
-            if root is not None and _TEST_CMD_RE.search(cmd):
-                sage_dir, _ = _config(root)
-                if sage_dir is not None:
-                    _verify_write_state(sage_dir, "last_test_run")
-        else:
-            path, _ = _target(tool_name, args)
-            if path:
-                abspath = path if os.path.isabs(path) else os.path.normpath(
-                    os.path.join(cwd, path))
-                root = _find_project_root(abspath)
-                if root is not None:
-                    if os.path.splitext(abspath)[1].lower() in _CODE_EXT:
-                        sage_dir, _ = _config(root)
-                        if sage_dir is not None:
-                            _verify_write_state(sage_dir, "last_source_edit")
-                            # ── manifest-sync: the cycle advances because
-                            # work plainly happened (never to approval states).
-                            _manifest_sync(root, sage_dir, abspath)
-    except Exception:
-        pass
+    config_text = _read_plain_text(
+        expected.config_path,
+        owner=profile,
+        label="selected profile config",
+        max_bytes=MAX_AUTHORITY_BYTES,
+    )
+    config = _load_config(config_text)
+    _enabled_for_selected_profile(config)
+    config_binding = config.get("sage_profile_binding")
+    if not isinstance(config_binding, dict):
+        raise PluginAuthorityError(
+            "selected profile config is missing sage_profile_binding authority"
+        )
 
-    # ── R29 degradation audit: a declared skip cannot go unlogged ──
+    receipt_text = _read_plain_text(
+        expected.receipt_path,
+        owner=workspace,
+        label="selected profile install receipt",
+        max_bytes=MAX_AUTHORITY_BYTES,
+    )
+    receipt = _load_receipt(receipt_text)
     try:
-        path, _ = _target(tool_name, args)
-        if not path:
-            return None
-        cwd = os.path.abspath(os.getcwd())
-        abspath = path if os.path.isabs(path) else os.path.normpath(
-            os.path.join(cwd, path))
-        project_root = _find_project_root(abspath)
-        if project_root is None:
-            return None
-        sage_dir, _flags = _config(project_root)
-        if sage_dir is None:
-            return None
-        if os.path.basename(abspath) != "manifest.md":
-            return None
-        work_root = os.path.normpath(os.path.join(sage_dir, "work"))
-        try:
-            if os.path.commonpath([abspath, work_root]) != work_root:
-                return None
-        except ValueError:
-            return None
-        if not os.path.isfile(abspath):
-            return None
-
-        with open(abspath, encoding="utf-8", errors="replace") as fh:
-            text = fh.read()
-        qa = _manifest_field(text, "qa")
-        if qa not in DEGRADED:
-            return None
-
-        slug = os.path.basename(os.path.dirname(abspath))
-        decisions = os.path.join(sage_dir, "decisions.md")
-        marker = "%s %s qa:%s" % (DEGLOG_MARK, slug, qa)
-        existing = ""
-        if os.path.isfile(decisions):
-            try:
-                with open(decisions, encoding="utf-8", errors="replace") as fh:
-                    existing = fh.read()
-            except OSError:
-                existing = ""
-        if marker in existing:
-            return None  # already logged — idempotent
-
-        ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-        line = ("\n- **%s** — cycle `%s`: %s %s\n"
-                % (ts, slug, DEGRADED[qa], marker))
-        with open(decisions, "a", encoding="utf-8") as fh:
-            fh.write(line)
-        return None
-    except Exception:
-        return None
+        binding = ProfileBinding.from_authorities(
+            receipt=receipt,
+            config_binding=config_binding,
+            collection_root=collection,
+            profile_root=profile,
+        )
+        binding.assert_same(expected)
+    except BindingError as exc:
+        raise PluginAuthorityError(
+            "selected profile config and receipt binding authorities disagree: %s"
+            % exc
+        ) from exc
+    _reject_project_collision(plugin, binding.workspace_root)
+    return binding
 
 
-# ── Context injection (pre_llm_call) ────────────────────────────────────────
-# CLI sessions don't have the gateway's session:start hook, so we inject
-# context here for every turn. Returns {"context": str} to prepend to the
-# user message, or None for no injection.
+def _load_runtime_module(path: pathlib.Path):
+    name = "_sage_bound_scope_judge_%s" % hashlib.sha256(
+        os.fspath(path).encode("utf-8")
+    ).hexdigest()[:16]
+    spec = importlib.util.spec_from_file_location(name, path)
+    if spec is None or spec.loader is None:
+        raise PluginAuthorityError("bound scope_judge module cannot be loaded")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    try:
+        spec.loader.exec_module(module)
+    except Exception as exc:
+        sys.modules.pop(name, None)
+        raise PluginAuthorityError(
+            "bound scope_judge module failed to load: %s" % exc
+        ) from exc
+    return module
 
-def _on_pre_llm_call(session_id=None, user_message=None, is_first_turn=False,
-                     platform=None, **_kwargs):
-    """Inject Sage context into every turn for CLI sessions.
 
-    Gateway sessions get context via the session:start hook writing
-    session-pickup.md. CLI sessions need this hook to inject directly.
+def _gate_bash_executable() -> str:
+    if os.name == "nt":
+        # Windows also ships System32/bash.exe, which is a WSL launcher and
+        # cannot execute this native profile's paths. Resolve Git's own shell.
+        git = shutil.which("git")
+        if git:
+            git_dir = pathlib.Path(git).resolve().parent
+            candidates = [git_dir / "bash.exe", git_dir.parent / "bin" / "bash.exe"]
+            if git_dir.name.casefold() == "bin" and git_dir.parent.name.casefold() in {
+                "mingw64", "mingw32", "clangarm64", "ucrt64",
+            }:
+                candidates.append(git_dir.parent.parent / "bin" / "bash.exe")
+            for candidate in candidates:
+                if candidate.is_file():
+                    return os.fspath(candidate.resolve())
+        raise PluginAuthorityError("Git Bash is required for native Windows Sage gates")
+    bash = shutil.which("bash")
+    if not bash:
+        raise PluginAuthorityError("bash is required for the bound Sage deterministic gate tools")
+    return os.fspath(pathlib.Path(bash).resolve())
+
+
+def _validate_runtime(binding) -> PluginBinding:
+    workspace = binding.workspace_root
+    runtime = _require_plain_directory(
+        workspace / "sage", owner=workspace, label="bound Sage runtime"
+    )
+    version = _read_plain_text(
+        runtime / "VERSION",
+        owner=runtime,
+        label="bound Sage runtime VERSION",
+        max_bytes=1024,
+    ).strip()
+    if version != PLUGIN_VERSION:
+        raise PluginAuthorityError(
+            "bound Sage runtime version %r does not match plugin version %s"
+            % (version, PLUGIN_VERSION)
+        )
+
+    context = _read_plain_text(
+        workspace / ".hermes.md",
+        owner=workspace,
+        label="bound workspace .hermes.md",
+        max_bytes=MAX_CONTEXT_BYTES,
+    ).strip()
+    if not context:
+        raise PluginAuthorityError("bound workspace .hermes.md is empty")
+
+    tools_root = _require_plain_directory(
+        runtime / "runtime" / "tools",
+        owner=runtime,
+        label="bound Sage runtime tools",
+    )
+    tool_paths = {}
+    for name in RUNTIME_TOOLS:
+        path = tools_root / name
+        _read_plain_text(
+            path,
+            owner=tools_root,
+            label="bound runtime tool %s" % name,
+            max_bytes=MAX_CONTEXT_BYTES,
+        )
+        tool_paths[name] = path
+
+    skills_root = _require_plain_directory(
+        runtime / "skills", owner=runtime, label="bound Sage runtime skills"
+    )
+    skill_paths = {}
+    skill_texts = {}
+    for name in SUPPORTED_SKILLS:
+        skill_dir = _require_plain_directory(
+            skills_root / name,
+            owner=skills_root,
+            label="bound runtime skill %s" % name,
+        )
+        skill_path = skill_dir / "SKILL.md"
+        skill_texts[name] = _read_plain_text(
+            skill_path,
+            owner=skill_dir,
+            label="bound runtime skill %s/SKILL.md" % name,
+            max_bytes=MAX_CONTEXT_BYTES,
+        )
+        skill_paths[name] = skill_path
+
+    command_texts = {}
+    for command_name, skill_name, _prefix, _description in COMMAND_SPECS:
+        if skill_name not in skill_texts:
+            raise PluginAuthorityError(
+                "command %s refers to an unvalidated bound skill %s"
+                % (command_name, skill_name)
+            )
+        command_texts[command_name] = skill_texts[skill_name]
+
+    gates_root = _require_plain_directory(
+        runtime / "core" / "gates" / "scripts",
+        owner=runtime,
+        label="bound Sage gate scripts",
+    )
+    gate_scripts = {}
+    for name in (
+        "sage-spec-check.sh",
+        "sage-hallucination-check.sh",
+        "sage-verify.sh",
+        "sage-visual-gate.sh",
+    ):
+        path = gates_root / name
+        _read_plain_text(
+            path,
+            owner=gates_root,
+            label="bound gate script %s" % name,
+            max_bytes=MAX_CONTEXT_BYTES,
+        )
+        gate_scripts[name] = path
+
+    gate_modes_path = runtime / "core" / "gates" / "_config" / "gate-modes.yaml"
+    _read_plain_text(
+        gate_modes_path,
+        owner=runtime,
+        label="bound gate modes",
+        max_bytes=MAX_AUTHORITY_BYTES,
+    )
+    bash_executable = _gate_bash_executable()
+
+    return PluginBinding(
+        authority=binding,
+        workspace_root=workspace,
+        runtime_root=runtime,
+        context=context,
+        skill_paths=MappingProxyType(skill_paths),
+        command_texts=MappingProxyType(command_texts),
+        gate_scripts=MappingProxyType(gate_scripts),
+        gate_modes_path=gate_modes_path,
+        bash_executable=os.fspath(pathlib.Path(bash_executable).resolve()),
+        scope_judge=_load_runtime_module(tool_paths["scope_judge.py"]),
+        sage_flags=_load_runtime_module(tool_paths["sage_flags.py"]),
+        memory_namespace=_MEMORY_NAMESPACE_MODULE,
+    )
+
+_RUNTIME = None
+_CONTEXT_SESSIONS: Set[str] = set()
+
+
+def _runtime() -> PluginBinding:
+    if _RUNTIME is None:
+        raise PluginAuthorityError("Sage plugin has not completed registration")
+    return _RUNTIME
+
+
+def _parse_frontmatter(text: str) -> Mapping[str, Any]:
+    """The YAML frontmatter mapping of a manifest, or {} when there is none.
+
+    Trade-off (review-pinned 2026-08-10): an UNCLOSED fence (crash-truncated
+    manifest write) returns {} rather than raising, so a quality_locked cycle
+    would report all-false and pre_verify would stay silent. Fail-open keeps
+    sessions alive on a corrupt manifest; a loud failure would brick the
+    plugin on a partial write. Accepted because the manifest writer
+    (manifest.py close-out) is single-pass and the workspace_layout commit
+    path guards published bytes.
     """
+
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return {}
+    end = None
+    for index in range(1, len(lines)):
+        if lines[index].strip() == "---":
+            end = index
+            break
+    if end is None:
+        return {}
+    return _load_yaml_mapping(
+        "\n".join(lines[1:end]), "active cycle manifest frontmatter"
+    )
+
+
+def _read_platform_contract(runtime: PluginBinding) -> Optional[Mapping[str, Any]]:
+    """The vendored Hermes platform contract, or None when the runtime lacks one.
+
+    A missing contract is not an error: it is the degraded default — the
+    subagent capability must be treated as unavailable (ADR-10 loud
+    degradation), never assumed.
+    """
+
+    contract_path = (
+        runtime.runtime_root
+        / "runtime"
+        / "platforms"
+        / "community"
+        / "hermes"
+        / "platform.yaml"
+    )
     try:
-        # Only inject for CLI — gateway already has session:start hook
-        if platform and platform != "cli":
+        text = _read_plain_text(
+            contract_path,
+            owner=runtime.runtime_root,
+            label="Hermes platform contract",
+            max_bytes=MAX_AUTHORITY_BYTES,
+        )
+    except PluginAuthorityError:
+        return None
+    return _load_yaml_mapping(text, "Hermes platform contract")
+
+
+def cycle_metadata(binding: Optional[PluginBinding] = None) -> Dict[str, Any]:
+    """Consume the bound workspace's active-cycle metadata.
+
+    Reads only the frozen binding's workspace — sibling workspaces and
+    collection-global state are unreachable by construction. Subagent
+    availability is resolved against the platform contract: a persisted flag
+    is a request, never proof the capability exists.
+    """
+
+    runtime = binding or _runtime()
+    workspace = runtime.workspace_root
+    cycle = runtime.scope_judge.active_cycle(workspace)
+    if cycle is None:
+        return {
+            "cycle": None,
+            "goal": None,
+            "quality_locked": False,
+            "autonomous": False,
+            "subagents": False,
+            "execution_mode": "inline",
+            "degraded": False,
+            "announcement": None,
+        }
+    manifest_text = _read_plain_text(
+        cycle / "manifest.md",
+        owner=workspace,
+        label="active cycle manifest",
+        max_bytes=MAX_AUTHORITY_BYTES,
+    )
+    frontmatter = _parse_frontmatter(manifest_text)
+    flags = frontmatter.get("flags")
+    if not isinstance(flags, Mapping):
+        flags = {}
+    goal = frontmatter.get("goal")
+    resolution = runtime.sage_flags.resolve_execution_mode(
+        flags.get("subagents") is True, _read_platform_contract(runtime)
+    )
+    return {
+        "cycle": cycle.name,
+        "goal": goal if isinstance(goal, str) else None,
+        "quality_locked": flags.get("quality_locked") is True,
+        "autonomous": flags.get("autonomous") is True,
+        "subagents": flags.get("subagents") is True,
+        "execution_mode": resolution["manifest_value"],
+        "degraded": resolution["degraded"],
+        "announcement": resolution["announcement"],
+    }
+
+
+def binding_snapshot() -> Dict[str, str]:
+    return _runtime().authority.to_mapping()
+
+
+def runtime_inventory() -> Dict[str, Any]:
+    binding = _runtime()
+    return {
+        "hooks": {"registered": sorted(REGISTERED_HOOKS)},
+        "skills": {"registered": sorted(SUPPORTED_SKILLS)},
+        "tools": {"registered": sorted(REGISTERED_TOOLS)},
+        "commands": {"registered": sorted(REGISTERED_COMMANDS)},
+        "memory": {
+            "adapter_registered": True,
+            "database": os.fspath(binding.authority.memory_db_path),
+            "scope": "project-only",
+        },
+        "delegation": {
+            "delegate_task_registered": False,
+            "kanban_registered": False,
+        },
+        "quality": {
+            "pre_verify_policy": (
+                "consumes the bound workspace's active-cycle quality_locked "
+                "via cycle_metadata()"
+            ),
+            "kanban_worker_bridge": False,
+            "kanban_worker_bridge_status": (
+                "separate initiative — never claimed by this surface"
+            ),
+        },
+    }
+
+
+def _tool_arguments(value: Any, allowed: Set[str]) -> Dict[str, Any]:
+    if value is None:
+        args = {}
+    elif isinstance(value, Mapping):
+        args = dict(value)
+    else:
+        raise PluginAuthorityError("tool arguments must be a mapping")
+    overrides = sorted(_FORBIDDEN_AUTHORITY_ARGUMENTS.intersection(args))
+    if overrides:
+        raise PluginAuthorityError(
+            "workspace/project authority override is forbidden: %s"
+            % ", ".join(overrides)
+        )
+    unknown = sorted(str(key) for key in args if key not in allowed)
+    if unknown:
+        raise PluginAuthorityError(
+            "unsupported tool argument(s): %s" % ", ".join(unknown)
+        )
+    return args
+
+
+def _bound_path(
+    binding: PluginBinding,
+    value: Any,
+    *,
+    default: str,
+    label: str,
+    require_file: bool = False,
+) -> pathlib.Path:
+    raw = default if value is None or str(value).strip() == "" else str(value).strip()
+    if not raw or "\x00" in raw:
+        raise PluginAuthorityError("%s must be a non-empty path" % label)
+    supplied = pathlib.Path(raw)
+    candidate = supplied if supplied.is_absolute() else binding.workspace_root / supplied
+    try:
+        canonical = candidate.resolve(strict=False)
+    except (OSError, RuntimeError) as exc:
+        raise PluginAuthorityError("%s cannot be resolved: %s" % (label, exc)) from exc
+    if not _contains(binding.workspace_root, canonical):
+        raise PluginAuthorityError("%s escapes the bound workspace" % label)
+    if require_file and not canonical.is_file():
+        raise PluginAuthorityError("%s is not a file inside the bound workspace" % label)
+    return canonical
+
+
+def _bound_url(binding: PluginBinding, value: Any) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        raise PluginAuthorityError("url is required")
+    parsed = urlparse(raw)
+    if parsed.scheme in {"http", "https"}:
+        return raw
+    if parsed.scheme != "file":
+        raise PluginAuthorityError("url must use http, https, or a bound file URL")
+    native = unquote(parsed.path)
+    if os.name == "nt" and len(native) >= 3 and native[0] == "/" and native[2] == ":":
+        native = native[1:]
+    return _bound_path(
+        binding,
+        native,
+        default=".",
+        label="file URL",
+        require_file=True,
+    ).as_uri()
+
+
+def _json_error(exc: Exception) -> str:
+    return json.dumps({"ok": False, "error": str(exc)}, sort_keys=True)
+
+
+def _run_script_data(
+    binding: PluginBinding,
+    script_name: str,
+    argv: Tuple[str, ...],
+    *,
+    timeout: int = 300,
+) -> Dict[str, Any]:
+    script = binding.gate_scripts.get(script_name)
+    if script is None:
+        raise PluginAuthorityError("unregistered bound gate script: %s" % script_name)
+    command = [binding.bash_executable, os.fspath(script), *argv]
+    if os.name == "nt" and script_name == "sage-spec-check.sh":
+        runner = binding.runtime_root / "runtime/platforms/community/hermes/gate-runner.sh"
+        _read_plain_text(runner, owner=binding.runtime_root,
+                         label="bound Windows formal-gate runner", max_bytes=MAX_CONTEXT_BYTES)
+        command = [binding.bash_executable, os.fspath(runner), sys.executable,
+                   os.fspath(script), *argv]
+    try:
+        completed = subprocess.run(
+            command,
+            cwd=os.fspath(binding.workspace_root),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        return {
+            "ok": False,
+            "exit_code": 2,
+            "script": script_name,
+            "cwd": os.fspath(binding.workspace_root),
+            "error": "gate timed out after %s seconds" % timeout,
+            "stdout": (exc.stdout or "")[-20000:] if isinstance(exc.stdout, str) else "",
+            "stderr": (exc.stderr or "")[-8000:] if isinstance(exc.stderr, str) else "",
+        }
+    except OSError as exc:
+        return {
+            "ok": False,
+            "exit_code": 2,
+            "script": script_name,
+            "cwd": os.fspath(binding.workspace_root),
+            "error": "gate executable failed: %s" % exc,
+            "stdout": "",
+            "stderr": "",
+        }
+    return {
+        "ok": completed.returncode == 0,
+        "exit_code": completed.returncode,
+        "script": script_name,
+        "cwd": os.fspath(binding.workspace_root),
+        "stdout": (completed.stdout or "")[-20000:],
+        "stderr": (completed.stderr or "")[-8000:],
+    }
+
+
+def _canonical_gate(value: Any) -> str:
+    name = str(value).strip().lower().replace("_", "-")
+    return GATE_ALIASES.get(name, name)
+
+
+def _as_gate_list(value: Any) -> list[str]:
+    raw = value if isinstance(value, list) else ([] if value is None else [value])
+    return [_canonical_gate(item) for item in raw if str(item).strip()]
+
+
+def _sort_gates(items) -> list[str]:
+    return sorted(set(items), key=lambda gate: (GATE_ORDER.get(gate, 99), gate))
+
+
+def _load_bound_yaml(binding: PluginBinding, path: pathlib.Path, label: str) -> Mapping[str, Any]:
+    text = _read_plain_text(
+        path,
+        owner=binding.workspace_root if _contains(binding.workspace_root, path) else binding.runtime_root,
+        label=label,
+        max_bytes=MAX_AUTHORITY_BYTES,
+    )
+    return _load_yaml_mapping(text, label)
+
+
+def _mode_config(binding: PluginBinding, mode: str) -> Tuple[Dict[str, list[str]], Dict[str, Any]]:
+    project_modes = binding.authority.state_root / "gates" / "gate-modes.yaml"
+    if project_modes.is_file():
+        modes = _load_bound_yaml(binding, project_modes, "bound project gate modes")
+        source_label = os.fspath(project_modes)
+    else:
+        modes = _load_bound_yaml(binding, binding.gate_modes_path, "bound runtime gate modes")
+        source_label = os.fspath(binding.gate_modes_path)
+    raw = modes.get(mode) if isinstance(modes, Mapping) else None
+    if not isinstance(raw, Mapping):
+        raw = DEFAULT_GATE_MODES[mode]
+        source_label = "validated built-in fallback"
+    config = {
+        "mandatory": _sort_gates(_as_gate_list(raw.get("mandatory"))),
+        "optional": _sort_gates(_as_gate_list(raw.get("optional"))),
+        "skipped": _sort_gates(_as_gate_list(raw.get("skipped"))),
+    }
+    meta: Dict[str, Any] = {
+        "mode_config": source_label,
+        "project_config": None,
+        "waiver_required": [],
+        "optional_enabled": [],
+    }
+    project_config = binding.authority.state_root / "config.yaml"
+    if not project_config.is_file():
+        return config, meta
+    data = _load_bound_yaml(binding, project_config, "bound project Sage config")
+    gates = data.get("gates") if isinstance(data, Mapping) else None
+    if not isinstance(gates, Mapping):
+        return config, meta
+    meta["project_config"] = os.fspath(project_config)
+    override = None
+    modes_value = gates.get("modes")
+    if isinstance(modes_value, Mapping) and isinstance(modes_value.get(mode), Mapping):
+        override = modes_value[mode]
+    elif isinstance(gates.get(mode), Mapping):
+        override = gates[mode]
+    elif any(key in gates for key in ("mandatory", "optional", "skipped")):
+        override = gates
+    if isinstance(override, Mapping):
+        for key in ("mandatory", "optional", "skipped"):
+            if key in override:
+                config[key] = _sort_gates(_as_gate_list(override.get(key)))
+    disabled = _as_gate_list(gates.get("disabled"))
+    if disabled:
+        mandatory = set(config["mandatory"])
+        config["mandatory"] = [gate for gate in config["mandatory"] if gate not in disabled]
+        config["optional"] = [gate for gate in config["optional"] if gate not in disabled]
+        config["skipped"] = _sort_gates(config["skipped"] + disabled)
+        meta["waiver_required"] = sorted(mandatory.intersection(disabled))
+    config["optional"] = _sort_gates(
+        config["optional"] + _as_gate_list(gates.get("additional"))
+    )
+    enabled = (
+        gates.get("enabled")
+        or gates.get("optional_enabled")
+        or gates.get("run_optional")
+        or gates.get("enabled_optional")
+    )
+    meta["optional_enabled"] = _as_gate_list(enabled)
+    return config, meta
+
+
+def _gate_result(
+    gate: str,
+    required: str,
+    status: str,
+    blocking: bool,
+    details: Optional[Mapping[str, Any]] = None,
+) -> Dict[str, Any]:
+    result: Dict[str, Any] = {
+        "gate": gate,
+        "required": required,
+        "status": status,
+        "blocking": blocking,
+    }
+    if details:
+        result.update(details)
+    return result
+
+
+def _run_one_gate(
+    binding: PluginBinding,
+    gate: str,
+    required: str,
+    args: Mapping[str, Any],
+) -> Dict[str, Any]:
+    mandatory = required == "mandatory"
+    if gate == "spec-compliance":
+        task_number = args.get("task_number")
+        plan_file = args.get("plan_file")
+        if not isinstance(task_number, int) or task_number < 1 or not plan_file:
+            return _gate_result(
+                gate,
+                required,
+                "missing_args",
+                mandatory,
+                {"error": "plan_file and positive task_number are required"},
+            )
+        plan = _bound_path(
+            binding,
+            plan_file,
+            default="",
+            label="plan_file",
+            require_file=True,
+        )
+        data = _run_script_data(
+            binding,
+            "sage-spec-check.sh",
+            (os.fspath(plan), str(task_number)),
+        )
+    elif gate == "hallucination-check":
+        target = _bound_path(
+            binding,
+            args.get("target"),
+            default=".",
+            label="target",
+        )
+        data = _run_script_data(
+            binding,
+            "sage-hallucination-check.sh",
+            (os.fspath(target), os.fspath(binding.workspace_root)),
+        )
+    elif gate == "verification":
+        data = _run_script_data(
+            binding,
+            "sage-verify.sh",
+            (os.fspath(binding.workspace_root),),
+            timeout=600,
+        )
+    elif gate == "visual-verification":
+        if not args.get("visual_url"):
+            return _gate_result(
+                gate,
+                required,
+                "missing_args",
+                mandatory,
+                {"error": "visual_url is required"},
+            )
+        url = _bound_url(binding, args.get("visual_url"))
+        output = _bound_path(
+            binding,
+            args.get("visual_output_dir"),
+            default=".sage/screenshots",
+            label="visual_output_dir",
+        )
+        data = _run_script_data(
+            binding,
+            "sage-visual-gate.sh",
+            (url, os.fspath(output)),
+            timeout=600,
+        )
+    elif gate in AGENT_REVIEW_GATES:
+        return _gate_result(
+            gate,
+            required,
+            "agent_review_required",
+            False,
+            {"agent_review_required": True, "note": AGENT_REVIEW_GATES[gate]},
+        )
+    else:
+        return _gate_result(
+            gate,
+            required,
+            "unsupported",
+            mandatory,
+            {"error": "no bound Hermes gate implementation is registered"},
+        )
+    return _gate_result(
+        gate,
+        required,
+        "script_passed" if data["ok"] else "failed",
+        mandatory and not data["ok"],
+        {
+            **data,
+            "agent_review_required": bool(data["ok"]),
+            "review_note": SCRIPT_REVIEW_NOTES.get(gate),
+        },
+    )
+
+
+def _handle_spec_check(binding: PluginBinding, value: Any) -> str:
+    args = _tool_arguments(value, {"plan_file", "task_number"})
+    task_number = args.get("task_number")
+    if not isinstance(task_number, int) or task_number < 1:
+        raise PluginAuthorityError("task_number must be a positive integer")
+    plan = _bound_path(
+        binding,
+        args.get("plan_file"),
+        default="",
+        label="plan_file",
+        require_file=True,
+    )
+    return json.dumps(
+        _run_script_data(
+            binding,
+            "sage-spec-check.sh",
+            (os.fspath(plan), str(task_number)),
+        ),
+        sort_keys=True,
+    )
+
+
+def _handle_hallucination_check(binding: PluginBinding, value: Any) -> str:
+    args = _tool_arguments(value, {"target"})
+    target = _bound_path(binding, args.get("target"), default=".", label="target")
+    return json.dumps(
+        _run_script_data(
+            binding,
+            "sage-hallucination-check.sh",
+            (os.fspath(target), os.fspath(binding.workspace_root)),
+        ),
+        sort_keys=True,
+    )
+
+
+def _handle_verify(binding: PluginBinding, value: Any) -> str:
+    _tool_arguments(value, set())
+    return json.dumps(
+        _run_script_data(
+            binding,
+            "sage-verify.sh",
+            (os.fspath(binding.workspace_root),),
+            timeout=600,
+        ),
+        sort_keys=True,
+    )
+
+
+def _handle_visual_gate(binding: PluginBinding, value: Any) -> str:
+    args = _tool_arguments(value, {"url", "output_dir"})
+    url = _bound_url(binding, args.get("url"))
+    output = _bound_path(
+        binding,
+        args.get("output_dir"),
+        default=".sage/screenshots",
+        label="output_dir",
+    )
+    return json.dumps(
+        _run_script_data(
+            binding,
+            "sage-visual-gate.sh",
+            (url, os.fspath(output)),
+            timeout=600,
+        ),
+        sort_keys=True,
+    )
+
+
+def _handle_run_gates(binding: PluginBinding, value: Any) -> str:
+    allowed = {
+        "mode",
+        "plan_file",
+        "task_number",
+        "target",
+        "visual_url",
+        "visual_output_dir",
+        "optional_gates",
+        "include_optional",
+    }
+    args = _tool_arguments(value, allowed)
+    mode = _canonical_gate(args.get("mode"))
+    if mode not in DEFAULT_GATE_MODES:
+        raise PluginAuthorityError("mode must be one of: fix, build, architect")
+    config, meta = _mode_config(binding, mode)
+    requested = set(_as_gate_list(args.get("optional_gates")))
+    requested.update(meta["optional_enabled"])
+    active_optional = [
+        gate
+        for gate in config["optional"]
+        if args.get("include_optional") is True or gate in requested
+    ]
+    if args.get("visual_url") and "visual-verification" not in config["skipped"]:
+        active_optional.append("visual-verification")
+    skipped = set(config["skipped"])
+    active = _sort_gates(
+        gate
+        for gate in config["mandatory"] + active_optional
+        if gate not in skipped
+    )
+    required_by_gate = {
+        gate: "mandatory" for gate in config["mandatory"] if gate not in skipped
+    }
+    for gate in active_optional:
+        required_by_gate.setdefault(gate, "optional")
+    results = [
+        _run_one_gate(binding, gate, required_by_gate.get(gate, "optional"), args)
+        for gate in active
+    ]
+    blocking = [result for result in results if result["blocking"]]
+    review = [result for result in results if result.get("agent_review_required")]
+    waiver = meta["waiver_required"]
+    ok = not blocking and not waiver
+    return json.dumps(
+        {
+            "ok": ok,
+            "all_gates_complete": ok and not review,
+            "mode": mode,
+            "cwd": os.fspath(binding.workspace_root),
+            "config": config,
+            "sources": meta,
+            "active_gates": active,
+            "optional_not_run": _sort_gates(
+                gate
+                for gate in config["optional"]
+                if gate not in skipped and gate not in active
+            ),
+            "skipped": _sort_gates(skipped),
+            "waiver_required": waiver,
+            "agent_review_required": [
+                {
+                    "gate": result["gate"],
+                    "required": result["required"],
+                    "note": result.get("review_note") or result.get("note"),
+                }
+                for result in review
+            ],
+            "results": results,
+            "summary": {
+                "script_passed": sum(
+                    result["status"] == "script_passed" for result in results
+                ),
+                "failed": sum(result["status"] == "failed" for result in results),
+                "agent_review_required": len(review),
+                "missing_args": sum(
+                    result["status"] == "missing_args" for result in results
+                ),
+                "unsupported": sum(
+                    result["status"] == "unsupported" for result in results
+                ),
+                "blocking": len(blocking) + len(waiver),
+            },
+        },
+        sort_keys=True,
+    )
+
+
+def _memory_store(binding: PluginBinding):
+    store = binding.memory_namespace.WorkspaceMemoryStore(binding.workspace_root)
+    binding.memory_namespace.verify_session_db(store.db_path, binding.workspace_root)
+    if not _same_path(store.db_path, binding.authority.memory_db_path):
+        store.close()
+        raise PluginAuthorityError(
+            "memory backend did not select the frozen binding database"
+        )
+    return store
+
+
+def _handle_memory_set_project(binding: PluginBinding, value: Any) -> str:
+    _tool_arguments(value, set())
+    with _memory_store(binding) as store:
+        database = os.fspath(store.db_path)
+    return json.dumps(
+        {
+            "ok": True,
+            "project": os.fspath(binding.workspace_root),
+            "database": database,
+            "scope": "project",
+        },
+        sort_keys=True,
+    )
+
+
+def _string_list(value: Any, label: str) -> list[str]:
+    if value is None:
+        return []
+    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+        raise PluginAuthorityError("%s must be an array of strings" % label)
+    return [item.strip() for item in value if item.strip()]
+
+
+def _handle_memory_store(binding: PluginBinding, value: Any) -> str:
+    args = _tool_arguments(value, {"title", "content", "tags", "scope"})
+    title = str(args.get("title") or "").strip()
+    content = str(args.get("content") or "").strip()
+    if not title or not content:
+        raise PluginAuthorityError("title and content are required")
+    if args.get("scope", "project") != "project":
+        raise PluginAuthorityError("only project memory scope is supported")
+    tags = _string_list(args.get("tags"), "tags")
+    with _memory_store(binding) as store:
+        row = store.store(title=title, content=content, tags=tags)
+    return json.dumps({"ok": True, **row}, sort_keys=True)
+
+
+def _handle_memory_search(binding: PluginBinding, value: Any) -> str:
+    args = _tool_arguments(value, {"query", "limit", "filter_tags", "tags"})
+    query = str(args.get("query") or "").strip()
+    if not query:
+        raise PluginAuthorityError("query is required")
+    limit = args.get("limit", 5)
+    if not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= 50:
+        raise PluginAuthorityError("limit must be an integer from 1 to 50")
+    filter_tags = _string_list(args.get("filter_tags"), "filter_tags")
+    tags = _string_list(args.get("tags"), "tags")
+    with _memory_store(binding) as store:
+        results = store.search(
+            query=query,
+            limit=limit,
+            filter_tags=filter_tags,
+            boost_tags=tags,
+        )
+    return json.dumps(
+        {
+            "ok": True,
+            "database": os.fspath(binding.authority.memory_db_path),
+            "scope": "project",
+            "results": results,
+        },
+        sort_keys=True,
+    )
+
+
+_TOOL_HANDLERS: Mapping[str, Callable[[PluginBinding, Any], str]] = {
+    "sage_run_gates": _handle_run_gates,
+    "sage_spec_check": _handle_spec_check,
+    "sage_hallucination_check": _handle_hallucination_check,
+    "sage_verify": _handle_verify,
+    "sage_visual_gate": _handle_visual_gate,
+    "sage_memory_set_project": _handle_memory_set_project,
+    "sage_memory_store": _handle_memory_store,
+    "sage_memory_search": _handle_memory_search,
+}
+
+
+def _make_tool_handler(
+    binding: PluginBinding,
+    implementation: Callable[[PluginBinding, Any], str],
+):
+    def handler(args=None, **_kwargs):
+        try:
+            return implementation(binding, args)
+        except (PluginAuthorityError, MemoryNamespaceError, ValueError) as exc:
+            return _json_error(exc)
+
+    return handler
+
+
+def _make_command_handler(
+    binding: PluginBinding,
+    command_name: str,
+    prefix: str,
+):
+    def handler(raw_args: str = "") -> str:
+        raw = "" if raw_args is None else str(raw_args).strip()
+        invocation = " ".join(part for part in (prefix, raw) if part).strip()
+        text = binding.command_texts[command_name]
+        if "$ARGUMENTS" in text:
+            return text.replace("$ARGUMENTS", invocation)
+        suffix = invocation or "(no arguments)"
+        return (
+            "%s\n\n## Bound Hermes invocation\n"
+            "- command: /%s\n"
+            "- arguments: %s\n"
+            "- workspace: %s"
+            % (
+                text.rstrip(),
+                command_name,
+                suffix,
+                binding.workspace_root,
+            )
+        )
+
+    return handler
+
+
+def _on_session_start(_binding: PluginBinding, **_kwargs):
+    """Initialization only; first-turn content belongs to ``pre_llm_call``."""
+
+    return None
+
+
+def _on_pre_llm_call(
+    binding: PluginBinding,
+    session_id=None,
+    is_first_turn=False,
+    **_kwargs,
+):
+    if not is_first_turn:
+        return None
+    key = str(session_id) if session_id is not None else "<anonymous-session>"
+    if key in _CONTEXT_SESSIONS:
+        return None
+    _CONTEXT_SESSIONS.add(key)
+    return {"context": binding.context}
+
+
+def _pending_scope_correction(binding: PluginBinding) -> Optional[str]:
+    workspace = binding.workspace_root
+    module = binding.scope_judge
+    try:
+        config = module.read_config(workspace)
+        if not config.get("scope_judge"):
             return None
-
-        cwd = os.path.abspath(os.getcwd())
-        project_root = _find_project_root(os.path.join(cwd, ".probe"))
-        if project_root is None:
-            return None  # not a Sage project
-
-        sage_dir = os.path.join(project_root, ".sage")
-        if not os.path.isdir(sage_dir):
+        cycle = module.active_cycle(workspace)
+        if cycle is None:
             return None
-
-        # Read the actual enforcement state from the project's config — the
-        # injected text must never claim more than the gates will actually do.
-        _, _flags = _config(project_root)
-        _enforced = _flags.get("hard_enforcement") is True
-
-        parts = []
-
-        # ── Always-on rules (eager core) ──
-        parts.append("""## Sage — Always-On Rules
-
-You are running under Sage. Mechanical gates enforce quality:
-- **spec-gate** blocks source edits before a spec exists
-- **tdd-gate** blocks source edits before tests exist
-- **secrets-gate** blocks hardcoded credentials
-- **config-gate** blocks edits that would disable enforcement
-- **verify-gate** blocks commits without fresh test evidence
-
-All gates are opt-in via .sage/config.yaml. Enforcement is currently: {status}.
-
-## Available Commands
-Use skill_view("sage:<name>") to load workflow skills:
-- sage:sage — route via keywords → classify → confirm
-- sage:build — spec → plan → build-loop → quality gates
-- sage:fix — diagnose → scope → fix → verify
-- sage:architect — elicit → design → milestone plan
-- sage:review — independent evaluation
-- sage:learn — codebase scan → memory
-- sage:continue — resume an active cycle""".format(
-            status="ENABLED (hard_enforcement: true)" if _enforced else
-                   "DISABLED (set hard_enforcement: true in .sage/config.yaml to opt in)"))
-
-        # ── Session pickup (same as gateway hook) ──
-        pickup = os.path.join(sage_dir, "gates", "session-pickup.md")
-        if os.path.isfile(pickup):
-            try:
-                with open(pickup, encoding="utf-8", errors="replace") as fh:
-                    pickup_text = fh.read().strip()
-                if pickup_text:
-                    parts.append("## Active Session Context\n" + pickup_text)
-            except OSError:
-                pass
-
-        if not parts:
+        rows = module.read_journal(cycle)
+        event_count = len(module.events(rows))
+        envelope = module.maybe_inject(cycle, config, event_count)
+        if not isinstance(envelope, dict):
             return None
-
-        return {"context": "\n\n".join(parts)}
+        specific = envelope.get("hookSpecificOutput")
+        if not isinstance(specific, dict):
+            return None
+        context = specific.get("additionalContext")
+        return context if isinstance(context, str) and context.strip() else None
     except Exception:
-        return None  # fail silent — never break the agent
+        LOGGER.exception("Sage scope correction delivery failed inside bound workspace")
+        return None
+
+
+def _on_transform_tool_result(
+    binding: PluginBinding,
+    result=None,
+    **_kwargs,
+):
+    correction = _pending_scope_correction(binding)
+    if correction is None:
+        return None
+    original = "" if result is None else str(result)
+    return "%s\n\n%s" % (original, correction) if original else correction
+
+
+def _on_pre_verify(binding: PluginBinding, **_kwargs):
+    """Surface bound quality policy without claiming the Kanban bridge."""
+
+    try:
+        metadata = cycle_metadata(binding)
+    except PluginAuthorityError:
+        LOGGER.exception("Sage quality metadata unavailable inside bound workspace")
+        return None
+    if not metadata["quality_locked"]:
+        return None
+    note = (
+        "quality_locked is active for cycle %s: completion claims need "
+        "pasted, current-byte verification receipts before they count."
+        % metadata["cycle"]
+    )
+    if metadata["announcement"]:
+        note = "%s\n%s" % (note, metadata["announcement"])
+    return {"context": note}
+
+
+def _make_hook_handler(binding: PluginBinding, implementation: Callable):
+    def handler(**kwargs):
+        return implementation(binding, **kwargs)
+
+    return handler
 
 
 def register(ctx) -> None:
-    """Wire schemas, hooks, commands, and skills into Hermes."""
+    """Register one validated, frozen, profile-bound Hermes plugin instance."""
 
-    import logging
-    logger = logging.getLogger(__name__)
+    global _RUNTIME
+    authority = _authorize_profile()
+    binding = _validate_runtime(authority)
 
-    # ── Register hooks ──
-    # pre_tool_call: THE critical veto hook — blocks edits before they happen
-    ctx.register_hook("pre_tool_call", _on_pre_tool_call)
+    # All authorities, source bytes, and executable paths are frozen before the
+    # first PluginContext mutation. Every callback, command, and tool handler
+    # closes over this exact PluginBinding; no handler rediscovers cwd/HOME.
+    for name in SUPPORTED_SKILLS:
+        ctx.register_skill(name, binding.skill_paths[name])
+    ctx.register_hook(
+        "on_session_start", _make_hook_handler(binding, _on_session_start)
+    )
+    ctx.register_hook(
+        "pre_llm_call", _make_hook_handler(binding, _on_pre_llm_call)
+    )
+    ctx.register_hook(
+        "transform_tool_result",
+        _make_hook_handler(binding, _on_transform_tool_result),
+    )
+    ctx.register_hook("pre_verify", _make_hook_handler(binding, _on_pre_verify))
 
-    # post_tool_call: audit trail — logs decisions, tracks degradation
-    ctx.register_hook("post_tool_call", _on_post_tool_call)
+    for command_name, _skill_name, prefix, description in COMMAND_SPECS:
+        ctx.register_command(
+            name=command_name,
+            handler=_make_command_handler(binding, command_name, prefix),
+            description=description,
+            args_hint="[arguments]",
+        )
+    for tool_name in REGISTERED_TOOLS:
+        schema = TOOL_SCHEMAS[tool_name]
+        ctx.register_tool(
+            name=tool_name,
+            toolset="sage",
+            schema=schema,
+            handler=_make_tool_handler(binding, _TOOL_HANDLERS[tool_name]),
+            description=schema["description"],
+            emoji="S",
+        )
 
-    # pre_llm_call: context injection for CLI sessions
-    ctx.register_hook("pre_llm_call", _on_pre_llm_call)
+    _CONTEXT_SESSIONS.clear()
+    _RUNTIME = binding
 
-    # Slash commands removed 2026-08-05: bare /fix, /build, /review etc. echoed
-    # instruction strings instead of running the workflow, and collided with the
-    # native skill slash commands (/sage-fix, /sage-build, ...) that Hermes
-    # auto-generates from the skills registered below. Those native skill
-    # commands ARE the delivery path on Hermes - they load the full SKILL.md
-    # into the turn. Use /sage to route, /sage-fix etc. to run.
 
-    # ── Register bundled skills ──
-    # The plugin IS the whole repo, so skills/ also holds the framework's
-    # own domain skills (api, web, nextjs, react, ...). Only the 21
-    # hermes-platform skills belong here — same set declared in
-    # build_plugin.py SKILLS_NOT_IN_PLUGIN and coverage.yaml. Registering
-    # the rest would drag the claude-code build's skills (and the
-    # sage-memory MCP dependency) into Hermes.
-    _HERMES_SKILLS = frozenset({
-        "sage", "sage-analyst", "sage-architect", "sage-autoresearch",
-        "sage-build", "sage-checkpoints", "sage-classifier",
-        "sage-constitution", "sage-continue", "sage-debugger",
-        "sage-decisions", "sage-developer", "sage-fix", "sage-gates",
-        "sage-learn", "sage-reflect", "sage-review", "sage-reviewer",
-        "sage-routing", "sage-tiers", "sage-using-memory",
-    })
-    try:
-        from pathlib import Path
-        _plugin_dir = Path(__file__).parent
-        _skills_dir = _plugin_dir / "skills"
-        if _skills_dir.is_dir():
-            for child in sorted(_skills_dir.iterdir()):
-                skill_md = child / "SKILL.md"
-                if (child.is_dir() and skill_md.exists()
-                        and child.name in _HERMES_SKILLS):
-                    try:
-                        # Hermes auto-namespaces: "sage:" prefix comes from plugin name
-                        ctx.register_skill(child.name, str(skill_md))
-                    except Exception as e:
-                        logger.warning("Failed to register skill '%s': %s", child.name, e)
-    except ImportError:
-        pass  # pathlib not available, skip skill registration
+__all__ = [
+    "PluginAuthorityError",
+    "PluginBinding",
+    "binding_snapshot",
+    "cycle_metadata",
+    "register",
+    "runtime_inventory",
+]

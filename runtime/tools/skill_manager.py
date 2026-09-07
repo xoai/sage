@@ -16,7 +16,7 @@ Usage:
     python skill_manager.py update [target]                   # update community skills
 """
 from __future__ import annotations
-import argparse, json, os, re, shutil, subprocess, sys, tarfile, tempfile, time
+import argparse, hashlib, json, os, re, shutil, subprocess, sys, tarfile, tempfile, time
 from pathlib import Path
 
 # The checksum chain, shared with release.py and install.sh. Reused, not
@@ -33,6 +33,8 @@ GITHUB_API = "https://api.github.com"
 GITHUB_RAW = "https://raw.githubusercontent.com"
 SAGE_SKILLS_DIR = "sage/skills"
 SKILLS_JSON = "sage/skills/skills.json"
+HERMES_SKILLS_DIR = ".sage/skills"
+HERMES_SKILLS_JSON = ".sage/skills.json"
 
 # Known SKILL.md locations in repos (priority order)
 SKILL_PATTERNS = [
@@ -256,6 +258,49 @@ class PacksLock:
             f.write("\n")
         tmp.replace(self.path)
         return self.path
+
+    def forget_skill(self, skill_name):
+        """Drop a skill from every pack entry; delete entries that go empty.
+
+        Called by `sage remove` so the bound workspace's packs.lock stays
+        truthful (spec 5.8.4: pack remove writes the bound packs.lock). An
+        absent lock file means there is nothing to forget — never invent one.
+        """
+        if not self.path.is_file():
+            return
+        data = self.read()
+        packs = data.get("packs", {})
+        changed = False
+        for name in list(packs):
+            skills = packs[name].get("skills", [])
+            if skill_name in skills:
+                packs[name]["skills"] = [s for s in skills if s != skill_name]
+                changed = True
+                if not packs[name]["skills"]:
+                    del packs[name]
+        if changed:
+            tmp = self.path.with_suffix(".tmp")
+            with open(tmp, "w") as f:
+                json.dump(data, f, indent=2)
+                f.write("\n")
+            tmp.replace(self.path)
+
+
+def _local_pack_digest(root):
+    """Deterministic sha256 over a local pack tree.
+
+    A local install publishes no checksums.txt, but the lock still deserves a
+    real digest rather than "unverified": hash the sorted (relpath, sha256)
+    pairs of the source tree itself (T26/BD-1, spec 5.8.4).
+    """
+    entries = []
+    root = Path(root)
+    for path in sorted(root.rglob("*")):
+        if path.is_file():
+            rel = path.relative_to(root).as_posix()
+            entries.append((rel, hashlib.sha256(path.read_bytes()).hexdigest()))
+    payload = json.dumps(entries, sort_keys=True).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
 
 
 def fetch_pack_release(src, workdir):
@@ -499,8 +544,16 @@ def audit_skills(source, slugs):
 class SkillsConfig:
     def __init__(self, project_dir=None):
         self.project_dir = project_dir or Path.cwd()
-        self.config_path = self.project_dir / SKILLS_JSON
-        self.skills_dir = self.project_dir / SAGE_SKILLS_DIR
+        if _hermes_bound_skills_dir(self.project_dir) is not None:
+            # The vendored ``workspace/sage`` tree is receipt-owned and
+            # replace-managed by ``sage update``.  Community pack source and
+            # its mutable registry therefore belong in durable project state,
+            # beside packs.lock, never inside the runtime that refresh replaces.
+            self.config_path = self.project_dir / HERMES_SKILLS_JSON
+            self.skills_dir = self.project_dir / HERMES_SKILLS_DIR
+        else:
+            self.config_path = self.project_dir / SKILLS_JSON
+            self.skills_dir = self.project_dir / SAGE_SKILLS_DIR
     def exists(self): return self.config_path.is_file()
     def read(self):
         if not self.exists(): return {"skills": {}}
@@ -529,6 +582,54 @@ class SkillsConfig:
                 if v.get("source") != "built-in"}
 
 # ── Platform Deploy/Undeploy ──
+def _hermes_bound_skills_dir(project_dir):
+    """The frozen binding's selected-profile skills dir, or None.
+
+    Resolution order: the CLI's explicit binding env (must name THIS
+    workspace — a cross-workspace binding refuses rather than spraying),
+    then the workspace's install receipt binding. No binding anywhere means
+    no Hermes deploy at all; the legacy every-profile enumeration is gone.
+    """
+
+    def _norm(value):
+        return os.path.normcase(os.path.normpath(str(value)))
+
+    env_profile = os.environ.get("SAGE_HERMES_PROFILE_ROOT")
+    env_workspace = os.environ.get("SAGE_HERMES_WORKSPACE_ROOT")
+    if env_profile or env_workspace:
+        if not env_profile or not env_workspace:
+            ui.warning("Hermes binding env is incomplete — deploying nowhere.")
+            return None
+        if _norm(env_workspace) != _norm(project_dir):
+            ui.warning(
+                "Hermes binding env names a different workspace — refusing "
+                "rather than spraying."
+            )
+            return None
+        return Path(env_profile) / "skills"
+    receipt = Path(project_dir) / ".sage" / "receipts" / "install.json"
+    if receipt.is_file():
+        try:
+            data = json.loads(receipt.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        block = data.get("binding") or {}
+        profile_root = block.get("profile_root")
+        workspace_root = block.get("workspace_root")
+        if profile_root and workspace_root:
+            # The same cross-workspace guard the env path enforces: a stale
+            # or copied receipt must not redirect deploys into another
+            # workspace's bound profile.
+            if _norm(workspace_root) != _norm(project_dir):
+                ui.warning(
+                    "Install receipt is bound to a different workspace — "
+                    "refusing rather than spraying."
+                )
+                return None
+            return Path(profile_root) / "skills"
+    return None
+
+
 def deploy_to_platform(name, source_dir, project_dir):
     deployed = False
     # Claude Code: create loader stub
@@ -563,6 +664,22 @@ def deploy_to_platform(name, source_dir, project_dir):
                 shutil.copy2(cf, rules / f"skill-{name}-constitution.md")
         ui.success(f"Deployed to .agent/skills/{name}/")
         deployed = True
+    # Hermes: copy full skill into the SELECTED profile's skills dir (flat
+    # native discovery). Only the frozen binding's profile — a missing or
+    # cross-workspace binding deploys nothing and says so (Task 22).
+    hermes_skills = _hermes_bound_skills_dir(project_dir)
+    if hermes_skills is not None:
+        if hermes_skills.is_dir():
+            dest = hermes_skills / name
+            if dest.exists(): shutil.rmtree(dest)
+            shutil.copytree(source_dir, dest)
+            ui.success(f"Deployed to {hermes_skills}/{name}/")
+            deployed = True
+        else:
+            ui.warning(
+                f"Selected profile skills dir is missing: {hermes_skills} — "
+                f"no fallback to other profiles."
+            )
     if not deployed:
         ui.dim(f"Available at sage/skills/{name}/. Run sage init to deploy.")
 
@@ -580,6 +697,18 @@ def undeploy_from_platform(name, project_dir):
     r = project_dir / ".agent" / "rules" / f"skill-{name}-constitution.md"
     if r.exists():
         r.unlink()
+    # Hermes — the frozen binding's selected profile only (Task 22)
+    hermes_skills = _hermes_bound_skills_dir(project_dir)
+    if hermes_skills is not None:
+        p = hermes_skills / name
+        if p.exists():
+            shutil.rmtree(p)
+            ui.success(f"Removed from {p}")
+        elif not hermes_skills.is_dir():
+            ui.warning(
+                f"Selected profile skills dir is missing: {hermes_skills} — "
+                f"nothing removed."
+            )
 
 # ── Display ──
 def fmt_installs(n):
@@ -857,6 +986,20 @@ def cmd_add(source, skill_name=None, install_all=False, do_audit=False):
 
     print()
     ok = sum(1 for s in selected if install_one(s, s["name"], src, source_str, cfg, branch))
+    if ok and src.type == "local":
+        # Spec 5.8.4: pack add writes the bound workspace's packs.lock. The
+        # release path records the lock in try_install_pack; the local path
+        # used to install silently, leaving the workspace unable to answer
+        # "which pack version is here" for the most common install form
+        # (T26/BD-1).
+        pack_name = os.path.basename(os.path.abspath(src.url)) or "local-pack"
+        installed = [s["name"] for s in selected
+                     if (cfg.skills_dir / s["name"]).is_dir()]
+        if installed:
+            lock = PacksLock(cfg.project_dir).record(
+                name=pack_name, source=source_str, version="local",
+                sha256=_local_pack_digest(src.url), skills=installed)
+            ui.dim(f"  provenance → {lock.relative_to(cfg.project_dir) if cfg.project_dir in lock.parents else lock}")
     print(); ui.success(f"{ok}/{len(selected)} skill(s) installed from {source_str}.")
 
 def cmd_remove(skill_name):
@@ -873,6 +1016,8 @@ def cmd_remove(skill_name):
     if t.exists():
         shutil.rmtree(t); cfg.remove_skill(skill_name)
         undeploy_from_platform(skill_name, cfg.project_dir)
+        # Spec 5.8.4: pack remove updates the bound workspace's packs.lock.
+        PacksLock(cfg.project_dir).forget_skill(skill_name)
         ui.success(f"Removed: {skill_name}")
     else: ui.warning(f'"{skill_name}" not found.')
 

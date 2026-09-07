@@ -1,0 +1,12 @@
+# Manifest-owned Hermes text is hashed and packaged as the LF Git index blob.
+# Disable content-transforming attributes so worktree normalization remains a
+# byte-identical representation of Git clean semantics apart from CRLF -> LF.
+__init__.py text eol=lf -filter -working-tree-encoding
+plugin.yaml text eol=lf -filter -working-tree-encoding
+core/gates/scripts/sage-*.sh text eol=lf -filter -working-tree-encoding
+runtime/platforms/claude-code/hooks/sage-*.sh text eol=lf -filter -working-tree-encoding
+runtime/plugin-overlay/hooks/scripts/sage-*.sh text eol=lf -filter -working-tree-encoding
+runtime/platforms/community/hermes/hooks/sage-*.sh text eol=lf -filter -working-tree-encoding
+runtime/platforms/community/hermes/setup/profile_binding.py text eol=lf -filter -working-tree-encoding
+runtime/platforms/community/hermes/plugin-overlay/memory_namespace.py text eol=lf -filter -working-tree-encoding
+runtime/platforms/community/hermes/setup/topology.json text eol=lf -filter -working-tree-encoding

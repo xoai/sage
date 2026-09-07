@@ -148,11 +148,6 @@ resolve_framework() {
     return
   fi
 
-  if [ -d "$HOME/.sage/framework/core" ]; then
-    SAGE_FRAMEWORK="$(cd "$HOME/.sage/framework" && pwd -P)"
-    return
-  fi
-
   # Local — script lives in bin/ inside the framework
   local script_dir
   script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -160,6 +155,14 @@ resolve_framework() {
 
   if [ -d "$parent_dir/core" ] && [ -d "$parent_dir/skills" ]; then
     SAGE_FRAMEWORK="$parent_dir"
+    return
+  fi
+
+  # Implicit global fallback. A real framework checkout containing the invoked
+  # bin/sage must win over stale per-user state; explicit SAGE_HOME above still
+  # remains authoritative for shims, fixtures, and pinned global installs.
+  if [ -d "$HOME/.sage/framework/core" ]; then
+    SAGE_FRAMEWORK="$(cd "$HOME/.sage/framework" && pwd -P)"
     return
   fi
 
@@ -209,13 +212,14 @@ prune_framework_copy() {
     return 0
   fi
 
-  # Allowlist vendoring (ADR-6/§16): a project needs only the runtime — core/,
-  # skills/, runtime/, bin/, LICENSE, VERSION. Everything else the repo carries
+  # Allowlist vendoring (ADR-6/§16): a project needs the runtime plus the
+  # Hermes plugin entry files — core/, skills/, runtime/, bin/, __init__.py,
+  # plugin.yaml, LICENSE, VERSION. Everything else the repo carries
   # is framework-dev material (docs/, develop/, tools/, marketing SVGs,
   # CHANGELOG, the repo README, .claude-plugin/, install.sh, RELEASING/
   # CONTRIBUTING, VCS/OS litter) and is not shipped into user projects. This
   # drops the per-project footprint from ~5.4 MB to well under 1.5 MB.
-  local keep=" core skills runtime bin LICENSE VERSION "
+  local keep=" core skills runtime bin __init__.py plugin.yaml LICENSE VERSION "
   local entry name
   for entry in "$sage_dir"/* "$sage_dir"/.[!.]*; do
     [ -e "$entry" ] || continue
@@ -238,7 +242,8 @@ prune_framework_copy() {
 # Sage (vendored runtime)
 
 Vendored Sage ${vendored_version} runtime for this project: \`core/\`, \`skills/\`,
-\`runtime/\`, \`bin/\`. This is a generated copy — do not edit it by hand.
+\`runtime/\`, \`bin/\`, plus the Hermes plugin entry files. This is a generated
+copy — do not edit it by hand.
 
 - Framework source and docs: https://github.com/xoai/sage
 - Regenerate platform files: \`sage update\`
@@ -327,17 +332,18 @@ select_platform() {
     # `--platform ","`) yields an empty FLAG_LIST; bash 3.2 aborts.
     for p in ${FLAG_LIST[@]+"${FLAG_LIST[@]}"}; do
       case "$p" in
-        claude-code|generic|antigravity|codex|opencode|gemini-cli)
+        claude-code|generic|antigravity|codex|opencode|gemini-cli|hermes)
           PLATFORMS+=("$p")
           ;;
         both)
           PLATFORMS+=("claude-code" "antigravity")
           ;;
         all)
-          PLATFORMS=("claude-code" "antigravity" "codex" "opencode" "gemini-cli")
+          PLATFORMS=("claude-code" "antigravity" "codex" "opencode" "gemini-cli" "hermes")
           ;;
         *)
-          echo -e "  ${YELLOW}Unknown platform: $p (supported: claude-code, antigravity, codex, opencode, gemini-cli)${RESET}"
+          echo -e "  ${RED}Unknown platform: $p (supported: claude-code, generic, antigravity, codex, opencode, gemini-cli, hermes, all)${RESET}" >&2
+          return 1
           ;;
       esac
     done
@@ -361,7 +367,12 @@ select_platform() {
     echo "    [3] Codex (OpenAI)        (community — experimental)"
     echo "    [4] Opencode              (community — experimental)"
     echo "    [5] Gemini CLI            (community — experimental)"
-    echo "    [6] Multiple — install for all"
+    if [ "${COMMAND:-}" = "new" ]; then
+      echo "    [6] Multiple — install all project platforms"
+    else
+      echo "    [6] Hermes Agent          (community — experimental)"
+      echo "    [7] Multiple — project platforms plus one Hermes profile"
+    fi
     printf "  > "
     read -r choice
     case "$choice" in
@@ -369,7 +380,20 @@ select_platform() {
       3) PLATFORMS=("codex") ;;
       4) PLATFORMS=("opencode") ;;
       5) PLATFORMS=("gemini-cli") ;;
-      6) PLATFORMS=("claude-code" "antigravity" "codex" "opencode" "gemini-cli") ;;
+      6)
+        if [ "${COMMAND:-}" = "new" ]; then
+          PLATFORMS=("claude-code" "antigravity" "codex" "opencode" "gemini-cli")
+        else
+          PLATFORMS=("hermes")
+        fi
+        ;;
+      7)
+        if [ "${COMMAND:-}" != "new" ]; then
+          PLATFORMS=("claude-code" "antigravity" "codex" "opencode" "gemini-cli" "hermes")
+        else
+          PLATFORMS=("claude-code")
+        fi
+        ;;
       *) PLATFORMS=("claude-code") ;;
     esac
     PLATFORM=$(printf '%s\n' ${PLATFORMS[@]+"${PLATFORMS[@]}"} | tr '\n' '+' | sed 's/+$//')
@@ -377,6 +401,206 @@ select_platform() {
     PLATFORMS=("claude-code")
     PLATFORM="claude-code"
   fi
+}
+
+# Validate explicit platform input before init/update can copy or generate a
+# single byte. select_platform() also validates defensively, but it runs after
+# copy_framework in legacy flows and is therefore too late for a hard error.
+validate_platform_flag() {
+  [ -n "${PLATFORM_FLAG:-}" ] || return 0
+  local flag_list=() p
+  IFS=', ' read -ra flag_list <<< "$PLATFORM_FLAG"
+  if [ ${#flag_list[@]} -eq 0 ]; then
+    echo -e "  ${RED}Unknown platform: $PLATFORM_FLAG${RESET}" >&2
+    return 1
+  fi
+  for p in ${flag_list[@]+"${flag_list[@]}"}; do
+    case "$p" in
+      claude-code|generic|antigravity|codex|opencode|gemini-cli|hermes|both|all) ;;
+      *)
+        echo -e "  ${RED}Unknown platform: $p (supported: claude-code, generic, antigravity, codex, opencode, gemini-cli, hermes, all)${RESET}" >&2
+        return 1
+        ;;
+    esac
+  done
+}
+
+platform_flag_requests_hermes() {
+  [ -n "${PLATFORM_FLAG:-}" ] || return 1
+  local flag_list=() p
+  IFS=', ' read -ra flag_list <<< "$PLATFORM_FLAG"
+  for p in ${flag_list[@]+"${flag_list[@]}"}; do
+    case "$p" in hermes|all) return 0 ;; esac
+  done
+  return 1
+}
+
+platforms_include_hermes() {
+  local p
+  for p in ${PLATFORMS[@]+"${PLATFORMS[@]}"}; do
+    [ "$p" = "hermes" ] && return 0
+  done
+  return 1
+}
+
+discover_hermes_profile_config() {
+  local profile="$1"
+  python3 - "$profile" <<'SAGE_HERMES_DISCOVERY_PY'
+import json
+import os
+import shutil
+import subprocess
+import sys
+
+profile = sys.argv[1]
+explicit = os.environ.get("SAGE_HERMES_COMMAND")
+if explicit:
+    try:
+        command = json.loads(explicit)
+    except ValueError:
+        raise SystemExit(1)
+    if not isinstance(command, list) or not command or not all(
+        isinstance(item, str) and item for item in command
+    ):
+        raise SystemExit(1)
+else:
+    executable = shutil.which("hermes")
+    if not executable:
+        raise SystemExit(1)
+    command = [executable]
+
+args = command + (["--profile", profile, "config", "path"] if profile else ["config", "path"])
+completed = subprocess.run(
+    args,
+    capture_output=True,
+    text=True,
+    check=False,
+)
+if completed.returncode != 0:
+    raise SystemExit(1)
+lines = [line.strip() for line in completed.stdout.splitlines() if line.strip()]
+if not lines:
+    raise SystemExit(1)
+print(lines[-1])
+SAGE_HERMES_DISCOVERY_PY
+}
+
+# Resolve exactly one selected profile without writing anything. The collection
+# root remains distinct from the profile root; later install stages consume the
+# exported immutable values rather than enumerating sibling profiles.
+prepare_hermes_selection() {
+  local command_name="${1:-init}"
+  local raw_home="${HERMES_HOME_FLAG:-${HERMES_HOME:-}}"
+  local display_home="${raw_home:-<collection>}"
+
+  if [ -z "${HERMES_PROFILE_FLAG:-}" ]; then
+    # The default profile is a first-class target: bare `sage init --platform
+    # hermes` installs to whatever profile hermes itself treats as default.
+    # Prompt or refuse only when the default cannot be resolved.
+    local default_native default_shell default_profile
+    if default_native="$(discover_hermes_profile_config "")" && [ -n "$default_native" ]; then
+      default_shell="$(shell_path_from_native "$default_native")"
+      default_profile="$(basename "$(dirname "$default_shell")")"
+      if [[ "$default_profile" =~ ^[a-z0-9][a-z0-9_-]{0,63}$ ]]; then
+        HERMES_PROFILE_FLAG="$default_profile"
+        echo -e "  ${GREEN}Hermes profile: ${RESET}${HERMES_PROFILE_FLAG} ${DIM}(default)${RESET}" >&2
+      fi
+    fi
+  fi
+  if [ -z "${HERMES_PROFILE_FLAG:-}" ]; then
+    if [ -t 0 ]; then
+      echo "" >&2
+      echo -e "  ${BOLD}Hermes profile${RESET}" >&2
+      echo "  Enter exactly one profile name (no all-profile operation):" >&2
+      printf "  > " >&2
+      read -r HERMES_PROFILE_FLAG
+    else
+      echo -e "  ${RED}Hermes profile selection is required before any files are changed.${RESET}" >&2
+      echo "  Run exactly:" >&2
+      echo "    sage $command_name --platform hermes --hermes-profile <name>" >&2
+      return 1
+    fi
+  fi
+  if ! [[ "$HERMES_PROFILE_FLAG" =~ ^[a-z0-9][a-z0-9_-]{0,63}$ ]]; then
+    echo -e "  ${RED}Invalid Hermes profile name: $HERMES_PROFILE_FLAG${RESET}" >&2
+    return 1
+  fi
+
+  if [ -z "$raw_home" ]; then
+    local discovered_native discovered_config profile_dir profiles_dir
+    if ! discovered_native="$(discover_hermes_profile_config "$HERMES_PROFILE_FLAG")" || \
+       [ -z "$discovered_native" ]; then
+      echo -e "  ${RED}Hermes collection root could not be discovered before any files were changed.${RESET}" >&2
+      echo "  Ensure the installed hermes command is on PATH, or pass" >&2
+      echo "  --hermes-home <collection> as an explicit override." >&2
+      return 1
+    fi
+    discovered_config="$(shell_path_from_native "$discovered_native")"
+    if [ "$(basename "$discovered_config")" != "config.yaml" ] || \
+       [ ! -f "$discovered_config" ]; then
+      echo -e "  ${RED}Hermes returned an invalid profile config path: $discovered_config${RESET}" >&2
+      return 1
+    fi
+    profile_dir="$(dirname "$discovered_config")"
+    profiles_dir="$(dirname "$profile_dir")"
+    if [ "$(basename "$profile_dir")" = "$HERMES_PROFILE_FLAG" ] && \
+       [ "$(basename "$profiles_dir")" = "profiles" ]; then
+      raw_home="$(dirname "$profiles_dir")"
+    elif [ -d "$profile_dir/profiles/$HERMES_PROFILE_FLAG/workspace" ]; then
+      raw_home="$profile_dir"
+    else
+      echo -e "  ${RED}Hermes profile config path is outside a recognizable collection: $discovered_config${RESET}" >&2
+      return 1
+    fi
+    display_home="$raw_home"
+  fi
+  if [ ! -d "$display_home" ]; then
+    echo -e "  ${RED}Hermes collection root does not exist: $display_home${RESET}" >&2
+    return 1
+  fi
+
+  display_home="$(cd "$display_home" && pwd -P)"
+
+  # Hermes itself exports HERMES_HOME as the effective profile home after
+  # `--profile` resolution.  Only inherited environment values receive this
+  # normalization; an explicit --hermes-home always means collection root.
+  if [ -z "${HERMES_HOME_FLAG:-}" ]; then
+    local inherited_parent
+    inherited_parent="$(dirname "$display_home")"
+    if [ "$(basename "$inherited_parent")" = "profiles" ]; then
+      display_home="$(dirname "$inherited_parent")"
+    elif [ ! -d "$display_home/profiles/$HERMES_PROFILE_FLAG/workspace" ]; then
+      echo -e "  ${RED}Hermes collection root is ambiguous: $display_home${RESET}" >&2
+      echo "  Pass it explicitly with --hermes-home <collection>." >&2
+      return 1
+    fi
+  fi
+
+  SAGE_HERMES_COLLECTION_ROOT="$display_home"
+  SAGE_HERMES_PROFILE="$HERMES_PROFILE_FLAG"
+  local selected="$SAGE_HERMES_COLLECTION_ROOT/profiles/$SAGE_HERMES_PROFILE"
+  if [ ! -d "$selected" ]; then
+    echo -e "  ${RED}Hermes profile does not exist: $selected${RESET}" >&2
+    return 1
+  fi
+  SAGE_HERMES_PROFILE_ROOT="$(cd "$selected" && pwd -P)"
+  local workspace="$SAGE_HERMES_PROFILE_ROOT/workspace"
+  if [ ! -d "$workspace" ]; then
+    echo -e "  ${RED}Hermes profile workspace does not exist: $workspace${RESET}" >&2
+    return 1
+  fi
+  SAGE_HERMES_WORKSPACE_ROOT="$(cd "$workspace" && pwd -P)"
+  local current_root="$(pwd -P)"
+  if [ "$current_root" != "$SAGE_HERMES_WORKSPACE_ROOT" ] && \
+     [ "$command_name" != "update" ] && [ "$command_name" != "doctor" ] && \
+     [ "$command_name" != "uninstall" ]; then
+    echo -e "  ${RED}Hermes $command_name must run from the selected profile workspace.${RESET}" >&2
+    echo "  selected: $SAGE_HERMES_WORKSPACE_ROOT" >&2
+    echo "  current:  $current_root" >&2
+    return 1
+  fi
+  export SAGE_HERMES_COLLECTION_ROOT SAGE_HERMES_PROFILE \
+    SAGE_HERMES_PROFILE_ROOT SAGE_HERMES_WORKSPACE_ROOT
 }
 
 detect_stack() {
@@ -544,15 +768,15 @@ hard_enforcement: true
 # test. New projects default ON, because the rule was measured and it did not hold:
 # asked to change one constant under pressure the agent wrote no test in 3 runs of 3,
 # with the tdd skill loaded. A rule the model can talk itself out of is not a rule.
-# Escape with `tier: tier1` on a manifest, or set this to false.
+# Escape with \`tier: tier1\` on a manifest, or set this to false.
 tdd_enforcement: true
 # scope_gate: the scope-gate hook blocks Edit/Write to paths outside the
 # approved plan's derived scope (manifest scope: block, written by
-# `manifest.py scope derive`). MEASURED 2026-08-02 and left OFF: bare and
+# \`manifest.py scope derive\`). MEASURED 2026-08-02 and left OFF: bare and
 # gated both held scope 3/3 at two model tiers, so the gate prevented
 # nothing (harmless and fast — arm it if you want the floor, but it is not
 # a drift-prevention claim). standard+ gates cycles with
-# manifests and skips tier1; `all` gates tier1 cycles too. Legal exits from a
+# manifests and skips tier1; \`all\` gates tier1 cycles too. Legal exits from a
 # block: scope add-collateral (recorded), or amend the plan + scope derive
 # --refresh. Scope changes go through the artifact, never silently through
 # the diff. ABSENT means off (it ships that way); arm by writing ONE line:
@@ -660,6 +884,249 @@ CONSTMD
 # Best-effort: failures never abort sage's primary operation. Helper
 # itself returns 0 in all expected paths (no-op when sage-memory absent).
 # ═══════════════════════════════════════════════════════════════
+native_python_path() {
+  if command -v cygpath >/dev/null 2>&1; then
+    cygpath -m "$1"
+  else
+    printf '%s\n' "$1"
+  fi
+}
+
+shell_path_from_native() {
+  if command -v cygpath >/dev/null 2>&1; then
+    cygpath -u "$1"
+  else
+    printf '%s\n' "$1"
+  fi
+}
+
+# Load the immutable Hermes profile binding from the workspace install receipt
+# before update performs any backup, replacement, migration, or generator work.
+# An explicit CLI selection must name the same binding; a bare update inherits
+# the receipt exactly.  This function only reads and validates state.
+bind_hermes_update_from_receipt() {
+  local target="$1"
+  local receipt="$target/.sage/receipts/install.json"
+  local binding_module="$SAGE_FRAMEWORK/runtime/platforms/community/hermes/setup/profile_binding.py"
+
+  if [ ! -f "$receipt" ]; then
+    echo -e "  ${RED}Hermes install receipt is required before this workspace can be updated.${RESET}" >&2
+    echo "  Expected: $receipt" >&2
+    return 1
+  fi
+  if [ ! -f "$binding_module" ]; then
+    echo -e "  ${RED}Hermes profile binding validator is unavailable: $binding_module${RESET}" >&2
+    return 1
+  fi
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo -e "  ${RED}python3 is required to validate the Hermes install receipt.${RESET}" >&2
+    return 1
+  fi
+
+  local py_module py_receipt py_cwd
+  py_module=$(native_python_path "$binding_module")
+  py_receipt=$(native_python_path "$receipt")
+  py_cwd=$(native_python_path "$target")
+
+  local requested_args=()
+  if [ -n "${SAGE_HERMES_PROFILE:-}" ]; then
+    requested_args=(
+      "$(native_python_path "$SAGE_HERMES_COLLECTION_ROOT")"
+      "$SAGE_HERMES_PROFILE"
+      "$(native_python_path "$SAGE_HERMES_PROFILE_ROOT")"
+      "$(native_python_path "$SAGE_HERMES_WORKSPACE_ROOT")"
+    )
+  fi
+
+  local binding_output
+  if ! binding_output=$(MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL="*" \
+      python3 - "$py_module" "$py_receipt" "$py_cwd" \
+      ${requested_args[@]+"${requested_args[@]}"} <<'PY'
+import importlib.util
+import json
+import os
+import pathlib
+import sys
+
+
+def path_key(value):
+    return os.path.normcase(os.path.normpath(os.fspath(value)))
+
+
+module_path = pathlib.Path(sys.argv[1])
+receipt_path = pathlib.Path(sys.argv[2])
+cwd = pathlib.Path(sys.argv[3])
+
+spec = importlib.util.spec_from_file_location("sage_hermes_profile_binding", module_path)
+if spec is None or spec.loader is None:
+    print("Hermes install receipt is invalid: binding validator cannot be loaded", file=sys.stderr)
+    raise SystemExit(1)
+module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module
+spec.loader.exec_module(module)
+
+try:
+    with receipt_path.open("r", encoding="utf-8") as handle:
+        receipt_data = json.load(handle)
+        existing = module.ProfileBinding.from_receipt(receipt_data)
+except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
+    print("Hermes install receipt is invalid: %s" % exc, file=sys.stderr)
+    raise SystemExit(1)
+
+requested = None
+if len(sys.argv) == 8:
+    try:
+        requested = module.ProfileBinding.from_explicit(
+            collection_root=sys.argv[4],
+            profile_id=sys.argv[5],
+            profile_root=sys.argv[6],
+            workspace_root=sys.argv[7],
+        )
+    except (ValueError, TypeError) as exc:
+        print("Requested Hermes binding is invalid: %s" % exc, file=sys.stderr)
+        raise SystemExit(1)
+elif len(sys.argv) != 4:
+    print("Requested Hermes binding is incomplete", file=sys.stderr)
+    raise SystemExit(1)
+
+if requested is not None and requested != existing:
+    print("Existing Hermes binding:", file=sys.stderr)
+    print("  collection_root: %s" % existing.collection_root, file=sys.stderr)
+    print("  profile_id: %s" % existing.profile_id, file=sys.stderr)
+    print("  workspace_root: %s" % existing.workspace_root, file=sys.stderr)
+    print("Requested Hermes binding:", file=sys.stderr)
+    print("  collection_root: %s" % requested.collection_root, file=sys.stderr)
+    print("  profile_id: %s" % requested.profile_id, file=sys.stderr)
+    print("  workspace_root: %s" % requested.workspace_root, file=sys.stderr)
+    print("Use 'sage migrate hermes-profile' to move an existing installation.", file=sys.stderr)
+    raise SystemExit(1)
+
+config_path = existing.config_path
+if not config_path.is_file():
+    print("Hermes profile config binding is required: %s" % config_path, file=sys.stderr)
+    raise SystemExit(1)
+try:
+    config_text = config_path.read_text(encoding="utf-8")
+except OSError as exc:
+    print("Hermes profile config binding is invalid: %s" % exc, file=sys.stderr)
+    raise SystemExit(1)
+
+lines = config_text.splitlines()
+starts = [index for index, line in enumerate(lines) if line == "sage_profile_binding:"]
+if len(starts) != 1:
+    print("Hermes profile config binding is required exactly once", file=sys.stderr)
+    raise SystemExit(1)
+config_binding = {}
+for line in lines[starts[0] + 1:]:
+    if line and not line[0].isspace():
+        break
+    if not line.strip() or line.lstrip().startswith("#"):
+        continue
+    if not line.startswith("  ") or line.startswith("   ") or ":" not in line[2:]:
+        print("Hermes profile config binding is invalid", file=sys.stderr)
+        raise SystemExit(1)
+    key, raw_value = line[2:].split(":", 1)
+    if key in config_binding:
+        print("Hermes profile config binding contains a duplicate field: %s" % key, file=sys.stderr)
+        raise SystemExit(1)
+    raw_stripped = raw_value.strip()
+    try:
+        value = json.loads(raw_stripped)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        # Hermes config writers re-dump Sage's JSON-quoted binding values as
+        # plain YAML scalars; accept the plain form (optionally quoted) so
+        # the authority check survives that round-trip. Path spelling
+        # differences are absorbed later by exact-path normalization.
+        value = raw_stripped
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+            value = value[1:-1]
+        if not value:
+            print("Hermes profile config binding is invalid: empty value for %s" % key, file=sys.stderr)
+            raise SystemExit(1)
+    config_binding[key] = value
+
+try:
+    existing = module.ProfileBinding.from_authorities(
+        receipt=receipt_data,
+        config_binding=config_binding,
+        collection_root=existing.collection_root,
+        profile_root=existing.profile_root,
+    )
+except (ValueError, TypeError) as exc:
+    print("Hermes profile config binding is invalid: %s" % exc, file=sys.stderr)
+    raise SystemExit(1)
+
+try:
+    actual_receipt = receipt_path.resolve(strict=True)
+    actual_cwd = cwd.resolve(strict=True)
+except OSError as exc:
+    print("Hermes install receipt is invalid: %s" % exc, file=sys.stderr)
+    raise SystemExit(1)
+if path_key(actual_receipt) != path_key(existing.receipt_path):
+    print("Hermes install receipt is bound to a different workspace", file=sys.stderr)
+    raise SystemExit(1)
+if path_key(actual_cwd) != path_key(existing.workspace_root):
+    print("Hermes update must run from the receipt-bound profile workspace", file=sys.stderr)
+    print("  receipt workspace: %s" % existing.workspace_root, file=sys.stderr)
+    print("  current workspace: %s" % actual_cwd, file=sys.stderr)
+    raise SystemExit(1)
+
+print(existing.collection_root)
+print(existing.profile_id)
+print(existing.profile_root)
+print(existing.workspace_root)
+PY
+  ); then
+    return 1
+  fi
+
+  local binding_values=() value
+  while IFS= read -r value; do
+    # Native Windows Python writes CRLF. Bash command substitution removes the
+    # final LF but preserves each CR, which would turn `alpha` into `alpha\r`
+    # and poison the otherwise-valid frozen binding.
+    value="${value%$'\r'}"
+    binding_values+=("$value")
+  done <<< "$binding_output"
+  if [ ${#binding_values[@]} -ne 4 ]; then
+    echo -e "  ${RED}Hermes install receipt returned an incomplete binding.${RESET}" >&2
+    return 1
+  fi
+
+  SAGE_HERMES_COLLECTION_ROOT=$(shell_path_from_native "${binding_values[0]}")
+  SAGE_HERMES_PROFILE="${binding_values[1]}"
+  SAGE_HERMES_PROFILE_ROOT=$(shell_path_from_native "${binding_values[2]}")
+  SAGE_HERMES_WORKSPACE_ROOT=$(shell_path_from_native "${binding_values[3]}")
+  export SAGE_HERMES_COLLECTION_ROOT SAGE_HERMES_PROFILE \
+    SAGE_HERMES_PROFILE_ROOT SAGE_HERMES_WORKSPACE_ROOT
+}
+
+require_hermes_consent() {
+  local operation="$1"
+  [ "${SAGE_HERMES_CONSENT_GRANTED:-0}" = "1" ] && return 0
+  if [ "${SAGE_YES:-false}" = "1" ]; then
+    SAGE_HERMES_CONSENT_GRANTED=1
+    export SAGE_HERMES_CONSENT_GRANTED
+    return 0
+  fi
+  local operation_label="$operation"
+  case "$operation" in install) operation_label="Install" ;; update) operation_label="Update" ;; esac
+  echo -e "  $operation_label applies the exact 7 blocking + 4 observer hook entries to ${CYAN}$SAGE_HERMES_PROFILE${RESET}."
+  if [ ! -t 0 ]; then
+    echo -e "  ${RED}Non-interactive $operation requires explicit consent: re-run with SAGE_YES=1.${RESET}" >&2
+    return 1
+  fi
+  local _sage_answer
+  read -r -p "  Proceed? [y/N] " _sage_answer
+  case "$_sage_answer" in
+    y|Y|yes|YES)
+      SAGE_HERMES_CONSENT_GRANTED=1
+      export SAGE_HERMES_CONSENT_GRANTED
+      ;;
+    *) echo "  Aborted."; return 1 ;;
+  esac
+}
+
 sage_memory_sync_hook() {
   local target="$1"
   local ms_script="$SAGE_FRAMEWORK/runtime/tools/memory_sync.py"
@@ -667,8 +1134,15 @@ sage_memory_sync_hook() {
   [ -f "$ms_script" ] || return 0
   command -v python3 >/dev/null 2>&1 || return 0
 
-  python3 "$ms_script" migrate-legacy "$target" "$target" || true
-  python3 "$ms_script" sync "$SAGE_FRAMEWORK" "$target" --yes || true
+  local py_ms py_target py_framework
+  py_ms=$(native_python_path "$ms_script")
+  py_target=$(native_python_path "$target")
+  py_framework=$(native_python_path "$SAGE_FRAMEWORK")
+
+  MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL="*" \
+    python3 "$py_ms" migrate-legacy "$py_target" "$py_target" || true
+  MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL="*" \
+    python3 "$py_ms" sync "$py_framework" "$py_target" --yes || true
 }
 
 run_generators() {
@@ -689,6 +1163,7 @@ run_generators() {
       codex)       platforms_to_run=("codex") ;;
       opencode)    platforms_to_run=("opencode") ;;
       gemini-cli)  platforms_to_run=("gemini-cli") ;;
+      hermes)      platforms_to_run=("hermes") ;;
       *)           platforms_to_run=("claude-code") ;;
     esac
   fi
@@ -703,11 +1178,449 @@ run_generators() {
       case "$script" in
         */community/*) echo -e "  ${YELLOW}⚠ $p is community-maintained (experimental) — generation only, no quality chain.${RESET}" ;;
       esac
-      bash "$script" "$target"
+      if [ "$p" = "hermes" ]; then
+        # Pass the one frozen binding explicitly. The Hermes generator rejects
+        # absent/incomplete bindings before writes and never enumerates siblings.
+        if [ "${SAGE_UPDATE_MODE:-false}" = "true" ]; then
+          hermes_update_transact "$target" "$sage_path"
+        else
+          # Transactional init (T26/BD-4): the generator contributes the
+          # workspace surfaces (.sage/, .hermes.md) and the binding block;
+          # profile_installer.install then commits every profile byte and the
+          # exact 7+4 registry in one journaled transaction and writes the
+          # install receipt that `sage update`/`doctor`/`uninstall` require.
+          HERMES_HOME="$SAGE_HERMES_COLLECTION_ROOT" \
+            SAGE_HERMES_TRANSACTIONAL_INIT=1 \
+            SAGE_HERMES_COLLECTION_ROOT="$SAGE_HERMES_COLLECTION_ROOT" \
+            SAGE_HERMES_PROFILE="$SAGE_HERMES_PROFILE" \
+            SAGE_HERMES_PROFILE_ROOT="$SAGE_HERMES_PROFILE_ROOT" \
+            SAGE_HERMES_WORKSPACE_ROOT="$SAGE_HERMES_WORKSPACE_ROOT" \
+            bash "$script" "$target"
+          hermes_install_transact "$target"
+        fi
+      else
+        bash "$script" "$target"
+      fi
     else
       echo -e "  ${YELLOW}⚠ Generator not found: $script${RESET}"
     fi
   done
+}
+
+# Read-only profile ownership preflight for Hermes init. Consent is already
+# frozen before this runs; no workspace or selected-profile bytes may move
+# until the same Python guard used by the transaction accepts the destination.
+preflight_hermes_profile_target() {
+  local setup_dir="$SAGE_FRAMEWORK/runtime/platforms/community/hermes/setup"
+  SAGE_HERMES_COLLECTION_ROOT="$(native_python_path "$SAGE_HERMES_COLLECTION_ROOT")" \
+  SAGE_HERMES_PROFILE_ROOT="$(native_python_path "$SAGE_HERMES_PROFILE_ROOT")" \
+  SAGE_HERMES_WORKSPACE_ROOT="$(native_python_path "$SAGE_HERMES_WORKSPACE_ROOT")" \
+  python3 - "$(native_python_path "$setup_dir")" <<'SAGE_PREFLIGHT_PY'
+import os
+import sys
+
+sys.path.insert(0, sys.argv[1])
+import profile_binding
+import profile_installer
+
+binding = profile_binding.ProfileBinding.from_explicit(
+    collection_root=os.environ["SAGE_HERMES_COLLECTION_ROOT"],
+    profile_id=os.environ["SAGE_HERMES_PROFILE"],
+    profile_root=os.environ["SAGE_HERMES_PROFILE_ROOT"],
+    workspace_root=os.environ["SAGE_HERMES_WORKSPACE_ROOT"],
+)
+try:
+    profile_installer.preflight_profile_target(binding)
+except profile_installer.InstallError as exc:
+    print("  install failed closed: %s" % exc, file=sys.stderr)
+    raise SystemExit(1)
+SAGE_PREFLIGHT_PY
+}
+
+# Transactional Hermes profile install (T26/BD-4): the receipt-writing half of
+# the lifecycle. Mirrors hermes_update_transact exactly — same artifact build,
+# same consent gate, same native-path hand-off — but calls
+# profile_installer.install so `sage init --platform hermes` leaves the
+# install receipt that update/doctor/uninstall fail closed without.
+hermes_install_transact() {
+  local target="$1"
+  # The framework copy (this CLI's own tree) owns the setup tools and the
+  # artifact source; the workspace vendored copy is a runtime consumer only.
+  local sage_path="$SAGE_FRAMEWORK"
+  local setup_dir="$sage_path/runtime/platforms/community/hermes/setup"
+  local artifact bash_exe version commit
+  artifact="$(mktemp -d)"
+  if ! python3 "$(native_python_path "$sage_path/runtime/tools/build_plugin.py")" --target hermes --out "$(native_python_path "$artifact")"; then
+    echo -e "  ${RED}Hermes artifact build failed; install aborted.${RESET}" >&2
+    rm -rf "$artifact"
+    return 1
+  fi
+  bash_exe="$(cygpath -m "$(command -v bash)" 2>/dev/null || command -v bash)"
+  version="$(tr -d '[:space:]' < "$sage_path/VERSION" 2>/dev/null || echo 0.0.0)"
+  commit="$(git -C "$sage_path" rev-parse HEAD 2>/dev/null || echo 0000000000000000000000000000000000000000)"
+  if [ "${SAGE_HERMES_CONSENT_GRANTED:-0}" != "1" ]; then
+    echo -e "  ${RED}Hermes install transaction has no consent token; refusing before selected-profile writes.${RESET}" >&2
+    rm -rf "$artifact"
+    return 1
+  fi
+  SAGE_HERMES_COLLECTION_ROOT="$(native_python_path "$SAGE_HERMES_COLLECTION_ROOT")" \
+  SAGE_HERMES_PROFILE_ROOT="$(native_python_path "$SAGE_HERMES_PROFILE_ROOT")" \
+  SAGE_HERMES_WORKSPACE_ROOT="$(native_python_path "$SAGE_HERMES_WORKSPACE_ROOT")" \
+  SAGE_FRAMEWORK_ROOT="$(native_python_path "$sage_path")" \
+  python3 - "$(native_python_path "$setup_dir")" "$(native_python_path "$artifact")" "$version" "$commit" "$bash_exe" <<'SAGE_INSTALL_PY'
+import os
+import sys
+
+sys.path.insert(0, sys.argv[1])
+import activation
+import profile_binding
+import profile_installer
+
+binding = profile_binding.ProfileBinding.from_explicit(
+    collection_root=os.environ["SAGE_HERMES_COLLECTION_ROOT"],
+    profile_id=os.environ["SAGE_HERMES_PROFILE"],
+    profile_root=os.environ["SAGE_HERMES_PROFILE_ROOT"],
+    workspace_root=os.environ["SAGE_HERMES_WORKSPACE_ROOT"],
+)
+activation_probe, activation_rollback = activation.callbacks(
+    binding, activation.resolve_hermes_command()
+)
+try:
+    result = profile_installer.install(
+        binding=binding,
+        artifact_dir=sys.argv[2],
+        framework_root=os.environ["SAGE_FRAMEWORK_ROOT"],
+        consent_granted=True,
+        source_version=sys.argv[3],
+        source_commit=sys.argv[4],
+        bash_path=sys.argv[5],
+        activation_probe=activation_probe,
+        activation_rollback=activation_rollback,
+    )
+except profile_installer.InstallError as exc:
+    print("  install failed closed: %s" % exc, file=sys.stderr)
+    sys.exit(1)
+print("  install committed: operation %s" % result["operation_id"])
+sys.exit(0)
+SAGE_INSTALL_PY
+  local rc=$?
+  rm -rf "$artifact"
+  return $rc
+}
+
+# Transactional Hermes profile update (Task 19/20): receipt-bound, journaled,
+# and rollback-packed. Replaces the generator merge on `sage update`.
+hermes_update_transact() {
+  local target="$1"
+  # The framework copy (this CLI's own tree) owns the setup tools and the
+  # artifact source; the workspace vendored copy is a runtime consumer only.
+  local sage_path="$SAGE_FRAMEWORK"
+  local setup_dir="$sage_path/runtime/platforms/community/hermes/setup"
+  local artifact bash_exe version commit
+  artifact="$(mktemp -d)"
+  if ! python3 "$(native_python_path "$sage_path/runtime/tools/build_plugin.py")" --target hermes --out "$(native_python_path "$artifact")"; then
+    echo -e "  ${RED}Hermes artifact build failed; update aborted.${RESET}" >&2
+    rm -rf "$artifact"
+    return 1
+  fi
+  bash_exe="$(cygpath -m "$(command -v bash)" 2>/dev/null || command -v bash)"
+  version="$(tr -d '[:space:]' < "$sage_path/VERSION" 2>/dev/null || echo 0.0.0)"
+  commit="$(git -C "$sage_path" rev-parse HEAD 2>/dev/null || echo 0000000000000000000000000000000000000000)"
+  if [ "${SAGE_HERMES_CONSENT_GRANTED:-0}" != "1" ]; then
+    echo -e "  ${RED}Hermes update transaction has no consent token; refusing before selected-profile writes.${RESET}" >&2
+    rm -rf "$artifact"
+    return 1
+  fi
+  SAGE_HERMES_COLLECTION_ROOT="$(native_python_path "$SAGE_HERMES_COLLECTION_ROOT")" \
+  SAGE_HERMES_PROFILE_ROOT="$(native_python_path "$SAGE_HERMES_PROFILE_ROOT")" \
+  SAGE_HERMES_WORKSPACE_ROOT="$(native_python_path "$SAGE_HERMES_WORKSPACE_ROOT")" \
+  SAGE_FRAMEWORK_ROOT="$(native_python_path "$sage_path")" \
+  python3 - "$(native_python_path "$setup_dir")" "$(native_python_path "$artifact")" "$version" "$commit" "$bash_exe" <<'SAGE_UPDATE_PY'
+import os
+import sys
+
+sys.path.insert(0, sys.argv[1])
+import activation
+import profile_binding
+import profile_installer
+
+binding = profile_binding.ProfileBinding.from_explicit(
+    collection_root=os.environ["SAGE_HERMES_COLLECTION_ROOT"],
+    profile_id=os.environ["SAGE_HERMES_PROFILE"],
+    profile_root=os.environ["SAGE_HERMES_PROFILE_ROOT"],
+    workspace_root=os.environ["SAGE_HERMES_WORKSPACE_ROOT"],
+)
+activation_probe, activation_rollback = activation.callbacks(
+    binding, activation.resolve_hermes_command()
+)
+try:
+    result = profile_installer.update(
+        binding=binding,
+        artifact_dir=sys.argv[2],
+        framework_root=os.environ["SAGE_FRAMEWORK_ROOT"],
+        consent_granted=True,
+        source_version=sys.argv[3],
+        source_commit=sys.argv[4],
+        bash_path=sys.argv[5],
+        activation_probe=activation_probe,
+        activation_rollback=activation_rollback,
+    )
+except profile_installer.InstallError as exc:
+    print("  update failed closed: %s" % exc, file=sys.stderr)
+    sys.exit(1)
+print("  update committed: operation %s" % result["operation_id"])
+sys.exit(0)
+SAGE_UPDATE_PY
+  local rc=$?
+  rm -rf "$artifact"
+  return $rc
+}
+
+# Read-only behavior-state doctor (Task 20): distinguishes present /
+# registered / discovered / executed / context-delivered /
+# behaviorally-verified; only the last applicable state counts as passing.
+sage_doctor() {
+  local setup_dir="$SAGE_FRAMEWORK/runtime/platforms/community/hermes/setup"
+  local bash_exe
+  bash_exe="$(cygpath -m "$(command -v bash)" 2>/dev/null || command -v bash)"
+  SAGE_HERMES_COLLECTION_ROOT="$(native_python_path "$SAGE_HERMES_COLLECTION_ROOT")" \
+  SAGE_HERMES_PROFILE_ROOT="$(native_python_path "$SAGE_HERMES_PROFILE_ROOT")" \
+  SAGE_HERMES_WORKSPACE_ROOT="$(native_python_path "$SAGE_HERMES_WORKSPACE_ROOT")" \
+  python3 - "$(native_python_path "$setup_dir")" "$bash_exe" <<'SAGE_DOCTOR_PY'
+import os
+import sys
+
+sys.path.insert(0, sys.argv[1])
+import profile_binding
+import doctor
+import doctor_probe
+import activation
+
+binding = profile_binding.ProfileBinding.from_explicit(
+    collection_root=os.environ["SAGE_HERMES_COLLECTION_ROOT"],
+    profile_id=os.environ["SAGE_HERMES_PROFILE"],
+    profile_root=os.environ["SAGE_HERMES_PROFILE_ROOT"],
+    workspace_root=os.environ["SAGE_HERMES_WORKSPACE_ROOT"],
+)
+try:
+    probe = doctor_probe.probe(
+        binding=binding,
+        bash_path=sys.argv[2],
+        hermes_command=activation.resolve_hermes_command(),
+        timeout=30,
+    )
+except (doctor_probe.ProbeError, activation.ActivationError) as exc:
+    probe = {
+        "fresh_process_verified": False,
+        "read_only": True,
+        "detail": str(exc),
+        "checks": {},
+    }
+report = doctor.diagnose(binding, bash_path=sys.argv[2], behavioral_probe=lambda **_kwargs: probe)
+roots = report["roots"]
+print("")
+print("  Sage doctor — %s" % os.environ["SAGE_HERMES_PROFILE"])
+print("  collection: %s" % roots["collection_root"])
+print("  profile:    %s" % roots["profile_root"])
+print("  workspace:  %s" % roots["workspace_root"])
+print("  receipt:    %s" % roots["receipt_path"])
+print("")
+for check in report["checks"]:
+    marker = "PASS" if check["passed"] else "FAIL"
+    print("  [%s] %s [%s/%s] — %s" % (
+        marker,
+        check["name"],
+        check["state"],
+        check["required_state"],
+        check["detail"],
+    ))
+print("")
+print("  result: %s" % ("clean" if report["ok"] else "NOT CLEAN"))
+sys.exit(0 if report["ok"] else 1)
+SAGE_DOCTOR_PY
+}
+
+# Explicit receipt-less Hermes profile adoption.  Never inferred from update:
+# the selected profile, legacy surfaces, retained backup, fresh activation, and
+# optional rollback are all named by this command.
+sage_migrate_hermes_profile() {
+  local setup_dir="$SAGE_FRAMEWORK/runtime/platforms/community/hermes/setup"
+  local rollback_id=""
+  if [ "${1:-}" = "--rollback" ]; then
+    rollback_id="${2:-}"
+    if [ -z "$rollback_id" ]; then
+      echo -e "${RED}sage migrate hermes-profile --rollback requires an operation id.${RESET}" >&2
+      return 1
+    fi
+  elif [ "$#" -ne 0 ]; then
+    echo -e "${RED}Usage: sage migrate hermes-profile [--rollback <operation-id>]${RESET}" >&2
+    return 1
+  fi
+
+  local bash_exe
+  bash_exe="$(cygpath -m "$(command -v bash)" 2>/dev/null || command -v bash)"
+  SAGE_HERMES_COLLECTION_ROOT="$(native_python_path "$SAGE_HERMES_COLLECTION_ROOT")" \
+  SAGE_HERMES_PROFILE_ROOT="$(native_python_path "$SAGE_HERMES_PROFILE_ROOT")" \
+  SAGE_HERMES_WORKSPACE_ROOT="$(native_python_path "$SAGE_HERMES_WORKSPACE_ROOT")" \
+  SAGE_MIGRATION_ROLLBACK_ID="$rollback_id" \
+  python3 - "$(native_python_path "$setup_dir")" "$bash_exe" "$(native_python_path "$SAGE_FRAMEWORK")" <<'SAGE_MIGRATE_PY'
+import json
+import os
+import pathlib
+import shutil
+import subprocess
+import sys
+import tempfile
+
+setup_dir = pathlib.Path(sys.argv[1])
+bash_path = sys.argv[2]
+framework_root = pathlib.Path(sys.argv[3])
+sys.path.insert(0, os.fspath(setup_dir))
+import activation
+import profile_binding
+import profile_migration
+
+binding = profile_binding.ProfileBinding.from_explicit(
+    collection_root=os.environ["SAGE_HERMES_COLLECTION_ROOT"],
+    profile_id=os.environ["SAGE_HERMES_PROFILE"],
+    profile_root=os.environ["SAGE_HERMES_PROFILE_ROOT"],
+    workspace_root=os.environ["SAGE_HERMES_WORKSPACE_ROOT"],
+)
+hermes_command = activation.resolve_hermes_command()
+activation_probe, activation_rollback = activation.callbacks(binding, hermes_command)
+rollback_id = os.environ.get("SAGE_MIGRATION_ROLLBACK_ID", "")
+try:
+    if rollback_id:
+        result = profile_migration.rollback_receiptless_profile(
+            binding=binding,
+            operation_id=rollback_id,
+            activation_rollback=activation_rollback,
+        )
+    else:
+        artifact = pathlib.Path(tempfile.mkdtemp(prefix="sage-hermes-migrate-"))
+        try:
+            subprocess.run(
+                [sys.executable, os.fspath(framework_root / "runtime" / "tools" / "build_plugin.py"),
+                 "--target", "hermes", "--out", os.fspath(artifact)],
+                check=True,
+            )
+            version = (framework_root / "VERSION").read_text(encoding="utf-8").strip()
+            try:
+                commit = subprocess.check_output(
+                    ["git", "-C", os.fspath(framework_root), "rev-parse", "HEAD"],
+                    text=True,
+                ).strip()
+            except (OSError, subprocess.CalledProcessError):
+                commit = "0" * 40
+            result = profile_migration.migrate_receiptless_profile(
+                binding=binding,
+                artifact_dir=artifact,
+                consent_granted=True,
+                source_version=version,
+                source_commit=commit,
+                backup_root=profile_migration.default_backup_root(binding),
+                bash_path=bash_path,
+                framework_root=framework_root,
+                activation_probe=activation_probe,
+                activation_rollback=activation_rollback,
+            )
+        finally:
+            shutil.rmtree(artifact, ignore_errors=True)
+except profile_migration.MigrationError as exc:
+    print("  migration failed closed: %s" % exc, file=sys.stderr)
+    raise SystemExit(1)
+print(json.dumps(result, sort_keys=True))
+SAGE_MIGRATE_PY
+}
+
+# Resume one incomplete transactional Hermes install/update from its durable
+# rollback pack. This is intentionally separate from receipt-less migration
+# rollback: recovery consumes an incomplete run journal, never a completed
+# migration receipt.
+sage_recover_hermes_profile() {
+  local operation_id="${1:-}"
+  if [ "$#" -ne 1 ] || ! [[ "$operation_id" =~ ^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$ ]]; then
+    echo -e "${RED}Usage: sage recover hermes-profile <operation-id>${RESET}" >&2
+    return 1
+  fi
+
+  local setup_dir="$SAGE_FRAMEWORK/runtime/platforms/community/hermes/setup"
+  SAGE_HERMES_COLLECTION_ROOT="$(native_python_path "$SAGE_HERMES_COLLECTION_ROOT")" \
+  SAGE_HERMES_PROFILE_ROOT="$(native_python_path "$SAGE_HERMES_PROFILE_ROOT")" \
+  SAGE_HERMES_WORKSPACE_ROOT="$(native_python_path "$SAGE_HERMES_WORKSPACE_ROOT")" \
+  SAGE_RECOVERY_OPERATION_ID="$operation_id" \
+  python3 - "$(native_python_path "$setup_dir")" <<'SAGE_RECOVER_PY'
+import os
+import sys
+
+sys.path.insert(0, sys.argv[1])
+import profile_binding
+import profile_installer
+
+binding = profile_binding.ProfileBinding.from_explicit(
+    collection_root=os.environ["SAGE_HERMES_COLLECTION_ROOT"],
+    profile_id=os.environ["SAGE_HERMES_PROFILE"],
+    profile_root=os.environ["SAGE_HERMES_PROFILE_ROOT"],
+    workspace_root=os.environ["SAGE_HERMES_WORKSPACE_ROOT"],
+)
+operation_id = os.environ["SAGE_RECOVERY_OPERATION_ID"]
+try:
+    result = profile_installer.resume_incomplete(
+        binding=binding,
+        operation_id=operation_id,
+    )
+except profile_installer.InstallError as exc:
+    print("  recovery failed closed: %s" % exc, file=sys.stderr)
+    raise SystemExit(1)
+print("  Hermes profile recovery complete: operation %s" % result["operation_id"])
+SAGE_RECOVER_PY
+}
+
+# Receipt-guided Hermes profile uninstall (Task 21): removes only
+# receipt-owned files and exact Sage config entries; never guesses
+# ownership; preserves durable and user-edited bytes.
+sage_uninstall() {
+  local setup_dir="$SAGE_FRAMEWORK/runtime/platforms/community/hermes/setup"
+  if [ "${SAGE_YES:-false}" != "1" ]; then
+    echo -e "  Uninstall removes Sage's receipt-owned files and hook entries from ${CYAN}$SAGE_HERMES_PROFILE${RESET}."
+    echo "  Durable state (.sage, .sage-memory, identity, user files) is preserved."
+    read -r -p "  Proceed? [y/N] " _sage_answer
+    case "$_sage_answer" in y|Y|yes|YES) ;; *) echo "  Aborted."; return 1 ;; esac
+  fi
+  SAGE_HERMES_COLLECTION_ROOT="$(native_python_path "$SAGE_HERMES_COLLECTION_ROOT")" \
+  SAGE_HERMES_PROFILE_ROOT="$(native_python_path "$SAGE_HERMES_PROFILE_ROOT")" \
+  SAGE_HERMES_WORKSPACE_ROOT="$(native_python_path "$SAGE_HERMES_WORKSPACE_ROOT")" \
+  python3 - "$(native_python_path "$setup_dir")" <<'SAGE_UNINSTALL_PY'
+import os
+import sys
+
+sys.path.insert(0, sys.argv[1])
+import activation
+import profile_binding
+import profile_installer
+
+binding = profile_binding.ProfileBinding.from_explicit(
+    collection_root=os.environ["SAGE_HERMES_COLLECTION_ROOT"],
+    profile_id=os.environ["SAGE_HERMES_PROFILE"],
+    profile_root=os.environ["SAGE_HERMES_PROFILE_ROOT"],
+    workspace_root=os.environ["SAGE_HERMES_WORKSPACE_ROOT"],
+)
+absence_probe, absence_rollback = activation.uninstall_callbacks(
+    binding, activation.resolve_hermes_command()
+)
+try:
+    result = profile_installer.uninstall(
+        binding=binding,
+        consent_granted=True,
+        absence_probe=absence_probe,
+        absence_rollback=absence_rollback,
+    )
+except profile_installer.InstallError as exc:
+    print("  uninstall failed closed: %s" % exc, file=sys.stderr)
+    sys.exit(1)
+print("  uninstall committed: operation %s" % result["operation_id"])
+sys.exit(0)
+SAGE_UNINSTALL_PY
 }
 
 print_success() {
@@ -757,6 +1670,9 @@ print_success() {
         ;;
       gemini-cli)
         echo "    $step. Gemini CLI: run \`gemini\` — TOML commands in .gemini/commands/"
+        ;;
+      hermes)
+        echo "    $step. Hermes: start \`hermes\` in this project — SOUL.md loads as system prompt, gates run via profile hooks"
         ;;
     esac
     step=$((step + 1))
@@ -880,10 +1796,29 @@ sage_init() {
     echo ""
   fi
 
-  copy_framework "$target"
   detect_stack "$target"
   select_platform "$target"
+  if platforms_include_hermes && [ -z "${SAGE_HERMES_PROFILE:-}" ]; then
+    prepare_hermes_selection init
+  fi
   select_preset "$target"
+  if platforms_include_hermes; then
+    require_hermes_consent install
+    # A Hermes-only init is one receipt transaction: the installer stages and
+    # owns workspace/sage + .hermes.md together with profile hooks/plugin/config.
+    # Durable .sage state is created only after consent and is never rolled into
+    # the replace-managed set.
+    if [ ${#PLATFORMS[@]} -eq 1 ] && [ "${PLATFORMS[0]}" = "hermes" ]; then
+      preflight_hermes_profile_target
+      create_sage_state "$target"
+      hermes_install_transact "$target"
+      echo "  Profile: $SAGE_HERMES_PROFILE"
+      echo -e "  ${GREEN}✓${RESET} Hermes workspace runtime and profile surfaces committed"
+      echo -e "  ${YELLOW}Restart required.${RESET} Fresh CLI/Gateway activation remains unverified until a host-capable probe runs."
+      return 0
+    fi
+  fi
+  copy_framework "$target"
   create_sage_state "$target"
   run_generators "$target"
   sage_memory_sync_hook "$target"
@@ -953,10 +1888,10 @@ sage_update() {
     # Empty-safe expansion (see select_platform — same bash 3.2 guard).
     for p in ${FLAG_LIST[@]+"${FLAG_LIST[@]}"}; do
       case "$p" in
-        claude-code|generic|antigravity|codex|opencode|gemini-cli)
+        claude-code|generic|antigravity|codex|opencode|gemini-cli|hermes)
           PLATFORMS+=("$p") ;;
         all)
-          PLATFORMS=("claude-code" "antigravity" "codex" "opencode" "gemini-cli")
+          PLATFORMS=("claude-code" "antigravity" "codex" "opencode" "gemini-cli" "hermes")
           break ;;
       esac
     done
@@ -964,6 +1899,23 @@ sage_update() {
 
   PLATFORM=$(printf '%s\n' ${PLATFORMS[@]+"${PLATFORMS[@]}"} | tr '\n' '+' | sed 's/+$//')
   echo -e "  ${GREEN}Platforms:${RESET} ${PLATFORMS[*]+"${PLATFORMS[*]}"}"
+
+  # Hermes updates are authorized by the immutable receipt in this exact
+  # workspace.  Validate it before even reading files that might be backed up
+  # or replaced later in this function.
+  local hermes_update=false
+  if platforms_include_hermes; then
+    hermes_update=true
+    bind_hermes_update_from_receipt "$target"
+    echo -e "  ${CYAN}Operation:${RESET} Hermes profile update (shared framework unchanged)"
+    require_hermes_consent update
+    if [ ${#PLATFORMS[@]} -eq 1 ] && [ "${PLATFORMS[0]}" = "hermes" ]; then
+      hermes_update_transact "$target" "$SAGE_FRAMEWORK"
+      echo -e "  ${GREEN}✓${RESET} Receipt-owned workspace runtime and profile surfaces refreshed"
+      echo -e "  ${YELLOW}Restart required.${RESET} Fresh CLI/Gateway activation remains unverified until a host-capable probe runs."
+      return 0
+    fi
+  fi
 
   # Detect community skills before updating
   local community_skills=""
@@ -982,7 +1934,11 @@ except: pass
   echo ""
   echo "  This will:"
   if [ -d "$target/sage" ]; then
-    echo -e "    ${CYAN}↻${RESET} Update sage/ framework to latest version"
+    if [ "$hermes_update" = true ]; then
+      echo -e "    ${CYAN}↻${RESET} Refresh the receipt-bound workspace runtime"
+    else
+      echo -e "    ${CYAN}↻${RESET} Update sage/ framework to latest version"
+    fi
   fi
   if [ "$PLATFORM" = "antigravity" ] || [ "$PLATFORM" = "both" ]; then
     echo -e "    ${CYAN}↻${RESET} Regenerate GEMINI.md and .agent/"
@@ -1347,6 +2303,7 @@ sage_upgrade() {
   echo ""
   echo -e "  ${BOLD}Sage — Upgrade Framework${RESET}"
   echo ""
+  echo -e "  ${CYAN}Operation:${RESET} Shared framework upgrade (Hermes profiles unchanged)"
 
   if [ ! -d "$framework" ]; then
     echo -e "  ${RED}❌ Sage not installed globally.${RESET}"
@@ -1448,7 +2405,11 @@ sage_upgrade() {
   # itself never fails because of memory-sync side effects.
   local ms_script="$sage_home/framework/runtime/tools/memory_sync.py"
   if [ -f "$ms_script" ] && command -v python3 >/dev/null 2>&1; then
-    python3 "$ms_script" upgrade "$sage_home/framework" || true
+    local py_ms py_framework
+    py_ms=$(native_python_path "$ms_script")
+    py_framework=$(native_python_path "$sage_home/framework")
+    MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL="*" \
+      python3 "$py_ms" upgrade "$py_framework" || true
   fi
 
   echo ""
@@ -1755,6 +2716,8 @@ sage_help() {
   echo "  sage new <n>                  Create a new project with Sage"
   echo "  sage init [--prefix] [--no-memory]  Add Sage to the current directory"
   echo "  sage update                      Regenerate platform files"
+  echo "  sage migrate hermes-profile      Adopt or roll back one explicit receipt-less Hermes profile"
+  echo "  sage recover hermes-profile      Resume one incomplete transactional Hermes operation"
   echo "  sage upgrade [--channel main]    Update Sage to the latest release"
   echo "  sage version                     Print the installed framework version"
   echo "  sage learn [path]                Learn a codebase or module"
@@ -1776,11 +2739,16 @@ sage_help() {
   echo "Flags:"
   echo "  --prefix                         Namespace commands as sage:build, sage:fix, etc."
   echo "  --preset <name>                  Set constitution preset (base|startup|enterprise|opensource)"
-  echo "  --platform <list>                Comma-separated platforms (claude-code|antigravity|codex|opencode|gemini-cli|all)"
+  echo "  --platform <list>                Comma-separated platforms (claude-code|antigravity|codex|opencode|gemini-cli|hermes|all)"
+  echo "  --hermes-profile <name>          Install or update exactly one Hermes profile"
+  echo "  --hermes-home <path>             Hermes collection root (or unambiguous HERMES_HOME)"
   echo ""
   echo "Examples:"
   echo "  sage new my-app                  # Create project with Sage"
   echo "  sage init --prefix               # Add Sage with sage: prefixed commands"
+  echo "  cd <hermes-home>/profiles/<profile>/workspace && sage init --platform hermes --hermes-home <hermes-home> --hermes-profile <profile>"
+  echo "  cd <hermes-home>/profiles/<profile>/workspace && sage migrate hermes-profile --hermes-home <hermes-home> --hermes-profile <profile>"
+  echo "  cd <hermes-home>/profiles/<profile>/workspace && sage recover hermes-profile <operation-id> --hermes-home <hermes-home> --hermes-profile <profile>"
   echo "  sage learn                       # Broad scan of whole project"
   echo "  sage learn src/billing/          # Deep dive into a module"
   echo "  sage find react                  # Search skills.sh for React skills"
@@ -2117,6 +3085,7 @@ sage_worktree() {
       codex)       _wt_copy_ignored "$root" "$dir" ".codex"; _wt_copy_ignored "$root" "$dir" "AGENTS.md" ;;
       opencode)    _wt_copy_ignored "$root" "$dir" ".opencode" ;;
       gemini-cli)  _wt_copy_ignored "$root" "$dir" ".gemini"; _wt_copy_ignored "$root" "$dir" "GEMINI.md" ;;
+      hermes)      _wt_copy_ignored "$root" "$dir" "SOUL.md" ;;
     esac
   done
   [ "$WT_COPIED" -gt 0 ] && echo -e "  ${GREEN}✓${RESET} Copied $WT_COPIED gitignored runtime path(s) into the worktree."
@@ -2148,6 +3117,10 @@ WORKTREE_ARGS=("$@")
 PRESET_FLAG=""
 PREFIX_FLAG=""
 PLATFORM_FLAG=""
+HERMES_PROFILE_FLAG=""
+HERMES_HOME_FLAG=""
+HERMES_PROFILE_FLAG_COUNT=0
+HERMES_HOME_FLAG_COUNT=0
 NO_MEMORY_FLAG=""
 REMAINING_ARGS=()
 NEXT_IS=""
@@ -2156,6 +3129,8 @@ for arg in "$@"; do
     case "$NEXT_IS" in
       preset)   PRESET_FLAG="$arg" ;;
       platform) PLATFORM_FLAG="$arg" ;;
+      hermes_profile) HERMES_PROFILE_FLAG="$arg" ;;
+      hermes_home) HERMES_HOME_FLAG="$arg" ;;
     esac
     NEXT_IS=""
     continue
@@ -2165,17 +3140,90 @@ for arg in "$@"; do
     --preset)     NEXT_IS="preset" ;;
     --platform=*) PLATFORM_FLAG="${arg#--platform=}" ;;
     --platform)   NEXT_IS="platform" ;;
+    --hermes-profile=*)
+      HERMES_PROFILE_FLAG_COUNT=$((HERMES_PROFILE_FLAG_COUNT + 1))
+      HERMES_PROFILE_FLAG="${arg#--hermes-profile=}"
+      ;;
+    --hermes-profile)
+      HERMES_PROFILE_FLAG_COUNT=$((HERMES_PROFILE_FLAG_COUNT + 1))
+      NEXT_IS="hermes_profile"
+      ;;
+    --hermes-home=*)
+      HERMES_HOME_FLAG_COUNT=$((HERMES_HOME_FLAG_COUNT + 1))
+      HERMES_HOME_FLAG="${arg#--hermes-home=}"
+      ;;
+    --hermes-home)
+      HERMES_HOME_FLAG_COUNT=$((HERMES_HOME_FLAG_COUNT + 1))
+      NEXT_IS="hermes_home"
+      ;;
     --prefix)     PREFIX_FLAG="true" ;;
     --no-memory)  NO_MEMORY_FLAG="true" ;;
     *)            REMAINING_ARGS+=("$arg") ;;
   esac
 done
+if [ -n "$NEXT_IS" ]; then
+  echo -e "${RED}Missing value for --${NEXT_IS//_/-}${RESET}" >&2
+  exit 1
+fi
+if [ "$HERMES_PROFILE_FLAG_COUNT" -gt 1 ]; then
+  echo -e "${RED}--hermes-profile may be provided only once.${RESET}" >&2
+  exit 1
+fi
+if [ "$HERMES_HOME_FLAG_COUNT" -gt 1 ]; then
+  echo -e "${RED}--hermes-home may be provided only once.${RESET}" >&2
+  exit 1
+fi
 set -- ${REMAINING_ARGS[@]+"${REMAINING_ARGS[@]}"}
+
+case "$COMMAND" in
+  init|update|doctor|uninstall)
+    validate_platform_flag
+    if platform_flag_requests_hermes; then
+      prepare_hermes_selection "$COMMAND"
+    elif [ -n "$HERMES_PROFILE_FLAG" ] || [ -n "$HERMES_HOME_FLAG" ]; then
+      echo -e "${RED}--hermes-profile and --hermes-home require --platform hermes.${RESET}" >&2
+      exit 1
+    fi
+    ;;
+  migrate)
+    if [ "${REMAINING_ARGS[0]:-}" != "hermes-profile" ]; then
+      echo -e "${RED}Usage: sage migrate hermes-profile [--rollback <operation-id>] --hermes-home <path> --hermes-profile <name>${RESET}" >&2
+      exit 1
+    fi
+    PLATFORM_FLAG="hermes"
+    prepare_hermes_selection migrate
+    ;;
+  recover)
+    if [ "${REMAINING_ARGS[0]:-}" != "hermes-profile" ] || [ -z "${REMAINING_ARGS[1]:-}" ]; then
+      echo -e "${RED}Usage: sage recover hermes-profile <operation-id> --hermes-home <path> --hermes-profile <name>${RESET}" >&2
+      exit 1
+    fi
+    PLATFORM_FLAG="hermes"
+    prepare_hermes_selection recover
+    ;;
+  new)
+    validate_platform_flag
+    if platform_flag_requests_hermes; then
+      echo -e "${RED}Hermes profile deployment is supported by sage init and sage update, not sage new.${RESET}" >&2
+      exit 1
+    fi
+    ;;
+esac
 
 case "$COMMAND" in
   new)              sage_new "$@" ;;
   init)             sage_init ;;
   update)           sage_update ;;
+  migrate)
+    shift
+    sage_migrate_hermes_profile "$@"
+    ;;
+  recover)
+    shift
+    sage_recover_hermes_profile "$@"
+    ;;
+  doctor)           sage_doctor ;;
+  uninstall)        sage_uninstall ;;
   upgrade)          sage_upgrade "$@" ;;
   learn)            sage_learn "$@" ;;
   worktree)         sage_worktree ${WORKTREE_ARGS[@]+"${WORKTREE_ARGS[@]}"} ;;

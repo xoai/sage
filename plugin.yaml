@@ -1,17 +1,25 @@
 name: sage
-version: "1.0.0"
-description: >
-  Sage framework engine for Hermes — mechanical gates (spec-gate/tdd-gate/
-  secrets-gate/config-gate/verify-gate/bookkeeping-gate via pre_tool_call
-  block; R29 degradation audit via post_tool_call) plus CLI context injection
-  via pre_llm_call and slash command delivery. Gates are INERT until a project
-  opts in via .sage/config.yaml (hard_enforcement: true) — they never
-  surprise-block an unenrolled project.
-author: "Sage (Hermes platform port)"
+kind: standalone
+version: "1.3.18"
+description: >-
+  Profile-bound Sage lifecycle context, collision-free workflow commands,
+  deterministic gate tools, and project-only memory for Hermes. Mechanical
+  lifecycle gates remain owned by the selected profile's configured shell hooks.
+author: "Sage (Hermes platform adapter)"
 
-provides_tools: []
+provides_slash_commands: true
+provides_tools:
+  - sage_run_gates
+  - sage_spec_check
+  - sage_hallucination_check
+  - sage_verify
+  - sage_visual_gate
+  - sage_memory_set_project
+  - sage_memory_store
+  - sage_memory_search
 
 provides_hooks:
-  - pre_tool_call
-  - post_tool_call
+  - on_session_start
   - pre_llm_call
+  - transform_tool_result
+  - pre_verify

@@ -1,221 +1,206 @@
 #!/usr/bin/env python3
-"""Level-2 equivalent probe: exercise the Hermes plugin's hook entry points
-directly, with the same (tool_name, args) shapes Hermes passes.
+"""Conformance probe for the exact generated 7+4 hook commands (spec 5.3.13-14).
 
-This is NOT a mock of Hermes — it calls the exact functions Hermes calls
-(_on_pre_tool_call / _on_post_tool_call) against a real scratch .sage
-project on disk, and prints what the model would have seen.
+Executes the EXACT command form the generator emits — resolved git-bash
+argv[0], quoted adapter path, gate script arg — through the same shlex.split
+Hermes applies, against real fixtures, and classifies the wire results with
+the Task 14 policy module:
 
-Usage:  python3 develop/conformance/probes/hermes-gates-probe.py [proj_dir]
-Exit:   0 all gates behaved · 1 a gate misbehaved · 2 setup failure
+  allow          a project with no blocking Sage state returns {}
+  block          an active pre-spec cycle vetoes a source edit (exit 2 path)
+  veto (missing executable)  argv[0] that does not exist fails closed
+  veto (timeout)             a hung gate fails closed
+  observer                   the same failures stay visible, never block
+
+Windows/MSYS-only (needs git-bash). Exit: 0 all assertions pass / 1 fail /
+2 setup failure.
 """
-import importlib.util
+
 import json
 import os
+import pathlib
+import shlex
 import shutil
 import subprocess
 import sys
-import time
+import tempfile
+import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
-PLUGIN = os.path.join(REPO, "__init__.py")
+sys.path.insert(
+    0, os.path.join(REPO, "runtime", "platforms", "community", "hermes", "setup")
+)
+import hook_config  # noqa: E402
 
-spec = importlib.util.spec_from_file_location("sage_plugin", PLUGIN)
-plugin = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(plugin)
+
+def resolve_git_bash():
+    """Resolve Git Bash without embedding one machine's install path."""
+
+    for candidate in (os.environ.get("SAGE_BASH_EXE"), shutil.which("bash")):
+        if candidate and os.path.isfile(candidate):
+            return os.path.abspath(candidate).replace("\\", "/")
+    return ""
+
+
+BASH = resolve_git_bash()
+ADAPTER_SRC = os.path.join(
+    REPO, "runtime", "platforms", "community", "hermes", "hooks", "sage-hermes-gate.sh"
+)
+GATES_SRC = os.path.join(REPO, "runtime", "platforms", "claude-code", "hooks")
 
 PASS = []
 FAIL = []
 
 
-def expect(name, got, want_block=None, want_gate=None):
-    """got = hook return. want_block True/False, want_gate substring."""
-    is_block = isinstance(got, dict) and got.get("action") == "block"
-    ok = (is_block == want_block) and (
-        want_gate is None or (is_block and want_gate in got.get("message", "")))
-    line = "%s: %s" % (name, "BLOCKED" if is_block else "allowed")
-    if is_block:
-        line += " — " + got["message"].splitlines()[0][:110]
+def expect(name, ok, note=""):
+    line = name + (": " + note if note else "")
     print(("  PASS " if ok else "  FAIL ") + line)
     (PASS if ok else FAIL).append(name)
 
 
-def setup(proj):
-    if os.path.isdir(proj):
-        def _unreadonly(func, path, exc_info):
-            os.chmod(path, 0o777)
-            func(path)
-        shutil.rmtree(proj, onerror=_unreadonly)
-    os.makedirs(os.path.join(proj, ".sage", "work", "probe-cycle"))
-    os.makedirs(os.path.join(proj, ".sage", "gates"))
-    with open(os.path.join(proj, ".sage", "config.yaml"), "w") as fh:
-        fh.write("hard_enforcement: true\ntdd_enforcement: true\n")
-    with open(os.path.join(proj, ".sage", "work", "probe-cycle", "manifest.md"), "w") as fh:
-        fh.write("---\ncycle: probe-cycle\ntier: tier2\nstatus: active\n"
-                 "gate_state: pre-spec\nqa: pending\n---\n# Probe cycle\n")
-    # git repo with a TRACKED test (tdd-gate precondition)
-    subprocess.run(["git", "init", "-q"], cwd=proj, check=True)
-    with open(os.path.join(proj, "test_probe.py"), "w") as fh:
-        fh.write("def test_placeholder():\n    assert True\n")
-    subprocess.run(["git", "add", "-A"], cwd=proj, check=True)
-    subprocess.run(["git", "-c", "user.email=probe@sage", "-c",
-                    "user.name=probe", "commit", "-qm", "test first"],
-                   cwd=proj, check=True)
+def _write(path, content):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+
+
+def _make_hooks_dir(root):
+    hooks = root / "hooks"
+    hooks.mkdir(parents=True)
+    shutil.copy2(ADAPTER_SRC, hooks / "sage-hermes-gate.sh")
+    for gate in ("sage-spec-gate.sh", "sage-tdd-gate.sh"):
+        shutil.copy2(os.path.join(GATES_SRC, gate), hooks / gate)
+    _write(hooks / "sage-sleep-gate.sh", "#!/usr/bin/env bash\nsleep 30\n")
+    return hooks
+
+
+def _command(bash, hooks, script):
+    return '"%s" "%s" %s' % (
+        bash,
+        os.fspath(hooks / "sage-hermes-gate.sh").replace("\\", "/"),
+        script,
+    )
+
+
+def _run(command, project, timeout=15):
+    argv = shlex.split(command)
+    payload = {
+        "hook_event_name": "pre_tool_call",
+        "tool_name": "write_file",
+        "tool_input": {"path": os.fspath(project / "src" / "edit.py").replace("\\", "/")},
+        "cwd": os.fspath(project).replace("\\", "/"),
+    }
+    try:
+        completed = subprocess.run(
+            argv,
+            input=json.dumps(payload),
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+        return completed.returncode, completed.stdout, False
+    except FileNotFoundError:
+        return None, "", False
+    except subprocess.TimeoutExpired:
+        return None, "", True
+
+
+def _make_project(root, *, pre_spec_cycle):
+    project = root / "project"
+    (project / "src").mkdir(parents=True)
+    if pre_spec_cycle:
+        # The spec-gate enforces only under explicit hard_enforcement: true —
+        # absent/false is a deliberate fail-open for opted-out projects.
+        _write(project / ".sage" / "config.yaml", "hard_enforcement: true\n")
+        _write(
+            project / ".sage" / "work" / "20260810-probe-cycle" / "manifest.md",
+            "---\nstatus: in-progress\ngate_state: pre-spec\n---\n",
+        )
+    return project
 
 
 def main():
-    if len(sys.argv) > 1:
-        proj = os.path.abspath(sys.argv[1])
-    else:
-        proj = os.path.join(os.path.dirname(REPO), "tmp-sage-tier-a-probe")
-    print("probe project:", proj)
+    if not shutil.which("cygpath"):
+        print("SKIP Windows/MSYS-only probe (cygpath unavailable)")
+        return 0
+    if not os.path.isfile(BASH):
+        print("SKIP git-bash unavailable (set SAGE_BASH_EXE or add bash to PATH)")
+        return 0
+    scratch = pathlib.Path(tempfile.mkdtemp(prefix="sage-gates-probe-"))
+    print("scratch:", scratch)
     try:
-        setup(proj)
-    except Exception as exc:
-        print("SETUP FAILURE:", exc)
-        return 2
+        hooks = _make_hooks_dir(scratch)
+        open_project = _make_project(scratch / "open", pre_spec_cycle=False)
+        locked_project = _make_project(scratch / "locked", pre_spec_cycle=True)
 
-    # Terminal-shaped calls resolve the project from cwd (documented plugin
-    # behavior: the gate follows the file for edits, but from cwd for terminal).
-    os.chdir(proj)
+        # 0. The generated command form must shlex.split to the full spaced
+        # bash path as argv[0] — an unquoted argv[0] splits at the space and
+        # dies before the adapter ever runs (the WSL/127 class).
+        command = _command(BASH, hooks, "sage-spec-gate.sh")
+        argv0 = shlex.split(command)[0]
+        expect("generated form: argv[0] is the full resolved git-bash",
+               argv0 == BASH, "argv0=%r" % argv0)
 
-    src = os.path.join(proj, "app.py")
-    cfg = os.path.join(proj, ".sage", "config.yaml")
-    man = os.path.join(proj, ".sage", "work", "probe-cycle", "manifest.md")
+        # 1. allow — no blocking state
+        rc, out, timed_out = _run(_command(BASH, hooks, "sage-spec-gate.sh"), open_project)
+        outcome = hook_config.classify_hook_result(
+            returncode=rc, stdout=out, stderr="", timed_out=timed_out, fail_closed=True
+        )
+        expect("allow: unblocked project classifies allow", outcome == "allow",
+               "rc=%s out=%r" % (rc, out[:80]))
 
-    print("\n── pre_tool_call probes (what the model sees BEFORE the tool runs) ──")
+        # 2. block — active pre-spec cycle vetoes the source edit
+        rc, out, timed_out = _run(_command(BASH, hooks, "sage-spec-gate.sh"), locked_project)
+        outcome = hook_config.classify_hook_result(
+            returncode=rc, stdout=out, stderr="", timed_out=timed_out, fail_closed=True
+        )
+        expect("block: pre-spec cycle vetoes with a decision", outcome == "block",
+               "rc=%s out=%r" % (rc, out[:80]))
 
-    # 1. spec-gate — source edit while cycle is pre-spec
-    got = plugin._on_pre_tool_call(
-        tool_name="write_file", args={"path": src, "content": "print('hi')\n"})
-    expect("spec-gate blocks pre-spec source edit", got, True, "spec-gate")
+        # 3. veto — missing executable (argv[0] does not exist)
+        rc, out, timed_out = _run(
+            _command("C:/nonexistent/git-bash.exe", hooks, "sage-spec-gate.sh"),
+            open_project,
+        )
+        outcome = hook_config.classify_hook_result(
+            returncode=rc, stdout=out, stderr="", timed_out=timed_out, fail_closed=True
+        )
+        expect("veto: missing executable blocks a fail-closed gate", outcome == "block",
+               "rc=%r" % rc)
 
-    # 2. secrets-gate — hardcoded key in source (fires before spec-gate)
-    got = plugin._on_pre_tool_call(
-        tool_name="write_file",
-        args={"path": src, "content": "KEY = 'sk-AbCdEfGh1234567890xYz'\n"})
-    expect("secrets-gate blocks hardcoded key", got, True, "secrets-gate")
+        # 4. veto — timeout on a hung gate
+        rc, out, timed_out = _run(
+            _command(BASH, hooks, "sage-sleep-gate.sh"), open_project, timeout=3
+        )
+        outcome = hook_config.classify_hook_result(
+            returncode=rc, stdout=out, stderr="", timed_out=timed_out, fail_closed=True
+        )
+        expect("veto: timeout blocks a fail-closed gate", outcome == "block",
+               "timed_out=%s" % timed_out)
 
-    # 3. config-gate — agent tries to disarm enforcement
-    with open(cfg) as fh:
-        cfg_now = fh.read()
-    got = plugin._on_pre_tool_call(
-        tool_name="patch",
-        args={"path": cfg, "old_string": "hard_enforcement: true",
-              "new_string": "hard_enforcement: false"})
-    expect("config-gate blocks self-disarmament", got, True, "config-gate")
-    _ = cfg_now
+        # 5. observer — identical failures never block
+        observer_cases = [
+            ("missing executable", "C:/nonexistent/git-bash.exe", "sage-spec-gate.sh", 15),
+            ("timeout", BASH, "sage-sleep-gate.sh", 3),
+        ]
+        for label, bash, script, timeout in observer_cases:
+            rc, out, timed_out = _run(_command(bash, hooks, script), open_project, timeout=timeout)
+            outcome = hook_config.classify_hook_result(
+                returncode=rc, stdout=out, stderr="", timed_out=timed_out,
+                fail_closed=False,
+            )
+            expect("observer %s: visible but never blocks" % label,
+                   outcome == "unverifiable", "outcome=%s" % outcome)
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
 
-    # 4. tdd-gate — advance the cycle past pre-spec (spec-gate fires first
-    #    otherwise), move HEAD off the test-only commit so ALLOW 2 doesn't
-    #    apply, and leave no pending test file so ALLOW 1 doesn't either.
-    with open(man, "w") as fh:
-        fh.write("---\ncycle: probe-cycle\ntier: tier2\nstatus: active\n"
-                 "gate_state: building\nqa: pending\n---\n# Probe cycle\n")
-    with open(os.path.join(proj, ".sage", "work", "probe-cycle", "spec.md"), "w") as fh:
-        fh.write("# Probe spec\nApproved for the probe.\n")
-    subprocess.run(["git", "-c", "user.email=probe@sage", "-c",
-                    "user.name=probe", "commit", "-q", "--allow-empty",
-                    "-m", "empty"], cwd=proj, check=True)  # move HEAD off test-only
-    got = plugin._on_pre_tool_call(
-        tool_name="write_file", args={"path": src, "content": "X = 1\n"})
-    expect("tdd-gate blocks code-without-test", got, True, "TDD gate")
+    print("\nResult: %d pass, %d fail" % (len(PASS), len(FAIL)))
+    return 0 if not FAIL else 1
 
-    # 5. bookkeeping-gate — hand-edit of an active cycle's manifest
-    got = plugin._on_pre_tool_call(
-        tool_name="patch",
-        args={"path": man, "old_string": "# Probe cycle",
-              "new_string": "# Probe cycle (edited by hand)"})
-    expect("bookkeeping-gate blocks hand-edited manifest", got, True,
-           "bookkeeping-gate")
 
-    # 6. verify-gate — commit after source edit, no test run since
-    plugin._on_post_tool_call(tool_name="write_file",
-                              args={"path": src})  # seeds last_source_edit
-    got = plugin._on_pre_tool_call(
-        tool_name="terminal", args={"command": "git commit -m done"})
-    expect("verify-gate blocks unverified commit", got, True, "verify-gate")
-
-    print("\n── post_tool_call probes (observers, must never block) ──")
-
-    # 7. verify-tracker — pytest run records last_test_run
-    plugin._on_post_tool_call(tool_name="terminal",
-                              args={"command": "pytest -q"})
-    state = plugin._verify_read_state(os.path.join(proj, ".sage"))
-    ok = "last_test_run" in state and "last_source_edit" in state
-    print(("  PASS" if ok else "  FAIL") + " verify-tracker state: " + str(state))
-    (PASS if ok else FAIL).append("verify-tracker")
-
-    # 8. commit allowed AFTER tests ran (discipline: test then commit)
-    time.sleep(1.1)
-    got = plugin._on_pre_tool_call(
-        tool_name="terminal", args={"command": "git commit -m done"})
-    expect("commit allowed after fresh test run", got, False)
-
-    # 9. R29 degradation audit — skipped QA must be auto-logged
-    with open(man, "w") as fh:
-        fh.write("---\ncycle: probe-cycle\ntier: tier2\nstatus: active\n"
-                 "gate_state: gates-passed\nqa: skipped-no-subagent\n---\n"
-                 "# Probe cycle\n")
-    plugin._on_post_tool_call(tool_name="write_file", args={"path": man})
-    dec = os.path.join(proj, ".sage", "decisions.md")
-    logged = os.path.isfile(dec) and "qa:skipped-no-subagent" in open(
-        dec, encoding="utf-8").read()
-    print(("  PASS" if logged else "  FAIL") + " R29 degradation logged to decisions.md")
-    (PASS if logged else FAIL).append("r29-degradation-audit")
-
-    # ── duplicate-key self-disarmament (maintainer review, 2026-08-05) ──
-    # A config where hard_enforcement holds BOTH values is a reader-divergence
-    # bomb: a last-wins main reader disarms while a first-wins gate reader
-    # stays armed. The canonical sage-config-gate.sh refuses to create such a
-    # config (contradictory_flag); the port must too.
-    print("\n── duplicate-key self-disarmament probes ──")
-
-    # 10. main reader must stay ARMED on a contradictory config (first-wins)
-    with open(cfg, "w") as fh:
-        fh.write("hard_enforcement: true\ntdd_enforcement: true\n"
-                 "hard_enforcement: false\n")
-    _sd, flags = plugin._config(proj)
-    armed = flags.get("hard_enforcement") is True
-    print(("  PASS" if armed else "  FAIL") +
-          " main reader stays armed on contradictory config: %s" % armed)
-    (PASS if armed else FAIL).append("contradictory-config-stays-armed")
-
-    # 11. with that config on disk, enforcement must still veto (secrets-gate
-    #     is manifest-independent, so it isolates the reader question)
-    got = plugin._on_pre_tool_call(
-        tool_name="write_file",
-        args={"path": src, "content": "KEY = 'sk-AbCdEfGh1234567890xYz'\n"})
-    expect("gates still veto under contradictory config", got, True,
-           "secrets-gate")
-
-    # 12. config-gate must refuse to CREATE the contradictory config — both
-    #     the whole-file write and the append-by-patch form. Start from a
-    #     CLEAN config so the write is what introduces the contradiction.
-    with open(cfg, "w") as fh:
-        fh.write("hard_enforcement: true\ntdd_enforcement: true\n")
-    # content keeps tdd_enforcement so the ONLY objection is the duplicate key
-    got = plugin._on_pre_tool_call(
-        tool_name="write_file",
-        args={"path": cfg, "content": "hard_enforcement: true\n"
-                                      "tdd_enforcement: true\n"
-                                      "hard_enforcement: false\n"})
-    expect("config-gate refuses contradictory write_file", got, True,
-           "config-gate")
-    got = plugin._on_pre_tool_call(
-        tool_name="patch",
-        args={"path": cfg, "old_string": "hard_enforcement: true",
-              "new_string": "hard_enforcement: true\nhard_enforcement: false"})
-    expect("config-gate refuses contradictory append-by-patch", got, True,
-           "config-gate")
-
-    # restore a clean config for anything run after this block
-    with open(cfg, "w") as fh:
-        fh.write("hard_enforcement: true\ntdd_enforcement: true\n")
-
-    print("\n%d passed, %d failed" % (len(PASS), len(FAIL)))
-    return 1 if FAIL else 0
+@unittest.skipUnless(shutil.which("cygpath"), "Windows/MSYS-only probe")
+def test_hermes_gates_conformance():
+    assert main() == 0
 
 
 if __name__ == "__main__":

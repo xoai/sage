@@ -14,6 +14,16 @@
 
 set -uo pipefail
 
+# Native Windows Python cannot open MSYS-only /tmp paths. Keep the entire
+# fixture tree in one path dialect so payloads, hooks, and inline probes agree.
+HOOK_TIMING_BUDGET_MS=200
+if command -v cygpath >/dev/null 2>&1 &&
+   [ "$(python3 -c 'import os; print(os.name)' 2>/dev/null | tr -d '\015')" = "nt" ]; then
+  TMPDIR="$(cygpath -m "${TMPDIR:-/tmp}")"
+  export TMPDIR
+  HOOK_TIMING_BUDGET_MS=1000
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 HOOK="${SAGE_SPEC_GATE:-$REPO_ROOT/runtime/platforms/claude-code/hooks/sage-spec-gate.sh}"
@@ -500,18 +510,27 @@ assert H10 "CLAUDE_PROJECT_DIR anchors the project root" "$OTHER" \
   '{"tool_name":"Edit","tool_input":{"file_path":"'"$P"'/src/app.ts"}}' \
   --env "CLAUDE_PROJECT_DIR=$P" --exit 2 --stderr "pre-spec"
 
-# H11 — timing budget (loose CI threshold 200 ms)
+# H11 — timing budget (native Windows includes Python process startup)
 if [ -z "$ONLY" ] || [ "$ONLY" = "H11" ]; then
   P=$(new_project); set_config "$P" "hard_enforcement: true"; add_manifest "$P" demo pre-spec
-  t0=$(python3 -c 'import time;print(int(time.time()*1000))')
-  (cd "$P" && printf '%s' "$SRC" | bash "$HOOK" >/dev/null 2>&1)
-  t1=$(python3 -c 'import time;print(int(time.time()*1000))')
-  ms=$((t1 - t0))
-  if [ "$ms" -lt 200 ]; then
-    N_PASS=$((N_PASS + 1)); report PASS H11 "decides in ${ms}ms (< 200ms budget)"
+  if [ -n "${EPOCHREALTIME:-}" ]; then
+    t0=${EPOCHREALTIME/./}
+    (cd "$P" && printf '%s' "$SRC" | bash "$HOOK" >/dev/null 2>&1)
+    t1=${EPOCHREALTIME/./}
+    ms=$(( (t1 - t0) / 1000 ))
+  else
+    t0=$(python3 -c 'import time;print(int(time.time()*1000))')
+    (cd "$P" && printf '%s' "$SRC" | bash "$HOOK" >/dev/null 2>&1)
+    t1=$(python3 -c 'import time;print(int(time.time()*1000))')
+    ms=$((t1 - t0))
+  fi
+  if [ "$ms" -lt "$HOOK_TIMING_BUDGET_MS" ]; then
+    N_PASS=$((N_PASS + 1)); report PASS H11 \
+      "decides in ${ms}ms (< ${HOOK_TIMING_BUDGET_MS}ms budget)"
   else
     N_FAIL=$((N_FAIL + 1)); FAILED_IDS="$FAILED_IDS H11"
-    report FAIL H11 "timing" "took ${ms}ms, budget is 200ms"
+    report FAIL H11 "timing" \
+      "took ${ms}ms, budget is ${HOOK_TIMING_BUDGET_MS}ms"
   fi
 fi
 

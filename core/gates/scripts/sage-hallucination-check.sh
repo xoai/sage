@@ -49,6 +49,20 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 2
 fi
 
+NATIVE_WINDOWS_PYTHON=false
+PYTHON_OS=$(python3 -c 'import os; print(os.name)' 2>/dev/null | tr -d '\015')
+if command -v cygpath >/dev/null 2>&1 && [ "$PYTHON_OS" = "nt" ]; then
+  NATIVE_WINDOWS_PYTHON=true
+fi
+
+python_path() {
+  if [ "$NATIVE_WINDOWS_PYTHON" = true ]; then
+    cygpath -w "$1"
+  else
+    printf '%s\n' "$1"
+  fi
+}
+
 # ── Static analysis (single pass, emitted as tab-separated records) ──
 #
 # Protocol:
@@ -278,7 +292,9 @@ emit('CHECKED_PKGS', checked_pkgs)
 sys.stdout.write('\n'.join(out) + ('\n' if out else ''))
 PYEOF
 
-ANALYSIS=$(python3 "$PY_ANALYZER" "$TARGET" "$ROOT")
+ANALYSIS=$(python3 "$(python_path "$PY_ANALYZER")" \
+                   "$(python_path "$TARGET")" \
+                   "$(python_path "$ROOT")" | tr -d '\015')
 ANALYSIS_RC=$?
 
 if [ "$ANALYSIS_RC" -ne 0 ]; then
@@ -403,7 +419,7 @@ elif [ -f "$ROOT/go.mod" ]; then
   if ! go version >/dev/null 2>&1; then
     warn "go.mod present but no working go toolchain — skipping compile check"
   elif GO_OUT=$(mktemp -d "${TMPDIR:-/tmp}/sage-gate4-go-XXXXXX"); then
-    TOOLCHAIN_ARGV=(go build -o "$GO_OUT" ./...)
+    TOOLCHAIN_ARGV=(go build -buildvcs=false -o "$GO_OUT" ./...)
     TOOLCHAIN_NAME="go build"
     TOOLCHAIN_ERR_RE='\.go:[0-9]+:|^go:'
   else
