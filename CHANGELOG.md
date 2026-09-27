@@ -2,7 +2,7 @@
 
 All notable changes to Sage will be documented in this file.
 
-## [Unreleased] — TDD gate: a test is test source, not any file under tests/
+## [1.3.22] — TDD gate: a test is test source, not any file under tests/
 
 Found piloting an opencode → Claude Code implementer: the TDD gate's
 `is_test()` matched ANY path under `tests?/`, `__tests__/` or `spec/`, and
