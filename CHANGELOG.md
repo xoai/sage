@@ -2,6 +2,44 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [Unreleased] — Claude Code as an opencode model: `sage setup claude-bridge`
+
+On opencode each role can run on its own model; now one of them can be
+**Claude Code itself**. `sage setup claude-bridge` installs a small local
+bridge that opencode's built-in `@ai-sdk/openai-compatible` provider talks
+to; pick `claude-cli/sonnet|opus|haiku` per agent in `opencode.jsonc`.
+Built and piloted live as a personal setup first (real Claude, a Go project,
+a `--parallel` lane), reviewed, then productized. Guide:
+`docs/claude-bridge.md`.
+
+- **Supervised on both platforms:** systemd user unit on Linux/WSL, launchd
+  LaunchAgent on macOS (tries `gui/`, then `user/`, then legacy `load -w`).
+  Starts at login, restarts after a crash; `--status`, `--remove [--purge]`,
+  `--run` (foreground), `--port`. `sage upgrade` restarts it onto new code.
+- **Gates still apply:** Claude runs in the project with sage's Claude Code
+  hooks, so every edit is policed; projects without them are refused (each
+  needs `sage update --platform opencode,claude-code`).
+- **Right directory, always:** from opencode's `<env>` block; a `--parallel`
+  lane task runs IN its worktree (same-repo only — Claude Code confines a
+  headless session to its start directory, so lane work could not otherwise
+  commit), anything else refused rather than run in the main checkout.
+- **Bounded and cancellable:** one Claude per working tree (others queue);
+  keep-alives beat opencode's stream timeout; a cancel stops Claude in ~1 s,
+  a queued cancel never starts it; runs are bounded (25 min) and report
+  `STATUS: BLOCKED` on expiry; process trees are killed children-first.
+- **Installer details that were bugs in the pilot:** PATH captured and
+  QUOTED in the systemd unit (unquoted, a space-bearing WSL dir truncated it
+  and dropped `go`); the service runs the installer's absolute interpreter
+  (macOS `/usr/bin/python3` can be the CLT stub); install is verified by
+  identity (`/healthz` code path + pid), not "the port answers"; an existing
+  personal install is migrated in place (token kept, legacy files moved to
+  `legacy-<date>/`, never deleted); opencode config is never auto-edited.
+- **Tested without an account:** `develop/validators/tools/test_claude_bridge.py`
+  (fastcheck) drives the real bridge and wrapper with a fake `claude`; the
+  new `claude-bridge` CI workflow runs it on Linux (python 3.8) and on
+  macOS under the system bash 3.2, and exercises the real launchd install,
+  crash-restart and removal.
+
 ## [1.3.22] — TDD gate: a test is test source, not any file under tests/
 
 Found piloting an opencode → Claude Code implementer: the TDD gate's

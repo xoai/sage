@@ -1451,6 +1451,18 @@ sage_upgrade() {
     python3 "$ms_script" upgrade "$sage_home/framework" || true
   fi
 
+  # ── claude-cli bridge (no-op unless installed) ──
+  # The service runs the bridge from the framework; after the framework
+  # changed on disk, restart it so it runs the new code, not the old inode.
+  local cb_script="$sage_home/framework/runtime/tools/claude_bridge_setup.py"
+  if [ -f "$cb_script" ] && command -v python3 >/dev/null 2>&1; then
+    if python3 "$cb_script" restart "$sage_home/framework" >/dev/null 2>&1; then
+      :
+    else
+      echo -e "  ${YELLOW}⚠ could not restart the claude-cli bridge — run: sage setup claude-bridge${RESET}"
+    fi
+  fi
+
   echo ""
 }
 
@@ -1503,6 +1515,7 @@ sage_setup() {
   case "$component" in
     memory)      sage_setup_memory "$@" ;;
     multi-agent) sage_setup_multi_agent "$@" ;;
+    claude-bridge) sage_setup_claude_bridge "$@" ;;
     "")
       echo ""
       echo -e "  ${BOLD}Sage — Setup${RESET}"
@@ -1511,16 +1524,51 @@ sage_setup() {
       echo "    sage setup memory               Configure persistent memory (sage-memory MCP)"
       echo "    sage setup multi-agent          Install the cross-model build cycle"
       echo "    sage setup multi-agent --remove Uninstall it"
+      echo "    sage setup claude-bridge        Serve opencode roles with Claude Code (claude -p)"
+      echo "    sage setup claude-bridge --status | --remove [--purge] | --run [--port N]"
       echo ""
       return
       ;;
     *)
       echo ""
       echo -e "  ${RED}Unknown setup target: $component${RESET}"
-      echo "  Try: sage setup memory  |  sage setup multi-agent"
+      echo "  Try: sage setup memory  |  sage setup multi-agent  |  sage setup claude-bridge"
       echo ""
       return 1
       ;;
+  esac
+}
+
+# sage setup claude-bridge — the opencode → Claude Code bridge as a user
+# service (systemd on Linux/WSL, launchd on macOS). See docs/claude-bridge.md.
+sage_setup_claude_bridge() {
+  require_python
+  local sub="install" port="8765" purge=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --status) sub="status" ;;
+      --remove) sub="remove" ;;
+      --purge)  purge="--purge" ;;
+      --run)    sub="run" ;;
+      --port)   port="${2:-}"; shift ;;
+      --port=*) port="${1#--port=}" ;;
+      *) echo -e "  ${RED}Unknown option: $1${RESET}"; return 2 ;;
+    esac
+    shift
+  done
+  case "$port" in ''|*[!0-9]*) echo -e "  ${RED}--port needs a number${RESET}"; return 2 ;; esac
+  local tool="$SAGE_FRAMEWORK/runtime/tools/claude_bridge_setup.py"
+  local bridge="$SAGE_FRAMEWORK/runtime/platforms/community/opencode/claude-bridge/claude-cli-bridge.py"
+  echo ""
+  echo -e "  ${BOLD}Sage — Claude bridge${RESET}"
+  echo ""
+  case "$sub" in
+    run)
+      echo "  Running in the foreground on port $port (Ctrl+C to stop)."
+      SAGE_BRIDGE_PORT="$port" exec python3 "$bridge"
+      ;;
+    remove) python3 "$tool" remove "$SAGE_FRAMEWORK" $purge ;;
+    *)      python3 "$tool" "$sub" "$SAGE_FRAMEWORK" --port "$port" ;;
   esac
 }
 

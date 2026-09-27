@@ -830,6 +830,17 @@ Claude Code only in v1.
 - `.sage/docs/multi-agent.md` (post-install) — protocol contract,
   schema, integration points
 
+### Claude Code as an opencode model (optional)
+
+On **opencode**, where each role can run on a different model, one of those
+models can be **Claude Code itself**: `sage setup claude-bridge` installs a
+local bridge (systemd on Linux/WSL, launchd on macOS) and prints the
+`opencode.jsonc` snippet; then pick `claude-cli/sonnet|opus|haiku` for a role
+such as `sage-implementer`. Sage's gates still police every edit Claude makes
+(each project needs `sage update --platform opencode,claude-code`), `--parallel`
+lane tasks run in their own worktree, and a cancel stops Claude within about
+a second. Guide: **[docs/claude-bridge.md](docs/claude-bridge.md)**.
+
 ## Parallel Sessions (optional)
 
 Every delivery workflow works on its own branch (`feat/<slug>`,

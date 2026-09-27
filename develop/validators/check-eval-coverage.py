@@ -77,6 +77,13 @@ DISCOVERY = [
     # layer — the wire that makes the shared gates and the scope judge real
     # off Claude Code. Behavioral surface, so it rows here.
     ("adapter",      "runtime/platforms/community/opencode/setup/sage-plugin.js"),
+    # The claude-cli bridge serves an opencode role with Claude Code: it
+    # decides WHERE Claude runs (env workdir, lane worktree), refuses ungated
+    # projects, serializes same-tree runs and bounds/kills them — behavior, not
+    # scaffolding. Its installer (claude_bridge_setup.py) is scaffolding, like
+    # multi_agent_setup.py, and deliberately not listed.
+    ("adapter",      "runtime/platforms/community/opencode/claude-bridge/claude-cli-bridge.py"),
+    ("adapter",      "runtime/platforms/community/opencode/claude-bridge/sage-claude-implement.sh"),
 ]
 
 
