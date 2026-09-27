@@ -2,7 +2,7 @@
 
 All notable changes to Sage will be documented in this file.
 
-## [Unreleased] — Claude Code as an opencode model: `sage setup claude-bridge`
+## [1.3.23] — Claude Code as an opencode model: `sage setup claude-bridge`
 
 On opencode each role can run on its own model; now one of them can be
 **Claude Code itself**. `sage setup claude-bridge` installs a small local
