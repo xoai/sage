@@ -2,6 +2,37 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [Unreleased] — TDD gate: a test is test source, not any file under tests/
+
+Found piloting an opencode → Claude Code implementer: the TDD gate's
+`is_test()` matched ANY path under `tests?/`, `__tests__/` or `spec/`, and
+both of its escape rules trusted it. Reproduced against the shipped gate
+(control blocks; each of these let a test-free source edit through):
+
+- **One pytest run held the gate open.** A project that doesn't gitignore
+  `__pycache__` gets an untracked `tests/__pycache__/` on its first test
+  run, and the gate treated it as "a test is written" for every later edit.
+  `sage init` writes only `.sage-memory/` to `.gitignore`, so every new
+  Python project set up with sage hit this on its first test run.
+- **An untracked fixture** (`tests/fixtures/data.json`) opened it the same way.
+- **A fixture-only or bytecode-only commit** passed as the red commit.
+
+A test now has to be test SOURCE: a test location/name AND a source-code
+extension, never bytecode. Suite detection, rule 1 (dirty/untracked) and
+rule 2 (red commit) all use it.
+
+Writing the guard tests surfaced a pre-existing false BLOCK in the other
+direction: `git status` collapses a new untracked directory to `?? calc/`,
+so a Go test written first in a new package was invisible and the gate
+blocked a developer doing TDD exactly right. Rule 1 now lists untracked
+files individually (`--untracked-files=all`), which also keeps a new test in
+a new `tests/unit/` visible once tests must be source.
+
+Hook tests TG1–TG7 (4 bypasses, 2 legit-path guards, fixtures-only repo has
+no suite); a mutation audit confirms each of the four changed decisions is
+killed by its intended test. The gate is one source copied to both
+platforms and the plugin, so the fix reaches all three.
+
 ## [1.3.21] — watchdog cleanup-order fix: a fast-failing suite is a FAIL, never a "timeout"
 
 One fix, shipped immediately because v1.3.20's flagship carries it:

@@ -440,6 +440,63 @@ printf 'tdd_enforcement: true\n' > "$P/.sage/config.yaml"
 assert H31 "a non-git project fails open" "$P" "$SRCEDIT" \
   --hook "$TDD_GATE" --exit 0
 
+# ─── A TEST is test SOURCE — not any file that lives under tests/ ───────────
+# Found 2026-09-27 piloting an opencode→claude implementer: is_test() matched
+# any path under tests?/ — bytecode, fixtures, snapshots — and both escape
+# rules trusted it. One pytest run in a project that does not gitignore
+# __pycache__ (sage init writes only .sage-memory/ to .gitignore) left an
+# untracked tests/__pycache__/ that held the gate OPEN for every later edit.
+
+# TG1 — pytest bytecode under tests/ is not a test (rule 1, untracked)
+P=$(tdd_project); mkdir -p "$P/tests/__pycache__"
+printf 'x' > "$P/tests/__pycache__/test_x.cpython-312-pytest-9.0.3.pyc"
+assert TG1 "untracked tests/__pycache__ bytecode does not open the gate" "$P" "$SRCEDIT" \
+  --hook "$TDD_GATE" --exit 2 --stderr "tests before code"
+
+# TG2 — a fixture under tests/ is not a test (rule 1, untracked)
+P=$(tdd_project); mkdir -p "$P/tests/fixtures"; printf '{"a":1}\n' > "$P/tests/fixtures/data.json"
+assert TG2 "an untracked fixture under tests/ does not open the gate" "$P" "$SRCEDIT" \
+  --hook "$TDD_GATE" --exit 2 --stderr "tests before code"
+
+# TG3 — a fixture-only commit is not the red commit (rule 2)
+P=$(tdd_project); mkdir -p "$P/tests/fixtures"; printf '{"a":1}\n' > "$P/tests/fixtures/data.json"
+( cd "$P" && git -c user.email=t@t -c user.name=t add -A \
+    && git -c user.email=t@t -c user.name=t commit -qm "update fixture" ) >/dev/null 2>&1
+assert TG3 "a commit touching only a fixture under tests/ is not a red commit" "$P" "$SRCEDIT" \
+  --hook "$TDD_GATE" --exit 2 --stderr "tests before code"
+
+# TG4 — committed bytecode under tests/ is not the red commit (the pilot's case:
+# `git commit -a` swept a rebuilt .pyc in and the next test-free edit went through)
+P=$(tdd_project); mkdir -p "$P/tests/__pycache__"; printf 'x' > "$P/tests/__pycache__/test_x.pyc"
+( cd "$P" && git -c user.email=t@t -c user.name=t add -A \
+    && git -c user.email=t@t -c user.name=t commit -qm "chore" ) >/dev/null 2>&1
+assert TG4 "a commit touching only tests/__pycache__ bytecode is not a red commit" "$P" "$SRCEDIT" \
+  --hook "$TDD_GATE" --exit 2 --stderr "tests before code"
+
+# TG5 — GUARD: a real test file in a NEW untracked directory still opens the gate.
+# `git status --porcelain` collapses a new directory to "?? tests/unit/"; a fix
+# that demanded a source extension on that entry would block legitimate TDD.
+P=$(tdd_project); mkdir -p "$P/tests/unit"; printf 'def test_new():\n    assert True\n' > "$P/tests/unit/test_new.py"
+assert TG5 "a new test file inside a new untracked directory is still a test" "$P" "$SRCEDIT" \
+  --hook "$TDD_GATE" --exit 0
+
+# TG6 — a Go test written first in a NEW package opens the gate. This was a
+# pre-existing FALSE BLOCK (found writing this guard): porcelain collapses the
+# new package to "?? calc/", which is not a test path, so the gate blocked a
+# developer doing TDD exactly right. Fixed by listing untracked files
+# individually (--untracked-files=all).
+P=$(tdd_project); mkdir -p "$P/calc"; printf 'package calc\n' > "$P/calc/calc_test.go"
+assert TG6 "a dirty x_test.go beside its source opens the gate" "$P" "$SRCEDIT" \
+  --hook "$TDD_GATE" --exit 0
+
+# TG7 — a repo whose only files under tests/ are fixtures has no test SUITE —
+# consistent with H26 (nothing to be test-first about yet).
+P=$(tdd_project --no-tests); mkdir -p "$P/tests/fixtures"; printf '{"a":1}\n' > "$P/tests/fixtures/data.json"
+( cd "$P" && git -c user.email=t@t -c user.name=t add -A \
+    && git -c user.email=t@t -c user.name=t commit -qm "fixture only" ) >/dev/null 2>&1
+assert TG7 "fixtures without any test source are not a test suite" "$P" "$SRCEDIT" \
+  --hook "$TDD_GATE" --exit 0
+
 
 # ─── The plugin is step 1 of 2, and must say so ─────────────────────────────
 # Found by smoking the marketplace install. The plugin ships commands, skills and

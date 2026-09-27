@@ -19,10 +19,14 @@
 # So this fires on the EDIT, not on the cycle. If a source file is about to change
 # and no test has been written for it, the edit does not happen.
 #
-#   ALLOW when: a test file is already dirty or untracked in the working tree
-#               (you wrote the test — proceed), or the most recent commit touched
-#               a test (you committed the test first, now write the code).
+#   ALLOW when: a test SOURCE file is already dirty or untracked in the working
+#               tree (you wrote the test — proceed), or the most recent commit
+#               touched test source and nothing else (the red commit: you
+#               committed the test first, now write the code).
 #   BLOCK when: neither. Write the failing test first.
+#
+# "Test source" = a test location/name AND a source-code extension. Fixtures,
+# snapshots and bytecode under tests/ prove nothing was written (is_test_source).
 #
 # Deliberately NOT clever. It does not try to decide whether the test is a GOOD
 # test, or whether it covers this particular change — that is undecidable and the
@@ -146,6 +150,19 @@ def is_test(path):
         return False
     return bool(TEST_RE.search(path))
 
+
+def is_test_source(path):
+    """A test file that is test CODE — the only thing that proves a test was
+    written. is_test() alone matches any path under tests?/, so bytecode,
+    fixtures and snapshots counted: one pytest run in a project that does not
+    gitignore __pycache__ left an untracked tests/__pycache__/ that held the
+    gate OPEN for every later edit, and a fixture-only commit passed as the
+    red commit (found 2026-09-27; hook tests TG1–TG4)."""
+    path = path.replace(os.sep, "/")
+    if "/__pycache__/" in "/" + path:
+        return False
+    return is_test(path) and os.path.splitext(path)[1].lower() in SOURCE_EXT
+
 if is_test(rel_posix):
     allow()                                   # writing the test IS the point
 
@@ -182,17 +199,21 @@ if not git("rev-parse", "--git-dir").strip():
 
 # ── does this project even have a test suite? ──
 tracked = git("ls-files")
-has_suite = any(is_test(p) for p in tracked.splitlines() if p.strip())
+has_suite = any(is_test_source(p) for p in tracked.splitlines() if p.strip())
 if not has_suite:
     allow()   # nothing to be test-first about yet; documented hole, see the header
 
 # ── ALLOW 1: a test is already written but not committed ──
 # `git status --porcelain` lines are "XY path"; renames carry "old -> new".
-for line in git("status", "--porcelain").splitlines():
+# --untracked-files=all lists every untracked FILE: by default a new directory
+# collapses to "?? calc/", which hid a Go test written first in a new package
+# (a false block) and — once a test must be source — would hide a new test in
+# a new tests/unit/ too (hook tests TG5, TG6).
+for line in git("status", "--porcelain", "--untracked-files=all").splitlines():
     if len(line) < 4:
         continue
     path = line[3:].split(" -> ")[-1].strip().strip('"')
-    if path and is_test(path):
+    if path and is_test_source(path):
         allow()
 
 # ── ALLOW 2: the previous commit was the RED commit — a test, and only a test ──
@@ -219,7 +240,7 @@ def is_source(path):
 
 
 if head_files:
-    tests_in_head = [p for p in head_files if is_test(p)]
+    tests_in_head = [p for p in head_files if is_test_source(p)]
     source_in_head = [p for p in head_files if is_source(p)]
     if tests_in_head and not source_in_head:
         allow()                               # the red commit

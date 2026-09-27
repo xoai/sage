@@ -65,7 +65,7 @@ safe: a project that has never heard of a key is never surprise-blocked.
 | Key | New projects | Absent means | What it gates |
 |---|---|---|---|
 | `hard_enforcement` | `true` | off | The master switch. Nothing below fires without it. Projects upgraded by `sage update` get it added as `false` with a notice — enforcement never surprises an established workflow. |
-| `tdd_enforcement` | `true` | off | The TDD gate: a source edit is blocked until a test is dirty/untracked or the last commit was test-only. Escape hatches: `tier: tier1` on the cycle manifest, or this key. |
+| `tdd_enforcement` | `true` | off | The TDD gate: a source edit is blocked until a test SOURCE file (test location/name + a source-code extension — never a fixture, snapshot or `__pycache__` bytecode) is dirty/untracked, or the last commit touched only test source. Escape hatches: `tier: tier1` on the cycle manifest, or this key. |
 | `secrets_gate` | on | on | Credentials in source are blocked (provider-shaped patterns; `.env` and test fixtures allowed; live-marked keys blocked everywhere but `.env`). `false` is the explicit opt-out. |
 | `verify_gate` | on | on | A code-bearing commit demands this-session test evidence. `false` opts out. |
 | `bookkeeping_gate` | on | on | Hand-edits of an active cycle's `manifest.md`/`decisions.md` are redirected to the one-command `manifest.py close-out` writer. `false` opts out. |
