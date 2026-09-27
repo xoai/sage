@@ -374,9 +374,19 @@ class InstallerRenderTest(unittest.TestCase):
         self.assertIn('Environment="PATH=%s"' % SPACEY_PATH, unit)
         self.assertIn('ExecStart="/opt/py 3/bin/python3" "%s"' % BRIDGE, unit)
         self.assertIn('Environment="SAGE_BRIDGE_PORT=8765"', unit)
+        self.assertIn('Environment="SAGE_CLAUDE_TIMEOUT=1500"', unit)
+        self.assertIn('Environment="SAGE_CLAUDE_TIMEOUT=3600"',
+                      self.s.render_unit(**dict(self.args, timeout=3600)))
         self.assertIn("Restart=on-failure", unit)
         self.assertIn("WantedBy=default.target", unit)
         self.assertNotIn("After=default.target", unit)   # ordering noise
+
+    def test_unit_escapes_systemd_specifiers_and_backslashes(self):
+        # WSL imports the Windows PATH; a literal %SystemRoot% entry would be
+        # silently rewritten by systemd (%S = state dir) — verify can't see it
+        weird = "/usr/bin:/mnt/c/%SystemRoot%/x:/mnt/c/a\\b:/q\"uote"
+        unit = self.s.render_unit(**dict(self.args, path_env=weird))
+        self.assertIn('Environment="PATH=/usr/bin:/mnt/c/%%SystemRoot%%/x:/mnt/c/a\\\\b:/q\\"uote"', unit)
 
     @unittest.skipUnless(shutil.which("systemd-analyze"), "no systemd-analyze")
     def test_unit_passes_systemd_verify_with_spacey_path(self):
@@ -396,6 +406,7 @@ class InstallerRenderTest(unittest.TestCase):
         self.assertEqual(pl["ProgramArguments"], ["/opt/py 3/bin/python3", str(BRIDGE)])
         self.assertEqual(pl["EnvironmentVariables"]["PATH"], SPACEY_PATH)
         self.assertEqual(pl["EnvironmentVariables"]["SAGE_BRIDGE_PORT"], "8765")
+        self.assertEqual(pl["EnvironmentVariables"]["SAGE_CLAUDE_TIMEOUT"], "1500")
         self.assertTrue(pl["RunAtLoad"])
         self.assertEqual(pl["KeepAlive"], {"SuccessfulExit": False})
         self.assertTrue(pl["StandardErrorPath"].startswith(self.args["state_dir"]))

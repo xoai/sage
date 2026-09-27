@@ -36,9 +36,12 @@ sage setup claude-bridge --status   # service, identity, port, config wiring
 sage setup claude-bridge --remove   # stop + remove the service (keeps token + log)
 sage setup claude-bridge --remove --purge   # … and delete token + log
 sage setup claude-bridge --run      # foreground, no service
+sage setup claude-bridge --timeout 3600   # allow runs up to an hour
 ```
 
-`--port N` changes the port (default 8765). Install runs a user service —
+`--port N` changes the port (default 8765); `--timeout SECS` changes how long
+one Claude run may take before it is stopped (default 1500 = 25 minutes;
+minimum 60). Install runs a user service —
 **systemd** (`~/.config/systemd/user/sage-claude-bridge.service`) on
 Linux/WSL, **launchd** (`~/Library/LaunchAgents/dev.sage.claude-bridge.plist`)
 on macOS — that starts at login and restarts after a crash. The installer
@@ -87,9 +90,8 @@ wired.
 - One Claude per working tree at a time (others queue); different projects
   and lanes run in parallel.
 - Keep-alive pings stop opencode dropping long runs; cancelling in opencode
-  stops Claude within about a second; a run is bounded at 25 minutes
-  (`SAGE_CLAUDE_TIMEOUT` in the service environment) and then reported as
-  `STATUS: BLOCKED`.
+  stops Claude within about a second; a run is bounded (25 minutes by
+  default, `--timeout` at install) and then reported as `STATUS: BLOCKED`.
 - Answers opencode's own title/summary prompts locally without starting
   Claude.
 

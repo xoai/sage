@@ -1525,7 +1525,7 @@ sage_setup() {
       echo "    sage setup multi-agent          Install the cross-model build cycle"
       echo "    sage setup multi-agent --remove Uninstall it"
       echo "    sage setup claude-bridge        Serve opencode roles with Claude Code (claude -p)"
-      echo "    sage setup claude-bridge --status | --remove [--purge] | --run [--port N]"
+      echo "    sage setup claude-bridge --status | --remove [--purge] | --run   [--port N] [--timeout SECS]"
       echo ""
       return
       ;;
@@ -1543,7 +1543,7 @@ sage_setup() {
 # service (systemd on Linux/WSL, launchd on macOS). See docs/claude-bridge.md.
 sage_setup_claude_bridge() {
   require_python
-  local sub="install" port="8765" purge=""
+  local sub="install" port="8765" purge="" timeout="1500"
   while [ $# -gt 0 ]; do
     case "$1" in
       --status) sub="status" ;;
@@ -1552,11 +1552,14 @@ sage_setup_claude_bridge() {
       --run)    sub="run" ;;
       --port)   port="${2:-}"; shift ;;
       --port=*) port="${1#--port=}" ;;
+      --timeout)   timeout="${2:-}"; shift ;;
+      --timeout=*) timeout="${1#--timeout=}" ;;
       *) echo -e "  ${RED}Unknown option: $1${RESET}"; return 2 ;;
     esac
     shift
   done
   case "$port" in ''|*[!0-9]*) echo -e "  ${RED}--port needs a number${RESET}"; return 2 ;; esac
+  case "$timeout" in ''|*[!0-9]*) echo -e "  ${RED}--timeout needs a number of seconds${RESET}"; return 2 ;; esac
   local tool="$SAGE_FRAMEWORK/runtime/tools/claude_bridge_setup.py"
   local bridge="$SAGE_FRAMEWORK/runtime/platforms/community/opencode/claude-bridge/claude-cli-bridge.py"
   echo ""
@@ -1565,10 +1568,11 @@ sage_setup_claude_bridge() {
   case "$sub" in
     run)
       echo "  Running in the foreground on port $port (Ctrl+C to stop)."
-      SAGE_BRIDGE_PORT="$port" exec python3 "$bridge"
+      SAGE_BRIDGE_PORT="$port" SAGE_CLAUDE_TIMEOUT="$timeout" exec python3 "$bridge"
       ;;
     remove) python3 "$tool" remove "$SAGE_FRAMEWORK" $purge ;;
-    *)      python3 "$tool" "$sub" "$SAGE_FRAMEWORK" --port "$port" ;;
+    install) python3 "$tool" install "$SAGE_FRAMEWORK" --port "$port" --timeout "$timeout" ;;
+    *)       python3 "$tool" "$sub" "$SAGE_FRAMEWORK" --port "$port" ;;
   esac
 }
 

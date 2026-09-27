@@ -46,6 +46,7 @@ import time
 UNIT_NAME = "sage-claude-bridge.service"
 LAUNCHD_LABEL = "dev.sage.claude-bridge"
 DEFAULT_PORT = 8765
+DEFAULT_TIMEOUT = 1500          # seconds per Claude run (the wrapper's own default)
 BRIDGE_REL = pathlib.Path("runtime/platforms/community/opencode/claude-bridge/claude-cli-bridge.py")
 LEGACY_FILES = ("claude-cli-bridge.py", "sage-claude-implement.sh",
                 "claude-implementer-shim.md", "last-request.json")
@@ -67,19 +68,31 @@ def plist_path() -> pathlib.Path:
 
 # ── pure renders (tested on every OS) ──────────────────────────────────────
 
-def render_unit(python: str, bridge: str, path_env: str, port: int, state_dir: str) -> str:
+def systemd_quote(value: str) -> str:
+    """Escape a value for a double-quoted systemd setting: `\\` is an escape
+    and `%` a SPECIFIER inside Environment=/ExecStart= — a Windows PATH entry
+    like %SystemRoot% (WSL imports the Windows PATH) would be silently
+    rewritten (%S = the state dir), and `systemd-analyze verify` does not flag
+    it. Quotes themselves are escaped too."""
+    return value.replace("\\", "\\\\").replace('"', '\\"').replace("%", "%%")
+
+
+def render_unit(python: str, bridge: str, path_env: str, port: int, state_dir: str,
+                timeout: int = DEFAULT_TIMEOUT) -> str:
+    q = systemd_quote
     return "\n".join([
         "[Unit]",
         "Description=Sage claude-cli bridge (opencode -> claude -p)",
         "Documentation=https://github.com/xoai/sage/blob/main/docs/claude-bridge.md",
         "",
         "[Service]",
-        'ExecStart="%s" "%s"' % (python, bridge),
+        'ExecStart="%s" "%s"' % (q(python), q(bridge)),
         "# PATH captured at install time and QUOTED: it may contain dirs with",
         "# spaces (WSL: /mnt/c/Program Files/...); unquoted, systemd truncates it.",
-        'Environment="PATH=%s"' % path_env,
+        'Environment="PATH=%s"' % q(path_env),
         'Environment="SAGE_BRIDGE_PORT=%d"' % port,
-        'Environment="SAGE_BRIDGE_STATE_DIR=%s"' % state_dir,
+        'Environment="SAGE_CLAUDE_TIMEOUT=%d"' % timeout,
+        'Environment="SAGE_BRIDGE_STATE_DIR=%s"' % q(state_dir),
         "Restart=on-failure",
         "RestartSec=3",
         "",
@@ -89,12 +102,14 @@ def render_unit(python: str, bridge: str, path_env: str, port: int, state_dir: s
     ])
 
 
-def render_plist(python: str, bridge: str, path_env: str, port: int, state_dir: str) -> str:
+def render_plist(python: str, bridge: str, path_env: str, port: int, state_dir: str,
+                 timeout: int = DEFAULT_TIMEOUT) -> str:
     return plistlib.dumps({
         "Label": LAUNCHD_LABEL,
         "ProgramArguments": [python, bridge],
         "EnvironmentVariables": {"PATH": path_env,
                                  "SAGE_BRIDGE_PORT": str(port),
+                                 "SAGE_CLAUDE_TIMEOUT": str(timeout),
                                  "SAGE_BRIDGE_STATE_DIR": state_dir},
         "RunAtLoad": True,
         "KeepAlive": {"SuccessfulExit": False},       # restart on crash
@@ -272,7 +287,8 @@ def verify(port: int, token: str, bridge: pathlib.Path, osname: str, wait=20.0):
 
 # ── commands ───────────────────────────────────────────────────────────────
 
-def cmd_install(framework: pathlib.Path, port: int, osname: str) -> int:
+def cmd_install(framework: pathlib.Path, port: int, osname: str,
+                timeout: int = DEFAULT_TIMEOUT) -> int:
     bridge = (framework / BRIDGE_REL).resolve()
     if not bridge.is_file():
         print("✗ bridge not found in the framework: %s" % bridge)
@@ -294,7 +310,7 @@ def cmd_install(framework: pathlib.Path, port: int, osname: str) -> int:
     python = os.path.realpath(sys.executable)
     path_env = os.environ.get("PATH", "/usr/bin:/bin")
     args = dict(python=python, bridge=str(bridge), path_env=path_env,
-                port=port, state_dir=str(sdir))
+                port=port, state_dir=str(sdir), timeout=timeout)
     try:
         if osname == "linux":
             apply_linux(render_unit(**args))
@@ -310,7 +326,8 @@ def cmd_install(framework: pathlib.Path, port: int, osname: str) -> int:
         print("  healthz answered: %s" % (json.dumps(h) if h else "nothing"))
         print("  service file: %s — log: %s/bridge.log" % (where, sdir))
         return 1
-    print("✓ claude-cli bridge running — pid %s, sage %s, port %d" % (h["pid"], h.get("version"), port))
+    print("✓ claude-cli bridge running — pid %s, sage %s, port %d, run limit %ds"
+          % (h["pid"], h.get("version"), port, timeout))
     print("  service: %s" % where)
     print("  state:   %s (bridge.token, bridge.log)" % sdir)
     for m in moved:
@@ -390,12 +407,17 @@ def main(argv=None) -> int:
     p.add_argument("cmd", choices=["install", "status", "remove", "restart", "render"])
     p.add_argument("framework", type=pathlib.Path)
     p.add_argument("--port", type=int, default=DEFAULT_PORT)
+    p.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT,
+                   help="seconds before a Claude run is stopped (default 1500)")
     p.add_argument("--purge", action="store_true")
     p.add_argument("--os", choices=["linux", "macos"])
     a = p.parse_args(argv)
     osname = service_os()
     if a.cmd == "install":
-        return cmd_install(a.framework, a.port, osname)
+        if a.timeout < 60:
+            print("✗ --timeout must be at least 60 seconds")
+            return 2
+        return cmd_install(a.framework, a.port, osname, a.timeout)
     if a.cmd == "status":
         return cmd_status(a.framework, a.port, osname)
     if a.cmd == "remove":

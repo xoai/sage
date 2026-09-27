@@ -15,7 +15,7 @@ a `--parallel` lane), reviewed, then productized. Guide:
 - **Supervised on both platforms:** systemd user unit on Linux/WSL, launchd
   LaunchAgent on macOS (tries `gui/`, then `user/`, then legacy `load -w`).
   Starts at login, restarts after a crash; `--status`, `--remove [--purge]`,
-  `--run` (foreground), `--port`. `sage upgrade` restarts it onto new code.
+  `--run` (foreground), `--port`, `--timeout`. `sage upgrade` restarts it onto new code.
 - **Gates still apply:** Claude runs in the project with sage's Claude Code
   hooks, so every edit is policed; projects without them are refused (each
   needs `sage update --platform opencode,claude-code`).
@@ -29,7 +29,9 @@ a `--parallel` lane), reviewed, then productized. Guide:
   `STATUS: BLOCKED` on expiry; process trees are killed children-first.
 - **Installer details that were bugs in the pilot:** PATH captured and
   QUOTED in the systemd unit (unquoted, a space-bearing WSL dir truncated it
-  and dropped `go`); the service runs the installer's absolute interpreter
+  and dropped `go`), with `%` and `\` escaped (systemd expands `%` specifiers
+  inside Environment= — a Windows `%SystemRoot%` entry would be silently
+  rewritten, and `systemd-analyze verify` does not flag it); the service runs the installer's absolute interpreter
   (macOS `/usr/bin/python3` can be the CLT stub); install is verified by
   identity (`/healthz` code path + pid), not "the port answers"; an existing
   personal install is migrated in place (token kept, legacy files moved to
