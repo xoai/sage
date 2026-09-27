@@ -412,6 +412,32 @@ surfaces:
       E-JUDGE-1 has NOT run on opencode, and the measured verdict above is
       unchanged.
 
+  opencode-claude-bridge:
+    path: runtime/platforms/community/opencode/claude-bridge/claude-cli-bridge.py
+    kind: adapter
+    uncovered: >
+      No agentic scenario drives opencode (the harness runs claude-code), and
+      a scenario would need a Claude account. Pinned deterministically instead:
+      develop/validators/tools/test_claude_bridge.py drives the REAL bridge and
+      REAL wrapper (sage-claude-implement.sh) with a fake claude — auth,
+      /healthz identity, exact-match housekeeping, <env> workdir, ungated
+      refusal, lane routing + refusals, same-tree serialization, cancel while
+      running/queued, wrapper timeout. Piloted live against real Claude Code
+      (2026-09-27) incl. a Go project and a --parallel lane.
+
+  opencode-claude-bridge-wrapper:
+    path: runtime/platforms/community/opencode/claude-bridge/sage-claude-implement.sh
+    kind: adapter
+    uncovered: >
+      Runs one task through `claude -p`: refuses projects without sage's Claude
+      Code hooks, role lock + tool allow-list, 25-min bound with process-tree
+      kill, self-ignoring transcripts, precise gate-block counting. Pinned end
+      to end by test_claude_bridge.py (the bridge drives it with a fake claude)
+      incl. the timeout path, and in the claude-bridge CI workflow under the
+      macOS system bash 3.2. The installer (runtime/tools/claude_bridge_setup.py)
+      is scaffolding and unlisted; its renders are unit-tested and its launchd
+      lifecycle runs in that workflow's macOS job.
+
   adapter-opencode:
     path: runtime/platforms/community/opencode/setup/sage-plugin.js
     kind: adapter

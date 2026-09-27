@@ -1,0 +1,111 @@
+name: claude-bridge
+
+# The opencode → Claude Code bridge (`sage setup claude-bridge`), tested on
+# BOTH platforms it supports. The integration suite drives the real bridge and
+# the real wrapper with a fake `claude` on PATH, so no Claude account is
+# needed. The macOS job is the only real evidence for launchd: it installs the
+# LaunchAgent, proves identity, crash-restarts it, and removes it — under the
+# system bash 3.2 and BSD userland the wrapper actually runs with on a Mac.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  linux:
+    name: bridge tests + foreground smoke (Linux, python 3.8)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.8'
+
+      - name: Integration + installer tests
+        run: python3 develop/validators/tools/test_claude_bridge.py -v
+
+      - name: Foreground smoke (sage setup claude-bridge --run)
+        run: |
+          set -euo pipefail
+          export SAGE_BRIDGE_STATE_DIR="$RUNNER_TEMP/bridge-state"
+          bash bin/sage setup claude-bridge --run --port 0 > "$RUNNER_TEMP/run.log" 2>&1 &
+          for i in $(seq 1 50); do grep -q "127.0.0.1:" "$RUNNER_TEMP/run.log" && break; sleep 0.2; done
+          cat "$RUNNER_TEMP/run.log"
+          port=$(sed -n 's/.*127\.0\.0\.1:\([0-9]*\)\/v1.*/\1/p' "$RUNNER_TEMP/run.log" | head -1)
+          token=$(cat "$SAGE_BRIDGE_STATE_DIR/bridge.token")
+          curl -sf -H "Authorization: Bearer $token" "http://127.0.0.1:$port/healthz" | tee "$RUNNER_TEMP/h.json"
+          grep -q '"ok": true' "$RUNNER_TEMP/h.json"
+          test "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$port/healthz")" = 401
+
+  macos:
+    name: real launchd install / crash-restart / remove (macOS, system bash 3.2)
+    runs-on: macos-latest
+    env:
+      PORT: '18765'
+    steps:
+      - uses: actions/checkout@v4
+
+      # Force the macOS SYSTEM shell and python for everything below: the
+      # wrapper is `#!/usr/bin/env bash`, and on a user's Mac that is bash 3.2
+      # with BSD tools. A Homebrew bash earlier on PATH would hide breakage.
+      - name: Pin system bash + python
+        run: |
+          echo "/bin" >> "$GITHUB_PATH"; echo "/usr/bin" >> "$GITHUB_PATH"
+          /bin/bash --version | head -1
+          /usr/bin/python3 --version
+
+      - name: Integration + installer tests (system bash 3.2)
+        run: PATH="/bin:/usr/bin:$PATH" /usr/bin/python3 develop/validators/tools/test_claude_bridge.py -v
+
+      - name: Install as a LaunchAgent (with a fake claude on PATH)
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/fakebin"
+          printf '#!/bin/bash\necho fake\n' > "$RUNNER_TEMP/fakebin/claude"
+          chmod +x "$RUNNER_TEMP/fakebin/claude"
+          export PATH="$RUNNER_TEMP/fakebin:/bin:/usr/bin:$PATH"
+          bash bin/sage setup claude-bridge --port "$PORT"
+          plutil -lint "$HOME/Library/LaunchAgents/dev.sage.claude-bridge.plist"
+
+      - name: Status, identity, and crash-restart (KeepAlive)
+        run: |
+          set -euo pipefail
+          export PATH="$RUNNER_TEMP/fakebin:/bin:/usr/bin:$PATH"
+          bash bin/sage setup claude-bridge --status --port "$PORT"
+          token=$(cat "$HOME/.config/opencode/sage/bridge.token")
+          pid1=$(curl -sf -H "Authorization: Bearer $token" "http://127.0.0.1:$PORT/healthz" \
+                 | /usr/bin/python3 -c 'import json,sys; print(json.load(sys.stdin)["pid"])')
+          echo "bridge pid before crash: $pid1"
+          kill -9 "$pid1"
+          pid2=""
+          for i in $(seq 1 60); do
+            pid2=$(curl -s -H "Authorization: Bearer $token" "http://127.0.0.1:$PORT/healthz" \
+                   | /usr/bin/python3 -c 'import json,sys
+          try: print(json.load(sys.stdin)["pid"])
+          except Exception: pass' || true)
+            [ -n "$pid2" ] && [ "$pid2" != "$pid1" ] && break
+            sleep 1
+          done
+          echo "bridge pid after crash: $pid2"
+          test -n "$pid2" && test "$pid2" != "$pid1"
+
+      - name: Remove
+        run: |
+          set -euo pipefail
+          export PATH="$RUNNER_TEMP/fakebin:/bin:/usr/bin:$PATH"
+          bash bin/sage setup claude-bridge --remove --purge
+          test ! -e "$HOME/Library/LaunchAgents/dev.sage.claude-bridge.plist"
+          sleep 2
+          if curl -s -m 3 "http://127.0.0.1:$PORT/v1/models" >/dev/null; then
+            echo "bridge still answering after --remove"; exit 1
+          fi
+
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          cat "$HOME/Library/LaunchAgents/dev.sage.claude-bridge.plist" || true
+          cat "$HOME/.config/opencode/sage/launchd.err.log" || true
+          tail -30 "$HOME/.config/opencode/sage/bridge.log" || true
+          launchctl print "gui/$(id -u)/dev.sage.claude-bridge" || launchctl print "user/$(id -u)/dev.sage.claude-bridge" || true

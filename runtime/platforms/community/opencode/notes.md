@@ -94,3 +94,15 @@ journal/trigger/delivery wire; see STATUS.md and platform.yaml.)
 `sage init` and `sage update` detect Opencode via `.opencode/` directory.
 If AGENTS.md exists but no `.opencode/`, Sage assumes Codex (and asks
 once if ambiguous).
+
+## Claude Code as a model (claude-cli bridge)
+
+`sage setup claude-bridge` installs `claude-bridge/claude-cli-bridge.py` as a
+user service; opencode's built-in `@ai-sdk/openai-compatible` provider talks
+to it, and each request runs `claude-bridge/sage-claude-implement.sh`
+(`claude -p`) in the session's working directory (or a `--parallel` lane's
+worktree). Enforcement for those edits comes from sage's **Claude Code**
+hooks in the project — opencode's plugin never sees them — so projects need
+both platforms. User guide: `docs/claude-bridge.md`; tests:
+`develop/validators/tools/test_claude_bridge.py`; CI: `claude-bridge.yml`
+(macOS job runs the real launchd lifecycle).
