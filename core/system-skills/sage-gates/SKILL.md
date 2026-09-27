@@ -28,7 +28,9 @@ source file. Write the spec, get `[A]`, and the manifest advances to
 
 **"Sage TDD gate: tests before code."** No test has been written for this
 change. Write the failing test first. The gate accepts a dirty/untracked test
-file or a red commit (tests touched, no source) as evidence.
+SOURCE file or a red commit (test source touched, no other source) as
+evidence. Fixtures, snapshots and `__pycache__` bytecode under `tests/` do not
+count — they prove no test was written.
 
 **Completion blocked.** The manifest cannot reach `complete` while
 `gate_state` is anything short of `gates-passed`, and it cannot complete with
