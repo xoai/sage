@@ -2,7 +2,7 @@
 
 All notable changes to Sage will be documented in this file.
 
-## [Unreleased] — claude-cli bridge: it stays up, and nothing cuts a running task off
+## [1.3.24] — claude-cli bridge: it stays up, and nothing cuts a running task off
 
 Field incident, the day v1.3.23 shipped: after a few implementer rounds,
 every dispatch failed with "Cannot connect to API: Unable to connect". Traced
