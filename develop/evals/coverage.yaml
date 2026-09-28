@@ -154,6 +154,11 @@ surfaces:
       independently approved, commit ranges that resolve to real shas. E10 grades
       that the review is worth having — a planted spec violation, marked done by
       its implementer, must be caught and fixed before completion.
+      Also unmeasured by E9/E10: the post-dispatch leftover-process sweep (added
+      v1.3.20; narrowed in v1.3.24 after a field incident where an orchestrator
+      killed the claude-cli bridge and another opencode session as "leftovers").
+      Its only evidence is that incident's forensic replay; no scenario plants a
+      leaked process or a must-not-kill one. Recorded debt, not re-measured.
       What neither measures: whether the mode produces BETTER code than the inline
       loop, and what it costs. That is a comparison, needs both modes on the same
       scenarios, and is Phase 5's (P5-T3). A mechanism that works and is not worth
@@ -422,8 +427,12 @@ surfaces:
       REAL wrapper (sage-claude-implement.sh) with a fake claude — auth,
       /healthz identity, exact-match housekeeping, <env> workdir, ungated
       refusal, lane routing + refusals, same-tree serialization, cancel while
-      running/queued, wrapper timeout. Piloted live against real Claude Code
-      (2026-09-27) incl. a Go project and a --parallel lane.
+      running/queued, wrapper timeout, and (v1.3.24) lifecycle: /healthz
+      active_runs, reload-when-idle letting an in-flight run finish, SIGTERM
+      logged and stopping the running claude. Piloted live against real Claude
+      Code (2026-09-27) incl. a Go project and a --parallel lane; the field
+      kill incident was replayed live (TERM, KILL, 5 kills in 12 s recover in
+      ~3 s) and the macOS CI job repeats SIGTERM recovery under launchd.
 
   opencode-claude-bridge-wrapper:
     path: runtime/platforms/community/opencode/claude-bridge/sage-claude-implement.sh
