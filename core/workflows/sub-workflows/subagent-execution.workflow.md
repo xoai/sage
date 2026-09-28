@@ -121,13 +121,27 @@ task that may already be half-done.
 
 The implementer returns `STATUS: DONE | BLOCKED` plus an evidence block.
 
-**First, sweep for leftovers.** A subagent's return does not prove its
-processes exited — check for anything it leaked (dev servers, watch-mode
-runners, emulators; `ps` for node/go/pytest processes older than the
-dispatch) and kill it before proceeding. A leaked process holds pipes
-and grinds the orchestrator for hours while every subagent box reads
-"completed" — the field measured exactly this. The templates mandate
-exit hygiene; this sweep is the trust-but-verify half.
+**First, sweep for leftovers — narrowly.** A subagent's return does not
+prove its processes exited; a leaked dev server or watch-mode runner holds
+pipes and grinds the orchestrator for hours (field-measured). The templates
+mandate exit hygiene; this sweep is the trust-but-verify half, and it may
+kill a process ONLY when ALL of these hold:
+
+1. it **started after this dispatch** (`ps -o lstart=` / `etime=`);
+2. its **working directory is the task's tree** (the project or the lane
+   worktree) — Linux `readlink /proc/<pid>/cwd`, macOS
+   `lsof -a -p <pid> -d cwd`;
+3. it is **project tooling**: a dev server, watcher, emulator, test runner
+   or build the task could have started.
+
+**Never kill Sage or agent infrastructure**, whatever its start time:
+`opencode` (any session — yours or the user's), `claude`, the Sage
+claude-cli bridge (`claude-cli-bridge.py`) and its wrapper
+(`sage-claude-implement.sh`), language servers, MCP servers. The bridge
+serves the implementer role itself; killing it made every later dispatch
+fail with "Unable to connect" (field, 2026-09-27 — an orchestrator killed
+it, and a second opencode session, as "bridge leftovers"). When a process
+fails any test above, or you cannot tell: **report it, do not kill it.**
 
 **BLOCKED** → record `status: blocked` and the reason. If the orchestrator can
 resolve it (a missing decision, an ambiguity in the task), resolve it and

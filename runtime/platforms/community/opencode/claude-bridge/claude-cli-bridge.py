@@ -29,7 +29,7 @@ Install/run: `sage setup claude-bridge` (service on Linux/WSL systemd or macOS
 launchd) — see docs/claude-bridge.md. Env: SAGE_BRIDGE_PORT (8765; 0 = any
 free port), SAGE_BRIDGE_HOST (127.0.0.1), SAGE_BRIDGE_KEEPALIVE seconds (15),
 SAGE_BRIDGE_STATE_DIR (~/.config/opencode/sage: bridge.token, bridge.log).
-Endpoints: /v1/models, /v1/chat/completions, /healthz (all bearer-auth).
+Endpoints: /v1/models, /v1/chat/completions, /healthz, POST /admin/reload-when-idle\n(all bearer-auth).
 Python 3.8+, stdlib only.
 """
 from __future__ import annotations
@@ -135,6 +135,53 @@ def log(msg: str) -> None:
 _LOCKS: dict = {}
 _LOCKS_GUARD = threading.Lock()
 
+# In-flight jobs (queued or running, until their response is fully written).
+# /healthz reports the count; reload-when-idle and SIGTERM use the registry.
+_JOBS: dict = {}
+_JOBS_GUARD = threading.Lock()
+_RELOAD_PENDING = threading.Event()
+RELOAD_EXIT_CODE = 75       # "restart me": the service manager (Restart=always /
+                            # KeepAlive) brings the bridge back on the new code
+
+
+def active_runs() -> int:
+    with _JOBS_GUARD:
+        return len(_JOBS)
+
+
+def maybe_reload() -> None:
+    """Exit for a reload once nothing is in flight. `sage upgrade` asks for
+    this instead of restarting outright: an outright restart cut a running
+    implementer off mid-task and left its half-done edits in the tree
+    (field, 2026-09-27)."""
+    if _RELOAD_PENDING.is_set() and active_runs() == 0:
+        log("reload-when-idle: idle — exiting %d for the service manager to "
+            "restart on the current code" % RELOAD_EXIT_CODE)
+        os._exit(RELOAD_EXIT_CODE)
+
+
+def on_terminate(signum, frame) -> None:
+    """A stray `kill` must not orphan Claude: stop every in-flight wrapper
+    (its trap kills claude's tree), log it, exit. launchd signals only this
+    process, not its children, so without this Claude would keep editing."""
+    name = {signal.SIGTERM: "SIGTERM", signal.SIGINT: "SIGINT"}.get(signum, str(signum))
+    with _JOBS_GUARD:
+        jobs = list(_JOBS.items())
+    log("received %s — stopping %d in-flight run(s) and exiting" % (name, len(jobs)))
+    for rid, state in jobs:
+        state["cancelled"] = True
+        proc = state.get("proc")
+        if proc is not None and proc.poll() is None:
+            proc.send_signal(signal.SIGTERM)
+    deadline = time.time() + 8
+    for _, state in jobs:
+        proc = state.get("proc")
+        while proc is not None and proc.poll() is None and time.time() < deadline:
+            time.sleep(0.1)
+        if proc is not None and proc.poll() is None:
+            proc.kill()
+    os._exit(128 + signum)
+
 
 def workdir_lock(workdir: str) -> threading.Lock:
     key = os.path.realpath(workdir)
@@ -225,12 +272,20 @@ class Handler(BaseHTTPRequestHandler):
                 version = "unknown"
             self._json(200, {"ok": True, "pid": os.getpid(),
                              "code": str(pathlib.Path(__file__).resolve()),
-                             "version": version, "state_dir": str(STATE_DIR)})
+                             "version": version, "state_dir": str(STATE_DIR),
+                             "active_runs": active_runs(),
+                             "reload_pending": _RELOAD_PENDING.is_set()})
         else:
             self._json(404, {"error": {"message": "not found"}})
 
     def do_POST(self):
         if not self._authed():
+            return
+        if self.path.rstrip("/") == "/admin/reload-when-idle":
+            _RELOAD_PENDING.set()
+            log("reload-when-idle requested (%d in flight)" % active_runs())
+            self._json(202, {"reload_pending": True, "active_runs": active_runs()})
+            threading.Timer(0.3, maybe_reload).start()   # after the 202 is sent
             return
         if self.path.rstrip("/") != "/v1/chat/completions":
             self._json(404, {"error": {"message": "not found"}})
@@ -294,9 +349,18 @@ class Handler(BaseHTTPRequestHandler):
                 job["out"] = out.decode("utf-8", "replace")
                 job["rc"] = proc.returncode
 
-        t = threading.Thread(target=run, daemon=True)
-        t.start()
-        self._reply(rid, model, stream, None, (job, t, started))
+        with _JOBS_GUARD:
+            _JOBS[rid] = job
+        try:
+            t = threading.Thread(target=run, daemon=True)
+            t.start()
+            self._reply(rid, model, stream, None, (job, t, started))
+        finally:
+            # released only after the response is fully written, so a
+            # reload can never cut off a report on its way to opencode
+            with _JOBS_GUARD:
+                _JOBS.pop(rid, None)
+            maybe_reload()
 
     def _client_gone(self) -> bool:
         """True once the client has closed its end (readable + EOF). The
@@ -388,6 +452,8 @@ def main() -> int:
         print("missing wrapper: %s" % WRAPPER, file=sys.stderr)
         return 2
     Handler.token = load_token()
+    signal.signal(signal.SIGTERM, on_terminate)
+    signal.signal(signal.SIGINT, on_terminate)
     srv = ThreadingHTTPServer((HOST, PORT), Handler)
     srv.daemon_threads = True
     port = srv.server_address[1]          # the real port when PORT is 0 (tests)

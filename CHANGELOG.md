@@ -2,6 +2,40 @@
 
 All notable changes to Sage will be documented in this file.
 
+## [Unreleased] — claude-cli bridge: it stays up, and nothing cuts a running task off
+
+Field incident, the day v1.3.23 shipped: after a few implementer rounds,
+every dispatch failed with "Cannot connect to API: Unable to connect". Traced
+through opencode's session store and the service journal to three defects:
+
+- **The orchestrator killed the bridge — on sage's instruction.** v1.3.20's
+  "sweep for leftover processes after a subagent returns" said to kill node/
+  go/pytest processes "older than the dispatch" and named nothing to spare;
+  the orchestrator saw the bridge (started near the dispatch) and ran
+  `kill <bridge> <another opencode session>` as "bridge leftovers". The sweep
+  now kills only processes that started after the dispatch, run in the task's
+  tree, and are project tooling — and never opencode, claude, the bridge or
+  its wrapper, language or MCP servers; when unsure it reports instead. The
+  implementer and reviewer templates add: kill by PID, never by name pattern.
+- **The service did not come back.** `Restart=on-failure` treats death by
+  SIGTERM as clean, so the bridge stayed dead for 8 hours. Units now use
+  `Restart=always` with no start-rate limit (launchd: `KeepAlive: true`);
+  replayed live — TERM, KILL and five kills in 12 s all recover in ~3 s. A
+  SIGTERM is logged and stops the in-flight Claude run instead of orphaning
+  it (launchd signals only the bridge process).
+- **`sage upgrade` cut a running task off.** Its restart killed an
+  implementer mid-run, leaving half-done edits that confused the next
+  dispatch. The bridge now tracks in-flight runs (`/healthz active_runs`) and
+  takes `POST /admin/reload-when-idle`: the run finishes, then it exits for
+  the service manager to restart it on the new code. `sage upgrade` uses it,
+  after re-rendering the service definition with the user's settings
+  preserved byte-for-byte (port, timeout, PATH, python — escaping round trip
+  pinned) so existing installs pick up the new restart policy.
+  `sage setup claude-bridge` refuses to restart a busy bridge (`--force`).
+
+After upgrading, run `sage update` in each project so its orchestrator gets
+the corrected sweep instruction.
+
 ## [1.3.23] — Claude Code as an opencode model: `sage setup claude-bridge`
 
 On opencode each role can run on its own model; now one of them can be

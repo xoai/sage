@@ -1543,12 +1543,13 @@ sage_setup() {
 # service (systemd on Linux/WSL, launchd on macOS). See docs/claude-bridge.md.
 sage_setup_claude_bridge() {
   require_python
-  local sub="install" port="8765" purge="" timeout="1500"
+  local sub="install" port="8765" purge="" timeout="1500" force=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --status) sub="status" ;;
       --remove) sub="remove" ;;
       --purge)  purge="--purge" ;;
+      --force)  force="--force" ;;
       --run)    sub="run" ;;
       --port)   port="${2:-}"; shift ;;
       --port=*) port="${1#--port=}" ;;
@@ -1571,7 +1572,7 @@ sage_setup_claude_bridge() {
       SAGE_BRIDGE_PORT="$port" SAGE_CLAUDE_TIMEOUT="$timeout" exec python3 "$bridge"
       ;;
     remove) python3 "$tool" remove "$SAGE_FRAMEWORK" $purge ;;
-    install) python3 "$tool" install "$SAGE_FRAMEWORK" --port "$port" --timeout "$timeout" ;;
+    install) python3 "$tool" install "$SAGE_FRAMEWORK" --port "$port" --timeout "$timeout" $force ;;
     *)       python3 "$tool" "$sub" "$SAGE_FRAMEWORK" --port "$port" ;;
   esac
 }

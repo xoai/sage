@@ -329,6 +329,76 @@ class BridgeIntegrationTest(unittest.TestCase):
         self.assertEqual(len(self.srv.runs()), 1, "the queued run started anyway")
 
 
+class BridgeLifecycleTest(unittest.TestCase):
+    """Reliability after the field incident (2026-09-27): an upgrade restart
+    cut a run off mid-flight, and a stray SIGTERM left the bridge dead."""
+
+    def setUp(self):
+        self.tmp = pathlib.Path(tempfile.mkdtemp(prefix="claude-bridge-lc-"))
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.srv = BridgeServer(self.tmp)
+        self.addCleanup(self.srv.stop)
+        self.proj = make_project(self.tmp / "proj")
+
+    def health(self):
+        return json.loads(self.srv.request("GET", "/healthz")[1])
+
+    def wait_for_run(self):
+        deadline = time.time() + 15
+        while not self.srv.runs() and time.time() < deadline:
+            time.sleep(0.2)
+        self.assertTrue(self.srv.runs(), "fake claude never started")
+        return int(self.srv.runs()[0][2].split("=")[1])
+
+    def test_healthz_reports_active_runs(self):
+        self.assertEqual(self.health()["active_runs"], 0)
+        self.srv.sleep(4)
+        t = threading.Thread(target=lambda: self.srv.chat(self.proj, "Task busy"))
+        t.start()
+        self.wait_for_run()
+        self.assertEqual(self.health()["active_runs"], 1)
+        t.join()
+        self.assertEqual(self.health()["active_runs"], 0)
+
+    def test_reload_requires_auth(self):
+        self.assertEqual(self.srv.request("POST", "/admin/reload-when-idle", {}, token=False)[0], 401)
+
+    def test_reload_when_idle_exits_now_if_idle(self):
+        status, _ = self.srv.request("POST", "/admin/reload-when-idle", {})
+        self.assertEqual(status, 202)
+        self.assertEqual(self.srv.proc.wait(timeout=10), 75)   # service manager restarts it
+
+    def test_reload_when_idle_lets_the_running_task_finish(self):
+        # `sage upgrade` used to restart the bridge mid-run, silently cutting
+        # off an implementer and leaving its half-done edits in the tree.
+        self.srv.sleep(4)
+        results = []
+        t = threading.Thread(target=lambda: results.append(self.srv.chat(self.proj, "Task in flight")))
+        t.start()
+        self.wait_for_run()
+        status, _ = self.srv.request("POST", "/admin/reload-when-idle", {})
+        self.assertEqual(status, 202)
+        time.sleep(1)
+        self.assertIsNone(self.srv.proc.poll(), "bridge exited while a run was active")
+        t.join()
+        self.assertIn("STATUS: DONE", results[0][1])           # the run completed
+        self.assertEqual(self.srv.proc.wait(timeout=10), 75)   # then it reloaded
+
+    def test_sigterm_is_logged_and_takes_claude_down(self):
+        self.srv.sleep(60)
+        s = self.srv.open_stream(self.proj, "Task long")
+        pid = self.wait_for_run()
+        self.srv.proc.terminate()                              # a stray `kill`
+        self.srv.proc.wait(timeout=15)
+        deadline = time.time() + 8
+        while fake_claude_alive(pid) and time.time() < deadline:
+            time.sleep(0.2)
+        s.close()
+        self.assertFalse(fake_claude_alive(pid), "claude orphaned by the bridge's death")
+        log = (self.srv.state / "bridge.log").read_text()
+        self.assertIn("SIGTERM", log)
+
+
 class WrapperTimeoutTest(unittest.TestCase):
     def test_timeout_returns_structured_blocked_and_kills(self):
         tmp = pathlib.Path(tempfile.mkdtemp(prefix="claude-bridge-to-"))
@@ -377,7 +447,11 @@ class InstallerRenderTest(unittest.TestCase):
         self.assertIn('Environment="SAGE_CLAUDE_TIMEOUT=1500"', unit)
         self.assertIn('Environment="SAGE_CLAUDE_TIMEOUT=3600"',
                       self.s.render_unit(**dict(self.args, timeout=3600)))
-        self.assertIn("Restart=on-failure", unit)
+        # restart after ANY exit: on-failure treats death by SIGTERM as clean,
+        # so a bridge killed by a mistaken process sweep stayed down for 8 h
+        # (field, 2026-09-27); and no start-rate limit that could give up
+        self.assertIn("Restart=always", unit)
+        self.assertIn("StartLimitIntervalSec=0", unit.split("[Service]")[0])
         self.assertIn("WantedBy=default.target", unit)
         self.assertNotIn("After=default.target", unit)   # ordering noise
 
@@ -408,8 +482,41 @@ class InstallerRenderTest(unittest.TestCase):
         self.assertEqual(pl["EnvironmentVariables"]["SAGE_BRIDGE_PORT"], "8765")
         self.assertEqual(pl["EnvironmentVariables"]["SAGE_CLAUDE_TIMEOUT"], "1500")
         self.assertTrue(pl["RunAtLoad"])
-        self.assertEqual(pl["KeepAlive"], {"SuccessfulExit": False})
+        self.assertIs(pl["KeepAlive"], True)          # restart after ANY exit
         self.assertTrue(pl["StandardErrorPath"].startswith(self.args["state_dir"]))
+
+    def test_refresh_reads_back_every_setting_from_a_unit(self):
+        # `sage upgrade` re-renders the unit to pick up policy fixes; the
+        # user's port / timeout / PATH / python must survive byte-for-byte,
+        # including systemd escaping (%, \\, ") — a lossy round trip would
+        # silently corrupt PATH, the same class as the original bug
+        weird = r'/usr/bin:/mnt/c/%SystemRoot%/x:/mnt/c/a\b:/Program Files/q"u'
+        args = dict(self.args, path_env=weird, port=9123, timeout=3600)
+        got = self.s.read_unit_settings(self.s.render_unit(**args))
+        self.assertEqual(got, {"python": args["python"], "path_env": weird,
+                               "port": 9123, "timeout": 3600,
+                               "state_dir": args["state_dir"]})
+
+    def test_refresh_reads_back_every_setting_from_a_plist(self):
+        args = dict(self.args, path_env=SPACEY_PATH, port=9123, timeout=3600)
+        got = self.s.read_plist_settings(self.s.render_plist(**args))
+        self.assertEqual(got, {"python": args["python"], "path_env": SPACEY_PATH,
+                               "port": 9123, "timeout": 3600,
+                               "state_dir": args["state_dir"]})
+
+    def test_refresh_reads_a_v1_3_23_unit(self):
+        # the unit v1.3.23 wrote (Restart=on-failure, no timeout line) must
+        # upgrade cleanly: missing settings fall back to their defaults
+        old = "\n".join(["[Service]",
+                         'ExecStart="/usr/bin/python3.12" "/x/claude-cli-bridge.py"',
+                         'Environment="PATH=/usr/bin:/bin"',
+                         'Environment="SAGE_BRIDGE_PORT=8765"',
+                         'Environment="SAGE_BRIDGE_STATE_DIR=/home/u/.config/opencode/sage"',
+                         "Restart=on-failure"])
+        got = self.s.read_unit_settings(old)
+        self.assertEqual(got["port"], 8765)
+        self.assertEqual(got["timeout"], 1500)
+        self.assertEqual(got["python"], "/usr/bin/python3.12")
 
     def test_token_created_0600_and_preserved(self):
         d = pathlib.Path(tempfile.mkdtemp(prefix="tok-"))

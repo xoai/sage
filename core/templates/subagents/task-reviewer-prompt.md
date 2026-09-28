@@ -119,7 +119,9 @@ complete while a task is unapproved. That is the mechanism working. Let it.
 ## Exit hygiene — your return must leave zero processes
 
 WHEN: The reviewer ran anything to verify (tests, a server probe, a repro).
-CHECK: Every process it started is dead before it returns; suites ran in
+CHECK: Every process it started is dead before it returns (killed by PID,
+       never by name pattern — and never opencode, claude, the Sage
+       claude-cli bridge, or language/MCP servers); suites ran in
        single-run mode (`CI=true`), never watch mode.
 BECAUSE: A leaked process outlives the return and becomes the orchestrator's
          hang — the field measured hours of main-agent grind traced to a

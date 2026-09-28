@@ -91,6 +91,24 @@ jobs:
           echo "bridge pid after crash: $pid2"
           test -n "$pid2" && test "$pid2" != "$pid1"
 
+      - name: SIGTERM recovery + upgrade refresh (reload-when-idle)
+        run: |
+          set -euo pipefail
+          export PATH="$RUNNER_TEMP/fakebin:/bin:/usr/bin:$PATH"
+          token=$(cat "$HOME/.config/opencode/sage/bridge.token")
+          pid_of() { curl -s -m 3 -H "Authorization: Bearer $token" "http://127.0.0.1:$PORT/healthz" \
+                     | /usr/bin/python3 -c 'import json,sys
+          try: print(json.load(sys.stdin)["pid"])
+          except Exception: pass' || true; }
+          wait_new() { for i in $(seq 1 60); do p=$(pid_of); [ -n "$p" ] && [ "$p" != "$1" ] && { echo "$p"; return 0; }; sleep 1; done; return 1; }
+          # a stray `kill` (SIGTERM) — the field incident — must not leave it dead
+          p1=$(pid_of); kill "$p1"; p2=$(wait_new "$p1"); echo "SIGTERM: $p1 -> $p2"
+          # `sage upgrade`'s hook: refresh the plist, reload when idle
+          /usr/bin/python3 runtime/tools/claude_bridge_setup.py restart "$PWD"
+          p3=$(wait_new "$p2"); echo "refresh: $p2 -> $p3"
+          /usr/bin/python3 -c 'import plistlib,os; pl=plistlib.load(open(os.path.expanduser("~/Library/LaunchAgents/dev.sage.claude-bridge.plist"),"rb")); assert pl["KeepAlive"] is True, pl["KeepAlive"]; assert pl["EnvironmentVariables"]["SAGE_BRIDGE_PORT"]=="'"$PORT"'"; print("plist refreshed, settings kept")'
+          grep -q "received SIGTERM" "$HOME/.config/opencode/sage/bridge.log"
+
       - name: Remove
         run: |
           set -euo pipefail
