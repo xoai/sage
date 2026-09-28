@@ -50,7 +50,16 @@ answers) and captures your shell `PATH` for it, so Claude can run your
 project's toolchains (`go`, `node`, `flutter`, …). If you install new
 toolchains later, re-run `sage setup claude-bridge`.
 
-`sage upgrade` restarts an installed bridge so it runs the new code.
+`sage upgrade` refreshes the service definition (keeping your port, timeout
+and PATH) and asks the bridge to **reload when idle**: a running Claude task
+finishes first, then the bridge restarts on the new code. `sage setup
+claude-bridge` itself refuses to restart a bridge that is serving a run
+(`--force` to override).
+
+**It stays up.** The service restarts after *any* exit — a crash, `kill`,
+`kill -9` — within a few seconds (`systemctl --user stop` / `--remove` still
+stop it for good), and a stray SIGTERM also stops the Claude run it was
+serving rather than orphaning it. Every signal is logged in `bridge.log`.
 
 ## Wire it into opencode
 
@@ -106,6 +115,12 @@ are accepted, and the bridge listens on 127.0.0.1 only.
   `sage setup claude-bridge` from a shell where the tool is on `PATH`.
 - A report says the project lacks sage's Claude Code hooks → run
   `sage update --platform opencode,claude-code` in that project.
+- opencode says **"Cannot connect to API: Unable to connect"** → the bridge is
+  not listening. `sage setup claude-bridge --status`; if it is down, look for
+  `received SIGTERM` in `bridge.log` (something killed it) and re-run
+  `sage setup claude-bridge` — installs before 1.3.24 did not restart after a
+  kill. On Linux/WSL the service runs while you have a session open; to keep
+  it up with no terminal open: `loginctl enable-linger $USER`.
 
 ## Accounts and terms
 

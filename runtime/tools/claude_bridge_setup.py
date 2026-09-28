@@ -6,7 +6,8 @@ Claude Code bridge as a supervised user service. Invoked by
     claude_bridge_setup.py install  <framework> [--port N]
     claude_bridge_setup.py status   <framework> [--port N]
     claude_bridge_setup.py remove   <framework> [--purge]
-    claude_bridge_setup.py restart  <framework>          (sage upgrade)
+    claude_bridge_setup.py restart  <framework>          (sage upgrade: refresh the
+                                                          service definition, reload when idle)
     claude_bridge_setup.py render   <framework> --os linux|macos [--port N]
 
 Service managers: systemd user unit on Linux/WSL, launchd LaunchAgent on
@@ -83,6 +84,8 @@ def render_unit(python: str, bridge: str, path_env: str, port: int, state_dir: s
     return "\n".join([
         "[Unit]",
         "Description=Sage claude-cli bridge (opencode -> claude -p)",
+        "# No start-rate limit: repeated kills must never make systemd give up.",
+        "StartLimitIntervalSec=0",
         "Documentation=https://github.com/xoai/sage/blob/main/docs/claude-bridge.md",
         "",
         "[Service]",
@@ -93,8 +96,11 @@ def render_unit(python: str, bridge: str, path_env: str, port: int, state_dir: s
         'Environment="SAGE_BRIDGE_PORT=%d"' % port,
         'Environment="SAGE_CLAUDE_TIMEOUT=%d"' % timeout,
         'Environment="SAGE_BRIDGE_STATE_DIR=%s"' % q(state_dir),
-        "Restart=on-failure",
-        "RestartSec=3",
+        "# ALWAYS: on-failure treats death by SIGTERM as a clean exit, so a bridge",
+        "# killed by a stray process sweep stayed down for 8 hours (field,",
+        "# 2026-09-27). `systemctl stop` still stops it for good.",
+        "Restart=always",
+        "RestartSec=2",
         "",
         "[Install]",
         "WantedBy=default.target",
@@ -112,11 +118,96 @@ def render_plist(python: str, bridge: str, path_env: str, port: int, state_dir: 
                                  "SAGE_CLAUDE_TIMEOUT": str(timeout),
                                  "SAGE_BRIDGE_STATE_DIR": state_dir},
         "RunAtLoad": True,
-        "KeepAlive": {"SuccessfulExit": False},       # restart on crash
+        "KeepAlive": True,          # restart after ANY exit, SIGTERM included
         "ThrottleInterval": 5,
         "StandardOutPath": str(pathlib.Path(state_dir) / "launchd.out.log"),
         "StandardErrorPath": str(pathlib.Path(state_dir) / "launchd.err.log"),
     }).decode()
+
+
+def systemd_unquote(value: str) -> str:
+    """Exact inverse of systemd_quote (the round trip is pinned by a test)."""
+    out, i = [], 0
+    while i < len(value):
+        c = value[i]
+        if c == "\\" and i + 1 < len(value):
+            out.append(value[i + 1]); i += 2
+        elif c == "%" and value[i:i + 2] == "%%":
+            out.append("%"); i += 2
+        else:
+            out.append(c); i += 1
+    return "".join(out)
+
+
+def _quoted_values(line: str) -> list:
+    """Every double-quoted token on a unit line, honoring \" escapes."""
+    vals, cur, inside, i = [], [], False, 0
+    while i < len(line):
+        c = line[i]
+        if inside and c == "\\" and i + 1 < len(line):
+            cur.append(line[i:i + 2]); i += 2; continue
+        if c == '"':
+            if inside:
+                vals.append("".join(cur)); cur = []
+            inside = not inside
+        elif inside:
+            cur.append(c)
+        i += 1
+    return vals
+
+
+def read_unit_settings(unit_text: str) -> dict:
+    """The user's settings out of an installed unit (any version), so a
+    refresh can re-render with the current template WITHOUT changing them."""
+    got = {"python": None, "path_env": None, "port": DEFAULT_PORT,
+           "timeout": DEFAULT_TIMEOUT, "state_dir": str(state_dir())}
+    for line in unit_text.splitlines():
+        line = line.strip()
+        if line.startswith("ExecStart="):
+            vals = _quoted_values(line)
+            if vals:
+                got["python"] = systemd_unquote(vals[0])
+            else:                              # an unquoted hand-written unit
+                got["python"] = line.split("=", 1)[1].split()[0]
+        elif line.startswith("Environment="):
+            for v in _quoted_values(line) or [line.split("=", 1)[1]]:
+                key, _, val = systemd_unquote(v).partition("=")
+                if key == "PATH":
+                    got["path_env"] = val
+                elif key == "SAGE_BRIDGE_PORT" and val.isdigit():
+                    got["port"] = int(val)
+                elif key == "SAGE_CLAUDE_TIMEOUT" and val.isdigit():
+                    got["timeout"] = int(val)
+                elif key == "SAGE_BRIDGE_STATE_DIR":
+                    got["state_dir"] = val
+    return got
+
+
+def read_plist_settings(plist_text: str) -> dict:
+    pl = plistlib.loads(plist_text.encode())
+    env = pl.get("EnvironmentVariables") or {}
+    args = pl.get("ProgramArguments") or [None]
+    return {"python": args[0], "path_env": env.get("PATH"),
+            "port": int(env.get("SAGE_BRIDGE_PORT", DEFAULT_PORT)),
+            "timeout": int(env.get("SAGE_CLAUDE_TIMEOUT", DEFAULT_TIMEOUT)),
+            "state_dir": env.get("SAGE_BRIDGE_STATE_DIR", str(state_dir()))}
+
+
+def request_reload(port: int, token: str) -> dict:
+    """Ask a running bridge to restart once no run is in flight (it exits and
+    the service manager restarts it on the current code). None if no bridge
+    answered."""
+    try:
+        c = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+        c.request("POST", "/admin/reload-when-idle", body="{}",
+                  headers={"Authorization": "Bearer " + token,
+                           "Content-Type": "application/json"})
+        r = c.getresponse()
+        body = r.read()
+        c.close()
+        return json.loads(body) if r.status == 202 else None
+    except (OSError, ValueError):
+        return None
 
 
 def opencode_snippet(port: int, state_dir: str) -> str:
@@ -288,7 +379,7 @@ def verify(port: int, token: str, bridge: pathlib.Path, osname: str, wait=20.0):
 # ── commands ───────────────────────────────────────────────────────────────
 
 def cmd_install(framework: pathlib.Path, port: int, osname: str,
-                timeout: int = DEFAULT_TIMEOUT) -> int:
+                timeout: int = DEFAULT_TIMEOUT, force: bool = False) -> int:
     bridge = (framework / BRIDGE_REL).resolve()
     if not bridge.is_file():
         print("✗ bridge not found in the framework: %s" % bridge)
@@ -305,6 +396,14 @@ def cmd_install(framework: pathlib.Path, port: int, osname: str,
         print("    sage setup claude-bridge --run")
         return 4
     sdir = state_dir()
+    tok = sdir / "bridge.token"
+    if tok.exists() and not force:
+        h = healthz(port, tok.read_text(encoding="utf-8").strip())
+        if h and h.get("active_runs", 0) > 0:
+            print("✗ the bridge is serving %d run(s) right now — installing restarts it"
+                  % h["active_runs"])
+            print("  and would cut them off. Re-run when idle, or pass --force.")
+            return 1
     moved = migrate_legacy(sdir)
     token = ensure_token(sdir)
     python = os.path.realpath(sys.executable)
@@ -389,16 +488,41 @@ def cmd_remove(purge: bool, osname: str) -> int:
     return 0
 
 
-def cmd_restart(osname: str) -> int:
-    """After `sage upgrade`: make an installed service run the new code."""
+def cmd_restart(framework: pathlib.Path, osname: str) -> int:
+    """After `sage upgrade` (the name is kept: older `sage upgrade` hooks call
+    `restart`). Two jobs:
+      1. REFRESH the service definition from the current template while
+         keeping the user's settings (port, timeout, PATH, python) — this is
+         how an existing install picks up policy fixes such as Restart=always.
+      2. RELOAD WHEN IDLE — never cut a running implementer off. An outright
+         restart did exactly that (field, 2026-09-27)."""
+    bridge = str((framework / BRIDGE_REL).resolve())
+    sdir = state_dir()
+    tok = sdir / "bridge.token"
+    token = tok.read_text(encoding="utf-8").strip() if tok.exists() else ""
     if osname == "linux" and unit_path().exists():
+        s = read_unit_settings(unit_path().read_text(encoding="utf-8"))
+        if s["python"] and s["path_env"]:
+            unit_path().write_text(render_unit(python=s["python"], bridge=bridge,
+                                               path_env=s["path_env"], port=s["port"],
+                                               state_dir=s["state_dir"], timeout=s["timeout"]),
+                                   encoding="utf-8")
+            run(["systemctl", "--user", "daemon-reload"])
+        if token and request_reload(s["port"], token) is not None:
+            return 0                     # it exits when idle; Restart= brings it back
         return run(["systemctl", "--user", "restart", UNIT_NAME]).returncode
     if osname == "macos" and plist_path().exists():
-        for domain in launchd_domains():
-            if run(["launchctl", "kickstart", "-k",
-                    "%s/%s" % (domain, LAUNCHD_LABEL)]).returncode == 0:
-                return 0
-        return 1
+        s = read_plist_settings(plist_path().read_text(encoding="utf-8"))
+        text = render_plist(python=s["python"], bridge=bridge, path_env=s["path_env"],
+                            port=s["port"], state_dir=s["state_dir"], timeout=s["timeout"])
+        h = healthz(s["port"], token) if token else None
+        if h is None or h.get("active_runs", 0) == 0:
+            apply_macos(text)            # idle (or down): re-load the new definition now
+            return 0
+        # busy: launchd re-reads the plist only on (re)load — write it now,
+        # reload the PROCESS when idle; the new definition applies at next login
+        plist_path().write_text(text, encoding="utf-8")
+        return 0 if request_reload(s["port"], token) is not None else 1
     return 0                                   # not installed: nothing to do
 
 
@@ -410,6 +534,8 @@ def main(argv=None) -> int:
     p.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT,
                    help="seconds before a Claude run is stopped (default 1500)")
     p.add_argument("--purge", action="store_true")
+    p.add_argument("--force", action="store_true",
+                   help="install even while runs are in flight (they are cut off)")
     p.add_argument("--os", choices=["linux", "macos"])
     a = p.parse_args(argv)
     osname = service_os()
@@ -417,13 +543,13 @@ def main(argv=None) -> int:
         if a.timeout < 60:
             print("✗ --timeout must be at least 60 seconds")
             return 2
-        return cmd_install(a.framework, a.port, osname, a.timeout)
+        return cmd_install(a.framework, a.port, osname, a.timeout, a.force)
     if a.cmd == "status":
         return cmd_status(a.framework, a.port, osname)
     if a.cmd == "remove":
         return cmd_remove(a.purge, osname)
     if a.cmd == "restart":
-        return cmd_restart(osname)
+        return cmd_restart(a.framework, osname)
     bridge = str((a.framework / BRIDGE_REL).resolve())
     args = dict(python=os.path.realpath(sys.executable), bridge=bridge,
                 path_env=os.environ.get("PATH", ""), port=a.port, state_dir=str(state_dir()))

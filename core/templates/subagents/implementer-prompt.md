@@ -104,7 +104,10 @@ watchers, emulators, database containers. Run suites in single-run
 mode (`CI=true`; never a watch mode). A process you leak outlives your
 return and becomes the orchestrator's hang — the field measured hours
 of main-agent grind traced to exactly this. If a step needs a server,
-start it, use it, kill it, in the same step.
+start it, use it, kill it, in the same step. Kill by PID, never by name
+pattern (`pkill -f python` would take down processes you did not start —
+including the Sage claude-cli bridge that may be running you). Never kill
+opencode, claude, `claude-cli-bridge.py` or language/MCP servers.
 
 ## The evidence block is not a formality
 
