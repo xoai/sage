@@ -485,7 +485,15 @@ PYEOF
 
 # Run the decision. python3 inherits the hook's stdin (the tool-call JSON);
 # the heredoc above fed cat, not python.
-GATE_OUT=$(python3 "$PY_GATE")
+PY_GATE_ARG="$PY_GATE"
+if command -v cygpath >/dev/null 2>&1; then
+  # Hermes disables MSYS argv conversion globally.  The adapter normally
+  # supplies a native TMPDIR, but the canonical hook is also executable
+  # directly (Claude Code and conformance probes), so bind this argument at
+  # the interpreter boundary instead of relying on caller environment.
+  PY_GATE_ARG="$(cygpath -m "$PY_GATE")"
+fi
+GATE_OUT=$(python3 "$PY_GATE_ARG")
 GATE_RC=$?
 
 if [ "$GATE_RC" -ne 0 ]; then

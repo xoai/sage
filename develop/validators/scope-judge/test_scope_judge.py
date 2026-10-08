@@ -43,6 +43,29 @@ A_PLAN = """\
 """
 
 
+def bash_path(path: pathlib.Path) -> str:
+    if os.name != "nt":
+        return str(path)
+    return subprocess.run(
+        ["cygpath", "-u", str(path)],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+
+
+def bash_executable() -> str:
+    found = shutil.which("bash") or "bash"
+    if os.name != "nt":
+        return found
+    raw = pathlib.Path(found)
+    if raw.parent.parent.name.lower() == "usr":
+        wrapper = raw.parent.parent.parent / "bin" / raw.name
+        if wrapper.is_file():
+            return str(wrapper)
+    return found
+
+
 def edit_event(path="src/auth.py", **extra):
     d = {"tool_name": "Edit", "tool_input": {"file_path": path}}
     d.update(extra)
@@ -97,24 +120,24 @@ class RecursionGuardTest(Fixture):
 
     def test_bash_hook_no_ops_under_SAGE_JUDGE(self):
         p = subprocess.run(
-            ["bash", str(JOURNAL_HOOK)],
+            [bash_executable(), bash_path(JOURNAL_HOOK)],
             input=json.dumps(edit_event()), capture_output=True, text=True,
             cwd=str(self.root),
             env={**os.environ, "SAGE_JUDGE": "1",
-                 "CLAUDE_PROJECT_DIR": str(self.root)})
+                 "CLAUDE_PROJECT_DIR": self.root.as_posix()})
         self.assertEqual(p.returncode, 0)
         self.assertEqual(p.stdout, "")
         self.assertFalse((self.cycle / "scope-journal.jsonl").exists())
 
     def test_bash_hook_journals_when_armed(self):
         p = subprocess.run(
-            ["bash", str(JOURNAL_HOOK)],
+            [bash_executable(), bash_path(JOURNAL_HOOK)],
             input=json.dumps(edit_event()), capture_output=True, text=True,
             cwd=str(self.root),
-            env={**os.environ, "CLAUDE_PROJECT_DIR": str(self.root),
-                 "SAGE_JUDGE_LOCK_DIR": str(self.locks),
+            env={**os.environ, "CLAUDE_PROJECT_DIR": self.root.as_posix(),
+                 "SAGE_JUDGE_LOCK_DIR": self.locks.as_posix(),
                  "SAGE_SCOPE_JUDGE_TOOL":
-                     str(REPO_ROOT / "runtime" / "tools" / "scope_judge.py")})
+                   (REPO_ROOT / "runtime" / "tools" / "scope_judge.py").as_posix()})
         self.assertEqual(p.returncode, 0)
         rows = self.rows()
         self.assertEqual(len(rows), 1)
@@ -124,10 +147,10 @@ class RecursionGuardTest(Fixture):
         (self.root / ".sage" / "config.yaml").write_text(
             "hard_enforcement: true\nscope_judge: false\n")
         p = subprocess.run(
-            ["bash", str(JOURNAL_HOOK)],
+            [bash_executable(), bash_path(JOURNAL_HOOK)],
             input=json.dumps(edit_event()), capture_output=True, text=True,
             cwd=str(self.root),
-            env={**os.environ, "CLAUDE_PROJECT_DIR": str(self.root)})
+            env={**os.environ, "CLAUDE_PROJECT_DIR": self.root.as_posix()})
         self.assertEqual(p.returncode, 0)
         self.assertFalse((self.cycle / "scope-journal.jsonl").exists())
 

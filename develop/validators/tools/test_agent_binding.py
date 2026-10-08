@@ -7,6 +7,7 @@ and silently inherits the primary, which is exactly the spend trap the
 resolver exists to prevent.
 """
 import json
+import os
 import pathlib
 import shutil
 import subprocess
@@ -86,7 +87,7 @@ class CliTest(Fixture):
     def run_tool(self, *names):
         return subprocess.run(
             [sys.executable, str(TOOL), *names, "--root", str(self.root)],
-            capture_output=True, text=True, env={**self.env, "PATH": "/usr/bin:/bin"})
+            capture_output=True, text=True, env={**os.environ, **self.env})
 
     def test_multi_name_output_bound_lines_only(self):
         (self.root / "opencode.json").write_text(cfg({

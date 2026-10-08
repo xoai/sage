@@ -151,5 +151,9 @@ PYEOF
 # stdout is suppressed (a PostToolUse hook's stdout is not a channel we want to
 # use); stderr passes through, so the degradation is visible even if the model
 # never mentions it. Never propagate a failure — see the exit contract above.
-python3 "$PY" >/dev/null || true
+PY_ARG="$PY"
+if command -v cygpath >/dev/null 2>&1; then
+  PY_ARG="$(cygpath -m "$PY")"
+fi
+python3 "$PY_ARG" >/dev/null || true
 exit 0

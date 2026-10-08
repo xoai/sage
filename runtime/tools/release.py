@@ -148,9 +148,10 @@ def hardcoded_literals(root: pathlib.Path) -> list[tuple[str, int, str]]:
         if path.suffix not in SCAN_SUFFIXES and not is_script(path):
             continue
         rel = path.relative_to(root)
+        rel_text = rel.as_posix()
         if any(part in SCAN_EXCLUDE_DIRS for part in rel.parts):
             continue
-        if any(str(rel).startswith(p) for p in SCAN_EXCLUDE_PATHS):
+        if any(rel_text.startswith(p) for p in SCAN_EXCLUDE_PATHS):
             continue
         try:
             lines = path.read_text(errors="replace").splitlines()
@@ -158,7 +159,7 @@ def hardcoded_literals(root: pathlib.Path) -> list[tuple[str, int, str]]:
             continue
         for lineno, line in enumerate(lines, 1):
             if HARDCODED.search(line):
-                hits.append((str(rel), lineno, line.strip()))
+                hits.append((rel_text, lineno, line.strip()))
     return hits
 
 

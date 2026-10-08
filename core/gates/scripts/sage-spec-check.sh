@@ -51,6 +51,20 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 2
 fi
 
+NATIVE_WINDOWS_PYTHON=false
+PYTHON_OS=$(python3 -c 'import os; print(os.name)' 2>/dev/null | tr -d '\015')
+if command -v cygpath >/dev/null 2>&1 && [ "$PYTHON_OS" = "nt" ]; then
+  NATIVE_WINDOWS_PYTHON=true
+fi
+
+python_path() {
+  if [ "$NATIVE_WINDOWS_PYTHON" = true ]; then
+    cygpath -w "$1"
+  else
+    printf '%s\n' "$1"
+  fi
+}
+
 vlog "═══ Sage Gate 1: Spec Compliance Check ═══"
 vlog "Plan: $PLAN"
 vlog "Task: $TASK_NUM"
@@ -199,7 +213,8 @@ for path, kind in deliverables:
 sys.stdout.write('\n'.join(out) + '\n')
 PYEOF
 
-EXTRACT=$(python3 "$PY_EXTRACT" "$PLAN" "$TASK_NUM")
+EXTRACT=$(python3 "$(python_path "$PY_EXTRACT")" \
+                  "$(python_path "$PLAN")" "$TASK_NUM" | tr -d '\015')
 if [ $? -ne 0 ]; then
   log "═══ Gate 1 Result ═══"
   log "⚠️ UNVERIFIABLE — could not parse $PLAN"

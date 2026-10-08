@@ -17,6 +17,7 @@ its handshake.
 Python 3.8+, stdlib only.
 """
 import json
+import os
 import pathlib
 import re
 import shutil
@@ -38,6 +39,29 @@ SPEC_TEMPLATES = (REPO / "core" / "templates" / "spec" / "full.spec-template.md"
 SPEC_GATE = (REPO / "runtime" / "platforms" / "claude-code" / "hooks"
              / "sage-spec-gate.sh")
 
+
+def find_bash() -> str:
+    """Prefer Git Bash on Windows; System32 bash.exe is the WSL launcher."""
+    configured = os.environ.get("SAGE_BASH_EXE")
+    if configured:
+        return configured
+    if os.name == "nt":
+        for candidate in (
+            pathlib.Path(r"C:\Program Files\Git\bin\bash.exe"),
+            pathlib.Path(r"C:\Program Files\Git\usr\bin\bash.exe"),
+            pathlib.Path(r"C:\Program Files (x86)\Git\bin\bash.exe"),
+        ):
+            if candidate.is_file():
+                return str(candidate)
+    return shutil.which("bash") or "bash"
+
+
+def bash_path(path: pathlib.Path) -> str:
+    """Return a path Bash can consume on both POSIX and Windows hosts."""
+    return str(path).replace("\\", "/")
+
+
+BASH = find_bash()
 PLAN_TEXT = PLAN_TEMPLATE.read_text(encoding="utf-8")
 
 
@@ -129,10 +153,23 @@ class LedgerRoundTrip(unittest.TestCase):
                            "old_string": "gate_state: building",
                            "new_string": "gate_state: gates-passed"},
             "cwd": str(self.root)})
+        env = {"PATH": "/usr/bin:/bin",
+               "CLAUDE_PROJECT_DIR": str(self.root)}
+        if os.name == "nt":
+            # Native Python needs the Windows process environment, and bare
+            # `bash` resolves to the System32 WSL launcher rather than Git Bash.
+            # The parent may disable MSYS argument conversion globally. Give
+            # mktemp a native spelling so the hook's native python3 can still
+            # open its generated decision script; this test is about R101, not
+            # the caller's terminal-wrapper flags.
+            env = {
+                **os.environ,
+                "CLAUDE_PROJECT_DIR": str(self.root),
+                "TMPDIR": bash_path(pathlib.Path(tempfile.gettempdir())),
+            }
         return subprocess.run(
-            ["bash", str(SPEC_GATE)], input=payload, capture_output=True,
-            text=True, env={"PATH": "/usr/bin:/bin",
-                            "CLAUDE_PROJECT_DIR": str(self.root)}).returncode
+            [BASH, bash_path(SPEC_GATE)], input=payload, capture_output=True,
+            text=True, env=env).returncode
 
     def mark(self, status, review):
         m = self.cyc / "manifest.md"

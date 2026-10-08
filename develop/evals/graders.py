@@ -28,12 +28,43 @@ import difflib
 import fnmatch
 import io
 import json
+import os
 import pathlib
 import re
+import shutil
 import subprocess
 import tokenize
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
+
+
+def bash_executable() -> str:
+    """Prefer Git for Windows' native launcher over its raw MSYS binary."""
+    found = shutil.which("bash") or "bash"
+    if os.name != "nt":
+        return found
+    raw = pathlib.Path(found)
+    if raw.parent.parent.name.lower() == "usr":
+        wrapper = raw.parent.parent.parent / "bin" / raw.name
+        if wrapper.is_file():
+            return str(wrapper)
+    return found
+
+
+def bash_path(path: pathlib.Path) -> str:
+    """Return a path Bash can open when the caller is native Windows Python."""
+    text = str(path)
+    if os.name != "nt":
+        return text
+    proc = subprocess.run(
+        ["cygpath", "-u", text], capture_output=True, text=True, check=False
+    )
+    converted = proc.stdout.strip()
+    if proc.returncode != 0 or not converted:
+        raise RuntimeError(
+            f"cygpath could not convert Bash path {text!r}: {proc.stderr.strip()}"
+        )
+    return converted
 
 
 class Transcript:
@@ -328,8 +359,8 @@ def gate_exit(ws, tx, p) -> tuple:
     script = REPO_ROOT / p["script"]
     if not script.is_file():
         return False, f"gate script not found: {p['script']}"
-    argv = p.get("args") or [str(ws)]
-    proc = subprocess.run(["bash", str(script), *argv],
+    argv = p.get("args") or [bash_path(ws)]
+    proc = subprocess.run([bash_executable(), bash_path(script), *argv],
                           capture_output=True, text=True, cwd=str(ws))
     expected = p["exit"]
     tail = (proc.stdout or "").strip().splitlines()

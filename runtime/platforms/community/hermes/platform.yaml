@@ -102,9 +102,21 @@ supported-os: [linux, macos, windows]
 
 command-prefix: "/sage"
 install-method: profile-plugin
+toolchain:
+  activation: setup/activation.py
+  doctor: setup/doctor.py
+  doctor-probe: setup/doctor_probe.py
+  hook-config: setup/hook_config.py
+  profile-binding: setup/profile_binding.py
+  profile-installer: setup/profile_installer.py
+  profile-migration: setup/profile_migration.py
+  receipts: setup/receipts.py
+  topology: setup/topology.json
+  workspace-layout: setup/workspace_layout.py
+host-proof-command: "hermes --profile <name> hooks activation-proof --surface <cli|gateway> --expectation-file <json>"
 artifacts:
-  instructions: SOUL.md           # Hermes reads SOUL.md as system prompt slot #1
+  instructions: .hermes.md        # the workspace instructions Hermes reads
+  hooks-config: <profile>/config.yaml  # registers the profile shell hooks (exact 7+4 registry)
   commands-dir: null              # commands registered via plugin API, not files
   skills-dir: null                # skills registered via plugin API, not files
-  hooks-config: null              # hooks registered via register(ctx), not config files
 ---

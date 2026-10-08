@@ -65,7 +65,16 @@ CONST_TMP="$(mktemp)"
 printf '%s\n' "$CONST_SECTION" > "$CONST_TMP"
 
 if command -v python3 >/dev/null 2>&1; then
-  python3 - "$OUT" "$CONST_TMP" <<'PYEOF'
+  OUT_ARG="$OUT"
+  CONST_TMP_ARG="$CONST_TMP"
+  # Hermes deliberately disables MSYS argv conversion for Windows-native
+  # commands. Convert the two filesystem arguments ourselves so native Python
+  # can open them even when the surrounding shell exports MSYS_NO_PATHCONV=1.
+  if command -v cygpath >/dev/null 2>&1; then
+    OUT_ARG="$(cygpath -m "$OUT")"
+    CONST_TMP_ARG="$(cygpath -m "$CONST_TMP")"
+  fi
+  python3 - "$OUT_ARG" "$CONST_TMP_ARG" <<'PYEOF'
 import sys
 out_path, const_path = sys.argv[1], sys.argv[2]
 with open(const_path) as f:

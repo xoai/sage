@@ -20,6 +20,14 @@
 
 set -uo pipefail
 
+# Native Windows Python cannot open MSYS-only /tmp paths. Keep the fixture
+# roots and every embedded-Python argument in one native path dialect.
+if command -v cygpath >/dev/null 2>&1 &&
+   [ "$(python3 -c 'import os; print(os.name)' 2>/dev/null | tr -d '\015')" = "nt" ]; then
+  TMPDIR="$(cygpath -m "${TMPDIR:-/tmp}")"
+  export TMPDIR
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 GATES_DIR="${SAGE_GATES_DIR:-$REPO_ROOT/core/gates/scripts}"

@@ -606,7 +606,11 @@ emit("BLOCK", (
 ) % (rel, slug, nearest, rel, tid if tid else "N"))
 PYEOF
 
-GATE_OUT=$(python3 "$PY_GATE")
+PY_GATE_ARG="$PY_GATE"
+if command -v cygpath >/dev/null 2>&1; then
+  PY_GATE_ARG="$(cygpath -m "$PY_GATE")"
+fi
+GATE_OUT=$(python3 "$PY_GATE_ARG")
 GATE_RC=$?
 
 if [ "$GATE_RC" -ne 0 ]; then

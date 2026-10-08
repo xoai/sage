@@ -1,100 +1,129 @@
 # Sage for Hermes Agent
 
-> **Where the code lives:** the plugin is packaged as the whole repo — the
-> Hermes plugin entry point is `__init__.py` at the repository root and the
-> manifest is `plugin.yaml`. This directory holds the platform contract,
-> docs, and the `sage init` generator only.
+> **Where the code lives:** the selected profile's `plugins/sage/` directory is
+> a complete, updateable Sage framework tree: CLI, core, runtime, skills, hooks,
+> packs, docs, installer, and platform adapters. `runtime/tools/build_plugin.py
+> --target hermes` copies the canonical tracked/release tree there, adds the two
+> Hermes-native projection files, emits a per-file framework manifest, and also
+> packages the profile shell hooks separately under artifact `hooks/`.
 
-**Tier A** — the full quality chain, live-probed 2026-08-05. Edits are blocked
-before a spec or a test exists; independent reviews run in fresh contexts via
-delegate_task; degradation is logged by code. See
+**Tier A** — the full quality chain is covered by the current platform
+validators and two-profile lifecycle probe. Edits are blocked before a spec or
+a test exists; independent reviews route through Hermes-native `delegate_task`;
+degradation is logged by code. Historical probe evidence remains in
 `docs/attestations/hermes-tier-a-2026-08-05.md`.
 
 ## What Sage enforces on Hermes
 
 | Capability | Status | Mechanism |
 |---|---|---|
-| **Pre-tool veto** | ✅ Attested | `pre_tool_call` returns `{"action": "block", ...}` — Hermes blocks the edit |
-| **Post-tool audit** | ✅ Attested | `post_tool_call` writes R29 degradation to `decisions.md`, tracks verify-state |
-| **Context injection** | ✅ Attested | `pre_llm_call` injects eager core + session-pickup into CLI; `session:start` writes `.sage/gates/session-pickup.md` for gateway |
-| **Session lifecycle** | ✅ Attested | Gateway: `session:start` / `session:end` via `hooks/sage-session/`. CLI: context injection via `pre_llm_call` |
-| **Slash commands** | ✅ Attested | `/sage`, `/build`, `/fix`, `/architect`, `/review`, `/learn`, `/reflect`, `/continue`, `/autoresearch` registered via `ctx.register_command()` |
-| **Skill discovery** | ✅ Attested | 21 bundled skills registered via `ctx.register_skill()` — loadable via `skill_view("sage:<name>")` |
-| **Subagent dispatch** | ✅ Attested | `delegate_task` dispatched live — independent fresh-context reviewer, verdict APPROVE (2026-08-05) |
+| **Pre-tool veto** | ✅ Verified | 7 fail-closed blockers and 4 observers are configured as selected-profile shell hooks; Hermes owns hook execution and blocking |
+| **Post-tool audit** | ✅ Verified | Four observer hooks track verification, degradation, manifest state, and scope without blocking the completed tool call |
+| **Plugin lifecycle** | ✅ Verified | `on_session_start`, `pre_llm_call`, `transform_tool_result`, and `pre_verify` bind context and policy to one profile workspace |
+| **Slash commands** | ✅ Verified | 16 slash commands are registered from validated bound-runtime skill bytes |
+| **Skill discovery** | ✅ Verified | 21 bound runtime skills are registered via `ctx.register_skill()` |
+| **Native tools** | ✅ Verified | 8 Sage tools cover deterministic gates and strict project memory |
+| **Delegation** | ✅ Attested | Sage routes review policy through Hermes-native `delegate_task`; it registers no replacement delegation, Kanban, or worker service |
 
 ## Installation
 
-### Option 1: Profile plugin (recommended)
-
-Copy the entire `sage/` directory into your Hermes profile:
-
-```bash
-# From the xoai/sage repo root:
-cp -r . ~/.hermes/profiles/<your-profile>/plugins/sage/
-```
-
-Then enable it in Hermes:
+Run the complete Sage framework from the exact selected profile workspace. Both
+the collection root and one profile name are mandatory before any write:
 
 ```bash
-hermes plugins enable sage
+sage init --platform hermes --hermes-home <collection> --hermes-profile <name>
 ```
 
-### Option 2: Global plugin
+The receipt-bound lifecycle uses the same explicit selection:
 
 ```bash
-cp -r . ~/.hermes/plugins/sage/
-hermes plugins enable sage
+sage update --platform hermes --hermes-home <collection> --hermes-profile <name>
 ```
-
-### Option 3: Vendored into a project
 
 ```bash
-cd your-project
-sage init --platform hermes
+sage migrate hermes-profile --platform hermes --hermes-home <collection> --hermes-profile <name>
 ```
 
-This runs `setup/generate-hermes.sh` which writes:
+```bash
+sage migrate hermes-profile --rollback --platform hermes --hermes-home <collection> --hermes-profile <name>
+```
+
+```bash
+sage recover hermes-profile <operation-id> --platform hermes --hermes-home <collection> --hermes-profile <name>
+```
+
+```bash
+sage doctor --platform hermes --hermes-home <collection> --hermes-profile <name>
+```
+
+```bash
+sage uninstall --platform hermes --hermes-home <collection> --hermes-profile <name>
+```
+
+`uninstall` removes only valid receipt-owned bytes and exact Sage hook/consent
+records. It preserves durable project state, identity, databases, user files,
+and unrelated hooks.
+
+`migrate hermes-profile` adopts a legacy Sage surface into the transactional
+profile layout; `--rollback` restores a completed migration from its external
+backup. If the process is interrupted while an install, update, or migration
+child transaction is still incomplete, use `recover hermes-profile`. The
+operation ID is the filename stem of an `incomplete` journal under
+`.sage/install-runs/`. Recovery validates the rollback pack and known receipt
+hashes before restoring the prior managed/config/receipt bytes; unexpected
+post-crash edits fail closed instead of being overwritten.
+
+The transaction writes or manages:
+
 - `.sage/` — the Sage project directory
-- `SOUL.md` — the instructions file Hermes reads at session start
-- `.hermes/config.yaml` snippet — registers the shell hooks (if using shell hooks instead of plugin)
+- `.hermes.md` — the workspace instructions Hermes reads
+- `sage/` — the complete bound project runtime
+- `.sage-memory/` — strict project-only memory state
+- `<profile>/hooks/` — the Sage shell-hook scripts
+- `<profile>/config.yaml` — registers the profile shell hooks
+- `<profile>/plugins/sage/` — the complete profile-scoped Sage framework/plugin
+  tree, including its update manifest and all canonical runtime/framework files
+- `<profile>/skills/` — receipt-managed optional packs only
+
+It never writes profile identity such as `SOUL.md`.
+
+## Portable host boundary
+
+Production Sage resolves Hermes only as an opaque command: JSON argv in
+`SAGE_HERMES_COMMAND`, or `hermes` from `PATH`. It does not import `hermes_cli`,
+inspect a virtual environment, or discover a source checkout.
+
+Install, update, doctor, and uninstall ask the host for fresh CLI and Gateway
+proof through this public command shape:
+
+```text
+hermes --profile <name> hooks activation-proof --surface <cli|gateway> --expectation-file <path>
+```
+
+The proof validates plugin discovery, callbacks, exact approved hook topology,
+policy behavior, context delivery, and strict memory binding. `sage doctor` is
+the normal user-facing entry point.
 
 ## How the gates work
 
-### Pre-tool veto (`pre_tool_call`)
+Hermes receives one immutable target plan per tool call. The selected profile's
+shell-hook registry contains these exact blockers:
 
-When the agent calls `write_file` or `patch`, the plugin:
+1. `sage-spec-gate.sh`
+2. `sage-tdd-gate.sh`
+3. `sage-bookkeeping-gate.sh`
+4. `sage-secrets-gate.sh`
+5. `sage-verify-gate.sh`
+6. `sage-config-gate.sh`
+7. `sage-scope-gate.sh`
 
-1. Finds the project root (nearest `.sage/` ancestor)
-2. Reads `.sage/config.yaml` for enforcement flags
-3. Runs each gate in order:
-   - **config-gate** — blocks edits that would disable enforcement (meta-gate)
-   - **secrets-gate** — blocks hardcoded credentials
-   - **bookkeeping-gate** — redirects hand-edits to the one-command close-out writer
-   - **spec-gate** — blocks source edits while any cycle is `pre-spec`
-   - **tdd-gate** — blocks source edits before a test exists
-4. Returns `{"action": "block", "message": "..."}` if any gate fails
+The four observers are `sage-verify-tracker.sh`, `sage-degradation-log.sh`,
+`sage-manifest-sync.sh`, and `sage-scope-journal.sh`. The plugin intentionally
+does **not** duplicate those mechanics with `pre_tool_call` or `post_tool_call`
+callbacks.
 
-Hermes short-circuits the tool call and shows the `message` to the model.
-
-### Post-tool audit (`post_tool_call`)
-
-After every tool call:
-
-1. **verify-tracker** — records `last_source_edit` and `last_test_run` timestamps
-2. **manifest-sync** — advances cycle manifests when plain work happened
-3. **R29 degradation audit** — if a cycle completes with `qa: skipped-*` or `qa: waived`, logs to `decisions.md`
-
-### Gateway session lifecycle (`session:start` / `session:end`)
-
-The `hooks/sage-session/` gateway hook:
-
-1. **Collision guard** — warns if another Sage session is active in the same checkout
-2. **Worktree memory** — points `sage-memory` at the main checkout root in linked worktrees
-3. **Active work scan** — lists cycles with `status: in-progress`
-4. **Recent decisions** — shows the last 3 decisions from `decisions.md`
-5. Writes `.sage/gates/session-pickup.md` for the eager core to read
-
-On `session:end`, appends to `.sage/gates/session-log`.
+Plugin callbacks provide profile-bound lifecycle/context behavior on both CLI
+and Gateway surfaces. No gateway-only Sage bundle is installed.
 
 ## Configuration
 
@@ -111,22 +140,45 @@ bookkeeping_gate: true    # bookkeeping-gate (one-command close-out)
 All gates are **opt-in** — a project without `.sage/config.yaml` or with
 `hard_enforcement: false` gets zero enforcement. The plugin never surprise-blocks.
 
-## What's NOT enforced
+## Ownership boundary
 
-- **Subagent review** — `delegate_task` exists in Hermes but the plugin doesn't dispatch independent reviewers. The agent reviews its own code.
+Hermes owns `delegate_task`, child lifecycle, workspaces, the Kanban dispatcher
+and database, and goal-mode judging. Sage owns workflow instructions, flags,
+quality gates, bound context, and its narrow pre-verification policy. The
+plugin's runtime inventory reports replacement delegation and Kanban
+registration as false by design.
 
-## Reaching Tier A
+### Native Kanban execution
 
-To upgrade from Tier B to Tier A, the plugin needs:
+Use a Hermes-native card rather than a Sage-owned worker or dispatcher:
 
-1. **Subagent dispatch** — wire `delegate_task` into the review loop so spec, plan, and code get independent fresh-context review. The plugin would call `delegate_task` with a reviewer persona and the artifact path, then check the review result before allowing completion.
+```yaml
+workspace_kind: dir
+workspace_path: <absolute-target-repository>
+skills:
+  - sage:sage-build
+goal_mode: true
+body: |
+  Execute the preloaded Sage build workflow.
+  Invocation arguments: --autonomous --quality-locked
+  Goal: <requested work>
+  Run all Sage gates and independent reviews before completion.
+```
+
+Skill preloading does not supply invocation flags, so the card body must carry
+`--autonomous --quality-locked` explicitly. The current plugin does not
+intercept Hermes-native `kanban_complete`: `pre_verify` supplies advisory
+quality context and goal mode supplies the host judge, but neither independently
+proves current-byte Sage receipts. The runtime inventory and `platform.yaml`
+therefore declare the completion-policy bridge false until that separate
+initiative exists.
 
 ## Troubleshooting
 
 ### Plugin not loading
 
 ```bash
-HERMES_PLUGINS_DEBUG=1 hermes plugins list
+HERMES_PLUGINS_DEBUG=1 hermes --profile <name> plugins list
 ```
 
 Check for:
@@ -134,19 +186,13 @@ Check for:
 - Wrong directory depth (must be `plugins/<name>/plugin.yaml`)
 - Python import errors in the handler
 
-### Gates not blocking
+### Gates or callbacks not active
 
-1. Check `.sage/config.yaml` — `hard_enforcement` must be `true`
-2. Check `.sage/gates/gate-blocks.log` — are blocks being logged?
-3. Verify the tool name matches — only `write_file` and `patch` are gated
-
-### Gateway hook not firing
-
-```bash
-hermes logs --follow --level INFO | grep sage-session
-```
-
-The hook only fires in gateway mode (Telegram, Discord, etc.), not CLI.
+Run the receipt-aware doctor command above. It distinguishes present,
+registered, discovered, executed, context-delivered, and behaviorally-verified
+states without mutating the profile. Doctor states: `failed`, `present`,
+`registered`, `discovered`, `executed`, `context-delivered`,
+`behaviorally-verified`.
 
 ## Maintainer
 

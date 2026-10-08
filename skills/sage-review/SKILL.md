@@ -15,7 +15,7 @@ Load this skill when the user runs `/sage-review` or asks to review something (t
 Hermes does NOT interpolate an in-body argument token. The user's arguments/flags arrive as a SEPARATE instruction line appended to this skill invocation. Wherever the steps below refer to "the user's arguments", use the text of that appended instruction line.
 
 ## Independent review (delegate_task)
-When a step calls for an independent review, invoke `delegate_task` against the `sage-reviewer` skill. Hermes delegate_task has NO toolset-restriction parameter — read-only is prompt-enforced, and you MUST verify afterward that the reviewer made no edits (e.g. `git status` unchanged) before accepting its verdict.
+When a step calls for an independent review, invoke `delegate_task` with a self-contained goal/context that carries the `sage-reviewer` contract (read-only, current-byte evidence, and an `approve`/`revise` verdict). `delegate_task` cannot target or preload a skill, so include the needed rubric or its exact repository path in the child context. Hermes `delegate_task` has NO toolset-restriction parameter — read-only is prompt-enforced, and you MUST verify afterward that the reviewer made no edits (e.g. `git status` unchanged) before accepting its verdict.
 
 
 # Review Workflow
