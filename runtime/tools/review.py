@@ -15,7 +15,8 @@ demonstrated defect from an opinion.
 So the reviewer reports FACTS and this tool records them. The verdict is
 computed by sage_flags.decide() from ledger state — never reported by a
 model. Findings without evidence are opinions and never block (they are
-capped at substantive on intake). Findings, once written down, cannot be
+rejected on intake — `require_evidence`; with it off, capped at
+substantive). Findings, once written down, cannot be
 forgotten or silently re-raised: the re-litigation guard makes fingerprint
 drift the only license to contradict a settled entry.
 
@@ -38,8 +39,10 @@ Usage:
     review.py open-instance <ledger.json> --checkpoint spec|plan|code|qa
     review.py close-round <ledger.json> --iteration N \\
                       [--suite-evidence TEXT] [--gates-evidence TEXT]
+    review.py gate    <ledger.json> --gate NAME --exit 0|1|2 [--evidence TEXT]
     review.py check-diff  <ledger.json> --finding F-003 --commit SHA
     review.py report  <ledger.json>
+    review.py summary <ledger.json>
 
 The ledger lives at .sage/work/<slug>/review-ledger.json, one per cycle,
 created and mutated only through these subcommands — machine-owned like
@@ -183,6 +186,19 @@ CONFIG_DEFAULTS = {
     "late_finding_disposition": "defer",  # "open" restores: rounds>1
                                           # non-blocking findings intake
                                           # open (the late-nit treadmill)
+    # Review 2026-10-26, P1 — the loop must end, and its ceremony must pay:
+    "cycle_round_budget": 10,    # 0 restores: no cycle-wide budget (each
+                                 # checkpoint capped alone; gate retries free)
+    "gate_retry_cap": 3,         # 0 restores: gate retries uncounted (the
+                                 # prose "max 3" no tool enforced)
+    "require_evidence": True,    # False restores: an evidence-less finding
+                                 # is capped to substantive and kept open
+    "max_fixes_per_round": 3,    # 0 restores: every blocking finding is
+                                 # fixed in the same round
+    "witness_location": "inline",  # "review-dir" restores: witnesses as
+                                   # tests/review/<F-id>.* files
+    "sentinels": False,          # True restores: sentinel tests pinning
+                                 # neighbors of each fix (advisory)
 }
 
 
@@ -372,7 +388,7 @@ def intake(ledger_path: pathlib.Path, findings: list, iteration: int,
 
     report = {"new": [], "merged": [], "capped": [], "disputed": [],
               "citation_unresolved": [], "citation_skipped": [],
-              "auto_deferred": []}
+              "auto_deferred": [], "rejected_no_evidence": []}
     for i, raw in enumerate(findings):
         _validate_finding(raw, i)
         fp = fingerprint_region(repo_root, raw["anchor"]["file"],
@@ -392,8 +408,10 @@ def intake(ledger_path: pathlib.Path, findings: list, iteration: int,
         severity = severity_as_reported
         cited = raw.get("cited_rule")
         citation_unresolved = citation_skipped = False
+        require_evidence = config.get("require_evidence", True)
         if (config.get("citation_check", True) and cited
-                and severity_as_reported in ("critical", "major")):
+                and (severity_as_reported in ("critical", "major")
+                     or require_evidence)):
             sources = _citation_sources(cited, ledger_path.resolve().parent,
                                         repo_root)
             if not sources:
@@ -406,11 +424,62 @@ def intake(ledger_path: pathlib.Path, findings: list, iteration: int,
                 and not _has_witness(raw)):
             severity = "substantive"
 
+        # L4 (review 2026-10-26) — evidence or nothing. A finding that
+        # neither demonstrates (witness) nor cites a rule that resolves is an
+        # opinion. Capping kept it open as a substantive: it then demanded a
+        # disposition at every STOP, or rode into cleanup.md as if it were
+        # work. It is recorded as rejected instead — visible in the report,
+        # never blocking, never ticketed. A real defect is worth one repro
+        # (input → observed → expected); with one, it intakes like any other.
+        # A witness is evidence only with something in it: a declared kind
+        # with no ref demonstrates nothing.
+        has_evidence = ((_has_witness(raw) and str(witness.get("ref") or "").strip())
+                        or (bool(cited) and not citation_unresolved))
+        if require_evidence and not has_evidence:
+            same = [e for e in by_fingerprint.get(fp, [])
+                    if claim_stem(e["claim"]) == stem]
+            if same:
+                same[0]["raised_count"] = same[0].get("raised_count", 1) + 1
+                report["merged"].append(same[0]["id"])
+                continue
+            entry = {
+                "id": "F-%03d" % ledger["next_id"],
+                "artifact": raw.get("artifact", artifact),
+                "first_seen": iteration,
+                "pass": raw.get("pass"),
+                "severity": severity,
+                "severity_as_reported": severity_as_reported,
+                "cited_rule": cited,
+                "anchor": {"file": raw["anchor"]["file"],
+                           "region": list(raw["anchor"]["region"]),
+                           "fingerprint": fp},
+                "claim": raw["claim"],
+                "witness": witness,
+                "exit_criteria": raw.get("exit_criteria"),
+                "status": "rejected",
+                "rejected_for": "no-evidence",
+                "raised_count": 1,
+                "verifications": [],
+                "disposition": {"action": "reject",
+                                "reason": "no witness and no resolving citation "
+                                          "(review_loop.require_evidence)"},
+            }
+            if citation_unresolved:
+                entry["citation_unresolved"] = True
+            ledger["next_id"] += 1
+            ledger["findings"].append(entry)
+            by_fingerprint.setdefault(fp, []).append(entry)
+            report["rejected_no_evidence"].append(entry["id"])
+            continue
+
         # RR-3.3 — re-litigation guard: contradicting a settled entry needs
         # fingerprint drift since settlement. An identical fingerprint means
         # the region has not changed; sampling noise loses to the record.
+        # An entry rejected only for lacking evidence settled nothing about
+        # the claim: the same claim arriving WITH evidence is not a re-raise.
         settled = [e for e in by_fingerprint.get(fp, [])
-                   if e["status"] in SETTLED_STATUSES]
+                   if e["status"] in SETTLED_STATUSES
+                   and e.get("rejected_for") != "no-evidence"]
 
         # RR-3.2 — dedup: same region text + same claim is the same finding.
         duplicates = [e for e in by_fingerprint.get(fp, [])
@@ -620,18 +689,37 @@ def disposition_batch(ledger_path: pathlib.Path, ids: list, severity,
     return [e["id"] for e in selected]
 
 
-def open_instance(ledger_path: pathlib.Path, checkpoint: str) -> None:
+def open_instance(ledger_path: pathlib.Path, checkpoint: str,
+                  config: dict = None) -> None:
     """Mark the start of a checkpoint loop instance. Cap, stall, and the
     derived iteration are computed per instance from here on — one ledger
     can carry spec, plan, code, and QA loops without their bookkeeping
     bleeding into each other (the field ran exit records at iter=13
-    against a cap of 5)."""
+    against a cap of 5). The cycle BUDGET is not per instance: a cycle
+    that has spent it cannot open another checkpoint loop."""
     if ledger_path.is_file():
         ledger = load_ledger(ledger_path)
     else:
         ledger = new_ledger(slug_of(ledger_path))
+    budget = _budget(ledger, config or CONFIG_DEFAULTS)
+    if budget["exhausted"]:
+        raise Problem(_budget_spent_message(budget))
     ledger["history"].append({"instance": checkpoint})
     save_ledger(ledger_path, ledger)
+
+
+def _budget(ledger: dict, config: dict, this_round: bool = False) -> dict:
+    return _load_sage_flags().budget_state(
+        ledger, config.get("cycle_round_budget", 0), this_round=this_round)
+
+
+def _budget_spent_message(budget: dict) -> str:
+    return ("this cycle has spent its round budget (%d of %d: %d review "
+            "round(s), %d failed gate attempt(s)) — do not start another "
+            "round. Show the user `review.py summary`; only they can raise "
+            "review_loop.cycle_round_budget in .sage/config.yaml."
+            % (budget["spent"], budget["limit"], budget["review_rounds"],
+               budget["gate_failures"]))
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -656,14 +744,17 @@ def close_round(ledger_path: pathlib.Path, iteration: int, config: dict,
     decision = sf.decide({}, iteration, [],
                          ledger={"findings": ledger["findings"],
                                  "history": ledger["history"],
+                                 "gates": ledger.get("gates", []),
                                  "config": config})
     action = decision["action"]
 
     # RR-7 — a STOP is a decision about every remaining open entry, not an
     # exhaustion — and a Phase-A-disputed entry is a contested one, not a
     # resolved one. Refuse to record any STOP until each has a disposition.
-    # (ESCALATE records first — it is the request FOR the human's decision.)
-    if action.startswith("STOP") and decision["dispositions_required"]:
+    # (ESCALATE and STOP_BUDGET record first — each is the request FOR the
+    # human's decision, and the summary hands it over in one message.)
+    if (action.startswith("STOP") and action != "STOP_BUDGET"
+            and decision["dispositions_required"]):
         raise Problem(
             f"{action} needs a disposition (defer/reject/fix-now) for: "
             + ", ".join(decision["dispositions_required"])
@@ -672,6 +763,8 @@ def close_round(ledger_path: pathlib.Path, iteration: int, config: dict,
 
     record = {"iteration": iteration, "counts": decision["counts"],
               "result": action}
+    if decision.get("fix_this_round"):
+        record["fix_this_round"] = decision["fix_this_round"]
     # RR-26 — round evidence on file, so the next Phase A verifies against
     # facts already purchased instead of re-running them.
     if suite_evidence:
@@ -702,6 +795,173 @@ def close_round(ledger_path: pathlib.Path, iteration: int, config: dict,
     if action != "CONTINUE":
         _write_exit_record(ledger_path, ledger, iteration, decision)
     return decision
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# gate — gate attempts are counted, not remembered (review 2026-10-26, L1)
+# ═══════════════════════════════════════════════════════════════════════
+
+GATE_VERDICTS = ("PASS", "RETRY", "ESCALATE", "STOP_BUDGET", "UNVERIFIABLE")
+
+
+def gate(ledger_path: pathlib.Path, name: str, exit_code: int, config: dict,
+         evidence=None) -> dict:
+    """Record one run of a quality gate's script and say what happens next.
+
+    "Fix-and-retry, max 3" was a sentence: nothing counted the retries, so a
+    gate that could not go green (a red suite the cycle did not cause) was
+    retried on every "continue", forever. Now each attempt lands in the
+    cycle ledger, a failure spends the cycle's round budget, and the verdict
+    is computed:
+
+      exit 0 → PASS          exit 2 → UNVERIFIABLE (the gate's own protocol)
+      exit 1 → RETRY | ESCALATE (gate_retry_cap consecutive failures of this
+               gate) | STOP_BUDGET (the cycle's budget is spent)
+    """
+    if exit_code not in (0, 1, 2):
+        raise Problem(f"--exit must be the gate script's exit code (0, 1 or 2), "
+                      f"got {exit_code}")
+    if ledger_path.is_file():
+        ledger = load_ledger(ledger_path)
+    else:
+        ledger = new_ledger(slug_of(ledger_path))
+    attempts = ledger.setdefault("gates", [])
+    result = {0: "pass", 1: "fail", 2: "unverifiable"}[exit_code]
+    record = {"gate": name, "exit": exit_code, "result": result,
+              "date": datetime.date.today().isoformat()}
+    if evidence:
+        record["evidence"] = evidence
+    attempts.append(record)
+
+    consecutive = 0
+    for a in reversed(attempts):
+        if a.get("gate") != name or a.get("result") == "unverifiable":
+            continue
+        if a.get("result") != "fail":
+            break
+        consecutive += 1
+
+    budget = _budget(ledger, config)
+    cap = config.get("gate_retry_cap", 0)
+    if result == "pass":
+        verdict = "PASS"
+    elif result == "unverifiable":
+        verdict = "UNVERIFIABLE"
+    elif cap and consecutive >= cap:
+        verdict = "ESCALATE"
+    elif budget["exhausted"]:
+        verdict = "STOP_BUDGET"
+    else:
+        verdict = "RETRY"
+    record["verdict"] = verdict
+    save_ledger(ledger_path, ledger)
+
+    if verdict in ("ESCALATE", "STOP_BUDGET"):
+        line = ("- [%s] gate-loop %s: %s gate=%s consecutive_failures=%d "
+                "budget=%d/%s [auto-logged by review.py]\n") % (
+            datetime.date.today().isoformat(), verdict,
+            ledger.get("slug", slug_of(ledger_path)), name, consecutive,
+            budget["spent"], budget["limit"] or "off")
+        try:
+            with open(ledger_path.resolve().parent / "decisions.md", "a",
+                      encoding="utf-8") as fh:
+                fh.write(line)
+        except OSError as exc:
+            print(f"✗ could not write exit record: {exc}", file=sys.stderr)
+    return {"gate": name, "verdict": verdict,
+            "consecutive_failures": consecutive, "retry_cap": cap,
+            "budget": budget}
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# summary — the one message a stopped cycle hands the user (L3)
+# ═══════════════════════════════════════════════════════════════════════
+
+def summary(ledger_path: pathlib.Path, config: dict) -> str:
+    """Everything the user needs to decide, in one message, rendered from
+    the ledger — so a spent budget ends in a decision, not another round."""
+    ledger = load_ledger(ledger_path)
+    budget = _budget(ledger, config)
+    cycle_dir = ledger_path.resolve().parent
+    out = []
+    if budget["exhausted"]:
+        out.append("Sage: stopped — this cycle has used its review budget "
+                   "(%d of %d rounds)." % (budget["spent"], budget["limit"]))
+    else:
+        out.append("Sage: review loop summary — %d round(s) spent%s."
+                   % (budget["spent"], " of %d" % budget["limit"]
+                      if budget["limit"] else ""))
+    out.append("")
+    out.append("Where it stands")
+
+    per_instance, current = [], None
+    for h in ledger.get("history", []):
+        if "instance" in h:
+            current = [h["instance"], 0, None]
+            per_instance.append(current)
+        else:
+            if current is None:
+                current = ["review", 0, None]
+                per_instance.append(current)
+            current[1] += 1
+            current[2] = h.get("result")
+    if per_instance:
+        out.append("- Review rounds: " + ", ".join(
+            "%s %d (%s)" % (n, c, r or "open") for n, c, r in per_instance))
+    gates = {}
+    for g in ledger.get("gates", []):
+        st = gates.setdefault(g["gate"], {"fail": 0, "last": None})
+        if g.get("result") == "fail":
+            st["fail"] += 1
+        st["last"] = g
+    for name, st in gates.items():
+        last = st["last"]
+        out.append("- Gate %s: %d failed attempt(s); last %s%s" % (
+            name, st["fail"], last.get("result"),
+            " — %s" % last["evidence"] if last.get("evidence") else ""))
+
+    sev = {"critical": 0, "major": 1, "substantive": 2, "cosmetic": 3}
+    open_entries = sorted((e for e in ledger["findings"]
+                           if e["status"] in OPEN_STATUSES + ("disputed",)
+                           and not e.get("relitigates")),
+                          key=lambda e: (sev[e["severity"]], e["id"]))
+    if open_entries:
+        out.append("- Still open: %d" % len(open_entries))
+        for e in open_entries[:5]:
+            a = e["anchor"]
+            out.append("  - %s [%s] %s (%s:%s-%s)" % (
+                e["id"], e["severity"], e["claim"], a["file"],
+                a["region"][0], a["region"][1]))
+        if len(open_entries) > 5:
+            out.append("  - … %d more (`review.py report`)" % (len(open_entries) - 5))
+    else:
+        out.append("- Still open: none")
+    deferred = sum(1 for e in ledger["findings"] if e["status"] == "deferred")
+    if deferred:
+        out.append("- Deferred to cleanup.md: %d" % deferred)
+    rejected = sum(1 for e in ledger["findings"]
+                   if e.get("rejected_for") == "no-evidence")
+    if rejected:
+        out.append("- Not acted on (no witness or citation): %d" % rejected)
+    base = cycle_dir / "verify-baseline.json"
+    if base.is_file():
+        try:
+            failing = json.loads(base.read_text(encoding="utf-8")).get("failing") or []
+            out.append("- Already failing before this cycle (baseline): %d"
+                       % len(failing))
+        except ValueError:
+            pass
+
+    if budget["exhausted"]:
+        out.append("")
+        out.append("[C] Continue — raise review_loop.cycle_round_budget in "
+                   ".sage/config.yaml (now %d), then say continue"
+                   % budget["limit"])
+        out.append("[A] Accept as is — you approve closing the cycle with "
+                   "the above on record (a red suite still blocks the commit "
+                   "hook: commit it yourself, or fix it first)")
+        out.append("[S] Stop here — leave the cycle open to pick up later")
+    return "\n".join(out)
 
 
 def _write_cleanup(ledger_path: pathlib.Path, iteration: int,
@@ -816,6 +1076,13 @@ def _git(repo_root: pathlib.Path, *args) -> str:
     return proc.stdout
 
 
+# What an inline witness file may be called: a test module by the usual
+# naming of its ecosystem — not conftest.py, setup files, fixtures or config.
+_WITNESS_FILE_RE = re.compile(
+    r"(^|/)(test_[^/]+\.py|[^/]+_test\.(py|go)|[^/]+\.(test|spec)\.[cm]?[jt]sx?"
+    r"|[^/]+Test\.(java|kt)|[^/]+_spec\.rb)$")
+
+
 def is_test_path(path: str) -> bool:
     return bool(_TEST_PATH_RE.search(path))
 
@@ -908,15 +1175,45 @@ def check_diff(ledger_path: pathlib.Path, finding_id: str, commit: str,
                 return True
         return False
 
-    witness_refs = [r for r in ((e.get("witness") or {}).get("ref")
-                                for e in scoped) if r]
-    witness_prefixes = ["tests/review/" + e["id"] for e in scoped]
+    # A witness ref may name the test inside its file ("tests/x.py::test_y").
+    raw_refs = [r for r in ((e.get("witness") or {}).get("ref") for e in scoped) if r]
+    witness_refs = [r.split("::")[0] for r in raw_refs]
+    named_tests = {}
+    for r in raw_refs:
+        if "::" in r:
+            named_tests.setdefault(r.split("::")[0], []).append(r.split("::")[-1])
+    # L5 (review 2026-10-26): witnesses are ordinary tests by default — a new
+    # test file named for the behavior, in the project's own test location —
+    # not a permanent tests/review/<F-id> file per finding. Only a file this
+    # commit CREATES is exempt: any change to an existing test file, even a
+    # pure insertion (a skip decorator, a module-level skip, a redefinition
+    # of an existing test's name), can silence tests that were already there,
+    # so it still needs Sage-License. `witness_location: review-dir` restores
+    # the per-finding files and their wholesale pass.
+    review_dir = config.get("witness_location", "inline") == "review-dir"
+    witness_prefixes = (["tests/review/" + e["id"] for e in scoped]
+                        if review_dir else [])
+    added = {line.split("\t", 1)[1] for line in
+             _git(repo_root, "show", "--name-status", "--format=", commit).splitlines()
+             if line.startswith("A\t")}
     anchors = [(e["anchor"]["file"], int(e["anchor"]["region"][0]),
                 int(e["anchor"]["region"][1])) for e in scoped]
 
     def is_witness_path(path):
-        return path in witness_refs or \
-            any(path.startswith(p) for p in witness_prefixes)
+        if any(path.startswith(p) for p in witness_prefixes):
+            return True
+        if path not in witness_refs:
+            return False
+        if review_dir:
+            return True
+        # Inline: a test file this commit creates, named like one (never a
+        # conftest/setup/config file — those reshape every other test), that
+        # holds the test the witness names.
+        if path not in added or not _WITNESS_FILE_RE.search(path):
+            return False
+        body = _git(repo_root, "show", "%s:%s" % (commit, path))
+        return all(re.search(r"\b%s\b" % re.escape(re.sub(r"\[.*\]$", "", n)), body)
+                   for n in named_tests.get(path, []))
 
     def in_anchor(path, old_start, old_end, old_count):
         for afile, start, end in anchors:
@@ -1028,6 +1325,10 @@ def report(ledger_path: pathlib.Path) -> str:
                 parts.append("%d:%s" % (h["iteration"], h["result"]))
         lines.append("")
         lines.append("rounds: " + " → ".join(parts))
+    if ledger.get("gates"):
+        lines.append("gates: " + " → ".join(
+            "%s:%s" % (g["gate"], g.get("verdict", g.get("result")))
+            for g in ledger["gates"]))
     return "\n".join(lines)
 
 
@@ -1053,11 +1354,35 @@ def _read_payload(args, file_attr: str, json_attr: str, what: str) -> list:
     return data
 
 
+# The cycle's stop belongs to the project's own config — the file the config
+# gate guards. A --config pointing elsewhere may tune anything else, but never
+# hands the loop a looser budget than the human set.
+PROTECTED_KEYS = ("cycle_round_budget", "gate_retry_cap")
+
+
+def _check_ledger_path(ledger_path: pathlib.Path) -> None:
+    """A cycle has ONE ledger: .sage/work/<slug>/review-ledger.json. A second
+    file beside it would start a fresh, unspent budget."""
+    parts = ledger_path.resolve().parts
+    for i in range(len(parts) - 2):
+        if parts[i] == ".sage" and parts[i + 1] == "work":
+            if ledger_path.name != "review-ledger.json" or len(parts) != i + 4:
+                raise Problem(f"{ledger_path}: a cycle's ledger is "
+                              ".sage/work/<slug>/review-ledger.json — one per "
+                              "cycle, nowhere else")
+            return
+
+
 def _resolve_config(args, ledger_path: pathlib.Path) -> dict:
-    if getattr(args, "config", None):
-        return load_config(args.config)
-    root = repo_root_of(ledger_path)
-    return load_config(root / ".sage" / "config.yaml")
+    project = repo_root_of(ledger_path) / ".sage" / "config.yaml"
+    if not getattr(args, "config", None):
+        return load_config(project)
+    cfg = load_config(args.config)
+    if project.is_file():
+        own = load_config(project)
+        for key in PROTECTED_KEYS:
+            cfg[key] = own[key]
+    return cfg
 
 
 def main(argv=None) -> int:
@@ -1112,6 +1437,7 @@ def main(argv=None) -> int:
     oi = add("open-instance", "mark the start of a checkpoint loop instance "
                               "(cap/stall/iteration count per instance)")
     oi.add_argument("--checkpoint", required=True)
+    oi.add_argument("--config", default=None)
 
     c = add("close-round", "compute the round verdict from ledger facts")
     c.add_argument("--iteration", type=int, required=True)
@@ -1126,11 +1452,22 @@ def main(argv=None) -> int:
     k.add_argument("--repo-root", type=pathlib.Path, default=None)
     k.add_argument("--config", default=None)
 
+    g = add("gate", "record a quality gate's run; the retry/budget verdict "
+                    "is computed")
+    g.add_argument("--gate", required=True, help="gate name, e.g. 5 or verify")
+    g.add_argument("--exit", type=int, required=True, dest="exit_code",
+                   help="the gate script's exit code (0 pass, 1 fail, 2 unverifiable)")
+    g.add_argument("--evidence", default=None)
+    g.add_argument("--config", default=None)
+
     add("report", "render the ledger for a human")
+    sm = add("summary", "the one message a stopped cycle hands the user")
+    sm.add_argument("--config", default=None)
 
     args = p.parse_args(argv)
 
     try:
+        _check_ledger_path(args.ledger)
         if args.cmd == "intake":
             config = _resolve_config(args, args.ledger)
             root = args.repo_root or repo_root_of(args.ledger)
@@ -1165,7 +1502,8 @@ def main(argv=None) -> int:
                                      args.reason, args.ticket, config)
             print(json.dumps({"dispositioned": done, "action": args.action}))
         elif args.cmd == "open-instance":
-            open_instance(args.ledger, args.checkpoint)
+            open_instance(args.ledger, args.checkpoint,
+                          _resolve_config(args, args.ledger))
             print(f"✓ instance opened: {args.checkpoint}")
         elif args.cmd == "close-round":
             config = _resolve_config(args, args.ledger)
@@ -1180,8 +1518,14 @@ def main(argv=None) -> int:
             print(json.dumps(result))
             if not result["in_scope"] or not result["license_ok"]:
                 return 1
+        elif args.cmd == "gate":
+            config = _resolve_config(args, args.ledger)
+            print(json.dumps(gate(args.ledger, args.gate, args.exit_code,
+                                  config, args.evidence)))
         elif args.cmd == "report":
             print(report(args.ledger))
+        elif args.cmd == "summary":
+            print(summary(args.ledger, _resolve_config(args, args.ledger)))
     except (Problem, OSError) as exc:
         print(f"✗ {exc}", file=sys.stderr)
         return 1

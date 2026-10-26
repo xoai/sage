@@ -1,0 +1,22 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.15.0, pytest-9.1.1, pluggy-1.7.0 -- /scratch/venv/bin/python3
+cachedir: .pytest_cache
+rootdir: /scratch/rt/py
+configfile: pytest.ini
+collecting ... collected 5 items / 1 error
+
+==================================== ERRORS ====================================
+_______________________ ERROR collecting tests/test_c.py _______________________
+ImportError while importing test module '/scratch/rt/py/tests/test_c.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+<python> in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_c.py:1: in <module>
+    import nonexistent_mod
+E   ModuleNotFoundError: No module named 'nonexistent_mod'
+=========================== short test summary info ============================
+ERROR tests/test_c.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+=============================== 1 error in 0.07s ===============================

@@ -116,6 +116,25 @@ class DriverErrorResultTest(unittest.TestCase):
                             pathlib.Path.home() / ".claude",
                             "must never be the operator's real config dir")
 
+    def test_real_claude_config_is_opt_in_and_keeps_the_operators_env(self):
+        """--real-claude-config (a keychain login the run-scoped dir cannot
+        carry): the subprocess gets the operator's env untouched — and only
+        when asked; the default stays isolated."""
+        captured = {}
+
+        def spy(cmd, **kw):
+            captured.clear()
+            captured.update(kw.get("env") or {})
+            return FakeProc([result_event()])
+
+        with mock.patch.object(RE, "OPERATOR_CONFIG", True), \
+                mock.patch.dict(RE.os.environ, {}, clear=False) as env, \
+                mock.patch.object(RE.subprocess, "run", side_effect=spy):
+            env.pop("CLAUDE_CONFIG_DIR", None)
+            self.driver.run(self.d, ["go"], self.out)
+        self.assertNotIn("CLAUDE_CONFIG_DIR", captured)
+        self.assertFalse(RE.OPERATOR_CONFIG, "the default must stay isolated")
+
     def test_a_clean_result_still_drives(self):
         run = self.drive([result_event()])
         self.assertTrue(run["ok"])

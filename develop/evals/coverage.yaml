@@ -54,7 +54,7 @@ surfaces:
   workflow-build:
     path: core/workflows/build.workflow.md
     kind: workflow
-    covered-by: [E1, E4, E7, E9, E10, L3]
+    covered-by: [E1, E4, E7, E9, E10, L3, E19]
     notes: >
       Both paths of Step 6's fork are now covered. E1/E4/E7 grade the INLINE path
       (TDD order, scope, spec gate); E9/E10 grade the SUBAGENT path. Before E9/E10
@@ -69,6 +69,11 @@ surfaces:
       with E-PAR (authored in this pack, execution budget-gated). Same day
       (A7): Step 6 points --parallel at the sub-workflow's lanes section
       (resolve_parallel — flag/config-gated, never default-on).
+      2026-10-26 (P1, the loop must end): the build workflow records Gate 5's
+      test baseline when the manifest is created and routes every gate run
+      through `review.py gate` (counted retries, cycle budget). E19 is the
+      scenario that measures it — added, run once 2026-10-26 (N=1, operator config — E19/MEASURED.md); E1/E4/E7/E9/E10/L3
+      predate the change.
 
   workflow-fix:
     path: core/workflows/fix.workflow.md
@@ -190,12 +195,17 @@ surfaces:
   subworkflow-quality-gates:
     path: core/workflows/sub-workflows/quality-gates.workflow.md
     kind: sub-workflow
-    covered-by: [E1, E5, E8]
+    covered-by: [E1, E5, E8, E19]
     notes: >
       E1 and E5 assert gate exit codes on the final tree; E8 asserts the loud
       degradation path when the Task tool is absent. The gate SEQUENCE — that
       gates run in order and a failure blocks completion — is asserted by the
       H-series hook tests, not by an eval scenario.
+      2026-10-26 (P1, the loop must end): Gate 5 passes on 'no new failures'
+      against the cycle baseline, and fix-and-retry is counted by `review.py
+      gate` (ESCALATE after gate_retry_cap, STOP_BUDGET when the cycle budget
+      is spent). Deterministic floor: gate tests G30a–q, test_review_budget.py
+      GateTest. E19 measures it live — added, run once 2026-10-26 (N=1, operator config — E19/MEASURED.md).
 
 # ── Hooks (the mechanical layer — what the eval says actually moves behavior) ─
 
@@ -229,6 +239,10 @@ surfaces:
       obvious Bash evasions) that reduce any gate's effective-enabled state while
       enforcement is on; no opt-out (it IS hard enforcement); humans disable
       out-of-band. C1-C9 pin the matrix; E15 is the end-to-end regression.
+      2026-10-26 (P1, the loop must end): cycle_round_budget and
+      gate_retry_cap joined the protected review floor (an agent may not raise
+      or zero its own stop); pinned by hook tests C11f–C11k. E15 not re-run
+      for this addition.
 
   hook-verify-gate:
     path: runtime/platforms/claude-code/hooks/sage-verify-gate.sh
@@ -257,6 +271,9 @@ surfaces:
       .sage/tmp/, so its scratch never shows in `git status`. That touches no
       recorded timestamp, so E14's claim stands; the .gitignore is pinned
       deterministically by hook test V1b, not by E14.
+      2026-10-26 (P1, the loop must end): a `sage-verify.sh --record-baseline`
+      run is not test evidence (recording exits 0 over a red suite). Pinned by
+      the hook tests; E14 not re-run for it.
 
   hook-secrets-gate:
     path: runtime/platforms/claude-code/hooks/sage-secrets-gate.sh
@@ -295,6 +312,10 @@ surfaces:
       section capture survives blank lines inside a block and commented
       headers — the de-DOTALL fix had introduced exactly that gap);
       L1 covers it end-to-end on the resume path.
+      2026-10-26 (P1, the loop must end): a cycle's verify-baseline.json and
+      review-ledger.json are machine-owned — any Edit/Write, even creation, is
+      blocked (a forged baseline is an excuse, an edited ledger a refunded
+      budget). Pinned by hook tests B6b/B6c; L1 not re-run for it.
 
   hook-manifest-sync:
     path: runtime/platforms/claude-code/hooks/sage-manifest-sync.sh
@@ -474,8 +495,23 @@ surfaces:
   gate-verify:
     path: core/gates/scripts/sage-verify.sh
     kind: gate
-    covered-by: [E1, E4]
-    notes: "Both assert exit 0 on the final tree via the gate_exit grader."
+    covered-by: [E1, E4, E19]
+    notes: >
+      E1 and E4 assert exit 0 on the final tree via the gate_exit grader.
+      2026-10-26 (P1, the loop must end): --record-baseline / --baseline /
+      --no-baseline. A red run passes only when every failure is PROVABLY a
+      baseline one: per-runner parsers (pytest, go, node --test, jest, vitest,
+      mocha) name fully qualified ids and must match the runner's own failure
+      count; interrupted runs, unhandled errors, timeouts, build failures and
+      unparsed formats (flutter) are never excused; recording is once per
+      cycle, refused over modified source; only the in-progress cycle's own
+      baseline from this branch's history applies; a --gate run is recorded in
+      the cycle ledger; go runs must close every RUN, node maps moved lines
+      through the diff, failing hooks, async errors and fail-fast runs (fewer
+      tests than the baseline) are never excused.
+      Pinned by test_verify_baseline.py (real runner output, collision cases,
+      second-review shapes) and gate tests G30a–s; E19 exercises it live —
+      added, run once 2026-10-26 (N=1, operator config — E19/MEASURED.md).
 
   gate-bounded:
     path: core/gates/scripts/sage-bounded.sh
@@ -825,7 +861,7 @@ surfaces:
   capability-auto-review:
     path: core/capabilities/review/auto-review/SKILL.md
     kind: capability
-    covered-by: [E8]
+    covered-by: [E8, E19]
     notes: >
       Only the ABSENCE path is graded: E8 removes the Task tool and asserts the
       skip is declared loudly. Nothing grades an auto-review that actually runs.
@@ -840,6 +876,11 @@ surfaces:
       ordered/shared artifact classes (migrations, lockfiles, codegen,
       global config) as serialization signals; E-PAR-2's any-layer grader
       counts this checklist as one of its three nets (authored, not run).
+      2026-10-26 (P1, the loop must end): the v2 output contract now says a
+      finding with neither witness nor resolving citation is REJECTED (not
+      capped), and that a round fixes only the top few blocking findings.
+      Contract text pinned by test_review_schema.py; behavior unmeasured live
+      — E19 added, run once 2026-10-26 (N=1, operator config — E19/MEASURED.md).
 
   capability-auto-qa:
     path: core/capabilities/review/auto-qa/SKILL.md
@@ -848,6 +889,8 @@ surfaces:
     notes: >
       As with auto-review: E8 grades the loud skip, not the running review.
       The v2 output contract is pinned by test_review_schema.py.
+      2026-10-26 (P1, the loop must end): same contract change as auto-review
+      (evidence-less findings rejected; most severe first). Unmeasured live.
 
   capability-implement:
     path: core/capabilities/execution/implement/SKILL.md
@@ -882,16 +925,22 @@ surfaces:
       is fine; judged against the packet's spec excerpt it is Critical. That
       difference is the entire product. The v2 output contract (trace matrix,
       no verdict) is pinned by test_review_schema.py.
+      2026-10-26 (P1, the loop must end): same contract change as auto-review
+      (evidence-less findings rejected; most severe first). E10 not re-run for
+      it.
 
   capability-quality-review:
     path: core/capabilities/review/quality-review/SKILL.md
     kind: capability
-    covered-by: [E16]
+    covered-by: [E16, E19]
     notes: >
       E16 drives the v2 contract (perspective passes, JSON findings, no
       verdict) end-to-end through the ledger loop; test_review_schema.py pins
       the contract text deterministically. The v1 persona remains
       judgment-only with no scenario of its own.
+      2026-10-26 (P1, the loop must end): same contract change as auto-review.
+      E16's 2026-07-20 numbers were measured under capping, not rejection —
+      re-run E16 before citing them for this version; E19 added, run once 2026-10-26 (N=1, operator config — E19/MEASURED.md).
 
   capability-flag-parser:
     path: core/capabilities/orchestration/flag-parser/SKILL.md
@@ -910,18 +959,24 @@ surfaces:
   capability-quality-locked:
     path: core/capabilities/orchestration/quality-locked/SKILL.md
     kind: capability
-    covered-by: [E16, E17, E18]
+    covered-by: [E16, E17, E18, E19]
     notes: >
       The v2 ledger loop and its fixer protocol: E16 convergence, E17 the
       re-litigation guard under a live model, E18 fix-scope honesty. The v1
       cap stays unit-tested via sage_flags.py (test_sage_flags.py) with no
       scenario of its own; the controller table is pinned by R1–R6 in
       develop/validators/review/test_review_controller.py.
+      2026-10-26 (P1, the loop must end): the cycle budget (STOP_BUDGET +
+      `review.py summary`), `fix_this_round` (max_fixes_per_round), inline
+      witnesses in the project's own test files and no sentinels by default.
+      Deterministic floor: test_review_budget.py, InlineWitnessTest. E16–E18
+      predate the change (they measured capping and tests/review/ witnesses) —
+      re-run before citing; E19 added, run once 2026-10-26 (N=1, operator config — E19/MEASURED.md).
 
   capability-autonomous:
     path: core/capabilities/orchestration/autonomous/SKILL.md
     kind: capability
-    uncovered: "No scenario runs a cycle in autonomous mode."
+    uncovered: "No measured scenario runs a cycle in autonomous mode. 2026-10-26 (P1): E19 runs /build --autonomous --quality-locked and asserts the cycle ends on its own inside its budget — added, run once 2026-10-26 (N=1, operator config — E19/MEASURED.md); that STOP_BUDGET and ESCALATE are never auto-picked is prose here, checked only through that outcome."
 
   capability-session-bridge:
     path: core/capabilities/context/session-bridge/SKILL.md
@@ -1106,6 +1161,10 @@ surfaces:
       Plugin wrapper for /build — the heaviest workflow, and the one E1/E4/E7/E9/E10
       all grade through `sage init` rather than through this file. If the wrapper
       and the workflow ever disagree, no scenario would notice.
+      2026-10-26 (P1, the loop must end): the plugin wrapper gained the
+      baseline step (plugin path) and says plainly that gate retries are
+      tool-counted only when Sage is vendored — plugin-only installs ship no
+      review.py.
 
   overlay-skill-configure:
     path: runtime/plugin-overlay/skills/configure/SKILL.md
@@ -1117,6 +1176,8 @@ surfaces:
       prose only; the knobs' behavior is measured through the workflows/capabilities
       they gate (E1/E4/E5/E8 and L1-resume-fidelity, all re-measured 3/3), not
       through this doc.
+      2026-10-26 (P1, the loop must end): evidence-less findings are now
+      described as rejected, not capped.
 
   overlay-skill-continue:
     path: runtime/plugin-overlay/skills/continue/SKILL.md
@@ -1169,18 +1230,25 @@ surfaces:
   tool-review-ledger:
     path: runtime/tools/review.py
     kind: tool
-    covered-by: [E16, E17, E18]
+    covered-by: [E16, E17, E18, E19]
     notes: >
       The findings ledger: intake normalization (capping, dedup, the
       re-litigation guard), verify, dispositions, close-round, check-diff.
       Deterministic floor: develop/validators/review/ (test_review_ledger,
       test_review_checkdiff, test_review_schema, and the calibration scorer
       self-test). E16–E18 are the live-model layer on top.
+      2026-10-26 (P1, the loop must end): require_evidence (evidence-less
+      findings rejected; the re-litigation guard ignores evidence-only
+      rejections), the `gate` and `summary` subcommands, the budget refusal in
+      open-instance, and inline-witness scope in check-diff. Pinned by
+      test_review_budget.py + InlineWitnessTest; the pre-existing ledger tests
+      run with require_evidence: false to keep pinning the capping mechanics.
+      E16–E18 predate it; E19 added, run once 2026-10-26 (N=1, operator config — E19/MEASURED.md).
 
   tool-review-controller:
     path: runtime/tools/sage_flags.py
     kind: tool
-    covered-by: [E16]
+    covered-by: [E16, E19]
     notes: >
       Flag parsing + the quality-locked decision logic, v1 and v2. The RR-6
       table is pinned by R1–R6 (test_review_controller.py, including the
@@ -1199,6 +1267,9 @@ surfaces:
       default cap 2, hard cap 4 clamped loudly) and resolve_parallel()
       (parallel requires subagent mode, refusal is the same ADR-10 loud
       degradation) — ParallelFlagTest + ResolveParallelTest pin both.
+      2026-10-26 (P1, the loop must end): STOP_BUDGET (the cycle budget only
+      ever turns a CONTINUE into a stop) and `fix_this_round`. Pinned by
+      test_review_budget.py BudgetTest/FixListTest; E19 added, run once 2026-10-26 (N=1, operator config — E19/MEASURED.md).
 
 # ── Hermes platform skills (added 2026-08-05) ───────────────────────────────
 # The hermes plugin registers 21 skills via ctx.register_skill(). Each mirrors
@@ -1241,6 +1312,9 @@ surfaces:
     notes: >
       Mirrors workflow-build's content — the scenarios grade the build-loop
       paths (inline and subagent), not the Hermes skill delivery of them.
+      2026-10-26 (P1, the loop must end): the Hermes copy gained the
+      cycle-start baseline step and the computed gate-retry verdicts,
+      mirroring workflow-build. Not measured on Hermes.
 
   skill-sage-checkpoints:
     path: skills/sage-checkpoints/SKILL.md

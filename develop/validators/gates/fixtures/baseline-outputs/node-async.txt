@@ -1,0 +1,63 @@
+npm notice run test
+npm notice run node --test
+▶ Report
+  ▶ v1
+    ✖ formats (1.068125ms)
+  ✖ v1 (1.391417ms)
+  ▶ v2
+    ✔ formats (0.055167ms)
+  ✔ v2 (0.123625ms)
+✖ Report (1.735542ms)
+✖ top fails (0.040667ms)
+▶ parent
+  ✖ child fails (0.046334ms)
+✖ parent (0.180791ms)
+✔ unhandled (0.058875ms)
+ℹ Error: Test "unhandled" at test/a.test.mjs:9:1 generated asynchronous activity after the test ended. This activity created the error "Error: u" and would have caused the test to fail, but instead triggered an unhandledRejection event.
+node:internal/modules/esm/resolve:272
+    throw new ERR_MODULE_NOT_FOUND(
+          ^
+
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/scratch/rt/node/test/nope.js' imported from /scratch/rt/node/test/load.test.mjs
+  code: 'ERR_MODULE_NOT_FOUND',
+  url: 'file:///scratch/rt/node/test/nope.js'
+}
+
+Node.js v24.22.0
+✖ test/load.test.mjs (26.233583ms)
+ℹ tests 7
+ℹ suites 3
+ℹ pass 2
+ℹ fail 5
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 47.608667
+
+✖ failing tests:
+
+test at test/a.test.mjs:4:26
+✖ formats (1.068125ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  1 !== 2
+  
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 2,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/a.test.mjs:7:1
+✖ top fails (0.040667ms)
+  Error: x
+
+test at test/a.test.mjs:8:39
+✖ child fails (0.046334ms)
+  Error: y
+
+test at test/load.test.mjs:1:1
+✖ test/load.test.mjs (26.233583ms)
+  'test failed'

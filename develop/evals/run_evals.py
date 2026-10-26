@@ -61,6 +61,7 @@ Python 3.8+, stdlib only.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import pathlib
@@ -505,6 +506,36 @@ def make_workspace(scenario: Scenario, condition: str, root: pathlib.Path,
     return ws
 
 
+# --real-claude-config: run with the operator's own Claude config instead of a
+# run-scoped one. It exists for one situation — a machine whose Claude Code
+# login lives in the OS keychain (macOS), where a run-scoped config dir has no
+# credentials to copy and every session starts "Not logged in". It gives up
+# the two things isolation buys (see isolated_claude_env): the operator's
+# settings (a default model, permissions, hooks, plugins, user CLAUDE.md) now
+# shape the run, and the eval agent CAN write the operator's real ~/.claude.
+# Results say so, and main() reports any change to those files afterwards.
+OPERATOR_CONFIG = False
+OPERATOR_CONFIG_NOTE = (
+    "run with the operator's own Claude config (--real-claude-config), not a "
+    "run-scoped one: the operator's settings, permissions, hooks, plugins and "
+    "user CLAUDE.md applied to these sessions, and the agent could write the "
+    "real ~/.claude. Not comparable to isolated runs without that caveat.")
+
+
+def _operator_config_files() -> dict:
+    """Fingerprints of the operator files an eval agent could alter."""
+    home = pathlib.Path(os.environ.get("CLAUDE_CONFIG_DIR")
+                        or pathlib.Path.home() / ".claude")
+    out = {}
+    for rel in ("CLAUDE.md", "settings.json", "settings.local.json"):
+        f = home / rel
+        try:
+            out[str(f)] = hashlib.sha256(f.read_bytes()).hexdigest() if f.is_file() else None
+        except OSError:
+            out[str(f)] = "unreadable"
+    return out
+
+
 def isolated_claude_env(ws: pathlib.Path) -> dict:
     """The env for a driver subprocess: the platform's config dir is RUN-SCOPED.
 
@@ -522,6 +553,8 @@ def isolated_claude_env(ws: pathlib.Path) -> dict:
     persists between sessions; runs never see each other or the real HOME.
     """
     env = dict(os.environ)
+    if OPERATOR_CONFIG:
+        return env
     cfg = ws.parent / "_claude_config"
     if not cfg.is_dir():
         cfg.mkdir(parents=True, exist_ok=True)
@@ -1085,7 +1118,8 @@ def sage_modes(v: dict) -> list:
 # ─────────────────────────────────────────────────────────────────────────────
 # Reporting
 # ─────────────────────────────────────────────────────────────────────────────
-def write_report(results: list, runs: int, path: pathlib.Path) -> None:
+def write_report(results: list, runs: int, path: pathlib.Path,
+                 note: str = None) -> None:
     v = verdicts(results, runs)
     scenarios = sorted({k[0] for k in v})
     modes = sage_modes(v)
@@ -1100,6 +1134,7 @@ def write_report(results: list, runs: int, path: pathlib.Path) -> None:
         f"N = {runs} run(s) per scenario per condition; a scenario passes on a",
         "majority of runs. Graders are deterministic — no LLM judge.",
         "",
+        *([f"> ⚠ {note}", ""] if note else []),
         "| Scenario | sage | bare | delta |",
         "|---|---|---|---|",
     ]
@@ -1383,7 +1418,14 @@ def main() -> int:
                    help="do not delete the temp workspaces (for debugging a failure)")
     p.add_argument("--dry-run", action="store_true",
                    help="print what would run; spend nothing")
+    p.add_argument("--real-claude-config", action="store_true",
+                   help="use YOUR Claude config instead of a run-scoped one — for "
+                        "a keychain login (macOS) the isolated config cannot "
+                        "carry. Trade-off: your settings shape the run and the "
+                        "agent can write your ~/.claude; results are marked")
     args = p.parse_args()
+    global OPERATOR_CONFIG
+    OPERATOR_CONFIG = args.real_claude_config
 
     try:
         scenarios = load_scenarios(args.scenario)
@@ -1429,17 +1471,28 @@ def main() -> int:
     arms = sum(len(modes_for(c, modes)) for c in conditions)
     print(f"Running {len(scenarios)} scenario(s) × {arms} arm(s) "
           f"× {args.runs} run(s) — driver {driver.name}\n")
+    before = _operator_config_files() if OPERATOR_CONFIG else {}
+    if OPERATOR_CONFIG:
+        print(f"  ⚠ {OPERATOR_CONFIG_NOTE}\n")
     results = run_all(scenarios, conditions, driver, args.runs,
                       args.keep_workspaces, modes=modes)
+    touched = [f for f, h in _operator_config_files().items()
+               if before.get(f) != h] if OPERATOR_CONFIG else []
 
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / "results.json").write_text(
         json.dumps({"runs": args.runs, "driver": driver.name,
-                    "model": args.model, "results": results}, indent=2),
+                    "model": args.model,
+                    "claude_config": "operator" if OPERATOR_CONFIG else "isolated",
+                    **({"claude_config_note": OPERATOR_CONFIG_NOTE,
+                        "operator_files_changed": touched}
+                       if OPERATOR_CONFIG else {}),
+                    "results": results}, indent=2),
         encoding="utf-8",
     )
     if args.report:
-        write_report(results, args.runs, args.out / "summary.md")
+        write_report(results, args.runs, args.out / "summary.md",
+                     OPERATOR_CONFIG_NOTE if OPERATOR_CONFIG else None)
 
     v = verdicts(results, args.runs)
     print()
@@ -1448,6 +1501,11 @@ def main() -> int:
         won = sum(1 for r in rows if r["verdict"])
         print(f"  {cond:5} {won}/{len(rows)} scenarios passed "
               f"(${sum(r['cost_usd'] for r in rows):.2f})")
+    if OPERATOR_CONFIG:
+        print("\n  ⚠ ran with YOUR Claude config (--real-claude-config)")
+        if touched:
+            print("  ⚠ these files of yours CHANGED during the run — check them: "
+                  + ", ".join(touched))
     print(f"\n  results → {args.out / 'results.json'}")
     if args.report:
         print(f"  summary → {args.out / 'summary.md'}")

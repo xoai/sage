@@ -591,6 +591,12 @@ review_loop:
   witness_capping: true     # false restores severity-as-reported
   scope_check: true         # false restores v1 (no diff-scope check on fix commits)
   review_model: inherit     # inherit | cheap (savings unclaimed until measured)
+  cycle_round_budget: 10    # review rounds + failed gate attempts per cycle; spent →
+                            # stop with one summary. 0 = no limit. Yours to raise.
+  gate_retry_cap: 3         # consecutive failures of one gate before escalating
+  require_evidence: true    # findings without a witness or citation are not acted on
+  max_fixes_per_round: 3    # blocking findings fixed per round (0 = all)
+  witness_location: inline  # inline | review-dir (per-finding tests/review/ files)
 # isolation: how delivery workflows isolate an initiative.
 #   branch   — (default) branch in place; one session at a time.
 #   worktree — a worktree per initiative; for parallel sessions.

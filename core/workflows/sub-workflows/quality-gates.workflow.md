@@ -126,10 +126,17 @@ incorrect version-specific behavior.
 
 Run the tests. Run the feature. Show evidence. Don't trust claims.
 
-**Script first:** Run `bash .sage/gates/scripts/sage-verify.sh --quiet [project-root]`
+**Script first:** Run `bash .sage/gates/scripts/sage-verify.sh --quiet --gate [project-root]`
+(`--gate` records the run in the cycle ledger — retries are counted for you).
 Exit 1 → the gate FAILS.
 Exit 2 → UNVERIFIABLE; see "Unverifiable Gate Handling" below. A project with
 no tests does NOT pass this gate.
+Exit 0 with "NO NEW TEST FAILURES" → PASS: every failure is provably one of
+the tests named in the cycle's `verify-baseline.json` (recorded at cycle
+start), which this cycle did not cause and is not asked to fix. Say so in the
+gate report; never try to "fix", skip or delete them inside the cycle. A
+failure the script cannot name, an interrupted run, a timeout, or a broken
+build is never excused.
 (`--quiet` prints one PASS summary line; a FAIL still pastes the last 40 lines
 of test output as evidence.)
 
@@ -235,7 +242,9 @@ reviewer (max 2 iterations) — never a fresh dedicated QA dispatch.
   silent default.
 - Gate 8 (Auto-QA) is advisory — findings don't block, but MUST be
   presented to the user.
-- Gate failures trigger fix-and-retry (max 3), then escalate to human.
+- Gate failures trigger fix-and-retry, counted by `review.py gate` (it
+  escalates after `gate_retry_cap` consecutive failures and stops the cycle
+  when its round budget is spent).
 - Never skip mandatory gates. They are mandatory, not suggestions.
 
 ## Resume close-out: one combined review, not the whole ceremony again
@@ -275,11 +284,21 @@ paying for it once.
 
 ### Gate Failure Handling
 
-Gate returns FAIL + fix-and-retry:
-→ Agent fixes the specific issue identified
-→ Gate re-runs (same gate, not from Gate 1)
-→ Maximum retries: 3 per gate
-→ After 3 retries: escalate to human
+Gate returns FAIL + fix-and-retry — obey the computed verdict. Gate 5 run
+with `--gate` records itself and prints the verdict; record the other gates'
+runs yourself:
+
+```bash
+python3 sage/runtime/tools/review.py gate .sage/work/[cycle-id]/review-ledger.json \
+  --gate <n> --exit <the script's exit code> --evidence "<its summary line>"
+```
+
+→ `RETRY`: fix the specific issue identified; re-run the same gate (not from Gate 1)
+→ `ESCALATE`: this gate failed `review_loop.gate_retry_cap` (default 3) times in
+  a row — stop and present the failures to the human
+→ `STOP_BUDGET`: the cycle spent `review_loop.cycle_round_budget` — run
+  `review.py summary` and present it as your whole message; do not retry
+Record passes too (`--exit 0`): a pass resets the gate's consecutive count.
 
 Gate returns FAIL + escalate-to-human:
 → Workflow pauses immediately
@@ -362,7 +381,7 @@ RETURN: Structured findings per gate to stdout.
 
 **Main agent runs Gates 4-5 concurrently (`--quiet`):**
 - Gate 4: `bash .sage/gates/scripts/sage-hallucination-check.sh --quiet`
-- Gate 5: `bash .sage/gates/scripts/sage-verify.sh --quiet`
+- Gate 5: `bash .sage/gates/scripts/sage-verify.sh --quiet --gate`
 
 **Merge results:** After both complete, combine findings. Any FAIL
 from either path = gate failure. Present unified result to user.

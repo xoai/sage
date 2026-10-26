@@ -1,0 +1,66 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.15.0, pytest-9.1.1, pluggy-1.7.0 -- /scratch/venv/bin/python3
+cachedir: .pytest_cache
+rootdir: /scratch/rt/py
+configfile: pytest.ini
+collecting ... collected 5 items
+
+tests/test_a.py::test_old FAILED                                         [ 20%]
+tests/test_a.py::test_p[a b] FAILED                                      [ 40%]
+tests/test_a.py::test_p[a - b] FAILED                                    [ 60%]
+tests/test_a.py::TestK::test_m FAILED                                    [ 80%]
+tests/test_a.py::test_err ERROR                                          [100%]
+
+==================================== ERRORS ====================================
+__________________________ ERROR at setup of test_err __________________________
+
+    @pytest.fixture
+>   def boom(): raise RuntimeError("setup")
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   RuntimeError: setup
+
+tests/test_a.py:8: RuntimeError
+=================================== FAILURES ===================================
+___________________________________ test_old ___________________________________
+
+>   def test_old(): assert False
+                    ^^^^^^^^^^^^
+E   assert False
+
+tests/test_a.py:2: AssertionError
+_________________________________ test_p[a b] __________________________________
+
+s = 'a b'
+
+    @pytest.mark.parametrize("s", ["a b", "a - b"])
+>   def test_p(s): assert False
+                   ^^^^^^^^^^^^
+E   assert False
+
+tests/test_a.py:4: AssertionError
+________________________________ test_p[a - b] _________________________________
+
+s = 'a - b'
+
+    @pytest.mark.parametrize("s", ["a b", "a - b"])
+>   def test_p(s): assert False
+                   ^^^^^^^^^^^^
+E   assert False
+
+tests/test_a.py:4: AssertionError
+_________________________________ TestK.test_m _________________________________
+
+self = <test_a.TestK object at 0x1049302d0>
+
+>   def test_m(self): assert False
+                      ^^^^^^^^^^^^
+E   assert False
+
+tests/test_a.py:6: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_a.py::test_old - assert False
+FAILED tests/test_a.py::test_p[a b] - assert False
+FAILED tests/test_a.py::test_p[a - b] - assert False
+FAILED tests/test_a.py::TestK::test_m - assert False
+ERROR tests/test_a.py::test_err - RuntimeError: setup
+========================== 4 failed, 1 error in 0.03s ==========================

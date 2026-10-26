@@ -1447,6 +1447,80 @@ class ReviewLoopGraderTest(unittest.TestCase):
         self.assertIn("no ledger", detail)
 
 
+class CycleTerminationGraderTest(unittest.TestCase):
+    """E19 (review 2026-10-26, P1): the cycle ENDS — inside its budget, on its
+    own. Both directions: a run the harness cut off must fail, however good
+    the tree looks."""
+
+    def setUp(self):
+        self.ws = pathlib.Path(tempfile.mkdtemp(prefix="grader-cycle-"))
+        self.addCleanup(shutil.rmtree, self.ws, ignore_errors=True)
+        (self.ws / ".sage" / "work" / "001-x").mkdir(parents=True)
+
+    def ledger(self, rounds, gate_fails):
+        hist = [{"iteration": i + 1, "counts": {}, "result": "CONTINUE"}
+                for i in range(rounds)]
+        gates = [{"gate": "5", "result": "fail"}] * gate_fails
+        (self.ws / ".sage" / "work" / "001-x" / "review-ledger.json").write_text(
+            __import__("json").dumps({"findings": [], "history": hist,
+                                      "gates": gates}))
+
+    def budget(self, limit):
+        return G.review_loop(self.ws, G.Transcript([], []),
+                             {"path": ".sage/work/*/review-ledger.json",
+                              "max_cycle_rounds": limit})
+
+    def test_inside_the_budget_passes(self):
+        self.ledger(6, 4)
+        self.assertTrue(self.budget(10)[0])
+
+    def test_one_spend_past_the_limit_is_the_attempt_that_learns_it(self):
+        self.ledger(10, 1)
+        self.assertTrue(self.budget(10)[0])
+
+    def test_running_on_past_the_budget_fails(self):
+        self.ledger(10, 3)
+        ok, detail = self.budget(10)
+        self.assertFalse(ok)
+        self.assertIn("10 review round(s) + 3 failed gate attempt(s)", detail)
+
+    def test_a_glob_matching_two_ledgers_fails(self):
+        self.ledger(1, 0)
+        (self.ws / ".sage" / "work" / "002-y").mkdir()
+        (self.ws / ".sage" / "work" / "002-y" / "review-ledger.json").write_text(
+            '{"findings": [], "history": []}')
+        self.assertFalse(self.budget(10)[0])
+
+    def test_inline_witness_ref_names_its_file(self):
+        (self.ws / "tests").mkdir()
+        (self.ws / "tests" / "test_x.py").write_text("def test_y(): pass\n")
+        (self.ws / ".sage" / "work" / "001-x" / "review-ledger.json").write_text(
+            __import__("json").dumps({"history": [], "findings": [
+                {"id": "F-001", "witness": {"kind": "test",
+                                            "ref": "tests/test_x.py::test_y"}}]}))
+        ok, detail = G.review_loop(self.ws, G.Transcript([], []),
+                                   {"path": ".sage/work/*/review-ledger.json",
+                                    "witnesses_exist": True})
+        self.assertTrue(ok, detail)
+
+    def ended(self, *results):
+        return G.session_ended_itself(self.ws, G.Transcript(list(results), []), {})
+
+    def test_session_that_stopped_itself_passes(self):
+        ok, _ = self.ended({"type": "result", "subtype": "success", "is_error": False})
+        self.assertTrue(ok)
+
+    def test_session_cut_off_by_the_budget_fails(self):
+        ok, detail = self.ended({"type": "result", "subtype": "success", "is_error": False},
+                                {"type": "result", "subtype": "error_max_budget_usd",
+                                 "is_error": True})
+        self.assertFalse(ok)
+        self.assertIn("error_max_budget_usd", detail)
+
+    def test_session_killed_without_a_result_fails(self):
+        self.assertFalse(self.ended()[0])
+
+
 class LaneGraderTest(unittest.TestCase):
     """E-PAR's deterministic teeth, pinned in both directions against a real
     git fixture — merge commits, lane branches, the runtime block writers."""

@@ -355,6 +355,179 @@ run_case G9 "'vitest' in package.json metadata is not a runner" \
   --timeout 60 \
   -- "$FIX/verify/misleading-package-json"
 
+# ── Baseline (review 2026-10-26, L2): a failure that predates the cycle must
+# not block it forever — and must never excuse a failure the cycle introduced.
+# Fixtures are read-only here (see the dirt check), so each case runs on a
+# throwaway git copy.
+gate_copy() {  # gate_copy <fixture-dir> → prints a committed throwaway copy
+  local d; d="$(mktemp -d "${TMPDIR:-/tmp}/sage-gate-base-XXXXXX")/proj"
+  cp -R "$1" "$d"
+  ( cd "$d" && git init -q . && git add -A \
+      && git -c user.email=t@t -c user.name=t commit -qm seed ) >/dev/null 2>&1
+  echo "$d"
+}
+B_PY="$(gate_copy "$FIX/verify/failing-pytest")"
+B_FILE="$B_PY/.sage/work/c1/verify-baseline.json"
+
+run_case G30a "record-baseline names the tests already failing, and exits 0" \
+  --script "$V" --exit 0 --contains "Baseline recorded" \
+  --contains "test_arithmetic_is_broken" \
+  --requires pytest \
+  -- --record-baseline "$B_FILE" "$B_PY"
+
+run_case G30b "a failure recorded in the baseline does not fail Gate 5" \
+  --script "$V" --exit 0 --contains "NO NEW TEST FAILURES" --contains "PASS" \
+  --requires pytest \
+  -- --quiet --baseline "$B_FILE" "$B_PY"
+
+run_case G30c "--no-baseline judges every failure, as before" \
+  --script "$V" --exit 1 --contains "FAIL" \
+  --requires pytest \
+  -- --quiet --no-baseline "$B_PY"
+
+mkdir -p "$B_PY/.sage/work/c1"
+printf -- '---\nstatus: in-progress\n---\n' > "$B_PY/.sage/work/c1/manifest.md"
+run_case G30d "the active cycle's baseline is found without a flag" \
+  --script "$V" --exit 0 --contains "NO NEW TEST FAILURES" \
+  --requires pytest \
+  -- --quiet "$B_PY"
+
+printf 'def test_cycle_broke_this():\n    assert 1 == 2\n' > "$B_PY/tests/test_new.py"
+run_case G30e "a failure NOT in the baseline fails, and is named as the cycle's" \
+  --script "$V" --exit 1 --contains "Not in the cycle's baseline" \
+  --contains "test_cycle_broke_this" --not-contains "NO NEW TEST FAILURES" \
+  --requires pytest \
+  -- --quiet "$B_PY"
+
+run_case G30f "no baseline is recorded over the cycle's own uncommitted edits" \
+  --script "$V" --exit 2 --contains "cannot record a baseline" \
+  --requires pytest \
+  -- --record-baseline "$B_PY/.sage/work/c1/late.json" "$B_PY"
+
+run_case G30j "a baseline is recorded once — never over an existing one" \
+  --script "$V" --exit 2 --contains "already exists" \
+  --requires pytest \
+  -- --record-baseline "$B_FILE" "$B_PY"
+
+# Gate 5 counts its own attempts in the cycle ledger (L1) — when it runs AS
+# the gate (--gate). The d/e runs above were plain runs (TDD-style) and must
+# have left no trace; this one is the gate.
+run_case G30k "a Gate 5 run (--gate) of an in-progress cycle lands in its ledger" \
+  --script "$V" --exit 1 --contains "Not in the cycle's baseline" \
+  --requires pytest \
+  -- --gate "$B_PY"
+if python3 -c 'import json,sys;g=json.load(open(sys.argv[1]))["gates"];sys.exit(0 if [a["result"] for a in g]==["fail"] else 1)' \
+     "$B_PY/.sage/work/c1/review-ledger.json" 2>/dev/null; then
+  report PASS G30l "the ledger holds exactly that gate attempt — plain runs are not attempts"; N_PASS=$((N_PASS + 1))
+elif have_tool pytest; then
+  report FAIL G30l "the ledger holds exactly that gate attempt — plain runs are not attempts"; N_FAIL=$((N_FAIL + 1)); FAILED_IDS="$FAILED_IDS G30l"
+fi
+
+sed -i.bak 's/in-progress/paused/' "$B_PY/.sage/work/c1/manifest.md" && rm -f "$B_PY/.sage/work/c1/manifest.md.bak"
+rm -f "$B_PY/tests/test_new.py"
+run_case G30m "a PAUSED cycle's baseline judges nothing (only the in-progress cycle's own)" \
+  --script "$V" --exit 1 --not-contains "NO NEW TEST FAILURES" \
+  --requires pytest \
+  -- --quiet "$B_PY"
+
+sed -i.bak 's/paused/complete/' "$B_PY/.sage/work/c1/manifest.md" && rm -f "$B_PY/.sage/work/c1/manifest.md.bak"
+rm -f "$B_PY/tests/test_new.py"
+run_case G30g "a COMPLETED cycle's baseline excuses nothing" \
+  --script "$V" --exit 1 --not-contains "NO NEW TEST FAILURES" \
+  --requires pytest \
+  -- --quiet "$B_PY"
+
+B_HANG="$(gate_copy "$FIX/verify/hanging-pytest")"
+printf '{"version":2,"attributable":true,"head":null,"failing":["test_hang.py::test_hangs"]}\n' \
+  > "$B_HANG/base.json"
+run_case G30h "a timeout is never excused by a baseline" \
+  --script "$V" --exit 1 --contains "TIMED OUT" --not-contains "NO NEW TEST FAILURES" \
+  --requires pytest --env SAGE_VERIFY_TIMEOUT=2 \
+  -- --quiet --baseline "$B_HANG/base.json" "$B_HANG"
+
+# The review's trap, verbatim in shape: `npm test` → `node --test`, which also
+# discovers a failing file under sage/ the project does not own.
+B_NODE="$(mktemp -d "${TMPDIR:-/tmp}/sage-gate-base-XXXXXX")/proj"
+mkdir -p "$B_NODE/test" "$B_NODE/vendor"
+printf '{"name":"n","private":true,"scripts":{"test":"node --test"}}\n' > "$B_NODE/package.json"
+printf 'import test from "node:test";\nimport assert from "node:assert";\ntest("adds", () => assert.equal(1 + 1, 2));\n' \
+  > "$B_NODE/test/add.test.mjs"
+printf 'import test from "node:test";\ntest("not ours", () => { throw new Error("x"); });\n' \
+  > "$B_NODE/vendor/adapter-test.mjs"
+( cd "$B_NODE" && git init -q . && git add -A \
+    && git -c user.email=t@t -c user.name=t commit -qm seed ) >/dev/null 2>&1
+( cd "$B_NODE" && bash "$GATES_DIR/$V" --record-baseline .sage/work/c1/verify-baseline.json . ) >/dev/null 2>&1
+run_case G30i "node --test: a pre-existing failing file is excused by name" \
+  --script "$V" --exit 0 --contains "vendor/adapter-test.mjs" --contains "PASS" \
+  --requires node --requires npm \
+  -- --quiet --baseline "$B_NODE/.sage/work/c1/verify-baseline.json" "$B_NODE"
+# A node id is file:line:col — mapped through the diff since the baseline, so
+# a test that only MOVED (a line added above it) is still itself, and a test
+# whose own line was edited is not.
+printf '// moved down by one line\n' | cat - "$B_NODE/vendor/adapter-test.mjs" > "$B_NODE/vendor/x" \
+  && mv "$B_NODE/vendor/x" "$B_NODE/vendor/adapter-test.mjs"
+run_case G30o "node: a pre-existing failure that only moved is still excused" \
+  --script "$V" --exit 0 --contains "NO NEW TEST FAILURES" \
+  --requires node --requires npm \
+  -- --quiet --baseline "$B_NODE/.sage/work/c1/verify-baseline.json" "$B_NODE"
+sed -i.bak 's/not ours/not ours, rewritten/' "$B_NODE/vendor/adapter-test.mjs" && rm -f "$B_NODE/vendor/adapter-test.mjs.bak"
+run_case G30p "node: a failing test whose own line changed reads as new" \
+  --script "$V" --exit 1 --contains "Not in the cycle's baseline" \
+  --requires node --requires npm \
+  -- --quiet --baseline "$B_NODE/.sage/work/c1/verify-baseline.json" "$B_NODE"
+( cd "$B_NODE" && git checkout -q -- . ) >/dev/null 2>&1
+
+# Too late: the cycle's manifest is committed and source has changed since —
+# a baseline now would describe the cycle's own work.
+B_LATE="$(gate_copy "$FIX/verify/failing-pytest")"
+mkdir -p "$B_LATE/.sage/work/c9"
+printf -- '---\nstatus: in-progress\ngate_state: plan-approved\n---\n' > "$B_LATE/.sage/work/c9/manifest.md"
+( cd "$B_LATE" && git add -A && git -c user.email=t@t -c user.name=t commit -qm cycle \
+    && printf 'def test_cycle():\n    assert 0\n' > tests/test_cycle.py && git add -A \
+    && git -c user.email=t@t -c user.name=t commit -qm work ) >/dev/null 2>&1
+run_case G30q "no baseline once the cycle's source work is committed" \
+  --script "$V" --exit 2 --contains "too late to record" \
+  --requires pytest \
+  -- --record-baseline "$B_LATE/.sage/work/c9/verify-baseline.json" "$B_LATE"
+# …and where .sage/ is gitignored (the manifest has no commit to date the
+# cycle by), gate runs already on the cycle's ledger mean the same thing.
+B_IGN="$(gate_copy "$FIX/verify/failing-pytest")"
+mkdir -p "$B_IGN/.sage/work/c8"
+printf -- '---\nstatus: in-progress\ngate_state: plan-approved\n---\n' > "$B_IGN/.sage/work/c8/manifest.md"
+printf '{"findings": [], "history": [], "gates": [{"gate": "5", "result": "fail"}]}\n' \
+  > "$B_IGN/.sage/work/c8/review-ledger.json"
+run_case G30r "no baseline once the cycle's ledger records gate runs" \
+  --script "$V" --exit 2 --contains "ledger already records" \
+  --requires pytest \
+  -- --record-baseline "$B_IGN/.sage/work/c8/verify-baseline.json" "$B_IGN"
+rm -rf "$(dirname "$B_LATE")" "$(dirname "$B_IGN")"
+
+# Fail-fast (final review, 2026-10-26): the project stops at the first
+# failure (addopts -x). The pre-existing failure comes first; the cycle's comes
+# after it. Gate 5 overrides the setting, so the cycle's failure still runs —
+# and still fails the gate.
+B_FF="$(gate_copy "$FIX/verify/failing-pytest")"
+printf '[pytest]\naddopts = -x\n' > "$B_FF/pytest.ini"
+( cd "$B_FF" && git add -A && git -c user.email=t@t -c user.name=t commit -qm ff ) >/dev/null 2>&1
+( cd "$B_FF" && bash "$GATES_DIR/$V" --record-baseline base.json . ) >/dev/null 2>&1
+printf 'def test_zz_cycle_broke_this():\n    assert 1 == 2\n' > "$B_FF/tests/test_zz.py"
+run_case G30s "a fail-fast project cannot hide the cycle's failure behind a baseline one" \
+  --script "$V" --exit 1 --contains "test_zz_cycle_broke_this" \
+  --not-contains "NO NEW TEST FAILURES" \
+  --requires pytest \
+  -- --quiet --baseline "$B_FF/base.json" "$B_FF"
+rm -rf "$(dirname "$B_FF")"
+
+# A baseline from history this branch does not contain describes some other
+# tree — it excuses nothing.
+( cd "$B_NODE" && git checkout -q --orphan elsewhere && git add -A \
+    && git -c user.email=t@t -c user.name=t commit -qm other ) >/dev/null 2>&1
+run_case G30n "a baseline recorded outside this branch's history excuses nothing" \
+  --script "$V" --exit 1 --contains "not recorded in this branch's history" \
+  --requires node --requires npm \
+  -- --quiet --baseline "$B_NODE/.sage/work/c1/verify-baseline.json" "$B_NODE"
+rm -rf "$(dirname "$B_PY")" "$(dirname "$B_HANG")" "$(dirname "$B_NODE")"
+
 echo ""
 
 # ── Gate 1: spec compliance ──────────────────────────────────────────────

@@ -116,19 +116,20 @@ Include verbatim in the reviewer's instructions:
 > You do not decide the loop; you report findings. The decision is
 > computed from them.
 >
-> A critical or major must carry a witness — a failing test you wrote
-> and ran, a concrete repro (input → observed → expected), or an
-> execution trace — or a citation that resolves: a spec clause,
-> constitution rule, or requirement that actually exists. Citations are
-> checked mechanically against the cycle's spec/plan and the
-> constitution; one that resolves nowhere counts as no citation. A
-> finding with neither witness nor resolving citation is recorded as
-> substantive. This is not a penalty; it is the definition of the
-> severities.
+> Every finding must carry a witness — a failing test you wrote and
+> ran, a concrete repro (input → observed → expected), or an execution
+> trace — or a citation that resolves: a spec clause, constitution
+> rule, or requirement that actually exists. Citations are checked
+> mechanically against the cycle's spec/plan and the constitution; one
+> that resolves nowhere counts as no citation. A finding with neither is
+> recorded as rejected and never acted on, whatever its severity. If
+> you found a real bug, one repro line is enough to make it count.
 >
 > An empty finding list is a valid, creditable outcome; you are scored
-> on precision, not volume. Spend your effort on witnesses and
-> resolvable citations, not on quantity.
+> on precision, not volume. Report the most severe findings first; a
+> round fixes only the top few blocking ones, so a long list buys
+> nothing. Spend your effort on witnesses and resolvable citations,
+> not on quantity.
 
 Findings are ONE fenced ```json block — an array of objects (prose
 outside it is not parsed):

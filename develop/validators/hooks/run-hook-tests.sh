@@ -695,6 +695,15 @@ assert B6 "the global .sage/decisions.md stays free (cross-initiative log)" "$P"
   '{"tool_name":"Edit","tool_input":{"file_path":".sage/decisions.md","new_string":"### x"}}' \
   --exit 0 --hook "$BKG"
 
+# The gates' own records (review 2026-10-26, L1/L2): a forged baseline is an
+# excuse, an edited ledger is a refunded budget.
+assert B6b "writing a cycle's verify-baseline.json by hand is blocked, even to create it" "$P" \
+  '{"tool_name":"Write","tool_input":{"file_path":".sage/work/bk/verify-baseline.json","content":"{}"}}' \
+  --exit 2 --stderr "machine-owned" --stderr "record-baseline" --hook "$BKG"
+assert B6c "editing a cycle's review-ledger.json by hand is blocked" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/bk/review-ledger.json","old_string":"fail","new_string":"pass"}}' \
+  --exit 2 --stderr "machine-owned" --stderr "review.py" --hook "$BKG"
+
 assert B7 "source edits are none of this hook's business" "$P" \
   '{"tool_name":"Edit","tool_input":{"file_path":"src/app.ts","new_string":"x"}}' \
   --exit 0 --hook "$BKG"
@@ -1163,6 +1172,91 @@ P="$(mk_enforced 'review_loop:
   disputed_disposition: true')"
 assert C11e "a contradictory disputed_disposition duplicate is the same bomb — blocked" "$P" \
   '{"tool_name":"Edit","tool_input":{"file_path":".sage/config.yaml","old_string":"  disputed_disposition: true","new_string":"  disputed_disposition: true\nreview_loop:\n  disputed_disposition: false"}}' \
+  --exit 2 --stderr "enforcement" --hook "$CG"
+
+# The cycle's stop (review 2026-10-26, L1): an agent must not lift its own
+# round budget or gate retry cap. Lowering them is the user's direction too,
+# and allowed — only loosening is blocked.
+P="$(mk_enforced 'review_loop:
+  mode: v2
+  cycle_round_budget: 10')"
+assert C11f "raising cycle_round_budget while the v2 loop is active is blocked" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/config.yaml","old_string":"  cycle_round_budget: 10","new_string":"  cycle_round_budget: 40"}}' \
+  --exit 2 --stderr "enforcement" --hook "$CG"
+assert C11g "zeroing cycle_round_budget (0 = no limit) is blocked" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/config.yaml","old_string":"  cycle_round_budget: 10","new_string":"  cycle_round_budget: 0"}}' \
+  --exit 2 --stderr "enforcement" --hook "$CG"
+assert C11h "lowering cycle_round_budget is allowed" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/config.yaml","old_string":"  cycle_round_budget: 10","new_string":"  cycle_round_budget: 6"}}' \
+  --exit 0 --hook "$CG"
+assert C11i "a looser duplicate appended beside the original is blocked" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/config.yaml","old_string":"  cycle_round_budget: 10","new_string":"  cycle_round_budget: 10\nreview_loop:\n  cycle_round_budget: 99"}}' \
+  --exit 2 --stderr "enforcement" --hook "$CG"
+assert C11j "a Bash redirect writing the budget is blocked" "$P" \
+  '{"tool_name":"Bash","tool_input":{"command":"echo \"  cycle_round_budget: 50\" >> .sage/config.yaml"}}' \
+  --exit 2 --stderr "enforcement" --hook "$CG"
+
+# Every edit that makes review.py READ a looser value is the same lift
+# (independent review 2026-10-26: each of these passed a substring matcher).
+for _case in "C11l|  cycle_round_budget: -1|a negative budget (= no limit)" \
+             "C11m|  cycle_round_budget: +99|'+99' (int() reads 99)" \
+             "C11n|  cycle_round_budget: 9_9|'9_9' (int() reads 99)" \
+             "C11o|    cycle_round_budget: 4|a re-indent review.py no longer parses (→ default 10)" \
+             "C11p|  cycle_round_budget: 4\\nreview_loop:\\n  mode: v2|a later review_loop: block without the key (→ default 10)"; do
+  _id="${_case%%|*}"; _rest="${_case#*|}"; _new="${_rest%%|*}"; _why="${_rest#*|}"
+  P="$(mk_enforced 'review_loop:
+  mode: v2
+  cycle_round_budget: 4')"
+  assert "$_id" "$_why is blocked" "$P" \
+    '{"tool_name":"Edit","tool_input":{"file_path":".sage/config.yaml","old_string":"  cycle_round_budget: 4","new_string":"'"$_new"'"}}' \
+    --exit 2 --stderr "enforcement" --hook "$CG"
+done
+
+P="$(mk_enforced 'review_loop:
+  mode: v2
+  cycle_round_budget: 4')"
+assert C11q "a Bash append of a fresh review_loop: block (→ default budget) is blocked" "$P" \
+  '{"tool_name":"Bash","tool_input":{"command":"printf \"review_loop:\\n  mode: v2\\n\" >> .sage/config.yaml"}}' \
+  --exit 2 --stderr "enforcement" --hook "$CG"
+for _case in "C11r|rm .sage/work/c1/verify-baseline.json" \
+             "C11s|mv .sage/work/c1/verify-baseline.json /tmp/old.json" \
+             "C11t|echo '{}' > .sage/work/c1/review-ledger.json" \
+             "C11u|python3 -c 'open(\\\".sage/work/c1/review-ledger.json\\\",\\\"w\\\")'"; do
+  _id="${_case%%|*}"; _cmd="${_case#*|}"
+  assert "$_id" "Bash rewriting a gate record is blocked: $_cmd" "$P" \
+    '{"tool_name":"Bash","tool_input":{"command":"'"$_cmd"'"}}' \
+    --exit 2 --stderr "gates' own records" --hook "$CG"
+done
+for _case in "C11x|rm .sage/work/*/verify-b*" "C11y|rm -r .sage/work/c1" "C11z|rm -rf .sage"; do
+  _id="${_case%%|*}"; _cmd="${_case#*|}"
+  assert "$_id" "a delete reaching the records by glob or directory is blocked: $_cmd" "$P" \
+    '{"tool_name":"Bash","tool_input":{"command":"'"$_cmd"'"}}' \
+    --exit 2 --stderr "gates' own records" --hook "$CG"
+done
+for _case in "C11za|sed -i.bak 's/round_budget: 4/round_budget: 0/' .sage/config.yaml" \
+             "C11zb|git checkout HEAD~1 -- .sage/config.yaml" \
+             "C11zc|cp /tmp/loose.yaml .sage/config.yaml"; do
+  _id="${_case%%|*}"; _cmd="${_case#*|}"
+  assert "$_id" "any Bash write to the config is blocked while enforced: $_cmd" "$P" \
+    '{"tool_name":"Bash","tool_input":{"command":"'"$_cmd"'"}}' \
+    --exit 2 --stderr "enforcement" --hook "$CG"
+done
+assert C11ze "cleaning .sage/tmp is none of this gate's business" "$P" \
+  '{"tool_name":"Bash","tool_input":{"command":"rm -rf .sage/tmp/claude-implementer"}}' \
+  --exit 0 --hook "$CG"
+assert C11zd "reading the config from the shell is fine" "$P" \
+  '{"tool_name":"Bash","tool_input":{"command":"grep -n budget .sage/config.yaml"}}' \
+  --exit 0 --hook "$CG"
+assert C11v "reading a gate record is fine" "$P" \
+  '{"tool_name":"Bash","tool_input":{"command":"cat .sage/work/c1/review-ledger.json"}}' \
+  --exit 0 --hook "$CG"
+assert C11w "the tool that owns the baseline may write it" "$P" \
+  '{"tool_name":"Bash","tool_input":{"command":"bash .sage/gates/scripts/sage-verify.sh --quiet --record-baseline .sage/work/c1/verify-baseline.json 2>&1"}}' \
+  --exit 0 --hook "$CG"
+
+P="$(mk_v2_review)"
+assert C11k "setting gate_retry_cap above its default (absent → 3) is blocked" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/config.yaml","old_string":"  mode: v2","new_string":"  mode: v2\n  gate_retry_cap: 9"}}' \
   --exit 2 --stderr "enforcement" --hook "$CG"
 
 P="$(mk_v2_review)"

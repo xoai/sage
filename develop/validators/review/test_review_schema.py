@@ -39,7 +39,8 @@ CAPABILITIES = {
 }
 
 NO_VERDICT_LINE = "You do not decide the loop; you report findings."
-WITNESS_TEXT = "A critical or major must carry a witness"
+WITNESS_TEXT = "Every finding must carry a witness"
+REJECTED_TEXT = "A finding with neither is\n> recorded as rejected and never acted on"
 CALIBRATION_TEXT = ("An empty finding list is a valid, creditable outcome; "
                     "you are scored\n> on precision, not volume.")
 VERDICT_TOKENS = ("VERDICT:", "ACCEPT", "REVISE", "RESULT: PASS")
@@ -84,7 +85,8 @@ class VerbatimTextsTest(unittest.TestCase):
         for name, path in CAPABILITIES.items():
             section = v2_section(path.read_text(encoding="utf-8"))
             self.assertTrue(section, f"{name}: no '## Review Loop v2' section")
-            for required in (NO_VERDICT_LINE, WITNESS_TEXT, CALIBRATION_TEXT):
+            for required in (NO_VERDICT_LINE, WITNESS_TEXT, REJECTED_TEXT,
+                             CALIBRATION_TEXT):
                 self.assertIn(required, section,
                               f"{name}: v2 section lost the verbatim text "
                               f"{required[:40]!r}")

@@ -34,6 +34,9 @@ jobs:
       - name: Run gate regression tests
         run: bash develop/validators/gates/run-gate-tests.sh
 
+      - name: Gate 5 baseline parsers (real runner output, collision cases)
+        run: python3 develop/validators/gates/test_verify_baseline.py
+
       - name: Flag/quality-locked tool tests
         run: python3 develop/validators/tools/test_sage_flags.py
 
@@ -44,6 +47,7 @@ jobs:
         run: |
           python3 develop/validators/review/test_review_controller.py
           python3 develop/validators/review/test_review_ledger.py
+          python3 develop/validators/review/test_review_budget.py
           python3 develop/validators/review/test_review_checkdiff.py
           python3 develop/validators/review/test_review_schema.py
           python3 develop/validators/review/calibration/score_calibration.py --self-test

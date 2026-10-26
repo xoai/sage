@@ -36,6 +36,9 @@
 #     through close-out but blocking plan edits would break the plan phase),
 #     and the global .sage/decisions.md stays free (cross-initiative log)
 #   - Bash is never matched — manifest.py's own writes pass by construction
+#
+# Always blocked (while enforced): an Edit/Write to a cycle's
+# verify-baseline.json or review-ledger.json — the gates' own records.
 # ═══════════════════════════════════════════════════════════════
 
 set -uo pipefail
@@ -114,6 +117,20 @@ abspath = (file_path if os.path.isabs(file_path)
            else os.path.join(project_root, file_path))
 abspath = os.path.abspath(abspath)
 rel = os.path.relpath(abspath, project_root).replace("\\", "/")
+# The gates' own records (review 2026-10-26): the test baseline decides which
+# failures Gate 5 excuses, the review ledger counts the cycle's budget. Only
+# their tools write them — never an Edit/Write, not even to create one (a
+# hand-written baseline would be a forged excuse).
+mm = re.match(r"^\.sage/work/([^/]+)/(verify-baseline\.json|review-ledger\.json)$", rel)
+if mm:
+    owner = ("bash .sage/gates/scripts/sage-verify.sh --record-baseline (once, at "
+             "cycle start)" if mm.group(2) == "verify-baseline.json"
+             else "sage/runtime/tools/review.py")
+    emit("BLOCK", (
+        "sage-bookkeeping-gate: .sage/work/%s/%s is machine-owned — only %s "
+        "writes it. A hand edit would change what the gates excuse or count. "
+        "If it is wrong, say so to the user; a human corrects it outside the "
+        "agent.\n" % (mm.group(1), mm.group(2), owner)))
 m = re.match(r"^\.sage/work/([^/]+)/(manifest\.md|decisions\.md)$", rel)
 if not m:
     emit("ALLOW")

@@ -39,7 +39,11 @@ def load_answers():
 def load_findings(path: pathlib.Path) -> list:
     data = json.loads(path.read_text(encoding="utf-8"))
     if isinstance(data, dict):
-        data = data.get("findings", [])
+        # A ledger entry rejected for carrying no evidence was never acted on
+        # (review_loop.require_evidence): finding a plant without being able
+        # to show it is not finding it.
+        data = [f for f in data.get("findings", [])
+                if f.get("rejected_for") != "no-evidence"]
     if not isinstance(data, list):
         raise SystemExit(f"✗ {path}: expected a findings array or a ledger")
     return data

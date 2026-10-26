@@ -28,6 +28,7 @@ import difflib
 import fnmatch
 import io
 import json
+import os
 import pathlib
 import re
 import subprocess
@@ -330,7 +331,8 @@ def gate_exit(ws, tx, p) -> tuple:
         return False, f"gate script not found: {p['script']}"
     argv = p.get("args") or [str(ws)]
     proc = subprocess.run(["bash", str(script), *argv],
-                          capture_output=True, text=True, cwd=str(ws))
+                          capture_output=True, text=True, cwd=str(ws),
+                          env=dict(os.environ, SAGE_VERIFY_NO_LEDGER="1"))
     expected = p["exit"]
     tail = (proc.stdout or "").strip().splitlines()
     last = tail[-1] if tail else ""
@@ -448,6 +450,25 @@ def tool_order(ws, tx, p) -> tuple:
     return i_first <= i_then, (
         f"{p['first']!r} at call {i_first}, {p['then']!r} at call {i_then}"
         + ("" if i_first <= i_then else " — the wrong way round"))
+
+
+def session_ended_itself(ws, tx, p) -> tuple:
+    """Every session ended because the agent stopped — not because the harness
+    cut it off (budget, turns, timeout).
+
+    The harness grades a truncated run on what it left behind, which is right
+    for "did the work happen" and wrong for "did the loop END": a loop that
+    would have run forever and a loop that stopped look identical once the
+    budget kills them. So termination is its own check, read from the CLI's
+    own result events.
+    """
+    results = [ev for ev in tx.events if ev.get("type") == "result"]
+    if not results:
+        return False, "no result event — the session was killed before it ended"
+    bad = [ev.get("subtype") or "error" for ev in results
+           if ev.get("is_error") or ev.get("subtype") != "success"]
+    return (not bad), ("every session ended on its own" if not bad
+                       else "cut off: " + ", ".join(bad))
 
 
 def ran_command(ws, tx, p) -> tuple:
@@ -1062,6 +1083,12 @@ def review_loop(ws, tx, p) -> tuple:
     # (develop/validators/review/) hold the two in agreement.
     weights = {"critical": 8, "major": 3, "substantive": 1, "cosmetic": 0}
     path = ws / p["path"]
+    if any(ch in p["path"] for ch in "*?["):
+        # A /build run names its own cycle dir; the scenario cannot know it.
+        hits = sorted(h for h in ws.glob(p["path"]) if h.is_file())
+        if len(hits) != 1:
+            return False, f"{len(hits)} ledger(s) matched {p['path']} (want exactly 1)"
+        path = hits[0]
     if not path.is_file():
         return False, f"no ledger at {p['path']}"
     try:
@@ -1122,9 +1149,27 @@ def review_loop(ws, tx, p) -> tuple:
     if p.get("witnesses_exist"):
         for f in findings:
             w = f.get("witness") or {}
-            if w.get("kind") == "test" and w.get("ref") \
-                    and not (ws / w["ref"]).is_file():
-                problems.append(f"{f.get('id')}: witness {w['ref']} not on disk")
+            # An inline witness names its test: "tests/test_x.py::test_y".
+            ref = (w.get("ref") or "").split("::")[0]
+            if w.get("kind") == "test" and ref and not (ws / ref).is_file():
+                problems.append(f"{f.get('id')}: witness {ref} not on disk")
+
+    # The cycle ends (review 2026-10-26, L1/L3): every review round of every
+    # instance plus every failed gate attempt stays within the budget, and a
+    # loop that did not end clean ended on a computed stop, logged.
+    if "max_cycle_rounds" in p:
+        # Gate 5 records its own runs (sage-verify.sh), so gates[] is not
+        # self-reported for the gate the field case looped on. One spend past
+        # the limit is legitimate: a clean final review round can land exactly
+        # on the limit, and the next gate failure is the attempt that learns
+        # the budget is spent (it answers STOP_BUDGET).
+        rounds = sum(1 for h in history if "instance" not in h)
+        gate_failures = sum(1 for g in ledger.get("gates", [])
+                            if g.get("result") == "fail")
+        if rounds + gate_failures > p["max_cycle_rounds"] + 1:
+            problems.append(f"cycle spent {rounds} review round(s) + "
+                            f"{gate_failures} failed gate attempt(s) > "
+                            f"{p['max_cycle_rounds']}")
 
     if p.get("no_reopened_settled"):
         settled = {(f.get("anchor") or {}).get("fingerprint")
@@ -1460,6 +1505,7 @@ GRADERS = {
     "consulted_skill":          (consulted_skill, ("skill",)),
     "ledger_complete":          (ledger_complete, ()),
     "ledger_attributes_commits": (ledger_attributes_commits, ()),
+    "session_ended_itself":     (session_ended_itself, ()),
     "ran_command":              (ran_command, ("pattern",)),
     "never_ran_command":        (never_ran_command, ("pattern",)),
     "verified_before_claiming": (verified_before_claiming, ()),

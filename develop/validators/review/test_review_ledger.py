@@ -58,7 +58,17 @@ class LedgerCase(unittest.TestCase):
         (self.root / "src" / "auth.ts").write_text(AUTH_TS, encoding="utf-8")
         self.ledger = (self.root / ".sage" / "work" / "20260720-slug"
                        / "review-ledger.json")
-        self.config = dict(R.CONFIG_DEFAULTS, mode="v2")
+        # These classes pin the ledger's mechanics — capping, dedup, the
+        # guard, dispositions, auto-defer — over fixtures that carry no
+        # evidence. Under the default `require_evidence: true` such findings
+        # are rejected on intake and never reach those mechanics, so the
+        # classes run with the knob at its restoring value (CLI calls read it
+        # from the project config). EvidenceTest and test_review_budget.py
+        # pin the defaults.
+        self.config = dict(R.CONFIG_DEFAULTS, mode="v2", require_evidence=False)
+        (self.root / ".sage" / "config.yaml").write_text(
+            "review_loop:\n  mode: v2\n  require_evidence: false\n",
+            encoding="utf-8")
 
     def intake(self, findings, iteration=1, config=None):
         return R.intake(self.ledger, findings, iteration, "code", self.root,

@@ -250,7 +250,8 @@ STUCK_THRESHOLD = 3  # consecutive iterations with the same critical+major count
 
 SEVERITY_WEIGHT = {"critical": 8, "major": 3, "substantive": 1, "cosmetic": 0}
 OPEN_STATUSES = ("open", "not-fixed")
-V2_DEFAULTS = {"major_budget": 0, "iteration_cap": 5, "escalate_after_stalls": 2}
+V2_DEFAULTS = {"major_budget": 0, "iteration_cap": 5, "escalate_after_stalls": 2,
+               "cycle_round_budget": 10, "max_fixes_per_round": 3}
 
 
 def _open_counts(findings):
@@ -305,7 +306,18 @@ def _decide_v2(iteration, ledger):
     Intake-disputed re-raises (`relitigates` set) stay non-blocking by
     design — sampling noise loses to the record.
 
-    Verdicts: CONTINUE | ESCALATE | STOP_CAP | STOP_ADVISORY | STOP_CLEAN.
+    Cycle budget (review 2026-10-26, L1/L3): one budget per cycle,
+    `cycle_round_budget`, spent by every review round of every checkpoint
+    instance AND every failed gate attempt (`review.py gate`). It only ever
+    turns a CONTINUE into STOP_BUDGET — a clean round still stops clean, and
+    a stall or the cap already stops. Per-instance caps cannot bound a cycle:
+    spec, plan and code each had five rounds, and a red gate had uncounted
+    retries, so "continue" could go on forever. 0 disables the budget.
+
+    Verdicts: CONTINUE | ESCALATE | STOP_CAP | STOP_ADVISORY | STOP_CLEAN |
+    STOP_BUDGET. Every verdict carries `fix_this_round`: the blocking
+    entries the next fix round works on, most severe first, at most
+    `max_fixes_per_round` (0 = all) — the rest stay open for later rounds.
     """
     cfg = dict(V2_DEFAULTS)
     config = ledger.get("config") or {}
@@ -339,6 +351,8 @@ def _decide_v2(iteration, ledger):
     fix_now = [f["id"] for f in blocking + disputed_live
                if f.get("disposition") == "fix-now"]
 
+    budget = budget_state(ledger, cfg["cycle_round_budget"], this_round=True)
+
     if not open_entries and not disputed_live:
         action = "STOP_CLEAN"
     elif fix_now:
@@ -353,6 +367,18 @@ def _decide_v2(iteration, ledger):
         action = "CONTINUE"
     else:
         action = "STOP_ADVISORY"     # substantive/cosmetic/disputed only
+    if action == "CONTINUE" and budget["exhausted"]:
+        action = "STOP_BUDGET"       # the cycle has spent what it was given
+
+    order = {"critical": 0, "major": 1, "substantive": 2, "cosmetic": 3}
+    candidates = [f for f in blocking + disputed_live
+                  if f.get("disposition") == "fix-now"]
+    candidates += sorted((f for f in blocking
+                          if f["severity"] in ("critical", "major")
+                          and f not in candidates),
+                         key=lambda f: (order[f["severity"]], f["id"]))
+    cap = cfg["max_fixes_per_round"]
+    fix_this_round = [f["id"] for f in (candidates[:cap] if cap > 0 else candidates)]
 
     return {
         "counts": counts,
@@ -365,8 +391,26 @@ def _decide_v2(iteration, ledger):
                                  + disputed_pending,
         "stalled": stalls >= cfg["escalate_after_stalls"],
         "cap_reached": iteration >= cfg["iteration_cap"],
+        "budget": budget,
+        "fix_this_round": fix_this_round if action == "CONTINUE" else [],
         "action": action,
     }
+
+
+def budget_state(ledger, limit, this_round=False):
+    """What the cycle has spent of `cycle_round_budget`: every review round
+    recorded in any instance, plus every failed gate attempt, plus — when a
+    round is being closed — that round. `exhausted` means no further round
+    may start."""
+    rounds = sum(1 for h in ledger.get("history", []) if "instance" not in h)
+    gate_failures = sum(1 for g in ledger.get("gates", [])
+                        if g.get("result") == "fail")
+    spent = rounds + gate_failures + (1 if this_round else 0)
+    limit = limit if isinstance(limit, int) and not isinstance(limit, bool) else 0
+    return {"limit": limit, "spent": spent, "review_rounds": rounds + (1 if this_round else 0),
+            "gate_failures": gate_failures,
+            "remaining": max(limit - spent, 0) if limit > 0 else None,
+            "exhausted": limit > 0 and spent >= limit}
 
 
 def is_clean(counts):

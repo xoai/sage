@@ -1,0 +1,61 @@
+npm notice run test
+npm notice run node --test
+▶ Report
+  ▶ v1
+    ✖ formats (0.874875ms)
+  ✖ v1 (1.4495ms)
+  ▶ v2
+    ✔ formats (0.054ms)
+  ✔ v2 (0.119584ms)
+✖ Report (1.777625ms)
+✖ top fails (0.037875ms)
+▶ parent
+  ✖ child fails (0.045958ms)
+✖ parent (0.169375ms)
+node:internal/modules/esm/resolve:272
+    throw new ERR_MODULE_NOT_FOUND(
+          ^
+
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/scratch/rt/node/test/nope.js' imported from /scratch/rt/node/test/load.test.mjs
+  code: 'ERR_MODULE_NOT_FOUND',
+  url: 'file:///scratch/rt/node/test/nope.js'
+}
+
+Node.js v24.22.0
+✖ test/load.test.mjs (23.452416ms)
+ℹ tests 6
+ℹ suites 3
+ℹ pass 1
+ℹ fail 5
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 46.138959
+
+✖ failing tests:
+
+test at test/a.test.mjs:4:26
+✖ formats (0.874875ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  1 !== 2
+  
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 2,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/a.test.mjs:7:1
+✖ top fails (0.037875ms)
+  Error: x
+
+test at test/a.test.mjs:8:39
+✖ child fails (0.045958ms)
+  Error: y
+
+test at test/load.test.mjs:1:1
+✖ test/load.test.mjs (23.452416ms)
+  'test failed'

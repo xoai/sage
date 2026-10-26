@@ -1,0 +1,40 @@
+
+ RUN  v2.1.8 /scratch/rt/vitest
+
+ × test/a.test.js > Report > v1 > formats
+   → expected 1 to be 2 // Object.is equality
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/load.test.js [ test/load.test.js ]
+Error: Failed to load url ./nope.js (resolved id: ./nope.js) in /scratch/rt/vitest/test/load.test.js. Does the file exist?
+ ❯ loadAndTransform ../../review-p1/jsdeps/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:51969:17
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/a.test.js > Report > v1 > formats
+AssertionError: expected 1 to be 2 // Object.is equality
+
+- Expected
++ Received
+
+- 2
++ 1
+
+ ❯ test/a.test.js:3:58
+      1| import { describe, test, expect } from "vitest";
+      2| describe("Report", () => {
+      3|   describe("v1", () => { test("formats", () => expect(1).toBe(2)); });
+       |                                                          ^
+      4|   describe("v2", () => { test("formats", () => expect(1).toBe(1)); });
+      5| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+ Test Files  2 failed (2)
+      Tests  1 failed (3)
+   Start at  17:21:32
+   Duration  432ms (transform 42ms, setup 0ms, collect 21ms, tests 11ms, environment 0ms, prepare 168ms)
+

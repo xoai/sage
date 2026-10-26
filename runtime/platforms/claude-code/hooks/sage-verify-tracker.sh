@@ -64,7 +64,10 @@ if tool in ("Edit", "Write", "MultiEdit", "NotebookEdit"):
             for seg in ["/" + p + "/" for p in rel.split("/")[:-1]]):
         key = "last_source_edit"
 elif tool == "Bash":
-    if TEST_CMD.search(str(tool_input.get("command") or "")):
+    command = str(tool_input.get("command") or "")
+    # Recording a baseline runs the suite but exits 0 even when it is red —
+    # it is bookkeeping, not evidence that the tests pass.
+    if TEST_CMD.search(command) and "--record-baseline" not in command:
         key = "last_test_run"
 
 if key is None:

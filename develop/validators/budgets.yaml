@@ -67,7 +67,10 @@ eager:
                           # 398 → 177 lines · ~4,433 → ~2,144 tokens · every turn
 
 commands:
-  build: 595              # measured 535 · target 400 · the heaviest workflow
+  build: 600              # measured 535 · target 400 · the heaviest workflow
+                          # +5 (2026-10-26, P1): the cycle-start test baseline
+                          # and the gate ledger (`review.py gate`) — protocol
+                          # that lets a cycle end, not prose
                           # +10 (2026-08-09, A8): the plan-approval transition
                           # gained the `graph derive` step — protocol, not prose
                           # +5 (2026-08-09, A7): Step 6 points --parallel at the
