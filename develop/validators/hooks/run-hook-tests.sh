@@ -975,6 +975,20 @@ P="$(new_project)"; set_config "$P" "hard_enforcement: true"
 assert V1 "source edited, no test run → commit is blocked with the run-the-tests path" "$P" \
   "$COMMIT_JSON" --exit 2 --stderr "run the tests" --hook "$VG"
 
+# V1b — the tracker's scratch never shows up in `git status` (review 2026-10-26, X7).
+if [ -z "$ONLY" ] || [ "$ONLY" = "V1b" ]; then
+  ( cd "$P" && git init -q . ) >/dev/null 2>&1
+  if [ -f "$P/.sage/tmp/verify-state" ] && \
+     ! ( cd "$P" && git status --porcelain --untracked-files=all ) | grep -q '\.sage/tmp/'; then
+    report PASS V1b "the tracker's .sage/tmp/ ignores itself — no untracked litter"
+    N_PASS=$((N_PASS + 1))
+  else
+    report FAIL V1b "the tracker's .sage/tmp/ ignores itself — no untracked litter" \
+      "$( cd "$P" && git status --porcelain --untracked-files=all | grep tmp )"
+    N_FAIL=$((N_FAIL + 1)); FAILED_IDS="$FAILED_IDS V1b"
+  fi
+fi
+
 # V2 — tests ran after the edit → allowed. Explicit state: deterministic.
 P="$(new_project)"; set_config "$P" "hard_enforcement: true"; mkdir -p "$P/.sage/tmp"
 printf 'last_source_edit=1000\nlast_test_run=2000\n' > "$P/.sage/tmp/verify-state"

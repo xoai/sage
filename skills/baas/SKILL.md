@@ -1,14 +1,14 @@
 ---
 name: "baas"
-description: "Corrects the most common BaaS architecture mistakes agents make — security rules as authorization, data modeling for queries, minimizing serverless functions, real-time by default, and client-direct access patterns. Applies to Firebase, Supabase, and similar platforms."
+description: "Use when building on Firebase, Supabase, or a similar Backend-as-a-Service — writing security rules, modeling data for client queries, deciding whether logic needs a serverless function, or wiring real-time and client-direct access."
 version: "1.0.0"
 type: knowledge
 layer: domain
 requires:
   sage: ">=1.0.0"
 activates-when:
-  detected: [firebase, @firebase/app, @supabase/supabase-js, supabase, firebase-admin, @angular/fire, reactfire, flutterfire]
-tags: [firebase,@firebase/app,@supabase/supabase-js,supabase,firebase-admin]
+  detected: [firebase, "@firebase/app", "@supabase/supabase-js", supabase, firebase-admin, "@angular/fire", reactfire, flutterfire]
+tags: [firebase, "@firebase/app", "@supabase/supabase-js", supabase, firebase-admin]
 ---
 
 # baas

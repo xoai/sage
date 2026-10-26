@@ -48,6 +48,10 @@ import sys
 import tempfile
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
+
+# The frontmatter rules `sage init` deploys by, so both install paths agree.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import skill_frontmatter  # noqa: E402
 OVERLAY = REPO_ROOT / "runtime" / "plugin-overlay"
 SKILLS = REPO_ROOT / "skills"
 SYSTEM_SKILLS = REPO_ROOT / "core" / "system-skills"
@@ -472,6 +476,11 @@ def audit(tree: pathlib.Path) -> list:
                             f"— it will silently fail to register")
             continue
         fm = m.group(1)
+        # Strict-YAML shapes: one invalid line and Claude Code drops the whole
+        # skill, silently (baas shipped that way: `@` opening a plain scalar).
+        for p in skill_frontmatter.lint_frontmatter(text):
+            problems.append(f"skills/{skill_dir.name}/SKILL.md: {p} "
+                            f"— it will silently fail to register")
         nm = re.search(r"^name:\s*[\"']?([A-Za-z0-9_-]+)", fm, re.M)
         if not nm or nm.group(1) != skill_dir.name:
             problems.append(

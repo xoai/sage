@@ -43,7 +43,12 @@ echo "📝 Generating CLAUDE.md..."
 # Source the shared instructions-body emitter
 source "$(dirname "$0")/../../_shared/instructions-body.sh"
 
-emit_instructions_body > "$SAGE_ROOT/CLAUDE.md"
+# Generate into a scratch file first. CLAUDE.md may be the user's own: what lands
+# there is decided once, at the end, by install_managed_md.
+CLAUDE_MD="$SAGE_ROOT/CLAUDE.md"
+CLAUDE_MD_NEW=$(mktemp "${TMPDIR:-/tmp}/sage-claude-md-XXXXXX")
+trap 'rm -f "$CLAUDE_MD_NEW" "$CLAUDE_MD_NEW.bak" "$CLAUDE_MD_NEW.managed" "$CLAUDE_MD_NEW.managed.out"' EXIT
+emit_instructions_body > "$CLAUDE_MD_NEW"
 
 # ── Dynamic constitution merging ──
 # Shared with the generic generator — see _shared/constitution.sh for why.
@@ -54,21 +59,22 @@ CONST_SECTION="$(build_constitution_section "$CORE" "$PROJECT_SAGE")"
 # Use a temp file since sed with multi-line replacement is tricky
 python3 -c "
 import sys
-with open('$SAGE_ROOT/CLAUDE.md', 'r') as f:
+with open('$CLAUDE_MD_NEW', 'r') as f:
     content = f.read()
 replacement = '''$CONST_SECTION'''
 content = content.replace('__CONSTITUTION_PLACEHOLDER__', replacement)
-with open('$SAGE_ROOT/CLAUDE.md', 'w') as f:
+with open('$CLAUDE_MD_NEW', 'w') as f:
     f.write(content)
 " 2>/dev/null || {
   # Fallback: simple sed if python3 not available
-  sed -i.bak "s|__CONSTITUTION_PLACEHOLDER__|## Engineering Principles\n\nBase (all projects):\n1. Tests before code\n2. No silent failures\n3. Secrets never in code\n4. Dependencies explicit\n5. Changes reversible|" "$SAGE_ROOT/CLAUDE.md" 2>/dev/null && rm -f "$SAGE_ROOT/CLAUDE.md.bak"
+  sed -i.bak "s|__CONSTITUTION_PLACEHOLDER__|## Engineering Principles\n\nBase (all projects):\n1. Tests before code\n2. No silent failures\n3. Secrets never in code\n4. Dependencies explicit\n5. Changes reversible|" "$CLAUDE_MD_NEW" 2>/dev/null && rm -f "$CLAUDE_MD_NEW.bak"
 }
 
 # ── Apply command prefix to CLAUDE.md routing table ──
 # Replaces all /command references except /sage (which stays unprefixed).
 # Order matters: longer names first to avoid partial matches
 # (e.g., /design-review before /design, /build before /b).
+# Runs on the generated text only — never over the user's own CLAUDE.md content.
 if [ -n "$PREFIX" ]; then
   sed -i.bak \
     -e "s|/design-review|/${PREFIX}design-review|g" \
@@ -86,11 +92,16 @@ if [ -n "$PREFIX" ]; then
     -e "s|/fix|/${PREFIX}fix|g" \
     -e "s|/map|/${PREFIX}map|g" \
     -e "s|/qa|/${PREFIX}qa|g" \
-    "$SAGE_ROOT/CLAUDE.md" && rm -f "$SAGE_ROOT/CLAUDE.md.bak"
-  echo "  ✓ CLAUDE.md (with ${PREFIX} prefix)"
-else
-  echo "  ✓ CLAUDE.md"
+    "$CLAUDE_MD_NEW" && rm -f "$CLAUDE_MD_NEW.bak"
 fi
+
+# ── Install: never destroy a user's CLAUDE.md (review 2026-10-26, C4) ──
+# Sage's text goes in a marked block; only the block is ever rewritten. See
+# _shared/managed-md.sh for every case (user file, legacy Sage file, CRLF,
+# malformed markers, symlinked CLAUDE.md).
+source "$(dirname "$0")/../../_shared/managed-md.sh"
+install_managed_md "$CLAUDE_MD" "$CLAUDE_MD_NEW" "$PROJECT_SAGE/backups"
+rm -f "$CLAUDE_MD_NEW"
 
 # ═══════════════════════════════════════════════════════════════
 # Commands — Adapted from core/workflows/ for Claude Code
@@ -389,33 +400,36 @@ fi
 echo ""
 echo "🧠 Deploying skills to .claude/skills/..."
 
-SKILL_COUNT=0
-for skill_dir in "$SAGE_DIR/skills"/*/; do
-  [ -d "$skill_dir" ] || continue
-  skill_name=$(basename "$skill_dir")
-  [ -f "$skill_dir/SKILL.md" ] || continue
-
-  # Read description from frontmatter
-  desc=$(sed -n '/^---$/,/^---$/{ /^description:/s/^description: *//p; }' "$skill_dir/SKILL.md" 2>/dev/null)
-  [ -z "$desc" ] && desc="Sage skill: $skill_name"
-  # Truncate long descriptions for frontmatter
-  desc=$(echo "$desc" | head -1 | cut -c1-120)
-
-  # Create loader SKILL.md (prefix skill directory name if configured)
-  target_dir="$CLAUDE_DIR/skills/${PREFIX}${skill_name}"
-  mkdir -p "$target_dir"
-  cat > "$target_dir/SKILL.md" << LOADEREOF
----
-name: ${PREFIX}${skill_name}
-description: $desc
----
-Read and follow the full skill at sage/skills/$skill_name/SKILL.md
-LOADEREOF
-
-  SKILL_COUNT=$((SKILL_COUNT + 1))
+# One loader stub per skill, written by skill_frontmatter.py — which parses the
+# frontmatter as YAML (folded and quoted descriptions included) and always emits a
+# valid, untruncated description. The old `sed | head -1 | cut -c1-120` read one
+# line: folded descriptions came out empty and long quoted ones lost their closing
+# quote, so Claude Code silently dropped 9 of 33 skills (review 2026-10-26, C2).
+#
+# What is NOT deployed, and why (C1):
+#   - another platform's port (`metadata: hermes:`) — the repo-root skills/ also
+#     carries the Hermes port of the workflows, which tells the model to call
+#     `delegate_task`, a tool Claude Code does not have;
+#   - any skill named `sage` — a skill shadows a command of the same name, and
+#     /sage must reach the generated command above;
+#   - the system skills — delivered whole by the next block, never as stubs.
+mkdir -p "$CLAUDE_DIR/skills"
+# The deployer first removes every existing loader stub, then writes the current
+# set: a stub an older version wrote (a Hermes port, `sage`, a system skill, the
+# other prefix setting) cannot outlive the rule that stopped deploying it.
+SYS_SKIP=""
+for sys_dir in "$CORE/system-skills"/*/; do
+  if [ -d "$sys_dir" ]; then SYS_SKIP="$SYS_SKIP $(basename "$sys_dir")"; fi
 done
-
-echo "  ✓ $SKILL_COUNT skills deployed to .claude/skills/"
+if command -v python3 >/dev/null 2>&1; then
+  # shellcheck disable=SC2086  # SYS_SKIP is a space-separated name list
+  python3 "$SAGE_DIR/runtime/tools/skill_frontmatter.py" deploy-claude \
+    "$SAGE_DIR/skills" "$CLAUDE_DIR/skills" --prefix "$PREFIX" --skip $SYS_SKIP \
+    || echo "  ✗ Skill deployment failed — re-run: sage update"
+else
+  echo "  ✗ python3 not found — skills were not deployed to .claude/skills/."
+  echo "    Install python3 and run: sage update"
+fi
 
 # ── System skills (ADR-9 delivery class 2) ──
 #
@@ -427,10 +441,9 @@ echo "  ✓ $SKILL_COUNT skills deployed to .claude/skills/"
 # Two deliberate differences from the loop above:
 #
 #   Copied WHOLE, not stubbed. A loader stub costs an extra Read hop, and these
-#   are small. More importantly, the stub loop truncates the description to 120
-#   characters — which for a system skill would amputate the trigger. The
-#   description IS the product here: it is the only thing standing between the
-#   model and content it no longer has in front of it.
+#   are small. The description IS the product here: it is the only thing standing
+#   between the model and content it no longer has in front of it, so it ships
+#   exactly as written.
 #
 #   Never prefixed. The `sage:` command prefix disambiguates Sage's commands
 #   from a project's own; these are already namespaced `sage-*`. Prefixing would
@@ -466,35 +479,19 @@ if [ -f "$HOOK_SRC" ]; then
   echo "  ✓ sage-session-init.sh"
 fi
 
-# Create or update settings.local.json with hook config (atomic write)
+# Merge the session hook into settings.local.json (review 2026-10-26, C4).
+# This file is where Claude Code saves the user's "don't ask again" permission
+# answers; writing it wholesale wiped them on every `sage update`. It is merged
+# now, by the same tool and policy as settings.json below (claude_settings.py:
+# our old entries replaced, everything else kept, an unparseable file refused).
 SETTINGS_LOCAL="$CLAUDE_DIR/settings.local.json"
-mkdir -p "$CLAUDE_DIR"
-TEMP_SETTINGS=$(mktemp "${SETTINGS_LOCAL}.XXXXXX" 2>/dev/null || echo "${SETTINGS_LOCAL}.tmp")
-cat > "$TEMP_SETTINGS" << 'HOOKEOF'
-{
-  "hooks": {
-    "SessionStart": [
-      {
-        "matcher": "startup|resume|clear|compact",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash .claude/hooks/sage-session-init.sh"
-          }
-        ]
-      }
-    ]
-  }
-}
-HOOKEOF
-
-if mv "$TEMP_SETTINGS" "$SETTINGS_LOCAL" 2>/dev/null; then
-  echo "  ✓ settings.local.json (session hook)"
+if command -v python3 >/dev/null 2>&1 && \
+   python3 "$SAGE_DIR/runtime/tools/claude_settings.py" session "$SETTINGS_LOCAL"; then
+  echo "  ✓ settings.local.json (session hook merged; your settings kept)"
 else
-  echo "  ✗ Could not write settings.local.json: check permissions"
-  echo "    The session hook won't activate until this is fixed."
-  echo "    Try: sage update (to retry)"
-  rm -f "$TEMP_SETTINGS" 2>/dev/null
+  echo "  ✗ Could not merge the session hook into settings.local.json"
+  echo "    (python3 missing, or the file is not valid JSON). Your file was left as is."
+  echo "    The session hook won't activate until this is fixed. Then: sage update"
 fi
 
 # ── Enforcement hooks (mechanical Rules 3 / 5 / R29) ──
@@ -570,74 +567,16 @@ if [ -f "$SPEC_GATE_SRC" ]; then
     chmod +x "$CLAUDE_DIR/hooks/sage-scope-journal.sh"
   fi
 
-  # Merge the hook into settings.json rather than overwriting, so the user's
-  # own settings survive; idempotent so re-running never duplicates the entry.
+  # Merge the hooks into settings.json rather than overwriting, so the user's
+  # own settings survive; idempotent so re-running never duplicates an entry, and
+  # a file that does not parse is left alone rather than replaced (C4).
   SETTINGS_JSON="$CLAUDE_DIR/settings.json"
-  MERGE_PY=$(mktemp "${TMPDIR:-/tmp}/sage-hookmerge-XXXXXX" 2>/dev/null || echo "")
-  if [ -n "$MERGE_PY" ] && command -v python3 >/dev/null 2>&1; then
-    cat > "$MERGE_PY" <<'PYEOF'
-import json
-import sys
-
-path = sys.argv[1]
-
-# (settings event, matcher, script) — each merged idempotently so re-running the
-# generator never duplicates an entry and never clobbers the user's own hooks.
-WANTED = [
-    ("PreToolUse", "Edit|Write|MultiEdit", "sage-spec-gate.sh"),
-    ("PreToolUse", "Edit|Write|MultiEdit", "sage-tdd-gate.sh"),
-    ("PreToolUse", "Edit|Write|MultiEdit", "sage-bookkeeping-gate.sh"),
-    ("PreToolUse", "Edit|Write|MultiEdit", "sage-secrets-gate.sh"),
-    ("PreToolUse", "Bash", "sage-verify-gate.sh"),
-    ("PostToolUse", "Bash|Edit|Write|MultiEdit", "sage-verify-tracker.sh"),
-    ("PreToolUse", "Bash|Edit|Write|MultiEdit", "sage-config-gate.sh"),
-    ("PreToolUse", "Edit|Write|MultiEdit", "sage-scope-gate.sh"),
-    ("PostToolUse", "Write|Edit", "sage-degradation-log.sh"),
-    ("PostToolUse", "Write|Edit", "sage-manifest-sync.sh"),
-    ("PostToolUse", "Bash|Edit|Write|MultiEdit", "sage-scope-journal.sh"),
-]
-
-try:
-    with open(path) as fh:
-        data = json.load(fh)
-    if not isinstance(data, dict):
-        data = {}
-except (OSError, ValueError):
-    data = {}
-
-hooks = data.setdefault("hooks", {})
-
-for event, matcher, script in WANTED:
-    entries = hooks.get(event)
-    if not isinstance(entries, list):
-        entries = []
-
-    def is_ours(entry, _script=script):
-        for h in (entry or {}).get("hooks", []):
-            if _script in (h.get("command") or ""):
-                return True
-        return False
-
-    entries = [e for e in entries if not is_ours(e)]
-    entries.append({
-        "matcher": matcher,
-        "hooks": [{
-            "type": "command",
-            "command": 'bash "$CLAUDE_PROJECT_DIR/.claude/hooks/%s"' % script,
-        }],
-    })
-    hooks[event] = entries
-
-with open(path, "w") as fh:
-    json.dump(data, fh, indent=2)
-    fh.write("\n")
-PYEOF
-    if python3 "$MERGE_PY" "$SETTINGS_JSON" 2>/dev/null; then
-      echo "  ✓ settings.json (spec-gate + tdd-gate + degradation-log hooks)"
-    else
-      echo "  ✗ Could not register enforcement hooks in settings.json"
-    fi
-    rm -f "$MERGE_PY"
+  if command -v python3 >/dev/null 2>&1 && \
+     python3 "$SAGE_DIR/runtime/tools/claude_settings.py" enforce "$SETTINGS_JSON"; then
+    echo "  ✓ settings.json (enforcement hooks merged; your settings kept)"
+  else
+    echo "  ✗ Could not register enforcement hooks in settings.json"
+    echo "    (python3 missing, or the file is not valid JSON). Your file was left as is."
   fi
 fi
 

@@ -74,6 +74,13 @@ tmp_dir = os.path.join(sage_dir, "tmp")
 state_path = os.path.join(tmp_dir, "verify-state")
 try:
     os.makedirs(tmp_dir, exist_ok=True)
+    # .sage/tmp/ is hook scratch, never project content: a self-ignoring
+    # .gitignore keeps it out of `git status` without touching the user's own
+    # .gitignore (review 2026-10-26, X7).
+    ignore_path = os.path.join(tmp_dir, ".gitignore")
+    if not os.path.exists(ignore_path):
+        with open(ignore_path, "w", encoding="utf-8") as fh:
+            fh.write("*\n")
     state = {}
     if os.path.isfile(state_path):
         with open(state_path, encoding="utf-8", errors="replace") as fh:

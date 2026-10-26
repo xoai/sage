@@ -24,6 +24,7 @@ from pathlib import Path
 # subtly wrong, and the one that is wrong is the one that says OK.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import release_lib  # noqa: E402
+import skill_frontmatter  # noqa: E402
 from typing import Any, Dict, List, Optional, Tuple
 
 # ── Constants ──
@@ -539,13 +540,13 @@ def deploy_to_platform(name, source_dir, project_dir):
         skill_md = source_dir / "SKILL.md"
         desc = ""
         if skill_md.is_file():
-            fm = parse_frontmatter(skill_md.read_text(encoding="utf-8", errors="replace"))
-            desc = fm.get("description", "")
-            if desc and len(desc) > 120:
-                desc = desc[:117] + "..."
+            # The same parser and writer `sage init` uses: an unquoted or
+            # truncated description makes Claude Code silently drop the skill.
+            desc = skill_frontmatter.description_of(skill_frontmatter.parse_frontmatter(
+                skill_md.read_text(encoding="utf-8", errors="replace")))
         (dest / "SKILL.md").write_text(
-            f"---\nname: {name}\ndescription: {desc}\n---\n"
-            f"Read and follow the full skill at sage/skills/{name}/SKILL.md\n",
+            skill_frontmatter.claude_loader(name, desc or f"Sage skill: {name}",
+                                            f"sage/skills/{name}"),
             encoding="utf-8"
         )
         ui.success(f"Deployed loader to .claude/skills/{name}/")

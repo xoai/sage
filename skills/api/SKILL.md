@@ -1,6 +1,6 @@
 ---
 name: "api"
-description: "Corrects the 13 most common API design mistakes agents make — grounded in Geewax, Amundsen, Ousterhout, Kleppmann, and Gough/Bryant"
+description: "Use when designing, reviewing, or changing an HTTP, REST, or GraphQL API — endpoints, resource naming, error responses, pagination, versioning, idempotency, or API contracts between services."
 version: "2.0.0"
 type: knowledge
 layer: domain

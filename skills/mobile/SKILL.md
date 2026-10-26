@@ -1,6 +1,6 @@
 ---
 name: "mobile"
-description: "Universal mobile development principles — offline-first, 60fps, touch, battery, platform patterns"
+description: "Use when building or reviewing a mobile app on any framework — offline behavior, scrolling and animation smoothness, touch targets, battery use, or platform conventions."
 version: "1.0.0"
 type: knowledge
 layer: domain

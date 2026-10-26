@@ -97,3 +97,22 @@ sage update
 ```
 
 Regenerates CLAUDE.md and `.claude/commands/` without touching `.sage/`.
+
+### Your own files are kept
+
+- **CLAUDE.md** — Sage's instructions live in one block between
+  `<!-- BEGIN SAGE … -->` and `<!-- END SAGE -->`; `sage update` rewrites only
+  that block. Anything outside it is yours and is kept — a CLAUDE.md you had
+  before `sage init` stays line for line, with the block added at the end. A
+  CLAUDE.md written by an older Sage (no markers) is backed up once to
+  `.sage/backups/` when it moves into the block. If the markers get damaged,
+  the file is left alone and the update says how to fix it. A symlinked
+  CLAUDE.md stays a symlink.
+- **`.claude/settings.local.json`** and **`.claude/settings.json`** — merged,
+  never replaced: Sage adds or refreshes its own hook entries and leaves your
+  permissions and other settings alone. A file that is not valid JSON is left
+  untouched (the update reports it).
+- **`.claude/skills/`** — one loader per Sage skill. Skills written for another
+  platform (the Hermes port) are not deployed here, and no skill is named
+  `sage`, so `/sage` always reaches the command. Your own skills in this folder
+  are never touched.

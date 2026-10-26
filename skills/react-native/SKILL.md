@@ -1,6 +1,6 @@
 ---
 name: "react-native"
-description: "React Native patterns — New Architecture (Fabric/TurboModules), Expo, navigation, performance"
+description: "Use when writing or reviewing React Native or Expo code — the New Architecture (Fabric, TurboModules), navigation, native modules, or list and animation performance."
 version: "1.0.0"
 type: knowledge
 layer: framework

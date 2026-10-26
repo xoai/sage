@@ -25,3 +25,17 @@ jobs:
 
       - name: Generation smoke (all platform generators)
         run: bash develop/validators/platforms/generation-smoke.sh
+
+      # Ask real Claude Code whether it registers every generated skill. Reads
+      # only the session's init event, before any model call: no secret, no
+      # tokens. Pinned to the CLI version the probe was verified against, so a
+      # change in the init event's shape cannot turn this red unannounced; bump
+      # it deliberately and re-run the probe locally when you do.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Claude Code skill registration probe
+        run: |
+          npm install --global --silent @anthropic-ai/claude-code@2.1.289
+          python3 develop/validators/platforms/claude-skill-probe.py

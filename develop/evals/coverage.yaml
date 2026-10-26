@@ -253,6 +253,10 @@ surfaces:
     notes: >
       The evidence half of the verify gate (PostToolUse recorder — never
       blocks). Split from the gate so a bug in one cannot take down the other.
+      2026-10-26 (review X7): it also writes a self-ignoring .gitignore into
+      .sage/tmp/, so its scratch never shows in `git status`. That touches no
+      recorded timestamp, so E14's claim stands; the .gitignore is pinned
+      deterministically by hook test V1b, not by E14.
 
   hook-secrets-gate:
     path: runtime/platforms/claude-code/hooks/sage-secrets-gate.sh
@@ -453,7 +457,7 @@ surfaces:
     uncovered: >
       Stated, not deferred: no eval scenario drives opencode — the harness
       runs claude-code. What pins the adapter is deterministic and in
-      fastcheck: setup/adapter-test.mjs (13 checks, via develop/validators/
+      fastcheck: develop/validators/platforms/opencode-adapter-test.mjs (13 checks, via develop/validators/
       platforms/run-opencode-adapter-tests.sh) drives the REAL gate scripts
       and the REAL judge runtime through the plugin wire — veto, journal
       schema with byte-parity against the claude-code hook's rows, sub-flag
@@ -682,42 +686,42 @@ surfaces:
   skill-api:
     path: skills/api/SKILL.md
     kind: skill
-    uncovered: "Domain knowledge skill; no scenario grades API design output."
+    uncovered: "Domain knowledge skill; no scenario grades API design output. Description reworded 2026-10-26 into a 'Use when…' trigger (review C2): that it registers on Claude Code is pinned (test_skill_frontmatter, claude-skill-probe); whether it changes how often the skill is opened is unmeasured."
 
   skill-baas:
     path: skills/baas/SKILL.md
     kind: skill
-    uncovered: "Domain knowledge skill; no scenario grades BaaS output."
+    uncovered: "Domain knowledge skill; no scenario grades BaaS output. Description reworded 2026-10-26 into a 'Use when…' trigger (review C2): that it registers on Claude Code is pinned (test_skill_frontmatter, claude-skill-probe); whether it changes how often the skill is opened is unmeasured."
 
   skill-flutter:
     path: skills/flutter/SKILL.md
     kind: skill
-    uncovered: "Domain knowledge skill; no scenario grades Flutter output."
+    uncovered: "Domain knowledge skill; no scenario grades Flutter output. Description reworded 2026-10-26 into a 'Use when…' trigger (review C2): that it registers on Claude Code is pinned (test_skill_frontmatter, claude-skill-probe); whether it changes how often the skill is opened is unmeasured."
 
   skill-mobile:
     path: skills/mobile/SKILL.md
     kind: skill
-    uncovered: "Domain knowledge skill; no scenario grades mobile output."
+    uncovered: "Domain knowledge skill; no scenario grades mobile output. Description reworded 2026-10-26 into a 'Use when…' trigger (review C2): that it registers on Claude Code is pinned (test_skill_frontmatter, claude-skill-probe); whether it changes how often the skill is opened is unmeasured."
 
   skill-nextjs:
     path: skills/nextjs/SKILL.md
     kind: skill
-    uncovered: "Domain knowledge skill; no scenario grades Next.js output."
+    uncovered: "Domain knowledge skill; no scenario grades Next.js output. Description reworded 2026-10-26 into a 'Use when…' trigger (review C2): that it registers on Claude Code is pinned (test_skill_frontmatter, claude-skill-probe); whether it changes how often the skill is opened is unmeasured."
 
   skill-react:
     path: skills/react/SKILL.md
     kind: skill
-    uncovered: "Domain knowledge skill; no scenario grades React output."
+    uncovered: "Domain knowledge skill; no scenario grades React output. Description reworded 2026-10-26 into a 'Use when…' trigger (review C2): that it registers on Claude Code is pinned (test_skill_frontmatter, claude-skill-probe); whether it changes how often the skill is opened is unmeasured."
 
   skill-react-native:
     path: skills/react-native/SKILL.md
     kind: skill
-    uncovered: "Domain knowledge skill; no scenario grades React Native output."
+    uncovered: "Domain knowledge skill; no scenario grades React Native output. Description reworded 2026-10-26 into a 'Use when…' trigger (review C2): that it registers on Claude Code is pinned (test_skill_frontmatter, claude-skill-probe); whether it changes how often the skill is opened is unmeasured."
 
   skill-web:
     path: skills/web/SKILL.md
     kind: skill
-    uncovered: "Domain knowledge skill; no scenario grades web output."
+    uncovered: "Domain knowledge skill; no scenario grades web output. Description reworded 2026-10-26 into a 'Use when…' trigger (review C2): that it registers on Claude Code is pinned (test_skill_frontmatter, claude-skill-probe); whether it changes how often the skill is opened is unmeasured."
 
   skill-autoresearch:
     path: skills/autoresearch/SKILL.md
