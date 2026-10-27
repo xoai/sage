@@ -130,8 +130,8 @@ A shell command that writes a source file (`>`, `tee`, an in-place `sed`,
 edit it is (`sage-bash-write-gate.sh`). It reads the command, not what a
 script or interpreter does at run time — `python3 gen.py` writing a file is
 not seen. While a Standard+ cycle is in progress, source edits on the default
-branch are blocked until the initiative branch exists
-(`sage-branch-gate.sh`; `branch_gate: false` opts out, and a user's decline
+branch are blocked until the initiative branch exists — proposed to the user
+and created once they confirm it (`sage-branch-gate.sh`; `branch_gate: false` opts out, and a user's decline
 recorded with `manifest.py close-out --branch declined` exempts that cycle).
 
 ### Plugin and `sage init` together

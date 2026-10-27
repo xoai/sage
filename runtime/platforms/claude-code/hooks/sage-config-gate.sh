@@ -316,6 +316,44 @@ if tool in ("Edit", "Write", "MultiEdit"):
         emit("BLOCK", BLOCK_MSG)
     emit("ALLOW")
 
+
+def sed_in_place(cmd):
+    """True when some `sed` in cmd edits a file in place (-i, -Ei, --in-place).
+
+    One command segment at a time: matched across the whole line, `sed -n 1,9p f;
+    grep -i x .sage/config.yaml` read grep's -i as sed's and blocked a read (E8,
+    2026-10-27). Segments split only OUTSIDE quotes — a quoted `s/a/b/;s/c/d/`
+    before `-i` is still one sed — and quoted text is kept, so
+    `sh -c 'sed -i.bak … config.yaml'` still reads as the edit it is."""
+    return any(re.search(r"\bsed\b.*\s(?:-[A-Za-z]*i|--in-place)", seg)
+               for seg in split_unquoted(cmd))
+
+
+def split_unquoted(cmd):
+    """cmd cut at ; & | and newlines that sit outside quotes."""
+    segs, cur, quote, i = [], [], None, 0
+    while i < len(cmd):
+        c = cmd[i]
+        if quote:
+            if c == "\\" and quote == '"' and i + 1 < len(cmd):
+                cur.append(cmd[i:i + 2])
+                i += 2
+                continue
+            if c == quote:
+                quote = None
+        elif c in "'\"":
+            quote = c
+        elif c in ";&|\n":
+            segs.append("".join(cur))
+            cur = []
+            i += 1
+            continue
+        cur.append(c)
+        i += 1
+    segs.append("".join(cur))
+    return segs
+
+
 # ── Bash: catch the obvious write-the-switch-off evasions ──
 # Conservative on purpose — a redirect/sed/tee that names config.yaml AND sets an
 # enforcement key false. A read (grep/cat) has no such write and is not matched.
@@ -331,9 +369,10 @@ if tool == "Bash":
                     or (re.search(r"\.sage/work\b|\.sage/?(?:[\s;&|]|$)", cmd)
                         and re.search(r"\b(?:rm|mv|unlink|shred|truncate)\b", cmd)))
     destroys = re.search(
-        r"\b(?:rm|mv|cp|tee|truncate|ln|dd|unlink|shred)\b|\bsed\b[^\n]*\s-i|"
+        r"\b(?:rm|mv|cp|tee|truncate|ln|dd|unlink|shred)\b|"
         r"\b(?:python3?|node|perl|ruby)\s+-[ce]\b|"
-        r">\s*\S*(?:verify-baseline|review-ledger)\.json", cmd)
+        r"\b(?:python[0-9.]*|node|perl|ruby)(?:\s+-(?=\s|$)|\b[^\n|;&]*<<(?!<))|"
+        r">\s*\S*(?:verify-baseline|review-ledger)\.json", cmd) or sed_in_place(cmd)
     if names_record and destroys:
         emit("BLOCK", (
             "sage-config-gate: a cycle's verify-baseline.json and review-ledger.json "
@@ -349,10 +388,11 @@ if tool == "Bash":
     # Write paths stay open and are judged exactly, by weaker() above; reads
     # (cat, grep) never match.
     writes = re.search(
-        r">\s*[^|&;]*\.sage/config\.ya?ml|\bsed\b[^\n]*\s-i|\btee\b|"
+        r">\s*[^|&;]*\.sage/config\.ya?ml|\btee\b|"
         r"\b(?:cp|mv|install|ln|truncate|dd|rm|unlink)\b|"
         r"\b(?:python3?|node|perl|ruby)\s+-[ce]\b|"
-        r"\bgit\s+(?:checkout|restore|stash|reset|apply)\b", cmd)
+        r"\b(?:python[0-9.]*|node|perl|ruby)(?:\s+-(?=\s|$)|\b[^\n|;&]*<<(?!<))|"
+        r"\bgit\s+(?:checkout|restore|stash|reset|apply)\b", cmd) or sed_in_place(cmd)
     if names_config and writes:
         emit("BLOCK", BLOCK_MSG)
     emit("ALLOW")

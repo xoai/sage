@@ -180,13 +180,17 @@ if not branch or branch == default:
     branch = "feat/" + re.sub(r"^\d+-", "", slug)
 emit("BLOCK", (
     "Sage: implementation does not start on the default branch (%s), and cycle "
-    "\"%s\" is in progress.\n\nCreate the initiative branch, then make this edit:\n"
-    "    git switch -c %s\n\nMerging back stays your [M]. To turn this off: "
+    "\"%s\" is in progress.\n\nPropose the initiative branch to the user and create "
+    "it once they confirm or rename it\n(git-discipline: never create one silently):\n"
+    "    git switch -c %s\n"
+    "Record the name they chose, then make this edit:\n"
+    "    python3 sage/runtime/tools/manifest.py close-out .sage/work/%s/manifest.md "
+    "--branch <name>\n\nMerging back stays your [M]. To turn this off: "
     "branch_gate: false in .sage/config.yaml (a human edit). If the USER\n"
     "declines branching for this initiative, record their decision:\n"
     "    python3 sage/runtime/tools/manifest.py close-out .sage/work/%s/manifest.md \\\n"
     "      --branch declined --decision \"branching declined by the user: <reason>\"\n"
-    % (current, slug, branch, slug)))
+    % (current, slug, branch, slug, slug)))
 PYEOF
 
 GATE_OUT=$(python3 "$PY_GATE")

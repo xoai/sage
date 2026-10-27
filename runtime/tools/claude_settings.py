@@ -57,7 +57,7 @@ ENFORCE: List[Tuple[str, str, str]] = [
     ("PostToolUse", "Bash|Edit|Write|MultiEdit", "sage-verify-tracker.sh"),
     ("PreToolUse", "Bash|Edit|Write|MultiEdit", "sage-config-gate.sh"),
     ("PreToolUse", "Edit|Write|MultiEdit", "sage-scope-gate.sh"),
-    ("PostToolUse", "Write|Edit", "sage-degradation-log.sh"),
+    ("PostToolUse", "Bash|Edit|Write|MultiEdit", "sage-degradation-log.sh"),   # close-out runs in Bash
     ("PostToolUse", "Write|Edit", "sage-manifest-sync.sh"),
     ("PostToolUse", "Bash|Edit|Write|MultiEdit", "sage-scope-journal.sh"),
 ]

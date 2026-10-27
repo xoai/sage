@@ -301,6 +301,7 @@ emit("BLOCK", (
     "--complete-task N \\\n"
     "    [--phase X] [--status blocked --blocked-on \"the question, the "
     "options, whose call\"]\n"
+    "    [--status complete --qa passed|skipped-no-subagent|waived|...]\n"
     "\n"
     "One command writes the manifest prose, prepends decisions (Rule 7), and "
     "checks plan boxes. gate_state and updated: are machine-owned — never set "

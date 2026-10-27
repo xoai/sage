@@ -71,3 +71,7 @@ reason, and decide whether the fix is prompt-level (a stricter epistemics
 line), evidence-level (the window lacks the content needed to judge, so the
 model speculates), or fatal (a cheap model cannot do this job at the
 precision required). That question is open.
+
+## Re-measured after P2 — 2026-10-27
+
+sage arm · N=1 · claude-opus-5-5 · operator config · **5/5**, $0.45. Full record: `develop/evals/REMEASURE-P2-2026-10-27.md`.

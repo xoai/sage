@@ -46,6 +46,9 @@ sequence triggers it — the agent does not decide whether to run it.
    qa: skipped-no-subagent    # or: passed | skipped-disabled | skipped-timeout | waived
    ```
 
+   While the cycle is active the manifest is written by `manifest.py close-out`
+   (the bookkeeping gate sends edits there): `--qa skipped-no-subagent`.
+
    Two mechanisms then act on that, and neither is your discretion (R29):
 
    - The **spec-gate hook refuses to let the cycle reach `complete`** while `qa:`

@@ -52,3 +52,7 @@ checkpoint markers in `history[]`; the review rounds were 4.
 
 Not yet measured: N>1, an isolated (non-operator-config) run, and a run where
 the budget — not a clean finish — is what ends the cycle.
+
+## Re-measured after P2 — 2026-10-27
+
+Run 2 (fixed tree) · N=1 · claude-opus-5-5 · operator config · **7/7**, $4.16 (the harness reported $8.33 — it summed the CLI's running totals; fixed). Branched on its own. Full record: `develop/evals/REMEASURE-P2-2026-10-27.md`.

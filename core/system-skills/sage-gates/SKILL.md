@@ -38,10 +38,11 @@ genuinely spans a second file needs that file's test too: write it (a dirty
 test file is evidence), or commit it as its own red commit.
 
 **"Sage: implementation does not start on the default branch."** A Standard+
-cycle is in progress and HEAD is the default branch. Run the `git switch -c`
-the message names, then make the edit. If the USER declines branching, record
-it with `manifest.py close-out <manifest> --branch declined --decision "..."`
-— that is their call, not yours.
+cycle is in progress and HEAD is the default branch. Propose the branch the
+message names; once the user confirms or renames it, `git switch -c` it, record
+it (`manifest.py close-out <manifest> --branch <name>`), then make the edit.
+If the USER declines branching, record `--branch declined --decision "..."`
+— either way it is their call, not yours.
 
 **A Bash command blocked by a gate.** `sage-bash-write-gate.sh` finds the
 source files a shell command would write (`>`, `tee`, an in-place `sed`,

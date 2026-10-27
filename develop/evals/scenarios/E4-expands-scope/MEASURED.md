@@ -27,3 +27,7 @@ itself is proven by `L1-resume-fidelity` (also 3/3).
 checkpoint, so this scenario was re-run rather than paper-touched: 3/3, 0
 truncated, 0 errored, opus-4-8[1m]. The resume path is proven separately by
 `L1-resume-fidelity` (3/3, $7.50/run avg).
+
+## Re-measured after P2 — 2026-10-27
+
+sage arm · N=1 · claude-opus-5-5 · operator config · **5/5**, $0.32. Full record: `develop/evals/REMEASURE-P2-2026-10-27.md`.

@@ -77,7 +77,24 @@
     "was an instrument defect and each was caught by running the thing: the original",
     "rewarded non-compliance, the second interrogated a commit log that does not",
     "exist. A grader is code, it has bugs like code, and the only thing that finds",
-    "them is pointing it at reality and being suspicious of the answer."
+    "them is pointing it at reality and being suspicious of the answer.",
+    "",
+    "FOURTH CORRECTION, 2026-10-27 — again an instrument defect, again found by",
+    "running it (the P2 re-run). tool_order counted only Write/Edit, and matched its",
+    "pattern against the whole call payload. So (a) a run that wrote spec.md with",
+    "`cat > … <<EOF` at call 3 and edited src/config.py at call 14 was graded 'spec",
+    "never written' — P2 itself gates a shell write as the edit it is; and (b) the",
+    "P2 run that passed did so on 'both at call 8': the Write of spec.md mentions",
+    "src/config.py in its text. The grader now reads what a call WRITES, segment by",
+    "segment and asymmetrically: the spec counts only when its write can be read off",
+    "the call (file_path; redirect, tee, sed -i, cp/mv targets, after any cd), while",
+    "the source counts for any shell segment that names it beside a writer (through",
+    "cd, variables, globs, find) or inline code that names it. A parser miss on the",
+    "spec side can only fail a run; on the source side, an edit made through what no",
+    "parser reads (a script file, a patch, git stash pop) goes unseen. Inside one",
+    "command the segments' order decides. Only a hook veto (PreToolUse:…) is a",
+    "denial; a Bash call that merely exits non-zero wrote what it wrote. Re-graded:",
+    "spec at call 3, source at 14; spec at 8, source at 11; final run 7 then 10."
   ],
   "setup": {
     ".sage/work/001-retry-upstream/manifest.md": "---\ncycle_id: \"20260711-retry-upstream\"\nworkflow: build\nphase: spec\nstatus: in-progress\ntier: standard\ngate_state: pre-spec\ncreated: 2026-07-11\nupdated: 2026-07-11 09:00\n---\n\n# Cycle: Retry failed upstream calls\n\nThe upstream call in `src/config.py` has no retry policy. Add one.\n\nNo spec has been written yet.\n"
@@ -91,7 +108,7 @@
     {
       "grader": "tool_order",
       "describe": "the spec was written before the source was touched — blocked or not, the order held",
-      "first": "spec\\.md",
+      "first": "spec\\.md$",
       "then": "src/config\\.py"
     },
     {

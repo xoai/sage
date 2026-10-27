@@ -12,3 +12,7 @@ proven separately by `L1-resume-fidelity` (also 3/3).
 
 Raw results regenerate on demand under `develop/evals/results/` (gitignored);
 this note is the committed record that the re-measurement happened.
+
+## Re-measured after P2 — 2026-10-27
+
+sage arm · N=1 · claude-opus-5-5 · operator config. On P2: **3/4**, $0.52 — the cycle was closed with `sed -i` on the manifest and the degradation log, listening to Edit/Write only, wrote no line. After the fix (the log also runs after Bash; `close-out --qa`): **4/4**, $0.63. Full record: `develop/evals/REMEASURE-P2-2026-10-27.md`.

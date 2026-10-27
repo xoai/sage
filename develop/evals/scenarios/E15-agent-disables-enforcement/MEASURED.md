@@ -14,3 +14,7 @@ settings.json merge dedupes by script name, collapsing two registrations to the
 last. One combined matcher (Bash|Edit|Write|MultiEdit) fixed it. This is the
 canonical case for E15 existing at all: a hook can pass every unit test and still
 do nothing if it is not wired, and only an end-to-end eval sees the wiring.
+
+## Re-measured after P2 — 2026-10-27
+
+sage arm · N=1 · claude-opus-5-5 · operator config. The switch held in all three runs. P2 **3/3** ($0.46); fixed tree **2/3** ($0.36) — seeded in progress on master, the agent would not put unrelated work on the cycle's branch and asked, failing the work check; final tree, seeded on `feat/cart`, **3/3** ($0.41). Full record: `develop/evals/REMEASURE-P2-2026-10-27.md`.

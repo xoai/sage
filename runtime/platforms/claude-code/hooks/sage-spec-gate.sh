@@ -426,8 +426,11 @@ if is_manifest and under_work:
                     "  qa: skipped-disabled       auto_qa is off in .sage/config.yaml\n"
                     "  qa: skipped-timeout        the sub-agent timed out\n"
                     "  qa: waived                 the user accepted completion without it\n"
-                    "Any value but `passed` is logged to .sage/decisions.md automatically."
-                ) % (slug, qa_state),
+                    "Any value but `passed` is logged to .sage/decisions.md automatically.\n"
+                    "While the cycle is active, write it with one command:\n"
+                    "  python3 sage/runtime/tools/manifest.py close-out "
+                    ".sage/work/%s/manifest.md --status complete --qa <one of the above>"
+                ) % (slug, qa_state, slug),
             )
 
 # Writing Sage's own state or the vendored framework is never gated.

@@ -30,7 +30,9 @@ import io
 import json
 import os
 import pathlib
+import posixpath
 import re
+import shlex
 import subprocess
 import tokenize
 
@@ -112,6 +114,32 @@ class Transcript:
                     if tid:
                         bad.add(tid)
         return bad
+
+    def vetoed_tool_ids(self) -> set:
+        """failed_tool_ids, less the Bash calls that merely exited non-zero.
+
+        A hook veto is a denial: the call did not happen. A shell command that
+        ran and returned an error status did happen, writes and all."""
+        names = {c["id"]: c["name"] for c in self.tool_calls()}
+        vetoed = set()
+        for ev in self.events:
+            if ev.get("type") != "user":
+                continue
+            for block in (ev.get("message") or {}).get("content") or []:
+                if block.get("type") != "tool_result" or not block.get("is_error"):
+                    continue
+                tid = block.get("tool_use_id")
+                text = block.get("content")
+                if not isinstance(text, str):
+                    text = " ".join(b.get("text", "") for b in text or []
+                                    if isinstance(b, dict))
+                # A veto names the hook stage FIRST; a command that ran and
+                # failed starts "Exit code N", whatever its output says
+                # ("Permission denied", "blocked by" in a test's output).
+                if tid and (names.get(tid) != "Bash"
+                            or re.match(r"\s*PreToolUse:", text)):
+                    vetoed.add(tid)
+        return vetoed
 
     def sequence(self) -> list:
         """Interleaved ('say', text) and ('tool', name, payload) in order.
@@ -401,6 +429,228 @@ def consulted_skill(ws, tx, p) -> tuple:
     return False, f"never consulted skill {name!r} (no Skill call, no SKILL.md read)"
 
 
+_HEREDOC = re.compile(r"<<(-?)\s*(['\"]?)([A-Za-z_][\w.-]*)\2")
+
+
+def _lift_heredocs(cmd: str):
+    """cmd with each heredoc body lifted out: the opener keeps a \\x00<n>
+    marker right after `<<TAG`, and bodies[n] holds the text. Line by line,
+    each opener skipping to ITS terminator (`<<-` allows leading tabs), so
+    an empty body or a later same-named heredoc cannot swallow the commands
+    between them."""
+    out, bodies, lines, i = [], [], cmd.split("\n"), 0
+    while i < len(lines):
+        line = lines[i]
+        i += 1
+        marked, last = [], 0
+        for m in _HEREDOC.finditer(line):
+            body = []
+            while i < len(lines):
+                text = lines[i].lstrip("\t") if m.group(1) else lines[i]
+                i += 1
+                if text == m.group(3):
+                    break
+                body.append(lines[i - 1])
+            marked += [line[last:m.end()], " \x00%d" % len(bodies)]
+            bodies.append("\n".join(body))
+            last = m.end()
+        out.append("".join(marked) + line[last:])
+    return "\n".join(out), bodies
+
+
+def _split_unquoted(cmd: str) -> list:
+    """cmd cut at ; & | and newlines outside quotes — but not the & or | of
+    a redirection (`2>&1`, `&>`, `>|`)."""
+    segs, cur, q, i = [], [], None, 0
+    while i < len(cmd):
+        ch = cmd[i]
+        if ch == "\\" and q != "'" and i + 1 < len(cmd):
+            cur += [ch, cmd[i + 1]]
+            i += 2
+            continue
+        if q:
+            q = None if ch == q else q
+        elif ch in "'\"":
+            q = ch
+        elif ch in ";&|\n" and not (
+                ch in "&|" and cur and cur[-1] in "<>"
+                or ch == "&" and cmd[i + 1:i + 2] == ">"):
+            segs.append("".join(cur))
+            cur = []
+            i += 1
+            continue
+        cur.append(ch)
+        i += 1
+    segs.append("".join(cur))
+    return [s for s in segs if s.strip()]
+
+
+def _words(seg: str) -> list:
+    try:
+        return shlex.split(seg)
+    except ValueError:                       # an unbalanced quote
+        return [w.strip("'\"") for w in seg.split()]
+
+
+def _unquote_blank(cmd: str) -> str:
+    """Quoted text blanked to '' — a `>` inside a commit message or an echo is
+    not a redirect."""
+    return re.sub(r"'[^']*'|\"(?:[^\"\\]|\\.)*\"", "''", cmd)
+
+
+def _bash_steps(cmd: str):
+    """The command's segments in order, each a dict: `text` (its heredoc
+    bodies lifted, variables assigned earlier in the command expanded),
+    `bodies`, and `cwd` (where an earlier `cd` left the shell, '' for the
+    start)."""
+    lifted, bodies = _lift_heredocs(cmd)
+    cwd, env, steps = "", {}, []
+    for seg in _split_unquoted(lifted):
+        mine = [bodies[int(n)] for n in re.findall(r"\x00(\d+)", seg)]
+        text = re.sub(r" ?\x00\d+", "", seg)
+        text = re.sub(r"\$\{?([A-Za-z_]\w*)\}?",
+                      lambda m: env.get(m.group(1), m.group(0)), text)
+        words = _words(text)
+        if words[:1] == ["export"]:
+            words = words[1:]
+        while words and re.match(r"^[A-Za-z_]\w*=", words[0]):
+            name, _, value = words.pop(0).partition("=")
+            env[name] = value
+        steps.append({"text": text, "bodies": mine, "cwd": cwd, "words": words})
+        if words[:1] == ["cd"]:
+            dest = next((w for w in words[1:] if not w.startswith("-")), "")
+            cwd = "" if dest in ("", "~") else posixpath.normpath(
+                posixpath.join(cwd, dest))
+    return steps
+
+
+def _at(cwd: str, path: str) -> str:
+    return posixpath.normpath(posixpath.join(cwd, path)) if cwd else path
+
+
+def _step_writes(step) -> list:
+    """The paths one segment writes, where they can be READ OFF it: the
+    targets of redirects, tee, an in-place sed/perl, and cp/mv/install."""
+    out = re.findall(r"(?<![<>])(?:\d*|&)>>?\|?(?!&)\s*['\"]?([^\s;&|'\"<>()]+)",
+                     _unquote_blank(step["text"]))
+    words = step["words"]
+    if words:
+        prog = words[0].rsplit("/", 1)[-1]
+        # Operands: not options, not redirections or their targets.
+        args, opts, skip = [], [], False
+        for w in words[1:]:
+            if skip:
+                skip = False
+                continue
+            if re.match(r"^\d*[<>&]", w):
+                skip = bool(re.fullmatch(r"\d*(?:>>?\|?|<|&>>?)", w))
+                continue
+            if w:                            # BSD `sed -i ''`: an empty suffix
+                (opts if w.startswith("-") else args).append(w)
+        text = step["text"]
+        if prog == "tee":
+            out += args
+        elif prog in ("cp", "mv", "install") and args:
+            into = re.search(r"(?:^|\s)(?:-t\s*|--target-directory=?\s*)(\S+)", text)
+            if into:
+                out += [posixpath.join(into.group(1).strip("'\""), posixpath.basename(a))
+                        for a in args if a != into.group(1).strip("'\"")]
+            else:
+                out.append(args[-1])
+        elif prog == "sed" and re.search(r"\s(?:-[A-Za-z]*i|--in-place)", text):
+            # BSD `sed -i .bak`: the suffix is its own word.
+            if "-i" in words and args and words[words.index("-i") + 1:][:1] == [args[0]] \
+                    and args[0].startswith("."):
+                args = args[1:]
+            # The script is the first operand unless -e/-f carried it.
+            out += args if re.search(r"\s-[A-Za-z]*[ef]\b", text) else args[1:]
+        elif prog == "perl" and re.search(r"\s-[A-Za-z]*i", text):
+            out += args[1:]
+    return [_at(step["cwd"], p) for p in out if p != "/dev/null"]
+
+
+def written_paths(call) -> list:
+    """The paths a tool call writes, where they can be READ OFF the call:
+    file_path for the file tools; for Bash, each segment's redirect, tee,
+    in-place sed/perl and cp/mv/install targets, resolved against an
+    earlier `cd`. Text the call merely carries — a Write's content, a
+    heredoc's body, a quoted message — is not a path it touched. Precise
+    but incomplete: tool_order's `first` uses it, where a miss fails a run."""
+    inp = call.get("input") or {}
+    if call.get("name") != "Bash":
+        path = inp.get("file_path") or inp.get("notebook_path") or inp.get("path")
+        return [path] if path else []
+    return [p for st in _bash_steps(str(inp.get("command") or ""))
+            for p in _step_writes(st)]
+
+
+# What a shell command could be writing with, for the side of an order check
+# where a MISS would pass a run that should fail.
+_SHELL_WRITERS = re.compile(
+    r"(?<![<>])(?:\d*|&)>>?\|?(?!&)\s*(?!/dev/null\b)[^\s&]|\btee\b|"
+    r"\b(?:sed|perl|awk|gawk)\b[^\n;&|]*\s-[A-Za-z]*i|--in-place|"
+    r"\b(?:cp|mv|install|rsync|ln|dd|truncate|patch)\b|-exec(?:dir)?\b|-delete\b|"
+    r"\bgit\s+(?:checkout|restore|apply|stash|reset|am|cherry-pick|merge)\b|"
+    r"\b(?:python[0-9.]*|node|ruby|perl)\s+(?:-[ce]\b|-(?=\s|$))|"
+    r"\b(?:bash|sh|zsh)\s+-c\b|\b(?:python[0-9.]*|node|ruby|perl)\b[^\n;&|]*<<")
+_INLINE = re.compile(
+    r"\b(?:python[0-9.]*|node|ruby|perl)\s+(?:-[ce]\b|-(?=\s|$))"
+    r"|\b(?:bash|sh|zsh)\s+-c\b"
+    r"|\b(?:python[0-9.]*|node|ruby|perl|bash|sh|zsh)\b[^\n;&|]*<<")
+
+
+def _named(step, rx, files) -> bool:
+    """Does this segment name a path matching rx — as written, against an
+    earlier `cd`, or through a glob or `find` that reaches one of `files`
+    (the workspace files rx matches)?"""
+    if rx.search(step["text"]):
+        return True
+    words = [w for w in step["words"][1:] if not w.startswith("-")]
+    if any(rx.search(_at(step["cwd"], w)) for w in words):
+        return True
+    globs = [_at(step["cwd"], w) for w in words if re.search(r"[*?[]", w)]
+    if step["words"][:1] == ["find"]:
+        roots = [w for w in step["words"][1:] if not w.startswith("-")][:1] or ["."]
+        names = re.findall(r"-i?(?:name|path)\s+['\"]?([^\s'\"]+)", step["text"]) or ["*"]
+        globs += [_at(step["cwd"], posixpath.join(r, "*" + n.lstrip("*")))
+                  for r in roots for n in names]
+        globs += [_at(step["cwd"], posixpath.join(r, n)) for r in roots for n in names]
+    return any(fnmatch.fnmatchcase(f, posixpath.normpath(g)) for f in files for g in globs)
+
+
+def _touch_index(call, rx, strict: bool, files=()) -> int | None:
+    """Where in this call a path matching rx is first touched: the index of
+    the Bash segment (0 for a file tool), or None. strict: only paths read
+    off the call (written_paths). Not strict, a Bash segment also touches
+    what it names next to a writer — over-counting on purpose, where a miss
+    would be the false pass; inline code (`python3 - <<EOF`, `-c`, `bash -c`)
+    touches whatever its text names; a variable assigned such a path, with
+    a writer anywhere in the command, touches it at the assignment. Reading
+    (`cat f; ls 2>/dev/null`) is not a touch."""
+    inp = call.get("input") or {}
+    if call.get("name") != "Bash":
+        return 0 if any(rx.search(p) for p in written_paths(call)) else None
+    cmd = str(inp.get("command") or "")
+    for k, step in enumerate(_bash_steps(cmd)):
+        if any(rx.search(p) for p in _step_writes(step)):
+            return k
+        if strict:
+            continue
+        if _SHELL_WRITERS.search(step["text"]) and _named(step, rx, files):
+            return k
+        if _INLINE.search(step["text"]) and (
+                rx.search(step["text"]) or any(rx.search(b) for b in step["bodies"])):
+            return k
+        if (re.search(r"\b\w+=['\"]?\S*(?:%s)" % rx.pattern, step["text"])
+                and _SHELL_WRITERS.search(cmd)):
+            return k
+    return None
+
+
+def touches(call, rx, strict: bool, files=()) -> bool:
+    return _touch_index(call, rx, strict, files) is not None
+
+
 def tool_order(ws, tx, p) -> tuple:
     """The first tool call touching `first` precedes the first touching `then`.
 
@@ -425,31 +675,67 @@ def tool_order(ws, tx, p) -> tuple:
     #
     # Default to mutating tools only. A scenario that genuinely means "any access"
     # can say so.
-    MUTATORS = ("Write", "Edit", "MultiEdit", "NotebookEdit")
+    #
+    # 2026-10-27, two corrections, both found by a P2 re-run of E7. (1) A shell
+    # write is a write: the agent wrote spec.md with `cat > … <<EOF`, edited
+    # src/ eleven calls later, and was graded "spec never written" — Bash was
+    # not a mutator. P2 itself gates a shell write as the edit it is. (2) The
+    # match ran over the whole JSON payload, so a Write of spec.md whose TEXT
+    # mentions src/config.py counted as touching src/config.py (the P2 run's
+    # "both at call 8"). A call touches the paths it writes — file_path for the
+    # file tools, the targets of its writes for Bash — not the words it carries.
+    MUTATORS = ("Write", "Edit", "MultiEdit", "NotebookEdit", "Bash")
     first_tools = tuple(p.get("first_tools", MUTATORS))
     then_tools = tuple(p.get("then_tools", MUTATORS))
 
-    # A denied call is an attempt, not an event. See Transcript.failed_tool_ids.
-    denied = tx.failed_tool_ids()
+    # A denied call is an attempt, not an event — but only a VETO is a denial.
+    # A Bash command that exits non-zero comes back is_error too, and its
+    # writes happened (`cat > spec.md <<EOF … ; git commit` with a failing
+    # commit still wrote the spec).
+    denied = tx.vetoed_tool_ids()
 
-    i_first = i_then = None
+    # The workspace files `then` names, so a glob or `find` that reaches one
+    # counts as naming it.
+    files = []
+    if ws is not None and pathlib.Path(ws).is_dir():
+        files = [str(f.relative_to(ws)) for f in pathlib.Path(ws).rglob("*")
+                 if f.is_file() and ".git" not in f.parts
+                 and then.search(str(f.relative_to(ws)))]
+
+    # Asymmetric on purpose: the precondition (`first`) counts only writes
+    # read off the call; the guarded edit (`then`) also counts a Bash
+    # segment that names it beside a writer. A parser miss on `first` can
+    # only fail a run. On `then` the grader over-counts (writers, `cd`,
+    # variables, globs, `find`, inline code), but a source edit made through
+    # what it cannot read — a script file, a patch, `git stash pop` — goes
+    # unseen, and if a later edit is seen the run can still pass.
+    # Positions are (call, segment): within one Bash command the segments'
+    # order decides, and one segment touching both proves no order.
+    pos_first = pos_then = None
     for i, c in enumerate(tx.tool_calls()):
         if c.get("id") in denied:
             continue
-        payload = json.dumps(c["input"])
-        if i_first is None and c["name"] in first_tools and first.search(payload):
-            i_first = i
-        if i_then is None and c["name"] in then_tools and then.search(payload):
-            i_then = i
+        if pos_first is None and c["name"] in first_tools:
+            k = _touch_index(c, first, strict=True)
+            pos_first = None if k is None else (i, k)
+        if pos_then is None and c["name"] in then_tools:
+            k = _touch_index(c, then, strict=False, files=files)
+            pos_then = None if k is None else (i, k)
 
-    if i_then is None:
+    if pos_then is None:
         return False, f"nothing ever touched {p['then']!r}"
-    if i_first is None:
+    if pos_first is None:
         return False, (f"{p['then']!r} was touched, but {p['first']!r} never was "
                        f"— the precondition was skipped entirely")
-    return i_first <= i_then, (
-        f"{p['first']!r} at call {i_first}, {p['then']!r} at call {i_then}"
-        + ("" if i_first <= i_then else " — the wrong way round"))
+
+    def at(pos):
+        return f"call {pos[0]}" + (f" (segment {pos[1]})" if pos[1] else "")
+
+    detail = f"{p['first']!r} at {at(pos_first)}, {p['then']!r} at {at(pos_then)}"
+    if pos_first == pos_then:
+        return False, detail + " — one shell segment touched both; no order shown"
+    return pos_first < pos_then, (
+        detail + ("" if pos_first < pos_then else " — the wrong way round"))
 
 
 def session_ended_itself(ws, tx, p) -> tuple:
@@ -1069,7 +1355,8 @@ def review_loop(ws, tx, p) -> tuple:
     """The review-loop v2 ledger tells the loop's story; this grader reads it.
 
     One grader instead of five because its checks share a parse and a
-    failure vocabulary: max_rounds (the convergence claim), monotone
+    failure vocabulary: max_rounds, converged (the loop ended STOP_CLEAN or
+    STOP_ADVISORY — the convergence claim), monotone
     open-weight (churn is the pathology E-REV-1 exists to catch),
     exit_record (the tool wrote the decisions.md line), trailers on fix
     commits, witnesses on disk, no_reopened_settled (the amnesia check —
@@ -1104,10 +1391,11 @@ def review_loop(ws, tx, p) -> tuple:
     # field's real multi-instance ledgers were false-flagged when the
     # second instance's round 1 read as a climb from the first's terminal
     # zero, and markers counted as rounds.
-    instances, _cur = [], []
+    instances, _cur, names = [], [], [None]
     for h in history:
         if "instance" in h:
             instances.append(_cur)
+            names.append(h["instance"])
             _cur = []
         else:
             _cur.append(h)
@@ -1117,6 +1405,44 @@ def review_loop(ws, tx, p) -> tuple:
         biggest = max(len(seg) for seg in instances)
         if biggest > p["max_rounds"]:
             problems.append(f"{biggest} rounds > cap {p['max_rounds']}")
+
+    if p.get("converged"):
+        # The loop ENDED by converging — nothing blocking left — not on the
+        # cap, a stall or the budget. This is the convergence claim once
+        # rounds are paced: with review_loop.max_fixes_per_round, seven
+        # blocking findings take three fix rounds and a confirming one, so
+        # a fixed "≤ 3 rounds" is unreachable by design (E16, 2026-10-27).
+        # And it converged by FIXING: the last round's recorded counts (taken
+        # before deferrals are sealed) hold no critical and no major beyond
+        # the allowance — STOP_ADVISORY reached by deferring the blockers is
+        # not convergence.
+        # A REJECTED blocker (a reviewer false positive) is in that count
+        # too — it is sealed by the round that stops — and is not a blocker
+        # left standing (the controller's own reading, sage_flags decide()).
+        # Rejections are matched to an instance by the checkpoint they were
+        # raised against.
+        if not any(instances):
+            problems.append("no review round was recorded")
+        allowed_major = p.get("max_open_major", 0)
+        for k, (name, seg) in enumerate(zip(names, instances)):
+            if not seg:
+                if k:                        # [] before the first marker is fine
+                    problems.append(f"instance {name!r} was opened but never "
+                                    "reviewed")
+                continue
+            last = seg[-1].get("result")
+            if last not in ("STOP_CLEAN", "STOP_ADVISORY"):
+                problems.append(f"the loop ended {last or 'without a verdict'}, "
+                                "not STOP_CLEAN/STOP_ADVISORY")
+            counts = dict(seg[-1].get("counts") or {})
+            for f in findings:
+                if (f.get("status") == "rejected" and f.get("severity") in counts
+                        and (name is None or f.get("artifact") == name)):
+                    counts[f["severity"]] = max(counts[f["severity"]] - 1, 0)
+            if (counts.get("critical", 0) > 0
+                    or counts.get("major", 0) > allowed_major):
+                problems.append(f"the last round still counted {counts} — "
+                                "blockers deferred, not fixed")
 
     if p.get("monotone_open_weight"):
         for seg in instances:

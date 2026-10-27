@@ -226,6 +226,11 @@ surfaces:
       line. Claude Code 2.1.289 still labels it 'hook error'
       (docs/attestations/claude-code-structured-deny-2026-10-27.md). Other
       callers keep exit 2. Pinned by hook tests D1–D8; E7 not re-run.
+      2026-10-27 (P2 re-run): the QA block names the one-command fix
+      (`manifest.py close-out … --status complete --qa …`); pinned by H12. E7
+      re-run on the fixed tree passes 3/3 under the corrected tool_order
+      grader (a shell-written spec counts; a call touches the paths it writes,
+      not the text it carries) (develop/evals/REMEASURE-P2-2026-10-27.md).
 
   hook-tdd-gate:
     path: runtime/platforms/claude-code/hooks/sage-tdd-gate.sh
@@ -250,6 +255,15 @@ surfaces:
     notes: >
       E8 is the scenario that proved the thesis: the decisions.md line appears
       because a script writes it, not because the model remembered to.
+      2026-10-27 (P2 re-run, E8): the line was missing when the cycle closed
+      through Bash — `sed -i` on the manifest, or `manifest.py close-out`, the
+      writer the bookkeeping gate sends an active cycle to; the hook listened
+      for Edit/Write only. It now also runs after Bash (Claude Code, plugin;
+      opencode already ran post hooks on bash; Hermes ported), checking
+      manifests written in the last 15 min, idempotent across rotated
+      decisions-*.md and the Hermes marker; paths compared by realpath (fixes
+      macOS H17). Hook tests H17–H19g. E8 re-run on the fixed tree: 4/4
+      (develop/evals/REMEASURE-P2-2026-10-27.md).
 
   hook-bash-write-gate:
     path: runtime/platforms/claude-code/hooks/sage-bash-write-gate.sh
@@ -281,6 +295,17 @@ surfaces:
       L1, L3 — or opens one through /build or /fix (E1, E4, E13, E19) now has
       to branch before its first source edit; re-run before citing their
       numbers for this version.
+      2026-10-27 (P2 re-run, N=1, operator config —
+      develop/evals/REMEASURE-P2-2026-10-27.md): across the seeded-cycle
+      scenarios most agents created a branch before their first source edit
+      unprompted, so the gate rarely fired. Two broke on it: E15 (one of two
+      runs: the agent would not put unrelated work on the cycle's branch and
+      asked) and E-PAR-3 (the agent asked to confirm a branch; the lane burst
+      never ran). Both now start on their cycle's branch (harness `branch`),
+      as a P2 cycle would; scenarios that measure branching keep master. The
+      block message now defers to git-discipline's propose-confirm — propose
+      the branch, create it once the user confirms, record it with close-out
+      --branch — where it used to say only 'create it' (BR1).
 
   hook-config-gate:
     path: runtime/platforms/claude-code/hooks/sage-config-gate.sh
@@ -305,6 +330,17 @@ surfaces:
       callers keep exit 2. Pinned by hook tests D1–D8; E15 not re-run.
       branch_gate joined the protected opt-outs (an agent may not add
       branch_gate: false; BR12).
+      2026-10-27 (P2 re-run, E8/E16): the in-place-sed test ran across the
+      whole line, so `sed -n …; grep -i …; cat .sage/config.yaml` (a read) was
+      blocked, while `sed -Ei` and `sed --in-place` were missed. It is judged
+      per command segment, split outside quotes (C11zf–zz); a heredoc/stdin
+      interpreter now counts as a writer (C11zq). A target-aware rewrite for
+      the E16 false blocks (cp of a record elsewhere, a python -c that only
+      loads it) was reviewed, found to open bypasses (`cp … 2>/dev/null`,
+      `bash -c`), and reverted; those false blocks remain a known cost — 4
+      across E9/E16/E19, none failed a check. E15 re-run on the fixed tree:
+      2/3 — the switch held; the work check failed on the branch gate (see
+      hook-branch-gate) (develop/evals/REMEASURE-P2-2026-10-27.md).
 
   hook-verify-gate:
     path: runtime/platforms/claude-code/hooks/sage-verify-gate.sh
@@ -403,6 +439,9 @@ surfaces:
       line. Claude Code 2.1.289 still labels it 'hook error'
       (docs/attestations/claude-code-structured-deny-2026-10-27.md). Other
       callers keep exit 2. Pinned by hook tests D1–D8; L1 not re-run.
+      2026-10-27 (P2 re-run): the redirect message lists `--status complete
+      --qa …`. L1 re-run on the fixed tree: 7/7
+      (develop/evals/REMEASURE-P2-2026-10-27.md).
 
   hook-manifest-sync:
     path: runtime/platforms/claude-code/hooks/sage-manifest-sync.sh
@@ -497,6 +536,12 @@ surfaces:
       — how the user's decline, `declined`, reaches the branch gate. Pinned by
       test_manifest.py CloseOutTest (test_branch_*); the E-PAR/L1 scenarios do
       not use it, not re-run.
+      2026-10-27 (P2 re-run, E8): `close-out --qa` (terminal dispositions
+      only) and, for `--status complete` (any case), the spec-gate's guards —
+      gate_state gates-passed, qa terminal — refusing before anything is
+      written; fields a manifest predates are not held against it.
+      test_manifest CloseOutTest. L1 re-run on the fixed tree 7/7; E-PAR-1–3
+      in develop/evals/REMEASURE-P2-2026-10-27.md.
 
   tool-lanes:
     path: runtime/tools/lanes.py
@@ -1005,6 +1050,9 @@ surfaces:
       The v2 output contract is pinned by test_review_schema.py.
       2026-10-26 (P1, the loop must end): same contract change as auto-review
       (evidence-less findings rejected; most severe first). Unmeasured live.
+      2026-10-27 (P2 re-run, E8): a skip is declared through `manifest.py
+      close-out --qa <disposition>` while the cycle is active. E8 re-run on
+      the fixed tree: 4/4 (develop/evals/REMEASURE-P2-2026-10-27.md).
 
   capability-implement:
     path: core/capabilities/execution/implement/SKILL.md

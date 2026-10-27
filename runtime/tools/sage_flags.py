@@ -352,6 +352,9 @@ def _decide_v2(iteration, ledger):
                if f.get("disposition") == "fix-now"]
 
     budget = budget_state(ledger, cfg["cycle_round_budget"], this_round=True)
+    cap_counts = _open_counts(blocking + [
+        f for f in open_entries if _is_pending_settlement(f)
+        and f["disposition"].get("action") == "defer"])
 
     if not open_entries and not disputed_live:
         action = "STOP_CLEAN"
@@ -359,7 +362,14 @@ def _decide_v2(iteration, ledger):
         action = "CONTINUE"                        # a human bought this round
     elif stalls >= cfg["escalate_after_stalls"]:
         action = "ESCALATE"
-    elif iteration >= cfg["iteration_cap"]:
+    elif iteration >= cfg["iteration_cap"] and (
+            cap_counts["critical"] > 0 or cap_counts["major"] > cfg["major_budget"]):
+        # The cap ends a loop that would otherwise go on. A cap round with
+        # nothing blocking left is a loop that converged ON the cap — it is
+        # STOP_ADVISORY, not "capped" (E16, 2026-10-27: round 5 with only
+        # substantive findings open read STOP_CAP). A blocker DEFERRED at the
+        # cap was not fixed, so it still counts; one REJECTED (a reviewer false
+        # positive) does not — the same ledger reads the same at any round.
         action = "STOP_CAP"
     elif blocking_counts["critical"] > 0:
         action = "CONTINUE"

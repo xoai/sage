@@ -95,6 +95,30 @@ class DriverErrorResultTest(unittest.TestCase):
         self.assertEqual(run["truncated"], "error_max_budget_usd",
                          "graded AND flagged — a truncated pass did the work")
 
+    def test_a_session_is_costed_at_its_running_total(self):
+        """total_cost_usd is the session's running total (2026-10-27): each
+        result in a call repeats it, and a --resume call carries it forward.
+        E-PAR-1's two calls (5 results) reported $34.50 summed per result,
+        $10.23 summed per call; the session cost $5.55. Usage is per turn."""
+        call1 = FakeProc([result_event(total_cost_usd=4.52),
+                          result_event(total_cost_usd=4.68),
+                          result_event(total_cost_usd=4.68)])
+        call2 = FakeProc([result_event(total_cost_usd=5.55),
+                          result_event(total_cost_usd=5.55)])
+        with mock.patch.object(RE.subprocess, "run", side_effect=[call1, call2]):
+            run = self.driver.run(self.d, ["go", "now finish"], self.out)
+        self.assertAlmostEqual(run["cost_usd"], 5.55)
+        self.assertEqual(run["tokens_out"], 25)
+
+    def test_a_void_session_still_reports_what_it_spent(self):
+        """A run voided on its second call keeps the first call's spend."""
+        call1 = FakeProc([result_event(total_cost_usd=1.25)])
+        with mock.patch.object(RE.subprocess, "run", side_effect=[
+                call1, RE.subprocess.TimeoutExpired("claude", 1)]):
+            run = self.driver.run(self.d, ["go", "now finish"], self.out)
+        self.assertFalse(run["ok"])
+        self.assertAlmostEqual(run["cost_usd"], 1.25)
+
     def test_the_subprocess_never_sees_the_real_claude_config(self):
         """L5's incident, pinned: the harness inherited the developer's HOME and
         an eval agent wrote into the REAL ~/.claude/CLAUDE.md. Every driver
@@ -195,6 +219,40 @@ class ConfigAppendTest(unittest.TestCase):
         }), encoding="utf-8")
         with self.assertRaises(RE.EvalError):
             RE.Scenario(sdir)
+
+
+class SeedBranchTest(unittest.TestCase):
+    """`branch` starts a scenario on its cycle's branch (E15, 2026-10-27)."""
+
+    def setUp(self):
+        self.d = pathlib.Path(tempfile.mkdtemp(prefix="driver-branch-"))
+        self.addCleanup(shutil.rmtree, self.d, ignore_errors=True)
+
+    def scenario(self, branch):
+        sdir = self.d / "EX-branch"
+        sdir.mkdir(exist_ok=True)
+        (sdir / "prompt-1.md").write_text("p", encoding="utf-8")
+        (sdir / "scenario.json").write_text(json.dumps({
+            "id": "EX", "name": "branch", "fixture": "py-broken",
+            "conditions": ["bare"], "prompts": ["prompt-1.md"],
+            "setup": {"notes.md": "seeded\n"}, "branch": branch,
+            "checks": [{"grader": "file_exists", "path": "x"}],
+        }), encoding="utf-8")
+        return RE.Scenario(sdir)
+
+    def test_the_workspace_starts_on_the_branch_with_setup_committed(self):
+        root = self.d / "ws"
+        root.mkdir()
+        ws = RE.make_workspace(self.scenario("feat/cart"), "bare", root)
+        head = RE.git(ws, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
+        self.assertEqual(head, "feat/cart")
+        self.assertEqual(RE.git(ws, "status", "--porcelain").stdout.strip(), "")
+
+    def test_a_bad_name_fails_the_offline_check(self):
+        for bad in ("feat cart", "../x", "-b", "x..y", "feat/", "x.lock", "a//b", 42):
+            self.assertTrue(self.scenario(bad).validate(), bad)
+        self.assertFalse([p for p in self.scenario("feat/cart").validate()
+                          if "branch" in p])
 
 
 if __name__ == "__main__":

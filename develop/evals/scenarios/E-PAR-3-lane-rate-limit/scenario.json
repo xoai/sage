@@ -35,13 +35,23 @@
     "silently rots; that sentence is what session 2 grades.",
     "",
     "Execution is budget-gated and OUT OF SCOPE for the pack that authored",
-    "this file."
+    "this file.",
+    "",
+    "SEEDED ON ITS BRANCH, 2026-10-27 — decided after a failure, and said so. The",
+    "P2 re-run seeded this cycle in progress on master; the branch gate blocked the",
+    "first implementation edit, and the agent — following git-discipline's",
+    "propose-confirm — stopped to ask for the branch. No burst ran, the 429",
+    "arrived with no lane to apply to, and the errored/freeze/brief checks failed",
+    "for a reason that is not this scenario's subject. Under P2 a plan-approved",
+    "cycle already has its confirmed branch, so the scenario now starts there",
+    "(harness `branch`: feat/feature-pair, recorded in the manifest)."
   ],
   "setup": {
     ".sage/work/012-feature-pair/spec.md": "---\nstatus: completed\n---\n\n# Spec: feature pair + report\n\n1. `src/auth.py` — `login(user_id) -> bool`: true iff the user exists.\n2. `src/session.py` — `create(user_id) -> bool`: registers a session, true on first create.\n3. `src/report.py` — `login_report(user_ids) -> str`: one line per user via login(), under report_header('logins').\n\nEvery change carries a test.\n",
     ".sage/work/012-feature-pair/plan.md": "---\nstatus: completed\n---\n\n# Implementation Plan: feature pair + report\n\n## Tasks\n\n- [ ] **Task 1:** auth.login [P]\n  - **Files:** `src/auth.py`, `tests/test_auth.py`\n  - **Action:** login(user_id) per spec §1\n  - **Test:** tests/test_auth.py\n  - **Depends on:** none\n- [ ] **Task 2:** session.create [P]\n  - **Files:** `src/session.py`, `tests/test_session.py`\n  - **Action:** create(user_id) per spec §2\n  - **Test:** tests/test_session.py\n  - **Depends on:** none\n- [ ] **Task 3:** report.login_report\n  - **Files:** `src/report.py`, `tests/test_report.py`\n  - **Action:** login_report(user_ids) per spec §3, composing auth.login\n  - **Test:** tests/test_report.py\n  - **Depends on:** T1\n",
-    ".sage/work/012-feature-pair/manifest.md": "---\ncycle_id: \"20260809-feature-pair\"\nworkflow: build\nphase: implement\nstatus: in-progress\ntier: standard\ngate_state: plan-approved\ncreated: 2026-08-09\nupdated: 2026-08-09 11:00\nflags:\n  quality_locked: false\n  autonomous: false\n  subagents: true\n  parallel: true\n---\n\n# Cycle: feature pair + report\n\n## State\n\n**Current phase:** implement — plan approved, no tasks started\n**Next step:** derive scope + graph, then open the burst\n\n## Context summary\n\nSpec and plan approved. T1 and T2 are parallel over disjoint modules;\nT3 depends on T1.\n"
+    ".sage/work/012-feature-pair/manifest.md": "---\ncycle_id: \"20260809-feature-pair\"\nworkflow: build\nphase: implement\nstatus: in-progress\ntier: standard\nbranch: feat/feature-pair\ngate_state: plan-approved\ncreated: 2026-08-09\nupdated: 2026-08-09 11:00\nflags:\n  quality_locked: false\n  autonomous: false\n  subagents: true\n  parallel: true\n---\n\n# Cycle: feature pair + report\n\n## State\n\n**Current phase:** implement — plan approved, no tasks started\n**Next step:** derive scope + graph, then open the burst\n\n## Context summary\n\nSpec and plan approved. T1 and T2 are parallel over disjoint modules;\nT3 depends on T1.\n"
   },
+  "branch": "feat/feature-pair",
   "sessions": [
     {
       "name": "burst",

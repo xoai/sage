@@ -274,7 +274,7 @@ P=$(new_project); set_config "$P" "hard_enforcement: true"
 add_manifest "$P" demo gates-passed in-progress pending
 assert H12 "completing while qa is 'pending' is blocked" "$P" \
   '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/demo/manifest.md","old_string":"status: in-progress","new_string":"status: complete"}}' \
-  --exit 2 --stderr "R29" --stderr "skipped-no-subagent"
+  --exit 2 --stderr "R29" --stderr "skipped-no-subagent" --stderr "close-out .sage/work/demo/manifest.md --status complete --qa"
 
 # H13 — the skip is DECLARED → allowed. Sage does not forbid degrading; it forbids
 # degrading quietly.
@@ -344,6 +344,58 @@ P=$(new_project); add_manifest "$P" demo gates-passed in-progress passed
 assert H19 "qa: passed writes no degradation line" "$P" \
   '{"tool_name":"Edit","tool_input":{"file_path":"'"$P"'/.sage/work/demo/manifest.md"}}' \
   --hook "$DEG_LOG" --exit 0 --no-stderr "recorded a degraded completion"
+
+# H19b–d — a shell command writes manifests too: `manifest.py close-out --qa`
+# (the sanctioned writer while a cycle is active) or a bare sed. E8, 2026-10-27:
+# the cycle closed `qa: waived` through sed and no line was logged.
+P=$(new_project); add_manifest "$P" demo gates-passed in-progress waived
+add_manifest "$P" other gates-passed in-progress passed
+: > "$P/.sage/decisions.md"
+assert H19b "after a Bash command, a declared skip in any cycle is recorded" "$P" \
+  '{"tool_name":"Bash","tool_input":{"command":"sed -i.bak s/pending/waived/ .sage/work/demo/manifest.md"}}' \
+  --hook "$DEG_LOG" --exit 0 --stderr 'cycle "demo" (waived)'
+if [ -z "$ONLY" ] || [ "$ONLY" = "H19c" ]; then
+  for _ in 1 2; do
+    ( cd "$P" && printf '%s' '{"tool_name":"Bash","tool_input":{"command":"ls"}}' \
+        | bash "$DEG_LOG" >/dev/null 2>&1 )
+  done
+  n=$(grep -c "auto-logged by sage-degradation-log" "$P/.sage/decisions.md" 2>/dev/null || echo 0)
+  if [ "$n" = "1" ] && ! grep -q 'cycle "other"' "$P/.sage/decisions.md"; then
+    report PASS H19c "later Bash calls add nothing; qa: passed is never logged"
+  else
+    report FAIL H19c "later Bash calls add nothing; qa: passed is never logged" "found $n lines"
+  fi
+fi
+P=$(new_project); add_manifest "$P" demo gates-passed in-progress waived
+: > "$P/.sage/decisions.md"
+assert H19d "an Edit of another file does not sweep the manifests" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"'"$P"'/src/app.py"}}' \
+  --hook "$DEG_LOG" --exit 0 --no-stderr "recorded a degraded completion"
+
+# H19e — a line rotated into decisions-<date>.md, or written by the Hermes
+# logger, is still a line: no second record. H19f — the Bash sweep looks only at
+# manifests this command can have written; an old cycle is not back-filled.
+P=$(new_project); add_manifest "$P" demo gates-passed complete waived
+add_manifest "$P" hermes gates-passed complete skipped-timeout
+: > "$P/.sage/decisions.md"
+printf -- '- [2026-10-01] cycle "demo" — auto-QA waived (waived) [auto-logged by sage-degradation-log]\n' > "$P/.sage/decisions-2026-10-01.md"
+printf -- '\n- **2026-10-02 09:00** — cycle `hermes`: skipped [auto-logged by sage-gates post_tool_call] hermes qa:skipped-timeout\n' >> "$P/.sage/decisions.md"
+assert H19e "a rotated or Hermes-written line counts as recorded" "$P" \
+  '{"tool_name":"Bash","tool_input":{"command":"ls"}}' \
+  --hook "$DEG_LOG" --exit 0 --no-stderr "recorded a degraded completion"
+P=$(new_project); add_manifest "$P" demo gates-passed complete waived
+: > "$P/.sage/decisions.md"; touch -t 202601010000 "$P/.sage/work/demo/manifest.md"
+assert H19f "an old cycle's manifest is not swept into the log" "$P" \
+  '{"tool_name":"Bash","tool_input":{"command":"ls"}}' \
+  --hook "$DEG_LOG" --exit 0 --no-stderr "recorded a degraded completion"
+
+# H19g — the slug is matched where the logger writes it, not as any word: a
+# cycle named `user` is not "the user" in another cycle's waived line.
+P=$(new_project); add_manifest "$P" user gates-passed complete waived
+printf -- '- [2026-10-20] cycle "fix-login" — auto-QA waived by the user — completion accepted without independent QA. (waived) [auto-logged by sage-degradation-log]\n' > "$P/.sage/decisions.md"
+assert H19g "another cycle's line naming 'the user' does not count for cycle user" "$P" \
+  '{"tool_name":"Bash","tool_input":{"command":"ls"}}' \
+  --hook "$DEG_LOG" --exit 0 --stderr 'cycle "user" (waived)'
 
 # H20 — the logger never fails a tool call, whatever it is handed.
 P=$(new_project)
@@ -1317,6 +1369,45 @@ assert C11ze "cleaning .sage/tmp is none of this gate's business" "$P" \
 assert C11zd "reading the config from the shell is fine" "$P" \
   '{"tool_name":"Bash","tool_input":{"command":"grep -n budget .sage/config.yaml"}}' \
   --exit 0 --hook "$CG"
+# E8 (2026-10-27): grep's -i later on the line was read as sed's, and a read
+# that only named the config was blocked. The in-place test is per segment now.
+assert C11zf "a read is fine when only a later grep carries -i" "$P" \
+  '{"tool_name":"Bash","tool_input":{"command":"sed -n 110,150p .claude/hooks/sage-spec-gate.sh; grep -n -i -A8 qa: notes.md | head -60; cat .sage/config.yaml"}}' \
+  --exit 0 --hook "$CG"
+assert C11zg "the same for a gate record: sed -n, then grep -i" "$P" \
+  '{"tool_name":"Bash","tool_input":{"command":"sed -n 1,5p .sage/work/c1/review-ledger.json | grep -i round"}}' \
+  --exit 0 --hook "$CG"
+for _case in "C11zh|sed -Ei 's/budget: 4/budget: 0/' .sage/config.yaml" \
+             "C11zi|sed --in-place=.bak 's/budget: 4/budget: 0/' .sage/config.yaml" \
+             "C11zj|grep -l budget .sage/config.yaml | xargs sed -i.bak 's/4/0/'"; do
+  _id="${_case%%|*}"; _cmd="${_case#*|}"
+  assert "$_id" "an in-place sed of the config is still blocked: $_cmd" "$P" \
+    '{"tool_name":"Bash","tool_input":{"command":"'"$_cmd"'"}}' \
+    --exit 2 --stderr "enforcement" --hook "$CG"
+done
+# A write is still a write however it is dressed — the cases a target-aware
+# rewrite of this rule let through in review (2026-10-27), pinned so the
+# conservative whole-command rule is not "refined" into them again.
+for _case in "C11zo|cp /tmp/l4.json .sage/work/c1/review-ledger.json|gates' own records" \
+             "C11zp|dd if=/tmp/x of=.sage/work/c1/verify-baseline.json|gates' own records" \
+             "C11zq|python3 - <<'EOF'\\np='.sage/config.yaml'\\nopen(p,'a').write('x: 1')\\nEOF|enforcement" \
+             "C11zr|echo hard_enforcement: false | tee -a .sage/config.yaml|enforcement" \
+             "C11zs|sudo cp /tmp/loose.yaml ./.sage/config.yaml|enforcement" \
+             "C11zt|cp /tmp/loose.yaml .sage/config.yaml 2>/dev/null|enforcement" \
+             "C11zu|bash -c 'echo hard_enforcement: false > .sage/config.yaml'|enforcement" \
+             "C11zv|sh -c 'sed -i.bak s/true/false/ .sage/config.yaml'|enforcement" \
+             "C11zw|timeout 5 cp /tmp/l4.json .sage/work/c1/review-ledger.json 2>&1|gates' own records" \
+             "C11zx|sed 's/a/b/;s/c/d/' -i .sage/config.yaml|enforcement" \
+             "C11zy|sed -e 's|a|b|' -i .sage/config.yaml|enforcement" \
+             "C11zz|sed -e 's/budget: 4/budget: 9/;s/x/y/' -i .sage/work/c1/review-ledger.json|gates' own records"; do
+  _id="${_case%%|*}"; _rest="${_case#*|}"; _cmd="${_rest%|*}"; _why="${_rest##*|}"
+  assert "$_id" "a write still is: $_cmd" "$P" \
+    '{"tool_name":"Bash","tool_input":{"command":"'"$_cmd"'"}}' \
+    --exit 2 --stderr "$_why" --hook "$CG"
+done
+assert C11y0 "a bare - argument to a script is not a stdin program" "$P" \
+  '{"tool_name":"Bash","tool_input":{"command":"python3 tool.py --out - ; cat .sage/config.yaml"}}' \
+  --exit 0 --hook "$CG"
 assert C11v "reading a gate record is fine" "$P" \
   '{"tool_name":"Bash","tool_input":{"command":"cat .sage/work/c1/review-ledger.json"}}' \
   --exit 0 --hook "$CG"
@@ -1941,7 +2032,8 @@ EDIT_SRC='{"tool_name":"Edit","tool_input":{"file_path":"src/app.py"}}'
 
 P=$(br_project)
 assert BR1 "a source edit on main during a standard cycle is blocked, with the branch command" "$P" \
-  "$EDIT_SRC" --hook "$BRG" --exit 2 --stderr "default branch (main)" --stderr "git switch -c feat/rate"
+  "$EDIT_SRC" --hook "$BRG" --exit 2 --stderr "default branch (main)" --stderr "git switch -c feat/rate" \
+  --stderr "once they confirm" --stderr "--branch <name>"
 assert BR2 "a test edit on main is fine (writing the test is not implementation)" "$P" \
   '{"tool_name":"Edit","tool_input":{"file_path":"tests/test_app.py"}}' --hook "$BRG" --exit 0
 assert BR3 "docs and Sage's own state are none of this gate's business" "$P" \
