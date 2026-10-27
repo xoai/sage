@@ -459,6 +459,65 @@ class CloseOutTest(unittest.TestCase):
         self.assertIn("## Handoff guidance", out)
         self.assertIn("take over", out)
 
+    def test_branch_declined_is_added_when_the_manifest_predates_the_field(self):
+        """The branch gate reads `branch: declined` — and the bookkeeping gate
+        redirects hand-edits here, so close-out must be able to write it into
+        a manifest from before the template had the field."""
+        M.close_out(self.m, branch="declined",
+                    decisions=["branching declined by the user: one-line fix"])
+        self.assertEqual(M.read_field(self.m.read_text(), "branch"), "declined")
+        self.assertIn("branching declined by the user",
+                      (self.d / "decisions.md").read_text())
+
+    def test_branch_replaces_the_template_placeholder(self):
+        self.m.write_text(a_manifest_with_body().replace(
+            "status: in-progress", 'status: in-progress\nbranch: ""'))
+        M.close_out(self.m, branch="feat/close-out")
+        text = self.m.read_text()
+        self.assertEqual(M.read_field(text, "branch"), "feat/close-out")
+        self.assertEqual(M.split_frontmatter(text)[0].count("branch:"), 1)
+
+    def test_completing_needs_a_qa_disposition_while_qa_is_pending(self):
+        """E8 (2026-10-27): close-out is where the bookkeeping gate sends an
+        active cycle's manifest writes, and it could complete a cycle the
+        spec-gate refuses through Edit — silent about QA. It refuses now, and
+        writes nothing."""
+        self.m.write_text(a_manifest_with_body("gates-passed").replace(
+            "status: in-progress", "status: in-progress\nqa: pending"))
+        before = self.m.read_text()
+        with self.assertRaisesRegex(M.Problem, "qa is 'pending'"):
+            M.close_out(self.m, status="complete")
+        self.assertEqual(self.m.read_text(), before)
+        M.close_out(self.m, status="complete", qa="waived")
+        text = self.m.read_text()
+        self.assertEqual(M.read_field(text, "qa"), "waived")
+        self.assertEqual(M.read_field(text, "status"), "complete")
+
+    def test_completing_needs_gates_passed(self):
+        with self.assertRaisesRegex(M.Problem, "gate_state is 'building'"):
+            M.close_out(self.m, status="complete", qa="passed")
+
+    def test_the_guard_is_not_case_sensitive(self):
+        """The spec-gate and cycle_is_active() read `Complete` as complete."""
+        for spelling in ("Complete", "COMPLETED"):
+            with self.assertRaisesRegex(M.Problem, "gate_state is 'building'"):
+                M.close_out(self.m, status=spelling)
+
+    def test_qa_is_added_when_the_manifest_predates_the_field(self):
+        M.close_out(self.m, qa="skipped-no-subagent")
+        self.assertEqual(M.read_field(self.m.read_text(), "qa"),
+                         "skipped-no-subagent")
+
+    def test_qa_must_be_a_terminal_disposition(self):
+        with self.assertRaisesRegex(M.Problem, "not one of"):
+            M.close_out(self.m, qa="pending")
+
+    def test_a_manifest_without_the_fields_still_completes(self):
+        """Fail open, as the spec-gate does: an upgrade must not freeze a cycle
+        whose manifest predates qa: and gate_state:."""
+        self.m.write_text(a_manifest_with_body().replace("gate_state: building\n", ""))
+        self.assertEqual(M.close_out(self.m, status="complete"), 0)
+
     def test_blocked_on_can_be_set_in_the_same_pass(self):
         """The bookkeeping gate redirects hand-edits to close-out — so close-out
         must be able to record a blocker, or the gate would trap the one write

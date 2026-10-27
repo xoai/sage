@@ -27,3 +27,7 @@ never score below an empty matrix cell.
 Contrast pinned by R1 (test_review_controller.py): the same reviewer
 population under v1 semantics produced the 7-iteration field pathology;
 under the v2 controller the calibration artifact terminates ≤2 rounds.
+
+## Re-measured after P2 — 2026-10-27
+
+sage arm · N=1 · claude-opus-5-5 · operator config. P2: **1/3** ($4.32) — 5 rounds ending STOP_CAP on a round with nothing blocking left; the ≤3-round check is unreachable under P1's 3 fixes per round. After the re-scope and the verdict-order fix: **2/2** ($3.43) — 4 rounds (weight never climbed), STOP_ADVISORY. Full record: `develop/evals/REMEASURE-P2-2026-10-27.md`.

@@ -1,6 +1,6 @@
 ---
 name: "react"
-description: "React 18/19 patterns and anti-patterns — hooks discipline, component architecture, state management"
+description: "Use when writing or reviewing React components — hooks, effects, component boundaries, state placement, or re-render problems in React 18 or 19."
 version: "1.0.0"
 type: knowledge
 layer: framework

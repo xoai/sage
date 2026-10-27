@@ -169,6 +169,20 @@ class R5CapTest(unittest.TestCase):
         self.assertEqual(d["action"], "STOP_CAP")
         self.assertTrue(d["cap_reached"])
 
+    def test_converged_on_the_cap_is_advisory_not_capped(self):
+        """Nothing blocking left at the cap round: the loop converged."""
+        d = sf.decide({}, 5, [], ledger=counts_ledger(substantive=2))
+        self.assertEqual(d["action"], "STOP_ADVISORY")
+
+    def test_a_rejected_blocker_at_the_cap_reads_as_at_any_round(self):
+        """A reviewer false positive rejected at round 5 is not a capped loop."""
+        for it in (3, 5):
+            lg = counts_ledger(major=1)
+            lg["findings"][0]["disposition"] = {"action": "reject",
+                                                "reason": "false positive"}
+            self.assertEqual(sf.decide({}, it, [], ledger=lg)["action"],
+                             "STOP_ADVISORY", it)
+
     def test_fix_now_converts_stop_to_continue(self):
         lg = counts_ledger(major=1)
         lg["findings"][0]["disposition"] = "fix-now"

@@ -14,6 +14,19 @@ around it. Too little on a consequential one is how a "quick fix" becomes an
 outage. Tier is where that judgment is made explicit instead of being made
 silently, differently, every time.
 
+## At a glance
+
+| The thought | Why it is wrong |
+|---|---|
+| "It is literally one line" | One line that changes behavior is a behavior change. The diff size is not the blast radius. |
+| "The design is obvious" | Obvious to you, now, with your context. Write it down and find out. |
+| "I will note it in the commit message" | A commit message is not a decision record and nobody reads it before the fact. |
+| "The user just wants it done" | The user wants it *right*. They will not thank you for speed on the change that broke checkout. |
+
+Tier 1 opens no cycle, so the spec, scope and branch gates have nothing to
+hold. The TDD and secrets gates still fire on every source edit — calling the
+work small does not get around writing the test.
+
 ## The three tiers
 
 | Tier | Response | What it looks like |
@@ -41,19 +54,11 @@ nobody expected, discovered later by someone who did not know it happened.
 ## Tier 1 is a real escape hatch, not a trap
 
 Tier 1 exists so the process does not tax trivial work, and it is genuinely
-free: no manifest is created, so the spec-gate hook has nothing to block on
-(the hook reads `gate_state` from a manifest; no manifest means no active
-cycle means edits are unrestricted).
+free of ceremony: no manifest is created, so the cycle gates (spec, scope,
+branch) have nothing to block on — they read a manifest, and no manifest means
+no active cycle. The edit-level gates still apply: TDD (a test first, unless
+`tdd_enforcement: false`) and secrets.
 
 That is the escape hatch working as designed. It is not a loophole — "I will
 call it Tier 1 so I do not have to write a spec" is a rationalization, and the
 list above is what it collides with.
-
-## Rationalizations that do not survive contact
-
-| The thought | Why it is wrong |
-|---|---|
-| "It is literally one line" | One line that changes behavior is a behavior change. The diff size is not the blast radius. |
-| "The design is obvious" | Obvious to you, now, with your context. Write it down and find out. |
-| "I will note it in the commit message" | A commit message is not a decision record and nobody reads it before the fact. |
-| "The user just wants it done" | The user wants it *right*. They will not thank you for speed on the change that broke checkout. |

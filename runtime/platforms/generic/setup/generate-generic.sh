@@ -36,7 +36,10 @@ SAGE_ROOT="${1:-.}"
 SAGE_DIR="$SAGE_ROOT/sage"
 PROJECT_SAGE="$SAGE_ROOT/.sage"
 CORE="$SAGE_DIR/core"
-OUT="$SAGE_ROOT/CLAUDE.md"
+# Generated into a scratch file, then installed as a marked block: CLAUDE.md may
+# be the user's own (see _shared/managed-md.sh).
+OUT="$(mktemp "${TMPDIR:-/tmp}/sage-generic-md-XXXXXX")"
+trap 'rm -f "$OUT" "$OUT.managed" "$OUT.managed.out"' EXIT
 
 echo ""
 echo "🚀 Sage → Generic Setup"
@@ -118,6 +121,8 @@ emit_system_skills_inline "$CORE" >> "$OUT"
 SYS_COUNT=$(find "$CORE/system-skills" -name SKILL.md 2>/dev/null | wc -l | tr -d ' ')
 
 echo "  ✓ CLAUDE.md generated ($(wc -l < "$OUT" | tr -d ' ') lines, $SYS_COUNT skills inlined)"
+source "$(dirname "$0")/../../_shared/managed-md.sh"
+install_managed_md "$SAGE_ROOT/CLAUDE.md" "$OUT" "$PROJECT_SAGE/backups"
 
 # ── .sage/ scaffolding ──
 mkdir -p "$PROJECT_SAGE/work" "$PROJECT_SAGE/docs"

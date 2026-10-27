@@ -20,8 +20,9 @@ runtime/platforms/<platform-name>/
 └── ...                       # Platform-specific files (plugin manifests, configs, etc.)
 ```
 
-The internal structure varies by platform. A Claude Code adapter has a `.claude-plugin/`
-directory. A Cursor adapter has rules files. A generic adapter has a CLAUDE.md-style
+The internal structure varies by platform. A Claude Code adapter has hook scripts and a
+setup generator (its plugin is built separately, by `runtime/tools/build_plugin.py`).
+A Cursor adapter has rules files. A generic adapter has a CLAUDE.md-style
 system prompt. The platform.yaml manifest is the universal interface.
 
 ---

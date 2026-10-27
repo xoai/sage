@@ -1,6 +1,6 @@
 ---
 name: "flutter"
-description: "Flutter patterns — widget architecture, state management, Impeller renderer, platform-adaptive design"
+description: "Use when writing or reviewing Flutter or Dart code — widget structure, state management, rendering performance on Impeller, or adapting a screen to iOS and Android."
 version: "1.0.0"
 type: knowledge
 layer: framework

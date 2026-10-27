@@ -1,6 +1,6 @@
 ---
 name: "nextjs"
-description: "Next.js 14/15 App Router patterns — server components, data fetching, caching, server actions"
+description: "Use when writing or reviewing a Next.js App Router project — choosing server or client components, fetching and caching data, server actions, or route handlers."
 version: "1.0.0"
 type: knowledge
 layer: framework

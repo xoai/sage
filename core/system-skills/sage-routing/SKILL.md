@@ -11,6 +11,21 @@ The eager layer carries the keyword map — the trigger. This carries the rest:
 what to do when the keyword map misses, how to present the choice, and what
 routing looks like when it is done well.
 
+## At a glance
+
+No keyword match → classify by the shape of the request:
+
+| Shape of the request | Category | Workflow |
+|---|---|---|
+| Question, evaluation, "why" | UNDERSTAND | `/research`, `/review --ux` |
+| Future, "should", "let's create" | ENVISION | `/design`, `/architect` |
+| Action, "add", "implement" | DELIVER | `/build`, `/fix` |
+| Ambiguous | — | offer options from every matching category |
+
+Confirm with `Sage → [workflow]. [rationale].` and a choice menu
+(`[1] [Workflow] — [chain] ([N] steps)`), except for explicit slash commands
+and Tier 1. A question answered with an implementation is a wrong answer.
+
 ## The three-layer chain
 
 **Layer 1 — Keyword routing (deterministic, checked first).** The map in the
@@ -25,14 +40,8 @@ classifier sub-agent:
 
 Use the response to select the workflow → confirm. No Task tool → Layer 3.
 
-**Layer 3 — In-context classification (fallback).**
-
-| Shape of the request | Category | Workflow |
-|---|---|---|
-| Question, evaluation, "why" | UNDERSTAND | `/research`, `/review --ux` |
-| Future, "should", "let's create" | ENVISION | `/design`, `/architect` |
-| Action, "add", "implement" | DELIVER | `/build`, `/fix` |
-| Ambiguous | — | present options from all matching categories |
+**Layer 3 — In-context classification (fallback).** The shape table under
+"At a glance" above.
 
 ## Confirmation (Zone 1)
 

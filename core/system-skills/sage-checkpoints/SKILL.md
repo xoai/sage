@@ -10,6 +10,22 @@ type: system
 The eager layer carries the contract: `[A]` approve, `[R]` revise, `[C]`
 continue — show the work, wait. This carries the detail.
 
+## At a glance
+
+A response that expects input ends with exactly ONE footer, as its last line,
+in plain text (never a code block):
+
+- **Choice:** `[1] [Option] — [chain] ([N] steps)` … then "Pick 1-N, type /
+  for commands, or describe what you need."
+- **Approval:** `[A] Approve  [R] Revise  [N] New session → /[next] to
+  continue` then "Pick A/R/N, or tell me what to change."
+- **Next step:** `/[command] — [chain]` lines, then "Type a command, or
+  describe what you want to do next."
+- **Open:** "Describe what you want to work on, or type / to see commands."
+
+No footer means no response is expected. At a checkpoint, show the work —
+not a summary of it — and wait.
+
 ## Checkpoints are sacred (Rule 4, in full)
 
 Never skip human approval on a brief, a spec, a plan, or a final deliverable.

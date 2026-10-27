@@ -61,6 +61,7 @@ Python 3.8+, stdlib only.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import pathlib
@@ -231,6 +232,14 @@ class Scenario:
         # (a cycle manifest, say) — something the fixture cannot do, because
         # `sage init` is what creates .sage/ in the first place.
         self.setup = spec.get("setup", {})
+        # A branch to check out once setup is committed. Under the branch gate
+        # (P2, X4) a Standard cycle is implemented on its own branch, so a
+        # scenario that seeds one in progress on the default branch seeds a
+        # state Sage no longer produces — and the agent's first edit meets the
+        # gate instead of the thing being measured (E15, 2026-10-27). Seed the
+        # manifest's `branch:` to match. Scenarios that MEASURE branching leave
+        # this out.
+        self.branch = spec.get("branch")
         # Lines APPENDED to .sage/config.yaml after sage init (sage arm only).
         # E16–E18 need `review_loop:\n  mode: v2` — a setup file cannot do it,
         # because overwriting the whole config would freeze a copy of what
@@ -283,6 +292,12 @@ class Scenario:
 
         if not self.sessions:
             problems.append("no sessions — the agent would be given nothing to do")
+
+        if self.branch is not None and not (
+                isinstance(self.branch, str) and not self.branch.startswith("-")
+                and subprocess.run(["git", "check-ref-format", "--branch", self.branch],
+                                   capture_output=True).returncode == 0):
+            problems.append(f"branch {self.branch!r} is not a valid git branch name")
 
         seen = set()
         for sess in self.sessions:
@@ -493,6 +508,11 @@ def make_workspace(scenario: Scenario, condition: str, root: pathlib.Path,
         git(ws, "add", "-A")
         git(ws, "-c", "user.email=evals@sage.test", "-c", "user.name=sage-evals",
             "commit", "-q", "-m", "fixture: scenario setup")
+    if scenario.branch:
+        r = git(ws, "checkout", "-q", "-b", scenario.branch)
+        if r.returncode != 0:
+            raise EvalError(f"{scenario.id}: could not check out branch "
+                            f"{scenario.branch!r}: {r.stderr.strip()}")
 
     # Dirty-tree seed: written last, staged, never committed.
     for rel, text in scenario.setup_uncommitted.items():
@@ -503,6 +523,36 @@ def make_workspace(scenario: Scenario, condition: str, root: pathlib.Path,
         git(ws, "add", str(p2))
 
     return ws
+
+
+# --real-claude-config: run with the operator's own Claude config instead of a
+# run-scoped one. It exists for one situation — a machine whose Claude Code
+# login lives in the OS keychain (macOS), where a run-scoped config dir has no
+# credentials to copy and every session starts "Not logged in". It gives up
+# the two things isolation buys (see isolated_claude_env): the operator's
+# settings (a default model, permissions, hooks, plugins, user CLAUDE.md) now
+# shape the run, and the eval agent CAN write the operator's real ~/.claude.
+# Results say so, and main() reports any change to those files afterwards.
+OPERATOR_CONFIG = False
+OPERATOR_CONFIG_NOTE = (
+    "run with the operator's own Claude config (--real-claude-config), not a "
+    "run-scoped one: the operator's settings, permissions, hooks, plugins and "
+    "user CLAUDE.md applied to these sessions, and the agent could write the "
+    "real ~/.claude. Not comparable to isolated runs without that caveat.")
+
+
+def _operator_config_files() -> dict:
+    """Fingerprints of the operator files an eval agent could alter."""
+    home = pathlib.Path(os.environ.get("CLAUDE_CONFIG_DIR")
+                        or pathlib.Path.home() / ".claude")
+    out = {}
+    for rel in ("CLAUDE.md", "settings.json", "settings.local.json"):
+        f = home / rel
+        try:
+            out[str(f)] = hashlib.sha256(f.read_bytes()).hexdigest() if f.is_file() else None
+        except OSError:
+            out[str(f)] = "unreadable"
+    return out
 
 
 def isolated_claude_env(ws: pathlib.Path) -> dict:
@@ -522,6 +572,8 @@ def isolated_claude_env(ws: pathlib.Path) -> dict:
     persists between sessions; runs never see each other or the real HOME.
     """
     env = dict(os.environ)
+    if OPERATOR_CONFIG:
+        return env
     cfg = ws.parent / "_claude_config"
     if not cfg.is_dir():
         cfg.mkdir(parents=True, exist_ok=True)
@@ -742,13 +794,23 @@ class ClaudeCodeDriver(Driver):
                         partial = partial.decode("utf-8", errors="replace")
                     for line in partial.splitlines():
                         try:
-                            events.append(json.loads(line.strip()))
+                            ev = json.loads(line.strip())
                         except (json.JSONDecodeError, ValueError):
                             continue
+                        events.append(ev)
+                        if isinstance(ev, dict) and ev.get("type") == "result":
+                            cost = max(cost, ev.get("total_cost_usd") or 0.0)
                     return snapshot(True, None)
                 return snapshot(
                     False, f"prompt {i + 1} timed out after {deadline}s")
 
+            # total_cost_usd is the SESSION's running total: every result event
+            # repeats it — one `-p` call can end in several, a background task
+            # waking the model — and a --resume call carries the session's total
+            # forward (E7, 2026-10-27: $0.30, $0.33, $0.74 over three calls, the
+            # per-model usage cumulative). Summing results reported E-PAR-1 at
+            # $34.50, summing calls at $10.23; it cost $5.55. The session's cost
+            # is the largest total seen; usage is per turn and still sums.
             for line in proc.stdout.splitlines():
                 line = line.strip()
                 if not line:
@@ -824,7 +886,7 @@ class ClaudeCodeDriver(Driver):
                     if ev.get("is_error"):
                         truncated = ev.get("subtype") or "error"
 
-                    cost += ev.get("total_cost_usd") or 0.0
+                    cost = max(cost, ev.get("total_cost_usd") or 0.0)
                     tok_in += input_tokens(usage)
                     tok_out += usage.get("output_tokens") or 0
                     turns.append(ev.get("result") or "")
@@ -1085,7 +1147,8 @@ def sage_modes(v: dict) -> list:
 # ─────────────────────────────────────────────────────────────────────────────
 # Reporting
 # ─────────────────────────────────────────────────────────────────────────────
-def write_report(results: list, runs: int, path: pathlib.Path) -> None:
+def write_report(results: list, runs: int, path: pathlib.Path,
+                 note: str = None) -> None:
     v = verdicts(results, runs)
     scenarios = sorted({k[0] for k in v})
     modes = sage_modes(v)
@@ -1100,6 +1163,7 @@ def write_report(results: list, runs: int, path: pathlib.Path) -> None:
         f"N = {runs} run(s) per scenario per condition; a scenario passes on a",
         "majority of runs. Graders are deterministic — no LLM judge.",
         "",
+        *([f"> ⚠ {note}", ""] if note else []),
         "| Scenario | sage | bare | delta |",
         "|---|---|---|---|",
     ]
@@ -1356,6 +1420,30 @@ def offline_check(scenarios: list) -> int:
     return 0
 
 
+def toolchain_missing(scenarios: list) -> str:
+    """The test runner a fixture needs, if this machine cannot run it.
+
+    Gate 5 and the agent both run the fixture's suite with whatever `python3` /
+    `node` is first on PATH. When that interpreter cannot run the suite, Gate 5
+    reports UNVERIFIABLE and the agent burns turns building its own toolchain —
+    a paid run that grades the machine, not the agent. (2026-10-27: Homebrew's
+    python3 moved to 3.15 without pytest, and E1 lost its Gate 5 check to it.)
+    """
+    fixtures = {s.fixture for s in scenarios}
+    if any((FIXTURES / f / "pytest.ini").is_file() for f in fixtures):
+        probe = subprocess.run(["python3", "-c", "import pytest"],
+                               capture_output=True, text=True)
+        if probe.returncode != 0:
+            where = shutil.which("python3") or "python3"
+            return (f"{where} cannot import pytest, which the Python fixtures "
+                    "need — put a python3 that has it first on PATH (e.g. a "
+                    "venv's bin/) and run again")
+    if (any((FIXTURES / f / "package.json").is_file() for f in fixtures)
+            and not shutil.which("node")):
+        return "`node` is not on PATH, which the Node fixtures need"
+    return ""
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 def main() -> int:
     p = argparse.ArgumentParser(description="Measure agent behaviour with and without Sage.")
@@ -1383,7 +1471,14 @@ def main() -> int:
                    help="do not delete the temp workspaces (for debugging a failure)")
     p.add_argument("--dry-run", action="store_true",
                    help="print what would run; spend nothing")
+    p.add_argument("--real-claude-config", action="store_true",
+                   help="use YOUR Claude config instead of a run-scoped one — for "
+                        "a keychain login (macOS) the isolated config cannot "
+                        "carry. Trade-off: your settings shape the run and the "
+                        "agent can write your ~/.claude; results are marked")
     args = p.parse_args()
+    global OPERATOR_CONFIG
+    OPERATOR_CONFIG = args.real_claude_config
 
     try:
         scenarios = load_scenarios(args.scenario)
@@ -1426,20 +1521,36 @@ def main() -> int:
         print(f"✗ driver {args.driver!r} unavailable: {unavailable}")
         return 1
 
+    missing = toolchain_missing(scenarios)
+    if missing:
+        print(f"✗ {missing}")
+        return 1
+
     arms = sum(len(modes_for(c, modes)) for c in conditions)
     print(f"Running {len(scenarios)} scenario(s) × {arms} arm(s) "
           f"× {args.runs} run(s) — driver {driver.name}\n")
+    before = _operator_config_files() if OPERATOR_CONFIG else {}
+    if OPERATOR_CONFIG:
+        print(f"  ⚠ {OPERATOR_CONFIG_NOTE}\n")
     results = run_all(scenarios, conditions, driver, args.runs,
                       args.keep_workspaces, modes=modes)
+    touched = [f for f, h in _operator_config_files().items()
+               if before.get(f) != h] if OPERATOR_CONFIG else []
 
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / "results.json").write_text(
         json.dumps({"runs": args.runs, "driver": driver.name,
-                    "model": args.model, "results": results}, indent=2),
+                    "model": args.model,
+                    "claude_config": "operator" if OPERATOR_CONFIG else "isolated",
+                    **({"claude_config_note": OPERATOR_CONFIG_NOTE,
+                        "operator_files_changed": touched}
+                       if OPERATOR_CONFIG else {}),
+                    "results": results}, indent=2),
         encoding="utf-8",
     )
     if args.report:
-        write_report(results, args.runs, args.out / "summary.md")
+        write_report(results, args.runs, args.out / "summary.md",
+                     OPERATOR_CONFIG_NOTE if OPERATOR_CONFIG else None)
 
     v = verdicts(results, args.runs)
     print()
@@ -1448,6 +1559,11 @@ def main() -> int:
         won = sum(1 for r in rows if r["verdict"])
         print(f"  {cond:5} {won}/{len(rows)} scenarios passed "
               f"(${sum(r['cost_usd'] for r in rows):.2f})")
+    if OPERATOR_CONFIG:
+        print("\n  ⚠ ran with YOUR Claude config (--real-claude-config)")
+        if touched:
+            print("  ⚠ these files of yours CHANGED during the run — check them: "
+                  + ", ".join(touched))
     print(f"\n  results → {args.out / 'results.json'}")
     if args.report:
         print(f"  summary → {args.out / 'summary.md'}")

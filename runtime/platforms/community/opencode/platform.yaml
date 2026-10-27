@@ -29,7 +29,7 @@ attestations:
       it false. The 2026-07-17 probe closed it: paths parsed out of apply_patch's
       patchText, sage-spec-gate.sh returned exit 2 in a pre-spec cycle, the
       adapter threw, and opencode BLOCKED the edit. The shipped adapter is tested
-      deterministically (setup/adapter-test.mjs, 13/13 since the 2026-08-04
+      deterministically (develop/validators/platforms/opencode-adapter-test.mjs, 14/14 since the 2026-10-27 bash-write veto; 13 after the 2026-08-04
       scope-judge port) driving the real gates — pre-spec veto, config
       self-disable veto, secrets veto — independent of opencode's model
       backend. Undocumented platform behaviour that can regress silently, so
@@ -85,7 +85,7 @@ artifacts:
 The three capabilities that decide the tier are attested with an instrumented
 transcript (`docs/attestations/opencode-tier-a-2026-07-17.md`) and the shipped
 adapter is tested deterministically against the real gate scripts
-(`setup/adapter-test.mjs`). Every claim above is either checkable by conformance
+(`develop/validators/platforms/opencode-adapter-test.mjs`). Every claim above is either checkable by conformance
 or backed by evidence with an expiry — nothing is typed on faith.
 
 ## How enforcement reaches opencode

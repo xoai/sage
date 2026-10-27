@@ -134,11 +134,14 @@ the default branch or from HEAD (`git checkout -b <branch>` works
 from either) — never proceed to implementation commits while
 detached.
 
-**User declines branching:** record the decline in the initiative
-decision log and proceed exactly as today (commits land on the
-current branch). Declining is always available — the discipline is a
-default, not a cage. A recorded decline also suppresses the
-CLAUDE.md minimum branch gate for this initiative.
+**User declines branching:** record the decline and proceed exactly
+as today (commits land on the current branch). One command writes it
+to both the manifest and the initiative decision log:
+`python3 sage/runtime/tools/manifest.py close-out <manifest> --branch declined --decision "branching declined by the user: <reason>"`.
+Declining is always available — the discipline is a default, not a
+cage — but it is the USER's decision, never the agent's. The recorded
+`branch: declined` is what the branch-gate hook reads: it stops
+blocking source edits on the default branch for this initiative.
 
 ## Default-branch resolution
 

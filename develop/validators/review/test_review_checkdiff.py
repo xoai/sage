@@ -40,7 +40,7 @@ def unrelated_helper():
 """
 
 
-class CheckDiffCase(unittest.TestCase):
+class CheckDiffFixture(unittest.TestCase):
     def setUp(self):
         self.root = pathlib.Path(tempfile.mkdtemp(prefix="review-diff-"))
         self.addCleanup(shutil.rmtree, self.root, ignore_errors=True)
@@ -55,7 +55,9 @@ class CheckDiffCase(unittest.TestCase):
         self.commit_all("seed")
         self.ledger = (self.root / ".sage" / "work" / "20260720-fix"
                        / "review-ledger.json")
-        self.config = dict(R.CONFIG_DEFAULTS, mode="v2")
+        # The RR-23/24 cases use the per-finding tests/review/F-*.py layout;
+        # InlineWitnessTest pins the inline default.
+        self.config = dict(R.CONFIG_DEFAULTS, mode="v2", witness_location="review-dir")
         # The finding: anchored on the discount function body (lines 1-4).
         R.intake(self.ledger, [{
             "pass": "input-hostility", "severity": "major",
@@ -91,6 +93,8 @@ class CheckDiffCase(unittest.TestCase):
     def entries(self):
         return json.loads(self.ledger.read_text(encoding="utf-8"))["findings"]
 
+
+class CheckDiffCase(CheckDiffFixture):
     def test_in_scope_fix_passes(self):
         (self.root / "src" / "cart.py").write_text(
             SRC.replace('raise ValueError("negative")',
@@ -217,7 +221,9 @@ class MultiFindingCommitTest(unittest.TestCase):
         self.commit_all("seed")
         self.ledger = (self.root / ".sage" / "work" / "20260815-fix"
                        / "review-ledger.json")
-        self.config = dict(R.CONFIG_DEFAULTS, mode="v2")
+        # The RR-23/24 cases use the per-finding tests/review/F-*.py layout;
+        # InlineWitnessTest pins the inline default.
+        self.config = dict(R.CONFIG_DEFAULTS, mode="v2", witness_location="review-dir")
         R.intake(self.ledger, [{
             "pass": "input-hostility", "severity": "major",
             "cited_rule": "spec §2.1",
@@ -375,6 +381,80 @@ class TrailerParserTest(unittest.TestCase):
         for p in ("src/x.py", "contest/x.py", "src/attest.py"):
             self.assertFalse(R.is_test_path(p), p)
 
+
+class InlineWitnessTest(CheckDiffFixture):
+    """L5 (review 2026-10-26): a witness is an ordinary test in a NEW test
+    file named for the behavior. Creating it is in scope; touching an existing
+    test file — even only adding lines — needs Sage-License, because an
+    insertion can silence the tests already there."""
+
+    def setUp(self):
+        super().setUp()
+        self.config = dict(R.CONFIG_DEFAULTS, mode="v2")      # inline: the default
+        R.attach_witness(self.ledger, "F-001",
+                         "tests/test_cart_limits.py::test_over_100", "test", "red")
+
+    def fix_source(self):
+        (self.root / "src" / "cart.py").write_text(
+            SRC.replace('raise ValueError("negative")',
+                        'raise ValueError("negative")\n'
+                        '    if percent > 100:\n'
+                        '        raise ValueError("over 100")'),
+            encoding="utf-8")
+
+    def test_a_new_test_file_for_the_witness_is_in_scope(self):
+        self.fix_source()
+        (self.root / "tests" / "test_cart_limits.py").write_text(
+            "def test_over_100():\n    pass\n", encoding="utf-8")
+        result = self.check(self.commit_all("fix\n\n" + self.TRAILERS))
+        self.assertTrue(result["in_scope"])
+        self.assertTrue(result["license_ok"], result)
+
+    def test_a_skip_inserted_into_an_existing_test_file_needs_a_license(self):
+        # The reviewer's repro: pure insertions above an existing test.
+        R.attach_witness(self.ledger, "F-001", "tests/test_cart.py::test_existing",
+                         "test", "red")
+        self.fix_source()
+        (self.root / "tests" / "test_cart.py").write_text(
+            "import pytest\n@pytest.mark.skip\ndef test_existing():\n    assert True\n",
+            encoding="utf-8")
+        result = self.check(self.commit_all("fix\n\n" + self.TRAILERS))
+        self.assertFalse(result["license_ok"])
+        self.assertEqual(result["license_needed"], ["tests/test_cart.py"])
+
+    def test_a_created_conftest_is_not_a_witness(self):
+        # The second review's repro: a new conftest that skips every test.
+        R.attach_witness(self.ledger, "F-001", "tests/conftest.py", "test", "red")
+        self.fix_source()
+        (self.root / "tests" / "conftest.py").write_text(
+            "def pytest_collection_modifyitems(items):\n    items.clear()\n",
+            encoding="utf-8")
+        result = self.check(self.commit_all("fix\n\n" + self.TRAILERS))
+        self.assertFalse(result["license_ok"])
+
+    def test_the_named_test_must_be_in_the_created_file(self):
+        self.fix_source()
+        (self.root / "tests" / "test_cart_limits.py").write_text(
+            "def test_something_else():\n    pass\n", encoding="utf-8")
+        result = self.check(self.commit_all("fix\n\n" + self.TRAILERS))
+        self.assertFalse(result["license_ok"])
+
+    def test_a_per_finding_review_file_is_not_special_inline(self):
+        self.fix_source()
+        (self.root / "tests" / "review").mkdir(parents=True)
+        (self.root / "tests" / "review" / "F-001-sentinel.py").write_text(
+            "def test_pin():\n    pass\n", encoding="utf-8")
+        result = self.check(self.commit_all("fix\n\n" + self.TRAILERS))
+        self.assertFalse(result["license_ok"])
+
+    def test_review_dir_restores_the_per_finding_files(self):
+        self.fix_source()
+        (self.root / "tests" / "review").mkdir(parents=True)
+        (self.root / "tests" / "review" / "F-001-sentinel.py").write_text(
+            "def test_pin():\n    pass\n", encoding="utf-8")
+        result = self.check(self.commit_all("fix\n\n" + self.TRAILERS),
+                            config=dict(self.config, witness_location="review-dir"))
+        self.assertTrue(result["license_ok"])
 
 if __name__ == "__main__":
     unittest.main()

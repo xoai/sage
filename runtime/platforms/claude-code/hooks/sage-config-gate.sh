@@ -8,7 +8,8 @@
 # add a *_gate: false opt-out, remove tdd_enforcement: true; with the v2
 # review loop active, flip review_loop mode v2→v1, witness_capping
 # true→false, or disputed_disposition true→false — an agent must not soften
-# its own review floor; with the scope
+# its own review floor — or raise/zero cycle_round_budget or gate_retry_cap —
+# an agent must not lift its own stop; with the scope
 # gate armed, lower scope_gate's rank or flip implicit_test_scope, or flip
 # scope_judge true→false — an agent must not soften its own scope floor,
 # SG-3) exits 2. Also
@@ -52,6 +53,15 @@ import sys
 
 
 def emit(decision, message=""):
+    # To Claude Code a block is a structured deny: the model gets the reason
+    # alone, where exit 2 also showed the hook's command line and read like a
+    # script failing (review 2026-10-26, C6; Claude Code still labels both
+    # "hook error" — docs/attestations/claude-code-structured-deny-2026-10-27.md).
+    # Callers that send no hook_event_name (opencode, the tests) keep exit 2.
+    payload = globals().get("data")
+    if (decision == "BLOCK" and isinstance(payload, dict)
+            and payload.get("hook_event_name") == "PreToolUse"):
+        decision = "DENY"
     sys.stdout.write(decision + "\n")
     if message:
         sys.stdout.write(message)
@@ -72,7 +82,7 @@ BLOCK_MSG = (
 #   opt_in  tdd_enforcement / scope_judge — default OFF; ON only when explicitly true.
 #   ranked  scope_gate — off < standard+ < all; lowering the rank is weakening.
 MASTER = "hard_enforcement"
-OPT_OUT = ("secrets_gate", "verify_gate")
+OPT_OUT = ("secrets_gate", "verify_gate", "branch_gate")
 OPT_IN = ("tdd_enforcement", "scope_judge")
 SCOPE_RANK = {"off": 0, "standard+": 1, "all": 2}
 
@@ -127,6 +137,43 @@ def disputed_guard(text):
     return read_flag(text, "disputed_disposition") is not False
 
 
+# The cycle's stop (review 2026-10-26, L1): the round budget and the gate
+# retry cap end a loop that would otherwise run on every "continue". Raising
+# either, zeroing or negating it (≤ 0 = no limit), or any edit that makes
+# review.py READ a looser value (a re-indent it no longer parses, a later
+# review_loop: block without the key, "+99", "9_9") lets the loop run on —
+# the human's call, made in their own editor. So the value compared is the
+# one review.py's load_config() actually reads, computed the same way.
+BUDGET_KNOBS = (("cycle_round_budget", 10), ("gate_retry_cap", 3))
+_RL_BLOCK = re.compile(r"^review_loop:\s*$", re.MULTILINE)
+_RL_ITEM = re.compile(r"^\s{2}([a-z_]+):\s*([^\s#]+)")
+
+
+def review_loop_int(text, key, default):
+    """review.py load_config(), for one int key: the LAST review_loop: block
+    wins; items sit at exactly two spaces until the first dedented line; the
+    value is whatever Python's int() makes of it."""
+    blocks = list(_RL_BLOCK.finditer(text or ""))
+    if not blocks:
+        return default
+    value = default
+    for line in text[blocks[-1].end():].splitlines():
+        if line.strip() and not line.startswith("  "):
+            break
+        m = _RL_ITEM.match(line)
+        if m and m.group(1) == key:
+            try:
+                value = int(m.group(2))
+            except ValueError:
+                pass
+    return value
+
+
+def effective_limit(text, key, default):
+    v = review_loop_int(text, key, default)
+    return float("inf") if v <= 0 else v
+
+
 def scope_mode(text):
     """The scope_gate mode. Absent → off (the gate SHIPS off; the default
     flips only when 30-§3's numbers land)."""
@@ -166,6 +213,9 @@ def weaker(before, after):
             return True
         if disputed_guard(before) and not disputed_guard(after):
             return True
+        for key, default in BUDGET_KNOBS:
+            if effective_limit(after, key, default) > effective_limit(before, key, default):
+                return True
     # The scope floor (SG-3): lowering scope_gate's rank is an agent widening
     # its own permitted diff. And while the scope gate is armed, the
     # implicit_test_scope knob belongs to the human — flipping it EITHER way
@@ -266,32 +316,84 @@ if tool in ("Edit", "Write", "MultiEdit"):
         emit("BLOCK", BLOCK_MSG)
     emit("ALLOW")
 
+
+def sed_in_place(cmd):
+    """True when some `sed` in cmd edits a file in place (-i, -Ei, --in-place).
+
+    One command segment at a time: matched across the whole line, `sed -n 1,9p f;
+    grep -i x .sage/config.yaml` read grep's -i as sed's and blocked a read (E8,
+    2026-10-27). Segments split only OUTSIDE quotes — a quoted `s/a/b/;s/c/d/`
+    before `-i` is still one sed — and quoted text is kept, so
+    `sh -c 'sed -i.bak … config.yaml'` still reads as the edit it is."""
+    return any(re.search(r"\bsed\b.*\s(?:-[A-Za-z]*i|--in-place)", seg)
+               for seg in split_unquoted(cmd))
+
+
+def split_unquoted(cmd):
+    """cmd cut at ; & | and newlines that sit outside quotes."""
+    segs, cur, quote, i = [], [], None, 0
+    while i < len(cmd):
+        c = cmd[i]
+        if quote:
+            if c == "\\" and quote == '"' and i + 1 < len(cmd):
+                cur.append(cmd[i:i + 2])
+                i += 2
+                continue
+            if c == quote:
+                quote = None
+        elif c in "'\"":
+            quote = c
+        elif c in ";&|\n":
+            segs.append("".join(cur))
+            cur = []
+            i += 1
+            continue
+        cur.append(c)
+        i += 1
+    segs.append("".join(cur))
+    return segs
+
+
 # ── Bash: catch the obvious write-the-switch-off evasions ──
 # Conservative on purpose — a redirect/sed/tee that names config.yaml AND sets an
 # enforcement key false. A read (grep/cat) has no such write and is not matched.
 if tool == "Bash":
     cmd = str(tool_input.get("command") or "")
+    # The gates' own records (review 2026-10-26): deleting or rewriting a
+    # cycle's baseline re-opens recording over the cycle's own failures, and
+    # rewriting its ledger refunds the budget. The tools that own them
+    # (sage-verify.sh, review.py) write them; a shell does not. Reads pass.
+    # By name, and by any delete reaching into .sage/work (a glob, a whole
+    # cycle dir, `rm -r .sage`) — the records are inside, whatever the path.
+    names_record = (re.search(r"(?:verify-baseline|review-ledger)\.json", cmd)
+                    or (re.search(r"\.sage/work\b|\.sage/?(?:[\s;&|]|$)", cmd)
+                        and re.search(r"\b(?:rm|mv|unlink|shred|truncate)\b", cmd)))
+    destroys = re.search(
+        r"\b(?:rm|mv|cp|tee|truncate|ln|dd|unlink|shred)\b|"
+        r"\b(?:python3?|node|perl|ruby)\s+-[ce]\b|"
+        r"\b(?:python[0-9.]*|node|perl|ruby)(?:\s+-(?=\s|$)|\b[^\n|;&]*<<(?!<))|"
+        r">\s*\S*(?:verify-baseline|review-ledger)\.json", cmd) or sed_in_place(cmd)
+    if names_record and destroys:
+        emit("BLOCK", (
+            "sage-config-gate: a cycle's verify-baseline.json and review-ledger.json "
+            "are the gates' own records — only sage-verify.sh and review.py write "
+            "them. Deleting or rewriting one would excuse the cycle's own failures "
+            "or refund its budget. If one is wrong, tell the user; they fix it "
+            "outside the agent."))
     names_config = re.search(r"\.sage/config\.ya?ml", cmd) is not None
-    writes = re.search(r">\s*[^|]*\.sage/config\.ya?ml|"
-                       r"\bsed\b[^\n]*-i|\btee\b[^\n]*\.sage/config\.ya?ml", cmd)
-    turns_off = re.search(
-        r"(?:%s|secrets_gate|verify_gate)\s*:?\s*false" % re.escape(MASTER),
-        cmd, re.I)
-    review_off = review_mode(current, absent="v1") == "v2" and re.search(
-        r"witness_capping\s*:?\s*false|disputed_disposition\s*:?\s*false"
-        r"|mode\s*:?\s*v1", cmd, re.I)
-    scope_off = (scope_mode(current) != "off" and re.search(
-        r"scope_gate\s*:?\s*\"?off|implicit_test_scope\s*:?\s*(true|false)",
-        cmd, re.I))
-    # A rank DECREASE written through a redirect (all → standard+) is the same
-    # softening the Edit path catches via weaker().
-    if not scope_off and scope_mode(current) == "all":
-        scope_off = re.search(r"scope_gate\s*:?\s*\"?standard", cmd, re.I)
-    judge_off = enabled(current, "scope_judge") and re.search(
-        r"scope_judge\s*:?\s*false|judge_(cmd|every|window|cooldown|timeout)\s*:",
-        cmd, re.I)
-    if names_config and writes and (turns_off or review_off or scope_off
-                                    or judge_off):
+    # While enforcement is on, the shell does not write the config at all.
+    # Matching what a write SAYS was a losing game — `sed s/budget: 10/
+    # budget: 0/`, a python one-liner, `git checkout <rev> -- …` each loosened
+    # a floor without naming its key (final review, 2026-10-26). The Edit and
+    # Write paths stay open and are judged exactly, by weaker() above; reads
+    # (cat, grep) never match.
+    writes = re.search(
+        r">\s*[^|&;]*\.sage/config\.ya?ml|\btee\b|"
+        r"\b(?:cp|mv|install|ln|truncate|dd|rm|unlink)\b|"
+        r"\b(?:python3?|node|perl|ruby)\s+-[ce]\b|"
+        r"\b(?:python[0-9.]*|node|perl|ruby)(?:\s+-(?=\s|$)|\b[^\n|;&]*<<(?!<))|"
+        r"\bgit\s+(?:checkout|restore|stash|reset|apply)\b", cmd) or sed_in_place(cmd)
+    if names_config and writes:
         emit("BLOCK", BLOCK_MSG)
     emit("ALLOW")
 
@@ -310,6 +412,10 @@ DECISION=$(printf '%s\n' "$GATE_OUT" | sed -n '1p')
 MESSAGE=$(printf '%s\n' "$GATE_OUT" | sed -n '2,$p')
 
 case "$DECISION" in
+  DENY)
+    SAGE_DENY_REASON="$MESSAGE" python3 -c 'import json, os; print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": os.environ["SAGE_DENY_REASON"]}}))'
+    exit 0
+    ;;
   BLOCK)
     printf '%s\n' "$MESSAGE" >&2
     exit 2

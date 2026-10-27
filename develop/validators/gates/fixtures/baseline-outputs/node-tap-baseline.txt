@@ -1,0 +1,170 @@
+TAP version 13
+# Subtest: Report
+    # Subtest: v1
+        # Subtest: formats
+        not ok 1 - formats
+          ---
+          duration_ms: 0.797
+          type: 'test'
+          location: '/work/proj/test/a.test.mjs:4:26'
+          failureType: 'testCodeFailure'
+          error: '1 == 2'
+          code: 'ERR_ASSERTION'
+          name: 'AssertionError'
+          expected: 2
+          actual: 1
+          operator: '=='
+          stack: |-
+            TestContext.<anonymous> (file:///work/proj/test/a.test.mjs:4:53)
+            Test.runInAsyncScope (node:async_hooks:227:14)
+            Test.run (node:internal/test_runner/test:1402:25)
+            Test.start (node:internal/test_runner/test:1262:17)
+            node:internal/test_runner/test:1903:71
+            node:internal/per_context/primordials:504:82
+            new Promise (<anonymous>)
+            new SafePromise (node:internal/per_context/primordials:478:3)
+            node:internal/per_context/primordials:504:9
+            Array.map (<anonymous>)
+          ...
+        1..1
+    not ok 1 - v1
+      ---
+      duration_ms: 1.132583
+      type: 'suite'
+      location: '/work/proj/test/a.test.mjs:4:3'
+      failureType: 'subtestsFailed'
+      error: '1 subtest failed'
+      code: 'ERR_TEST_FAILURE'
+      stack: |-
+        async Promise.all (index 0)
+      ...
+    # Subtest: v2
+        # Subtest: formats
+        ok 1 - formats
+          ---
+          duration_ms: 0.055417
+          type: 'test'
+          ...
+        1..1
+    ok 2 - v2
+      ---
+      duration_ms: 0.128333
+      type: 'suite'
+      ...
+    1..2
+not ok 1 - Report
+  ---
+  duration_ms: 1.474333
+  type: 'suite'
+  location: '/work/proj/test/a.test.mjs:3:1'
+  failureType: 'subtestsFailed'
+  error: '1 subtest failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: top fails
+not ok 2 - top fails
+  ---
+  duration_ms: 0.041208
+  type: 'test'
+  location: '/work/proj/test/a.test.mjs:7:1'
+  failureType: 'testCodeFailure'
+  error: 'x'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    TestContext.<anonymous> (file:///work/proj/test/a.test.mjs:7:33)
+    Test.runInAsyncScope (node:async_hooks:227:14)
+    Test.run (node:internal/test_runner/test:1402:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+    Suite.postRun (node:internal/test_runner/test:1542:19)
+    Suite.run (node:internal/test_runner/test:1921:10)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3)
+  ...
+# Subtest: parent
+    # Subtest: child fails
+    not ok 1 - child fails
+      ---
+      duration_ms: 0.075833
+      type: 'test'
+      location: '/work/proj/test/a.test.mjs:8:39'
+      failureType: 'testCodeFailure'
+      error: 'y'
+      code: 'ERR_TEST_FAILURE'
+      stack: |-
+        TestContext.<anonymous> (file:///work/proj/test/a.test.mjs:8:73)
+        Test.runInAsyncScope (node:async_hooks:227:14)
+        Test.run (node:internal/test_runner/test:1402:25)
+        Test.start (node:internal/test_runner/test:1262:17)
+        TestContext.test (node:internal/test_runner/test:400:20)
+        TestContext.<anonymous> (file:///work/proj/test/a.test.mjs:8:39)
+        Test.runInAsyncScope (node:async_hooks:227:14)
+        Test.run (node:internal/test_runner/test:1402:25)
+        Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+        Test.postRun (node:internal/test_runner/test:1542:19)
+      ...
+    1..1
+not ok 3 - parent
+  ---
+  duration_ms: 0.20725
+  type: 'test'
+  location: '/work/proj/test/a.test.mjs:8:1'
+  failureType: 'subtestsFailed'
+  error: '1 subtest failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: a \# hash \\ slash
+not ok 4 - a \# hash \\ slash
+  ---
+  duration_ms: 0.06
+  type: 'test'
+  location: '/work/proj/test/a.test.mjs:9:1'
+  failureType: 'testCodeFailure'
+  error: 'z'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    TestContext.<anonymous> (file:///work/proj/test/a.test.mjs:9:41)
+    Test.runInAsyncScope (node:async_hooks:227:14)
+    Test.run (node:internal/test_runner/test:1402:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+    Test.postRun (node:internal/test_runner/test:1542:19)
+    Test.run (node:internal/test_runner/test:1467:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+# node:internal/modules/esm/resolve:272
+#     throw new ERR_MODULE_NOT_FOUND(
+#           ^
+# Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/work/proj/test/nope.js' imported from /work/proj/test/load.test.mjs
+#     at finalizeResolution (node:internal/modules/esm/resolve:272:11)
+#     at moduleResolve (node:internal/modules/esm/resolve:879:10)
+#     at defaultResolve (node:internal/modules/esm/resolve:1006:11)
+#     at \#cachedDefaultResolve (node:internal/modules/esm/loader:705:20)
+#     at \#resolveAndMaybeBlockOnLoaderThread (node:internal/modules/esm/loader:725:38)
+#     at ModuleLoader.resolveSync (node:internal/modules/esm/loader:763:56)
+#     at \#resolve (node:internal/modules/esm/loader:687:17)
+#     at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:607:35)
+#     at ModuleJob.syncLink (node:internal/modules/esm/module_job:276:33)
+#     at ModuleJob.link (node:internal/modules/esm/module_job:381:17) {
+#   code: 'ERR_MODULE_NOT_FOUND',
+#   url: 'file:///work/proj/test/nope.js'
+# }
+# Node.js v24.22.0
+# Subtest: test/load.test.mjs
+not ok 2 - test/load.test.mjs
+  ---
+  duration_ms: 24.869042
+  type: 'test'
+  location: '/work/proj/test/load.test.mjs:1:1'
+  failureType: 'testCodeFailure'
+  exitCode: 1
+  signal: ~
+  error: 'test failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+1..5
+# tests 7
+# suites 3
+# pass 1
+# fail 6
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 42.984791

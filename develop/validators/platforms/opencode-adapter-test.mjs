@@ -38,6 +38,10 @@ ok("pre-spec source edit is VETOED",
    await threw(hooks, "edit", { filePath: join(root, "src/calc.py"),
      oldString: "def add", newString: "def add\ndef multiply(a,b): return a*b" }))
 
+// 1b. the same write through the shell → VETO (review 2026-10-26, X1)
+ok("pre-spec source write through bash is VETOED",
+   await threw(hooks, "bash", { command: "cat > src/calc.py <<'EOF'\ndef add(a, b): return a + b\nEOF" }))
+
 // 2. spec-approved → allowed
 setManifest("spec-approved")
 ok("spec-approved source edit is ALLOWED",

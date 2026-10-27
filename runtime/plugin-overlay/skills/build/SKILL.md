@@ -58,6 +58,12 @@ Using as build input."
 **Create** manifest.md when the first artifact is saved (brief or spec).
 Use the template from `core/templates/manifest-template.md`.
 
+**Record the test baseline in the same step**, before any source edit:
+`bash "${CLAUDE_PLUGIN_ROOT}/hooks/scripts/sage-verify.sh" --quiet
+--record-baseline .sage/work/[cycle-id]/verify-baseline.json`. Gate 5 then fails
+only on failures this cycle introduces (the script refuses once source files
+are modified).
+
 **Update** manifest.md at EVERY checkpoint:
 - Every [A]/[R]/[N] gate: update phase, status, `gate_state`, updated timestamp
 - Phase transitions: update context summary if new information emerged
@@ -266,8 +272,11 @@ It sequences 5 verification stages:
 4. Hallucination check — are all imports, APIs, versions real?
 5. Verification — tests pass with pasted evidence?
 
-Each gate that fails triggers fix-and-retry (max 3 attempts) or
-escalation to the user.
+Gate 5 run as the gate (`sage-verify.sh --gate`) records itself in the cycle
+ledger and prints the computed verdict — RETRY, ESCALATE (ask the user) or STOP_BUDGET
+(stop and summarize) — when Sage is vendored into the project (`sage init`).
+Plugin-only installs have no ledger tool: count retries yourself, max 3 per
+gate, then escalate to the user.
 
 If quality-gates cannot be loaded, follow these minimum rules:
 run full test suite, paste output, verify implementation matches spec,

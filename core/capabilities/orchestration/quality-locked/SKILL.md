@@ -238,12 +238,23 @@ structured evidence, the decision is computed by
 `sage/runtime/tools/review.py` + `sage_flags.py` from ledger facts. A
 finding that cites nothing (or whose citation resolves against no
 spec/plan/constitution source — intake checks) and demonstrates nothing
-is capped at substantive on intake and never blocks. Findings, once
+is recorded as rejected on intake: it never blocks, never needs a
+disposition and is never ticketed (`review_loop.require_evidence:
+false` restores capping it to substantive). Findings, once
 recorded, cannot be forgotten or silently re-raised — including
 disputed ones: a Phase-A-disputed entry (cannot-reproduce, or
 DISPUTED-STANDS) never drives another round, but it must receive a
 disposition before any STOP records (`review_loop.disputed_disposition:
 false` restores the old vanish).
+
+**The cycle budget (one per cycle, not per checkpoint).**
+`review_loop.cycle_round_budget` (default 10) is spent by every review
+round of every checkpoint AND every failed gate attempt recorded with
+`review.py gate`. When it is spent the loop ends: `close-round` returns
+`STOP_BUDGET` instead of `CONTINUE`, `open-instance` refuses to start
+another checkpoint loop, and `review.py gate` returns `STOP_BUDGET`
+instead of `RETRY`. Only the user raises the budget — in their own
+editor; the config gate blocks an agent from raising or zeroing it.
 
 Per iteration (1..cap, default cap 5 — `review_loop.iteration_cap`):
 
@@ -280,7 +291,10 @@ Per iteration (1..cap, default cap 5 — `review_loop.iteration_cap`):
 
 5. Dispatch on `action`:
    - CONTINUE:      run the fix round (fixer protocol in the review
-                    capability), increment, loop.
+                    capability) on exactly the IDs in `fix_this_round`
+                    (at most `review_loop.max_fixes_per_round`, most
+                    severe first — the rest stay open for later
+                    rounds), increment, loop.
    - STOP_CLEAN:    exit loop, continue the workflow.
    - STOP_ADVISORY / STOP_CAP: close-round REFUSES to record until every
                     open AND every Phase-A-disputed entry has a
@@ -291,6 +305,11 @@ Per iteration (1..cap, default cap 5 — `review_loop.iteration_cap`):
                     several sharing a decision — then close-round again.
    - ESCALATE:      render `review.py report`, present the escalation
                     prompt. The controller does not spend past a stall.
+   - STOP_BUDGET:   the cycle has spent its budget. Run `review.py
+                    summary <ledger>` and present its output as your
+                    whole message — no dispositions first, no other
+                    round, no "one more fix". Then wait for the user.
+                    Under --autonomous too: this is never auto-picked.
 ```
 
 Disposition menu (per remaining open or disputed entry, RR-7):
@@ -326,9 +345,9 @@ work with ordinary commits.
 
 ### Fix round (v2) — witness-first, one finding one commit
 
-On CONTINUE, fix the BLOCKING findings — criticals, and majors beyond
-`major_budget` — in severity order; the witness-first ceremony below is
-theirs. Substantive and cosmetic entries are NOT fixed inside the loop
+On CONTINUE, fix the findings the verdict lists in `fix_this_round` —
+blocking ones, most severe first, at most `max_fixes_per_round` per round;
+the witness-first ceremony below is theirs. Substantive and cosmetic entries are NOT fixed inside the loop
 by default: they stay open and are settled at STOP with dispositions
 (the `[B]` batch path collapses N of them into one command — defers
 share one cleanup ticket). Fixing a substantive anyway is allowed when
@@ -338,8 +357,15 @@ finding:
 
 1. **Materialize the witness before touching code.** `witness.kind:
    test` — run it, confirm red at HEAD. `repro`/`trace` — write the
-   test that encodes it at `tests/review/<F-id>.*`, run it red, then
-   `review.py attach-witness <F-id> --ref <path>`. A trace-kind finding
+   test that encodes it as an ORDINARY test in a NEW test file in the
+   project's normal test location, named for the behavior — e.g.
+   `tests/test_cart_limits.py`, never `tests/review/<F-id>` — run it red,
+   then `review.py attach-witness <F-id> --ref <test-file>::<test-name>`.
+   check-diff exempts a test file the fix commit creates; changing an
+   existing test file — even only adding to it — needs `Sage-License`,
+   because an insertion can silence the tests already there.
+   (`review_loop.witness_location: review-dir` restores per-finding
+   `tests/review/<F-id>.*` files.) A trace-kind finding
    from an empty matrix cell — the witness IS the missing test: write
    it (red or green as the code warrants; an empty test cell over green
    code is still a fix). If the witness cannot be reproduced at HEAD:
@@ -350,11 +376,11 @@ finding:
    vanish from the verdict. (The tdd-gate already blocks a source edit without
    a test in scope; witness-first is that rule's loop-shaped
    application.)
-2. **Collateral safety (advisory):** when the packet's blast radius
-   shows a neighbor of the fix with no covering test, pin current
-   behavior with 1–3 asserts first (`tests/review/<F-id>-sentinel.*`).
-   You cannot avoid breaking what nothing observes; sentinels are the
-   cheapest observer.
+2. **Collateral safety:** do NOT write sentinel tests by default —
+   they pinned current behavior, bugs included, permanently, and grew
+   the suite with every round. Only when `review_loop.sentinels: true`:
+   pin an uncovered blast-radius neighbor with 1–3 asserts in its own
+   test file before the fix.
 3. **Fix, then commit — ONE commit per finding** (cluster findings only
    when one change genuinely closes them together — then `Sage-Fix`
    names ALL of them, e.g. `Sage-Fix: F-003 F-007`, and check-diff
@@ -397,10 +423,10 @@ finding:
    suite proves nothing about a prose edit, and the field ran four
    full suites for one spec review).
 
-Witness tests are permanent: they land with the fix, run in the suite
-thereafter, and are never deleted on STOP — a deferred finding's
-witness stays red-marked (`xfail`/`todo` per runner idiom) as the
-ticket's executable form.
+Witness tests are ordinary tests: they land with the fix in their own
+test file and run in the suite thereafter — never a separate
+review-only suite. A deferred finding's witness stays red-marked
+(`xfail`/`todo` per runner idiom) as the ticket's executable form.
 
 The exit record in decisions.md is written by `review.py close-round`
 itself — do not write it by hand. If any `review.py` command exits 1,

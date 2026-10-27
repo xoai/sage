@@ -141,6 +141,11 @@ Using as build input."
 **Create** manifest.md when the first artifact is saved (brief or spec).
 Use the template from `core/templates/manifest-template.md`.
 
+**Record the test baseline in the same step**, before any source edit:
+`bash .sage/gates/scripts/sage-verify.sh --quiet --record-baseline
+.sage/work/[cycle-id]/verify-baseline.json`. Gate 5 then fails only on failures
+this cycle introduces (the script refuses once source files are modified).
+
 **Update** manifest.md at EVERY checkpoint:
 - Every [A]/[R]/[N] gate: update phase, status, `gate_state`, updated timestamp
 - Phase transitions: update context summary if new information emerged
@@ -477,8 +482,10 @@ It sequences 5 verification stages:
 4. Hallucination check — are all imports, APIs, versions real?
 5. Verification — tests pass with pasted evidence?
 
-Each gate that fails triggers fix-and-retry (max 3 attempts) or
-escalation to the user.
+Gate 5 run with `--gate` records itself; record the other gates' with `python3
+sage/runtime/tools/review.py gate .sage/work/[cycle-id]/review-ledger.json
+--gate <n> --exit <code>`. Obey the computed verdict: RETRY, ESCALATE (ask the
+user) or STOP_BUDGET (present `review.py summary` and stop).
 
 If quality-gates cannot be loaded, follow these minimum rules:
 run full test suite, paste output, verify implementation matches spec,

@@ -65,15 +65,18 @@ safe: a project that has never heard of a key is never surprise-blocked.
 | Key | New projects | Absent means | What it gates |
 |---|---|---|---|
 | `hard_enforcement` | `true` | off | The master switch. Nothing below fires without it. Projects upgraded by `sage update` get it added as `false` with a notice — enforcement never surprises an established workflow. |
-| `tdd_enforcement` | `true` | off | The TDD gate: a source edit is blocked until a test SOURCE file (test location/name + a source-code extension — never a fixture, snapshot or `__pycache__` bytecode) is dirty/untracked, or the last commit touched only test source. Escape hatches: `tier: tier1` on the cycle manifest, or this key. |
+| `tdd_enforcement` | `true` | off | The TDD gate: a source edit is blocked until a test SOURCE file (test location/name + a source-code extension — never a fixture, snapshot or `__pycache__` bytecode) is dirty/untracked, or the last commit touched only test source — that red commit unlocks ONE source file (the first one edited after it); a second file needs its own test. Escape hatches: `tier: tier1` on the cycle manifest, or this key. |
 | `secrets_gate` | on | on | Credentials in source are blocked (provider-shaped patterns; `.env` and test fixtures allowed; live-marked keys blocked everywhere but `.env`). `false` is the explicit opt-out. |
 | `verify_gate` | on | on | A code-bearing commit demands this-session test evidence. `false` opts out. |
 | `bookkeeping_gate` | on | on | Hand-edits of an active cycle's `manifest.md`/`decisions.md` are redirected to the one-command `manifest.py close-out` writer. `false` opts out. |
+| `branch_gate` | on | on | While a Standard+ cycle is in progress, a source edit on the default branch is blocked, and the block names the `git switch -c` that fixes it. Tier1 cycles are exempt. `false` opts out. |
 
 **What the config-gate blocks the agent from writing** (humans out-of-band
-only): flipping `hard_enforcement` off; adding `secrets_gate`/`verify_gate:
+only): flipping `hard_enforcement` off; adding `secrets_gate`/`verify_gate`/`branch_gate:
 false`; removing `tdd_enforcement: true`; softening the review floor
 (`review_loop.mode` v2→v1, `witness_capping` off) while v2 is active;
+lifting the cycle's stop (raising or zeroing `cycle_round_budget` or
+`gate_retry_cap`) while v2 is active;
 lowering `scope_gate`'s rank or flipping `implicit_test_scope` while the
 scope gate is armed; turning `scope_judge` off or touching any `judge_*`
 knob while it is on; and creating contradictory duplicates of any of these.
@@ -296,7 +299,46 @@ review_loop:
                                    # auto-defer to cleanup.md (machine-
                                    # written at the stop); open restores
                                    # the late-nit treadmill
+  cycle_round_budget: 10    # one budget per CYCLE: every review round of
+                            # every checkpoint + every failed gate attempt
+                            # spends it; spent → STOP_BUDGET + one summary.
+                            # 0 restores no cycle-wide limit. Raising it is
+                            # the user's call (config-gate protected)
+  gate_retry_cap: 3         # consecutive failures of one gate before
+                            # ESCALATE (`review.py gate`); 0 restores the
+                            # uncounted prose "max 3" (protected)
+  require_evidence: true    # a finding with no witness and no resolving
+                            # citation is rejected on intake; false restores
+                            # capping it to substantive (open, needs a
+                            # disposition)
+  max_fixes_per_round: 3    # blocking findings a fix round works on, most
+                            # severe first (`fix_this_round`); 0 = all
+  witness_location: inline  # a witness is an ordinary test in a NEW test
+                            # file named for the behavior; review-dir restores
+                            # per-finding tests/review/<F-id>.* files
+  sentinels: false          # true restores sentinel tests pinning a fix's
+                            # uncovered neighbors (advisory)
 ```
+
+**The cycle ends.** Per-checkpoint caps could not bound a cycle — spec,
+plan and code each had five rounds, and a red gate had uncounted retries —
+so "continue" could run forever against a failure the cycle did not cause.
+Two mechanisms close that. The cycle budget above, which Gate 5 spends by
+itself (each `sage-verify.sh --gate` run of an in-progress cycle lands in its
+ledger; TDD runs are not gate attempts). And Gate 5's baseline:
+`sage-verify.sh --record-baseline
+.sage/work/<cycle>/verify-baseline.json`, once at cycle start, names the
+tests already failing; Gate 5 then passes a red run only when it can prove
+every failure is one of those — fully qualified test ids, matched against
+the runner's own failure count, from a baseline in this branch's history
+(a node test that only moved maps back through the diff; one whose own line
+changed is new). An interrupted run, an unhandled or asynchronous error, a
+test that never finished, a failing hook, a run where fewer tests ran than
+at the baseline (fail-fast), a timeout, a broken build, or a
+runner whose output it cannot parse (flutter today) is never excused. The
+baseline is recorded once, before the cycle implements anything. The
+baseline and the ledger are machine-owned: the bookkeeping gate blocks hand
+edits. `review.py summary` is the one message a stopped cycle hands the user.
 
 One ledger, several checkpoint loops: `review.py open-instance <ledger>
 --checkpoint <spec|plan|code|qa>` marks each loop's start, and cap,
@@ -478,6 +520,11 @@ review_loop:
   witness_capping: true
   scope_check: true
   review_model: inherit
+  cycle_round_budget: 10
+  gate_retry_cap: 3
+  require_evidence: true
+  max_fixes_per_round: 3
+  witness_location: inline
 
 # Execution-flag defaults (canonical form only)
 # quality_locked: true

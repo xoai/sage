@@ -3,7 +3,10 @@
 #
 # Stages a vendored-project-shaped scratch (adapter + real gate scripts + the
 # real judge runtime + the claude-code journal hook for the parity check) and
-# runs setup/adapter-test.mjs in it. No opencode binary, no model backend —
+# runs opencode-adapter-test.mjs (beside this script) in it. The test lives in
+# develop/, not runtime/, so it is never vendored into a project — where
+# `node --test` would discover it and fail (review 2026-10-26, X3). No opencode
+# binary, no model backend —
 # this is the same "test the wire against the real scripts" pattern the
 # 2026-07-17 Tier-A port established, extended to the scope judge.
 #
@@ -33,13 +36,13 @@ OC_SETUP="$REPO_ROOT/runtime/platforms/community/opencode/setup"
 CC_HOOKS="$REPO_ROOT/runtime/platforms/claude-code/hooks"
 
 cp "$OC_SETUP/sage-plugin.js" "$SCRATCH/.opencode/plugin/sage.js"
-cp "$OC_SETUP/adapter-test.mjs" "$SCRATCH/adapter-test.mjs"
+cp "$REPO_ROOT/develop/validators/platforms/opencode-adapter-test.mjs" "$SCRATCH/adapter-test.mjs"
 
 # The gate scripts the adapter drives — same set generate-opencode.sh installs.
 for g in sage-spec-gate.sh sage-tdd-gate.sh sage-bookkeeping-gate.sh \
          sage-secrets-gate.sh sage-config-gate.sh sage-scope-gate.sh \
          sage-verify-gate.sh sage-verify-tracker.sh sage-degradation-log.sh \
-         sage-manifest-sync.sh; do
+         sage-manifest-sync.sh sage-bash-write-gate.sh sage-branch-gate.sh; do
   if [ -f "$CC_HOOKS/$g" ]; then
     cp "$CC_HOOKS/$g" "$SCRATCH/.opencode/sage-hooks/$g"
     chmod +x "$SCRATCH/.opencode/sage-hooks/$g"

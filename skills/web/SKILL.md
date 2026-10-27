@@ -1,6 +1,6 @@
 ---
 name: "web"
-description: "Universal web development principles — accessibility (WCAG 2.2), performance (Core Web Vitals), security headers (OWASP), SEO, responsive design, error UX, and loading states. Framework-agnostic."
+description: "Use when building or reviewing anything that renders in a browser — accessibility (WCAG 2.2), Core Web Vitals, security headers, SEO, responsive layout, error states, or loading states. Framework-agnostic."
 version: "2.0.0"
 type: knowledge
 layer: domain

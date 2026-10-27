@@ -48,9 +48,14 @@ import sys
 import tempfile
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
+
+# The frontmatter rules `sage init` deploys by, so both install paths agree.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import skill_frontmatter  # noqa: E402
 OVERLAY = REPO_ROOT / "runtime" / "plugin-overlay"
 SKILLS = REPO_ROOT / "skills"
 SYSTEM_SKILLS = REPO_ROOT / "core" / "system-skills"
+QUICK_REFERENCE_SH = REPO_ROOT / "runtime" / "platforms" / "_shared" / "quick-reference.sh"
 INSTRUCTIONS_BODY = REPO_ROOT / "runtime" / "platforms" / "_shared" / "instructions-body.sh"
 CONSTITUTION_SH = REPO_ROOT / "runtime" / "platforms" / "_shared" / "constitution.sh"
 
@@ -129,6 +134,8 @@ FILE_MAP = {
     "hooks/scripts/sage-verify-gate.sh": "runtime/platforms/claude-code/hooks/sage-verify-gate.sh",
     "hooks/scripts/sage-verify-tracker.sh": "runtime/platforms/claude-code/hooks/sage-verify-tracker.sh",
     "hooks/scripts/sage-config-gate.sh": "runtime/platforms/claude-code/hooks/sage-config-gate.sh",
+    "hooks/scripts/sage-bash-write-gate.sh": "runtime/platforms/claude-code/hooks/sage-bash-write-gate.sh",
+    "hooks/scripts/sage-branch-gate.sh": "runtime/platforms/claude-code/hooks/sage-branch-gate.sh",
     # The manifest hook delegates here rather than inlining a second copy of the
     # state machine. A plugin-only project may have no vendored sage/, so the tool
     # ships with the plugin too.
@@ -191,7 +198,12 @@ def build_navigator() -> str:
         'set -eu\n'
         'source "%s"\n'
         'source "%s"\n'
-        'emit_instructions_body\n' % (INSTRUCTIONS_BODY, CONSTITUTION_SH)
+        'source "%s"\n'
+        'emit_instructions_body\n'
+        # The eager layer's Quick reference (C3) — the vendored CLAUDE.md
+        # carries it, so the plugin's stand-in for that file does too.
+        'emit_quick_reference "%s"\n'
+        % (INSTRUCTIONS_BODY, CONSTITUTION_SH, QUICK_REFERENCE_SH, REPO_ROOT / "core")
     )
     proc = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
     if proc.returncode != 0:
@@ -309,7 +321,10 @@ def build(out: pathlib.Path) -> None:
 
 def build_inputs() -> list:
     """Every repo file the build reads. The artifact is exactly a function of these."""
-    inputs = [REPO_ROOT / "VERSION"]
+    inputs = [REPO_ROOT / "VERSION", INSTRUCTIONS_BODY, CONSTITUTION_SH,
+              QUICK_REFERENCE_SH]
+    inputs += [REPO_ROOT / "core" / "system-skills" / s / "SKILL.md"
+               for s in ("sage-routing", "sage-tiers", "sage-checkpoints")]
     inputs += [REPO_ROOT / src for src in FILE_MAP.values()]
     inputs += [f for f in OVERLAY.rglob("*") if f.is_file()]
     for name in sorted(PLUGIN_SKILLS):
@@ -448,12 +463,24 @@ def audit(tree: pathlib.Path) -> list:
         except json.JSONDecodeError as exc:
             problems.append(f"hooks/hooks.json is not valid JSON: {exc}")
             hooks = {}
+        registered = set()
         for matchers in hooks.get("hooks", {}).values():
             for matcher in matchers:
                 for hook in matcher.get("hooks", []):
                     for rel in HOOK_COMMAND.findall(hook.get("command", "")):
+                        registered.add(pathlib.PurePosixPath(rel).name)
                         if not (tree / rel).is_file():
                             problems.append(f"hooks.json registers {rel}, which does not ship")
+        # `sage init` dedupes against exactly this set when the plugin is on
+        # (claude_settings.PLUGIN_SHIPS): a script listed there but not
+        # registered here would run nowhere; one registered here but not
+        # listed there would run twice.
+        import claude_settings
+        if registered != set(claude_settings.PLUGIN_SHIPS):
+            problems.append(
+                "hooks.json registers %s but claude_settings.PLUGIN_SHIPS lists %s"
+                % (sorted(registered - claude_settings.PLUGIN_SHIPS),
+                   sorted(claude_settings.PLUGIN_SHIPS - registered)))
 
     # 6. Every shipped skill can actually REGISTER. Claude Code discovers a skill
     #    by its frontmatter; a SKILL.md whose `name:` disagrees with its directory
@@ -472,6 +499,11 @@ def audit(tree: pathlib.Path) -> list:
                             f"— it will silently fail to register")
             continue
         fm = m.group(1)
+        # Strict-YAML shapes: one invalid line and Claude Code drops the whole
+        # skill, silently (baas shipped that way: `@` opening a plain scalar).
+        for p in skill_frontmatter.lint_frontmatter(text):
+            problems.append(f"skills/{skill_dir.name}/SKILL.md: {p} "
+                            f"— it will silently fail to register")
         nm = re.search(r"^name:\s*[\"']?([A-Za-z0-9_-]+)", fm, re.M)
         if not nm or nm.group(1) != skill_dir.name:
             problems.append(

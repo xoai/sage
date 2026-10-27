@@ -1369,6 +1369,54 @@ class ReviewLoopGraderTest(unittest.TestCase):
         ok, detail = self.check(max_rounds=3, monotone_open_weight=True)
         self.assertTrue(ok, detail)
 
+    def test_converged_means_the_loop_ended_clean_or_advisory(self):
+        h = self.hist(3, 2, 1, 0)
+        h[-1]["result"] = "STOP_ADVISORY"
+        self.ledger(history=[{"instance": "code"}] + h)
+        ok, detail = self.check(max_rounds=5, converged=True)
+        self.assertTrue(ok, detail)
+        h[-1]["counts"]["major"] = 2          # advisory by deferring blockers
+        self.ledger(history=h)
+        ok, detail = self.check(converged=True)
+        self.assertFalse(ok)
+        self.assertIn("deferred, not fixed", detail)
+        h[-1]["counts"]["major"] = 0
+        self.ledger(history=[{"instance": "code"}])
+        self.assertFalse(self.check(converged=True)[0], "no rounds is not convergence")
+        for end in ("STOP_CAP", "ESCALATE", "STOP_BUDGET", "CONTINUE"):
+            h[-1]["result"] = end
+            self.ledger(history=h)
+            ok, detail = self.check(converged=True)
+            self.assertFalse(ok, end)
+            self.assertIn("ended " + end, detail)
+
+    def test_a_rejected_blocker_is_not_one_left_standing(self):
+        """The last round's counts include a major rejected as a false
+        positive (sealed by that round); decide() does not count it, and
+        neither does converged. A deferred one still fails."""
+        h = self.hist(2, 1)
+        h[-1]["result"] = "STOP_ADVISORY"
+        rejected = {"id": "F-1", "severity": "major", "status": "rejected",
+                    "artifact": "code"}
+        self.ledger(findings=[rejected], history=[{"instance": "code"}] + h)
+        ok, detail = self.check(converged=True)
+        self.assertTrue(ok, detail)
+        self.ledger(findings=[dict(rejected, status="deferred")],
+                    history=[{"instance": "code"}] + h)
+        self.assertFalse(self.check(converged=True)[0])
+        self.ledger(findings=[dict(rejected, artifact="spec")],
+                    history=[{"instance": "code"}] + h)
+        self.assertFalse(self.check(converged=True)[0],
+                         "a rejection in another checkpoint does not clear this one")
+
+    def test_an_instance_opened_and_never_reviewed_has_not_converged(self):
+        h = self.hist(1, 0)
+        h[-1]["result"] = "STOP_CLEAN"
+        self.ledger(history=[{"instance": "spec"}] + h + [{"instance": "code"}])
+        ok, detail = self.check(converged=True)
+        self.assertFalse(ok)
+        self.assertIn("'code' was opened but never reviewed", detail)
+
     def test_too_many_rounds_fails(self):
         self.ledger(history=self.hist(2, 2, 2, 2))
         ok, detail = self.check(max_rounds=3)
@@ -1445,6 +1493,80 @@ class ReviewLoopGraderTest(unittest.TestCase):
         ok, detail = self.check()
         self.assertFalse(ok)
         self.assertIn("no ledger", detail)
+
+
+class CycleTerminationGraderTest(unittest.TestCase):
+    """E19 (review 2026-10-26, P1): the cycle ENDS — inside its budget, on its
+    own. Both directions: a run the harness cut off must fail, however good
+    the tree looks."""
+
+    def setUp(self):
+        self.ws = pathlib.Path(tempfile.mkdtemp(prefix="grader-cycle-"))
+        self.addCleanup(shutil.rmtree, self.ws, ignore_errors=True)
+        (self.ws / ".sage" / "work" / "001-x").mkdir(parents=True)
+
+    def ledger(self, rounds, gate_fails):
+        hist = [{"iteration": i + 1, "counts": {}, "result": "CONTINUE"}
+                for i in range(rounds)]
+        gates = [{"gate": "5", "result": "fail"}] * gate_fails
+        (self.ws / ".sage" / "work" / "001-x" / "review-ledger.json").write_text(
+            __import__("json").dumps({"findings": [], "history": hist,
+                                      "gates": gates}))
+
+    def budget(self, limit):
+        return G.review_loop(self.ws, G.Transcript([], []),
+                             {"path": ".sage/work/*/review-ledger.json",
+                              "max_cycle_rounds": limit})
+
+    def test_inside_the_budget_passes(self):
+        self.ledger(6, 4)
+        self.assertTrue(self.budget(10)[0])
+
+    def test_one_spend_past_the_limit_is_the_attempt_that_learns_it(self):
+        self.ledger(10, 1)
+        self.assertTrue(self.budget(10)[0])
+
+    def test_running_on_past_the_budget_fails(self):
+        self.ledger(10, 3)
+        ok, detail = self.budget(10)
+        self.assertFalse(ok)
+        self.assertIn("10 review round(s) + 3 failed gate attempt(s)", detail)
+
+    def test_a_glob_matching_two_ledgers_fails(self):
+        self.ledger(1, 0)
+        (self.ws / ".sage" / "work" / "002-y").mkdir()
+        (self.ws / ".sage" / "work" / "002-y" / "review-ledger.json").write_text(
+            '{"findings": [], "history": []}')
+        self.assertFalse(self.budget(10)[0])
+
+    def test_inline_witness_ref_names_its_file(self):
+        (self.ws / "tests").mkdir()
+        (self.ws / "tests" / "test_x.py").write_text("def test_y(): pass\n")
+        (self.ws / ".sage" / "work" / "001-x" / "review-ledger.json").write_text(
+            __import__("json").dumps({"history": [], "findings": [
+                {"id": "F-001", "witness": {"kind": "test",
+                                            "ref": "tests/test_x.py::test_y"}}]}))
+        ok, detail = G.review_loop(self.ws, G.Transcript([], []),
+                                   {"path": ".sage/work/*/review-ledger.json",
+                                    "witnesses_exist": True})
+        self.assertTrue(ok, detail)
+
+    def ended(self, *results):
+        return G.session_ended_itself(self.ws, G.Transcript(list(results), []), {})
+
+    def test_session_that_stopped_itself_passes(self):
+        ok, _ = self.ended({"type": "result", "subtype": "success", "is_error": False})
+        self.assertTrue(ok)
+
+    def test_session_cut_off_by_the_budget_fails(self):
+        ok, detail = self.ended({"type": "result", "subtype": "success", "is_error": False},
+                                {"type": "result", "subtype": "error_max_budget_usd",
+                                 "is_error": True})
+        self.assertFalse(ok)
+        self.assertIn("error_max_budget_usd", detail)
+
+    def test_session_killed_without_a_result_fails(self):
+        self.assertFalse(self.ended()[0])
 
 
 class LaneGraderTest(unittest.TestCase):
@@ -1823,6 +1945,163 @@ class LaneGraderTest(unittest.TestCase):
         self.assertTrue(any("unknown grader" in p for p in problems))
         self.assertTrue(any("not supported inside any_of" in p
                             for p in problems))
+
+
+class ToolOrderTest(unittest.TestCase):
+    """E7's order check reads what each call WROTE (2026-10-27 P2 re-run)."""
+
+    P = {"first": r"spec\.md", "then": r"src/config\.py"}
+
+    def order(self, *blocks):
+        return G.tool_order(None, transcript(*blocks), self.P)
+
+    def test_a_shell_written_spec_counts(self):
+        ok, detail = self.order(
+            ("tool", "Bash", {"command": "cat > .sage/work/c/spec.md <<'EOF'\n"
+                                         "edit src/config.py\nEOF"}),
+            ("tool", "Edit", {"file_path": "src/config.py"}))
+        self.assertTrue(ok, detail)
+
+    def test_text_that_names_a_file_is_not_a_touch(self):
+        """The spec's content mentions src/config.py; writing it does not edit it."""
+        ok, detail = self.order(
+            ("tool", "Edit", {"file_path": "src/config.py", "new_string": "x"}),
+            ("tool", "Write", {"file_path": ".sage/work/c/spec.md",
+                               "content": "Change src/config.py"}))
+        self.assertFalse(ok, detail)
+        self.assertIn("wrong way round", detail)
+
+    def test_reading_by_shell_is_not_writing(self):
+        ok, detail = self.order(
+            ("tool", "Bash", {"command": "cat .sage/work/c/spec.md src/config.py"}),
+            ("tool", "Edit", {"file_path": "src/config.py"}))
+        self.assertFalse(ok, detail)
+        self.assertIn("never was", detail)
+
+    def test_a_failing_shell_command_still_wrote(self):
+        """Only a VETO is a denial; `… && git commit` failing did not unwrite."""
+        tx = transcript(
+            ("tool", "Bash", {"command": "cat > .sage/work/c/spec.md <<'EOF'\nx\nEOF\n"
+                                         "git commit -qm spec"}),
+            ("tool", "Edit", {"file_path": "src/config.py"}))
+        tx.events[0]["message"]["content"][0]["id"] = "t0"
+        result = {"type": "tool_result", "tool_use_id": "t0", "is_error": True,
+                  "content": "Exit code 1"}
+        tx.events.insert(1, {"type": "user", "message": {"content": [result]}})
+        self.assertTrue(G.tool_order(None, tx, self.P)[0])
+        result["content"] = "PreToolUse:Bash hook error: sage-spec-gate: blocked"
+        ok, detail = G.tool_order(None, tx, self.P)
+        self.assertFalse(ok, "a vetoed write did not happen")
+        self.assertIn("never was", detail)
+
+    def test_a_hidden_source_write_before_the_spec_fails(self):
+        """The asymmetry: a source write the parser cannot read off still
+        counts against the order, so the miss cannot become a pass."""
+        ok, detail = self.order(
+            ("tool", "Bash", {"command": "F=src/config.py; sed -i.bak s/a/b/ \"$F\" 2>&1"}),
+            ("tool", "Write", {"file_path": ".sage/work/c/spec.md", "content": "x"}),
+            ("tool", "Edit", {"file_path": "src/config.py"}))
+        self.assertFalse(ok, detail)
+
+    def test_reading_source_beside_a_devnull_redirect_is_not_a_touch(self):
+        ok, detail = self.order(
+            ("tool", "Bash", {"command": "cat src/config.py 2>/dev/null; python3 -m pytest -q"}),
+            ("tool", "Write", {"file_path": ".sage/work/c/spec.md", "content": "x"}),
+            ("tool", "Edit", {"file_path": "src/config.py"}))
+        self.assertTrue(ok, detail)
+
+    def test_inline_code_naming_the_source_counts(self):
+        ok, detail = self.order(
+            ("tool", "Bash", {"command": "python3 - <<'EOF'\nopen('src/config.py','w')\nEOF"}),
+            ("tool", "Write", {"file_path": ".sage/work/c/spec.md", "content": "x"}))
+        self.assertFalse(ok, detail)
+
+    def test_quoted_arrows_are_not_writes(self):
+        ok, detail = self.order(
+            ("tool", "Bash", {"command": "echo 'next: draft -> .sage/work/c/spec.md'"}),
+            ("tool", "Edit", {"file_path": "src/config.py"}),
+            ("tool", "Write", {"file_path": ".sage/work/c/spec.md", "content": "x"}))
+        self.assertFalse(ok, detail)
+
+    def test_shell_write_forms(self):
+        for cmd in ("echo x >> src/config.py", "sed -i.bak s/a/b/ src/config.py",
+                    "printf x | tee -a src/config.py", "cp /tmp/c.py src/config.py"):
+            self.assertIn("src/config.py",
+                          G.written_paths({"name": "Bash", "input": {"command": cmd}}),
+                          cmd)
+
+    def vetoed_or_failed(self, content):
+        tx = transcript(
+            ("tool", "Bash", {"command": "sed -i '' 's/A/B/' src/config.py && cat /etc/sudoers"}),
+            ("tool", "Write", {"file_path": ".sage/work/c/spec.md", "content": "x"}),
+            ("tool", "Edit", {"file_path": "src/config.py"}))
+        tx.events[0]["message"]["content"][0]["id"] = "t0"
+        tx.events.insert(1, {"type": "user", "message": {"content": [
+            {"type": "tool_result", "tool_use_id": "t0", "is_error": True,
+             "content": content}]}})
+        return G.tool_order(None, tx, self.P)
+
+    def test_only_a_hook_veto_is_a_denial(self):
+        """Review 2026-10-27: 'denied' anywhere in a failed command's output
+        read as a veto, so the source edit before the spec vanished."""
+        for out in ("Exit code 1\ncat: /etc/sudoers: Permission denied",
+                    "Exit code 1\nFAILED test_x - blocked by fixture",
+                    [{"type": "text", "text": "Exit code 1\ndenied"}]):
+            self.assertFalse(self.vetoed_or_failed(out)[0], out)
+        ok, detail = self.vetoed_or_failed(
+            [{"type": "text", "text": "PreToolUse:Bash hook error: blocked"}])
+        self.assertTrue(ok, detail)
+
+    def test_order_inside_one_command_counts(self):
+        """Review 2026-10-27: source then spec in ONE Bash call tied and passed."""
+        ok, detail = self.order(
+            ("tool", "Bash", {"command": "sed -i '' 's/A/B/' src/config.py && "
+                                         "cat > .sage/work/c/spec.md <<'EOF'\nx\nEOF"}))
+        self.assertFalse(ok, detail)
+        self.assertIn("wrong way round", detail)
+        ok, detail = self.order(
+            ("tool", "Bash", {"command": "cat > .sage/work/c/spec.md <<'EOF'\n"
+                                         "edit src/config.py; then x > y\nEOF\n"
+                                         "sed -i '' 's/A/B/' src/config.py"}))
+        self.assertTrue(ok, detail)
+        self.assertIn("call 0 (segment 1)", detail)
+        ok, detail = self.order(
+            ("tool", "Bash", {"command": "tee .sage/work/c/spec.md src/config.py < /tmp/x"}))
+        self.assertFalse(ok, detail)
+        self.assertIn("no order shown", detail)
+
+    def test_indirect_source_writes_before_the_spec_fail(self):
+        ws = pathlib.Path(tempfile.mkdtemp(prefix="grader-order-"))
+        self.addCleanup(shutil.rmtree, ws, ignore_errors=True)
+        (ws / "src").mkdir()
+        (ws / "src" / "config.py").write_text("x\n")
+        for cmd in ("cd src && sed -i '' 's/A/B/' config.py",
+                    "cd src\nprintf 'x' >> config.py",
+                    "sed -i '' 's/A/B/' src/*.py",
+                    "find src -name config.py -exec sed -i '' 's/A/B/' {} \\;",
+                    "D=src; sed -i '' 's/A/B/' $D/config.py",
+                    "export F=src/config.py; perl -pi -e 's/A/B/' \"$F\""):
+            tx = transcript(
+                ("tool", "Bash", {"command": cmd}),
+                ("tool", "Write", {"file_path": ".sage/work/c/spec.md", "content": "x"}),
+                ("tool", "Edit", {"file_path": "src/config.py"}))
+            ok, detail = G.tool_order(ws, tx, self.P)
+            self.assertFalse(ok, f"{cmd!r}: {detail}")
+
+    def test_strict_side_reads_only_real_writes(self):
+        """The precondition must not be satisfied by words."""
+        for cmd in ('echo "a; tee .sage/work/c/spec.md"',
+                    "sed -i '' 's/draft/spec.md approved/' manifest.md",
+                    "sed -i .bak 's/x/y/' notes.md"):
+            self.assertFalse(
+                [w for w in G.written_paths({"name": "Bash", "input": {"command": cmd}})
+                 if "spec.md" in w], cmd)
+        for cmd, want in (("cp -t .sage/work/c /tmp/spec.md", ".sage/work/c/spec.md"),
+                          ("cd .sage/work/c && cat > spec.md <<'EOF'\nx\nEOF",
+                           ".sage/work/c/spec.md"),
+                          ("sed -i .bak 's/x/y/' src/config.py", "src/config.py")):
+            self.assertIn(want, G.written_paths({"name": "Bash", "input": {"command": cmd}}),
+                          cmd)
 
 
 if __name__ == "__main__":

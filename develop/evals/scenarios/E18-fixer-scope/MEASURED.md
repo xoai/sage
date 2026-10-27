@@ -22,3 +22,7 @@ The eval-harness lesson file's "grep punishes conscientiousness" claims
 another instance: both E-REV instrument bugs this campaign (this
 allowlist, and the calibration absence matcher) punished an agent for
 doing something STRONGER than the rubric imagined.
+
+## Re-measured after P2 — 2026-10-27
+
+sage arm · N=1 · claude-opus-5-5 · operator config · **4/4**, $0.87. Full record: `develop/evals/REMEASURE-P2-2026-10-27.md`.

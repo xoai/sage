@@ -213,6 +213,12 @@ hide a real problem:
 - **Quality-locked stuck-escalation** (`[E] Escalate / [C] Continue /
   [R] Revise manually`) — 3 iterations with no improvement.
   Architecture-level question.
+- **Cycle budget spent** (`STOP_BUDGET` from `review.py close-round` or
+  `review.py gate`) — the cycle has used the rounds it was given. Present
+  `review.py summary` and wait; "continue" is the user's to grant, by
+  raising `review_loop.cycle_round_budget` themselves.
+- **Gate retry cap** (`ESCALATE` from `review.py gate`) — the same gate
+  failed `gate_retry_cap` times in a row.
 - **Autonomous unconfident-decision questions** (the `[Q1]/[Q2]` block
   that surfaces when the agent can't recommend a substantive decision)
   — by definition, the agent is asking because it doesn't know.

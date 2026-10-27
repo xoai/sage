@@ -1,0 +1,13 @@
+=== RUN   TestA
+=== RUN   TestA/x_y
+    a_test.go:3: no
+--- FAIL: TestA (0.00s)
+    --- FAIL: TestA/x_y (0.00s)
+FAIL
+FAIL	ex	0.461s
+=== RUN   TestB
+    s_test.go:3: b
+--- FAIL: TestB (0.00s)
+FAIL
+FAIL	ex/sub	0.276s
+FAIL

@@ -22,7 +22,9 @@
 #   ALLOW when: a test SOURCE file is already dirty or untracked in the working
 #               tree (you wrote the test — proceed), or the most recent commit
 #               touched test source and nothing else (the red commit: you
-#               committed the test first, now write the code).
+#               committed the test first, now write the code — ONE change: the
+#               first source file EDITED after it, which sage-verify-tracker.sh
+#               records in .sage/tmp/tdd-red once the edit has happened).
 #   BLOCK when: neither. Write the failing test first.
 #
 # "Test source" = a test location/name AND a source-code extension. Fixtures,
@@ -63,6 +65,14 @@ def allow():
     sys.exit(0)
 
 def block(msg):
+    # Structured deny for Claude Code (C6, see the other gates); exit 2 for
+    # callers that send no hook_event_name.
+    payload = globals().get("payload")
+    if isinstance(payload, dict) and payload.get("hook_event_name") == "PreToolUse":
+        sys.stdout.write(json.dumps({"hookSpecificOutput": {
+            "hookEventName": "PreToolUse", "permissionDecision": "deny",
+            "permissionDecisionReason": msg}}) + "\n")
+        sys.exit(0)
     sys.stderr.write(msg + "\n")
     sys.exit(2)
 
@@ -239,11 +249,43 @@ def is_source(path):
     return os.path.splitext(path)[1].lower() in SOURCE_EXT
 
 
+def red_commit_unlocked():
+    """The file the red commit's ONE change went to, or None (not spent yet).
+    The red commit used to unlock every source edit until the next commit —
+    four untested changes went through on one test commit (review 2026-10-26,
+    X2). sage-verify-tracker.sh (PostToolUse) records the first source file
+    actually EDITED after HEAD in .sage/tmp/tdd-red — after the edit happened,
+    so a rejected, failed or other-gate-blocked edit spends nothing. This gate
+    only reads it. Paths are compared through realpath."""
+    head = git("rev-parse", "HEAD").strip()
+    try:
+        with open(os.path.join(sage_dir, "tmp", "tdd-red"), encoding="utf-8") as fh:
+            sha, _, unlocked = fh.read().strip().partition("\t")
+    except OSError:
+        return None
+    return unlocked if head and sha == head else None
+
+
+real_rel = os.path.relpath(os.path.realpath(abspath),
+                           os.path.realpath(project_root)).replace(os.sep, "/")
+
+
 if head_files:
     tests_in_head = [p for p in head_files if is_test_source(p)]
     source_in_head = [p for p in head_files if is_source(p)]
     if tests_in_head and not source_in_head:
-        allow()                               # the red commit
+        unlocked = red_commit_unlocked()
+        if unlocked is None or unlocked == real_rel:
+            allow()                           # the red commit's one change
+        block(
+            'Sage TDD gate: the last commit (tests only) unlocked ONE change — %s.\n'
+            'This edit is to a different file: %s\n'
+            '\n'
+            'Write the test for this change first (or commit it as its own red\n'
+            'commit), then edit the code. One test commit is not a licence for\n'
+            'every edit until the next one. (A change that genuinely spans two\n'
+            'files: write the second file\'s test too — a written, uncommitted\n'
+            'test allows the edit.)' % (unlocked, rel_posix))
 
 block(
     'Sage TDD gate: tests before code — no test has been written for this change.\n'

@@ -21,8 +21,11 @@ Hermes tool mapping (verified against the live tool schemas):
   write_file -> args["path"], args["content"]
   patch      -> args["path"], args["new_string"] (replace mode),
                 args["patch"] (V4A patch mode — new_text is the patch body)
-Everything else (terminal, execute_code, …) is not gated — the same documented
-hole the claude-code hooks have (they matched Edit|Write|MultiEdit only).
+Everything else (terminal, execute_code, …) is not gated. The claude-code
+hooks have since closed part of that hole (sage-bash-write-gate.sh) and added
+a branch gate (sage-branch-gate.sh); neither is ported here yet. The config
+gate still protects `branch_gate`, so the key means the same thing if the
+gate arrives.
 """
 
 from __future__ import annotations
@@ -32,6 +35,7 @@ import glob
 import os
 import re
 import subprocess
+import time
 
 # ── Shared classification ────────────────────────────────────────────────────
 
@@ -80,6 +84,7 @@ DEGRADED = {
 }
 
 DEGLOG_MARK = "[auto-logged by sage-gates post_tool_call]"
+_DEGLOG_RECENT_S = 900  # terminal sweep: a command runs ≤ 10 min, plus margin
 
 # sk-ant- MUST precede sk-: the generic sk- pattern would otherwise match
 # first and mislabel Anthropic keys.
@@ -573,7 +578,7 @@ _CONFIG_BLOCK_MSG = (
     "the work it is pointing at — that is what it is for.")
 
 _CFG_MASTER = "hard_enforcement"
-_CFG_OPT_OUT = ("secrets_gate", "verify_gate")
+_CFG_OPT_OUT = ("secrets_gate", "verify_gate", "branch_gate")
 _CFG_OPT_IN = ("tdd_enforcement",)
 
 
@@ -610,6 +615,41 @@ def _cfg_contradictory_flag(text, key):
     vals = {v.lower() for v in re.findall(
         r"(?mi)^\s*%s\s*:\s*(true|false)\b" % re.escape(key), text or "")}
     return len(vals) > 1
+
+
+def _sed_in_place(cmd):
+    """True when some `sed` in cmd edits a file in place (-i, -Ei, --in-place),
+    judged one command segment at a time — so grep's -i later on the line is
+    not read as sed's (E8, 2026-10-27). Quoted text is kept: `sh -c 'sed -i …'`
+    is still an in-place edit."""
+    return any(re.search(r"\bsed\b.*\s(?:-[A-Za-z]*i|--in-place)", seg)
+               for seg in _split_unquoted(cmd))
+
+
+def _split_unquoted(cmd):
+    """cmd cut at ; & | and newlines that sit outside quotes — a quoted
+    `s/a/b/;s/c/d/` before `-i` is still one sed."""
+    segs, cur, quote, i = [], [], None, 0
+    while i < len(cmd):
+        c = cmd[i]
+        if quote:
+            if c == "\\" and quote == '"' and i + 1 < len(cmd):
+                cur.append(cmd[i:i + 2])
+                i += 2
+                continue
+            if c == quote:
+                quote = None
+        elif c in "'\"":
+            quote = c
+        elif c in ";&|\n":
+            segs.append("".join(cur))
+            cur = []
+            i += 1
+            continue
+        cur.append(c)
+        i += 1
+    segs.append("".join(cur))
+    return segs
 
 
 def _cfg_weaker(before, after):
@@ -689,9 +729,9 @@ def _config_gate(project_root, sage_dir, tool_name, args, path, new_text):
         cmd = str(args.get("command") or "")
         names_config = re.search(r"\.sage/config\.ya?ml", cmd) is not None
         writes = re.search(r">\s*[^|]*\.sage/config\.ya?ml|"
-                           r"\bsed\b[^\n]*-i|\btee\b[^\n]*\.sage/config\.ya?ml", cmd)
+                           r"\btee\b[^\n]*\.sage/config\.ya?ml", cmd) or _sed_in_place(cmd)
         turns_off = re.search(
-            r"(?:%s|secrets_gate|verify_gate)\s*:?\s*false" % re.escape(_CFG_MASTER),
+            r"(?:%s|secrets_gate|verify_gate|branch_gate)\s*:?\s*false" % re.escape(_CFG_MASTER),
             cmd, re.I)
         review_off = _cfg_review_mode(current, absent="v1") == "v2" and re.search(
             r"witness_capping\s*:?\s*false|mode\s*:?\s*v1", cmd, re.I)
@@ -924,57 +964,93 @@ def _on_post_tool_call(tool_name=None, args=None, **_kwargs):
         pass
 
     # ── R29 degradation audit: a declared skip cannot go unlogged ──
+    # After a write to a manifest, that manifest; after a terminal command,
+    # every cycle's — `manifest.py close-out --qa` and a bare sed write it from
+    # the shell, and the command does not say which (E8, 2026-10-27).
     try:
-        path, _ = _target(tool_name, args)
-        if not path:
-            return None
         cwd = os.path.abspath(os.getcwd())
-        abspath = path if os.path.isabs(path) else os.path.normpath(
-            os.path.join(cwd, path))
-        project_root = _find_project_root(abspath)
+        if tool_name == "terminal":
+            project_root = _find_project_root(os.path.join(cwd, ".probe"))
+            targets = None
+        else:
+            path, _ = _target(tool_name, args)
+            if not path:
+                return None
+            abspath = path if os.path.isabs(path) else os.path.normpath(
+                os.path.join(cwd, path))
+            project_root = _find_project_root(abspath)
+            targets = [abspath]
         if project_root is None:
             return None
         sage_dir, _flags = _config(project_root)
         if sage_dir is None:
             return None
-        if os.path.basename(abspath) != "manifest.md":
-            return None
         work_root = os.path.normpath(os.path.join(sage_dir, "work"))
-        try:
-            if os.path.commonpath([abspath, work_root]) != work_root:
-                return None
-        except ValueError:
-            return None
-        if not os.path.isfile(abspath):
-            return None
-
-        with open(abspath, encoding="utf-8", errors="replace") as fh:
-            text = fh.read()
-        qa = _manifest_field(text, "qa")
-        if qa not in DEGRADED:
-            return None
-
-        slug = os.path.basename(os.path.dirname(abspath))
-        decisions = os.path.join(sage_dir, "decisions.md")
-        marker = "%s %s qa:%s" % (DEGLOG_MARK, slug, qa)
-        existing = ""
-        if os.path.isfile(decisions):
+        if targets is None:
+            # Manifests this command can have written — not every historical
+            # cycle, back-filled dated today (same window as the Claude hook).
             try:
-                with open(decisions, encoding="utf-8", errors="replace") as fh:
-                    existing = fh.read()
+                targets = [os.path.join(work_root, d, "manifest.md")
+                           for d in sorted(os.listdir(work_root))]
             except OSError:
-                existing = ""
-        if marker in existing:
-            return None  # already logged — idempotent
-
-        ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-        line = ("\n- **%s** — cycle `%s`: %s %s\n"
-                % (ts, slug, DEGRADED[qa], marker))
-        with open(decisions, "a", encoding="utf-8") as fh:
-            fh.write(line)
+                return None
+            now, recent = time.time(), []
+            for t in targets:
+                try:
+                    if now - os.path.getmtime(t) <= _DEGLOG_RECENT_S:
+                        recent.append(t)
+                except OSError:
+                    continue
+            targets = recent
+        for abspath in targets:
+            try:
+                _deglog_record(sage_dir, work_root, abspath)
+            except Exception:
+                continue  # one unreadable manifest must not hide the rest
         return None
     except Exception:
         return None
+
+
+def _deglog_record(sage_dir, work_root, abspath):
+    """Log one manifest's degraded qa disposition to decisions.md, once."""
+    if os.path.basename(abspath) != "manifest.md":
+        return
+    try:
+        if os.path.commonpath([abspath, work_root]) != work_root:
+            return
+    except ValueError:
+        return
+    if not os.path.isfile(abspath):
+        return
+
+    with open(abspath, encoding="utf-8", errors="replace") as fh:
+        text = fh.read()
+    qa = _manifest_field(text, "qa")
+    if qa not in DEGRADED:
+        return
+
+    slug = os.path.basename(os.path.dirname(abspath))
+    decisions = os.path.join(sage_dir, "decisions.md")
+    marker = "%s %s qa:%s" % (DEGLOG_MARK, slug, qa)
+    # Already logged — here, in a rotated decisions-<date>.md, or by the Claude
+    # Code hook (its own marker): idempotent across all three.
+    logged = re.compile(r"cycle [`\"]%s[`\"]|\] %s qa:" % (re.escape(slug), re.escape(slug)))
+    for path in [decisions] + sorted(glob.glob(os.path.join(sage_dir, "decisions-*.md"))):
+        try:
+            with open(path, encoding="utf-8", errors="replace") as fh:
+                text = fh.read()
+        except OSError:
+            continue
+        for line in text.splitlines():
+            if "auto-logged by sage-" in line and qa in line and logged.search(line):
+                return
+
+    ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    line = ("\n- **%s** — cycle `%s`: %s %s\n"
+            % (ts, slug, DEGRADED[qa], marker))
+    with open(decisions, "a", encoding="utf-8") as fh:
+        fh.write(line)
 
 
 # ── Context injection (pre_llm_call) ────────────────────────────────────────

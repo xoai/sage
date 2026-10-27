@@ -1,0 +1,21 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.15.0, pytest-9.1.1, pluggy-1.7.0 -- /scratch/venv/bin/python3
+cachedir: .pytest_cache
+rootdir: /scratch/rt/py
+configfile: pytest.ini
+collecting ... collected 5 items
+
+tests/test_a.py::test_old FAILED                                         [ 20%]
+
+=================================== FAILURES ===================================
+___________________________________ test_old ___________________________________
+
+>   def test_old(): assert False
+                    ^^^^^^^^^^^^
+E   assert False
+
+tests/test_a.py:2: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_a.py::test_old - assert False
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+============================== 1 failed in 0.03s ===============================

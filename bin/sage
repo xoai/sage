@@ -523,13 +523,18 @@ create_sage_state() {
     platforms_yaml="[$(printf '"%s", ' ${PLATFORMS[@]+"${PLATFORMS[@]}"} | sed 's/, $//')]"
   fi
 
-  cat > "$sage_dir/config.yaml" << YAML
+  # Static text goes through QUOTED heredocs: the comments quote shell syntax
+  # (`tier: tier1`, `manifest.py scope derive`), and an unquoted heredoc ran each
+  # backtick span as a command, leaving holes in the comments (review 2026-10-26,
+  # X5). Only the values below are interpolated, through printf.
+  {
+    cat <<'YAML'
 # Sage project configuration. Full reference for every key (defaults, who
 # reads it, which keys enforcement protects): sage/docs/configuration.md
-sage-version: "$SAGE_FRAMEWORK_VERSION"
-project-name: "$project_name"
-detected-stack: [$DETECTED_STACK]
-platforms: $platforms_yaml
+YAML
+    printf 'sage-version: "%s"\nproject-name: "%s"\ndetected-stack: [%s]\nplatforms: %s\n' \
+      "$SAGE_FRAMEWORK_VERSION" "$project_name" "$DETECTED_STACK" "$platforms_yaml"
+    cat <<'YAML'
 auto_review: true
 auto_qa: true
 independent_gate3: true
@@ -570,7 +575,9 @@ tdd_enforcement: true
 # judge_cmd) are documented in sage/docs/configuration.md and are
 # config-gate-protected while the judge is armed. ABSENT means off; arm by
 # writing scope_judge: true.
-command_prefix: $prefix_val
+YAML
+    printf 'command_prefix: %s\n' "$prefix_val"
+    cat <<'YAML'
 # review_loop: v2 puts the review-revise verdict in code — reviewer findings
 # land in a machine-owned ledger (review.py) and every CONTINUE/STOP is
 # computed from it. v2 is the default since the RR-28 numbers held
@@ -584,13 +591,19 @@ review_loop:
   witness_capping: true     # false restores severity-as-reported
   scope_check: true         # false restores v1 (no diff-scope check on fix commits)
   review_model: inherit     # inherit | cheap (savings unclaimed until measured)
+  cycle_round_budget: 10    # review rounds + failed gate attempts per cycle; spent →
+                            # stop with one summary. 0 = no limit. Yours to raise.
+  gate_retry_cap: 3         # consecutive failures of one gate before escalating
+  require_evidence: true    # findings without a witness or citation are not acted on
+  max_fixes_per_round: 3    # blocking findings fixed per round (0 = all)
+  witness_location: inline  # inline | review-dir (per-finding tests/review/ files)
 # isolation: how delivery workflows isolate an initiative.
 #   branch   — (default) branch in place; one session at a time.
 #   worktree — a worktree per initiative; for parallel sessions.
 isolation: branch
 # worktree_copy / worktree_harvest: which gitignored paths (relative to the repo
-# root) \`sage worktree\` seeds INTO a new worktree, and which \`sage worktree
-# remove\` harvests BACK to the main checkout. Tracked paths are skipped (git
+# root) `sage worktree` seeds INTO a new worktree, and which `sage worktree
+# remove` harvests BACK to the main checkout. Tracked paths are skipped (git
 # already carries them). A trailing /* in worktree_harvest harvests each child
 # independently (per-initiative). Platform runtime (.claude/CLAUDE.md, etc.) is
 # always seeded from your platforms: list. Edit these to match your project's
@@ -598,6 +611,7 @@ isolation: branch
 worktree_copy: [.sage/config.yaml, .sage/constitution.md, .sage/gates, .sage/agents.toml, .sage/prompts, .sage/scripts, .mcp.json]
 worktree_harvest: [.sage/work/*]
 YAML
+  } > "$sage_dir/config.yaml"
 
   cat > "$sage_dir/decisions.md" << MD
 # Decisions
@@ -911,6 +925,24 @@ sage_update() {
     echo -e "  ${RED}❌ No Sage project found here.${RESET}"
     echo "  Run this from a directory with .sage/"
     echo "  Or run 'sage init' to set up Sage first."
+    exit 1
+  fi
+
+  # Refuse to update from the project's own vendored copy. With no global
+  # install, resolve_framework falls back to this script's directory — which for
+  # `sage/bin/sage update` IS $target/sage. The update below deletes $target/sage
+  # and then copies from... $target/sage: the project lost its framework and the
+  # command exited 1 (review 2026-10-26, X6). A sage/ that is a SYMLINK to the
+  # framework is fine: `rm -rf` removes only the link, and the copy that follows
+  # reads the real tree.
+  if [ -d "$target/sage" ] && [ ! -L "$target/sage" ] && \
+     [ "$(cd "$target/sage" && pwd -P)" = "$(cd "$SAGE_FRAMEWORK" && pwd -P)" ]; then
+    echo ""
+    echo -e "  ${RED}❌ This is the project's own vendored copy of Sage (sage/bin/sage).${RESET}"
+    echo "  Updating would delete the framework it is running from."
+    echo "  Install the global CLI, then run 'sage update' with it:"
+    echo "    curl -fsSL https://raw.githubusercontent.com/xoai/sage/main/install.sh | bash"
+    echo "  (or run bin/sage from a Sage checkout: /path/to/sage/bin/sage update)"
     exit 1
   fi
 

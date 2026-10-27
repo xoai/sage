@@ -106,6 +106,7 @@ Each of these is enforced by a script, not by your memory of this paragraph:
 - **Tests before code.** [sage-tdd-gate blocks the edit]
 - **Branch:** implementation does not start on the default branch. Merging is
   always a user-gated `[M]` — no workflow path merges on its own.
+  [sage-branch-gate blocks the edit while a Standard+ cycle is in progress]
 - **Fix:** confirm the root cause BEFORE scoping the fix. 1–2 files → do it;
   3–5 → write a fix plan first; 5+ or interface changes → escalate to /build.
 - **Architect:** `brief.md` exists before design. All three elicitation rounds.

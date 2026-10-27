@@ -112,3 +112,7 @@ cannot see. That is SG-9's documented residual, observed in the wild on the
 first real run rather than merely predicted. It is the strongest available
 evidence that the residual is real and worth the honesty it already gets in
 the hook header, the README, and `docs/configuration.md`.
+
+## Re-measured after P2 — 2026-10-27
+
+sage arm · N=1 · claude-opus-5-5 · operator config · **6/6** on the fixed tree ($1.74) and the final tree ($0.92). Full record: `develop/evals/REMEASURE-P2-2026-10-27.md`.

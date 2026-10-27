@@ -48,3 +48,7 @@ resumes measured (~2.05–2.1× bare); the heavy run was implementation-weighted
 (19 implement calls, 10 test runs; bookkeeping just $0.86 — not gate thrash).
 Mean $8.33 is noise-dominated; the honest read is a ~2.1× median with heavy-run
 variance. Below-2× remains undemonstrated.
+
+## Re-measured after P2 — 2026-10-27
+
+sage arm · N=1 · claude-opus-5-5 · operator config · fixed tree · **7/7**, $1.37 over two sessions. Full record: `develop/evals/REMEASURE-P2-2026-10-27.md`.

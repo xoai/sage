@@ -36,6 +36,9 @@
 #     through close-out but blocking plan edits would break the plan phase),
 #     and the global .sage/decisions.md stays free (cross-initiative log)
 #   - Bash is never matched — manifest.py's own writes pass by construction
+#
+# Always blocked (while enforced): an Edit/Write to a cycle's
+# verify-baseline.json or review-ledger.json — the gates' own records.
 # ═══════════════════════════════════════════════════════════════
 
 set -uo pipefail
@@ -61,6 +64,15 @@ import sys
 
 
 def emit(decision, message=""):
+    # To Claude Code a block is a structured deny: the model gets the reason
+    # alone, where exit 2 also showed the hook's command line and read like a
+    # script failing (review 2026-10-26, C6; Claude Code still labels both
+    # "hook error" — docs/attestations/claude-code-structured-deny-2026-10-27.md).
+    # Callers that send no hook_event_name (opencode, the tests) keep exit 2.
+    payload = globals().get("data")
+    if (decision == "BLOCK" and isinstance(payload, dict)
+            and payload.get("hook_event_name") == "PreToolUse"):
+        decision = "DENY"
     sys.stdout.write(decision + "\n")
     if message:
         sys.stdout.write(message)
@@ -114,6 +126,20 @@ abspath = (file_path if os.path.isabs(file_path)
            else os.path.join(project_root, file_path))
 abspath = os.path.abspath(abspath)
 rel = os.path.relpath(abspath, project_root).replace("\\", "/")
+# The gates' own records (review 2026-10-26): the test baseline decides which
+# failures Gate 5 excuses, the review ledger counts the cycle's budget. Only
+# their tools write them — never an Edit/Write, not even to create one (a
+# hand-written baseline would be a forged excuse).
+mm = re.match(r"^\.sage/work/([^/]+)/(verify-baseline\.json|review-ledger\.json)$", rel)
+if mm:
+    owner = ("bash .sage/gates/scripts/sage-verify.sh --record-baseline (once, at "
+             "cycle start)" if mm.group(2) == "verify-baseline.json"
+             else "sage/runtime/tools/review.py")
+    emit("BLOCK", (
+        "sage-bookkeeping-gate: .sage/work/%s/%s is machine-owned — only %s "
+        "writes it. A hand edit would change what the gates excuse or count. "
+        "If it is wrong, say so to the user; a human corrects it outside the "
+        "agent.\n" % (mm.group(1), mm.group(2), owner)))
 m = re.match(r"^\.sage/work/([^/]+)/(manifest\.md|decisions\.md)$", rel)
 if not m:
     emit("ALLOW")
@@ -275,6 +301,7 @@ emit("BLOCK", (
     "--complete-task N \\\n"
     "    [--phase X] [--status blocked --blocked-on \"the question, the "
     "options, whose call\"]\n"
+    "    [--status complete --qa passed|skipped-no-subagent|waived|...]\n"
     "\n"
     "One command writes the manifest prose, prepends decisions (Rule 7), and "
     "checks plan boxes. gate_state and updated: are machine-owned — never set "
@@ -295,6 +322,10 @@ DECISION=$(printf '%s\n' "$GATE_OUT" | sed -n '1p')
 MESSAGE=$(printf '%s\n' "$GATE_OUT" | sed -n '2,$p')
 
 case "$DECISION" in
+  DENY)
+    SAGE_DENY_REASON="$MESSAGE" python3 -c 'import json, os; print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": os.environ["SAGE_DENY_REASON"]}}))'
+    exit 0
+    ;;
   BLOCK)
     printf '%s\n' "$MESSAGE" >&2
     exit 2

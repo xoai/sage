@@ -101,7 +101,7 @@ reviewer findings land in a machine-owned ledger (`runtime/tools/review.py`,
 at `.sage/work/<slug>/review-ledger.json`) and `sage_flags.py` computes every
 CONTINUE/ESCALATE/STOP from ledger facts. Findings that cite nothing (or
 whose citation resolves against no spec/plan/constitution source) and
-demonstrate nothing are capped at substantive and never block — and a
+demonstrate nothing are rejected on intake and never block — and a
 finding the fixer disputes cannot vanish: it stops the loop until a human
 dispositions it. Projects initialized before the flip are pinned to
 `mode: v1` by `sage update` (nothing changes mid-initiative); delete the

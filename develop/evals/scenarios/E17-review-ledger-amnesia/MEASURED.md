@@ -17,3 +17,7 @@ swallowed audit write) with witnesses — the guard suppresses
 re-litigation, not discovery. One run found nothing new and closed
 STOP_CLEAN; the others closed CONTINUE on genuinely new majors. Both are
 correct controller behavior for what the round found.
+
+## Re-measured after P2 — 2026-10-27
+
+sage arm · N=1 · claude-opus-5-5 · operator config · **3/3**, $0.53. Full record: `develop/evals/REMEASURE-P2-2026-10-27.md`.

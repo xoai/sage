@@ -1,0 +1,1 @@
+/build --autonomous --quality-locked Add a token-bucket rate limiter to `add()` in `src/math.js`: at most 5 calls per second per caller key (a new optional third argument, default key "default"); a call over the limit throws a `RateLimitError`. Tokens refill continuously.

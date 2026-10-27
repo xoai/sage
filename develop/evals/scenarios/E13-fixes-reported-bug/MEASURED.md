@@ -19,3 +19,7 @@ Instrument history, for the record (two iterations, one global fix):
   matching commands), but not in every earlier run — the instruction-channel
   pattern again, worth remembering if fix-mode gates ever need to be guaranteed
   rather than probable.
+
+## Re-measured after P2 — 2026-10-27
+
+sage arm · N=1 · claude-opus-5-5 · operator config · **5/5** on P2 ($0.68) and on the fixed tree ($0.96). Branched on its own before the fix. Full record: `develop/evals/REMEASURE-P2-2026-10-27.md`.

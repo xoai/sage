@@ -690,9 +690,28 @@ def check(manifests, root: pathlib.Path) -> int:
 # it in one pass — one call instead of eight. What stays the model's: the words.
 # What stops being the model's: the ceremony of applying them file by file.
 
+# What became of a cycle's independent QA — the spec-gate's QA_TERMINAL. A cycle
+# completes only once `qa:` holds one of these; any but `passed` is a degraded
+# completion, and sage-degradation-log writes its decisions.md line.
+QA_TERMINAL = ("passed", "skipped-no-subagent", "skipped-disabled",
+               "skipped-timeout", "waived")
+
+
+def _set_field(text: str, name: str, value: str) -> str:
+    """write_field, adding the field when an older manifest predates it."""
+    try:
+        return write_field(text, name, value)
+    except Problem:
+        fm, _ = split_frontmatter(text)
+        if fm is None:
+            raise
+        return text.replace(fm, fm.rstrip("\n") + "\n%s: %s" % (name, value), 1)
+
+
 def close_out(manifest: pathlib.Path, summary=None, next_step=None,
               decisions=(), complete_tasks=(), open_questions=None,
-              status=None, phase=None, blocked_on=None) -> int:
+              status=None, phase=None, blocked_on=None, branch=None,
+              qa=None) -> int:
     text = manifest.read_text(encoding="utf-8", errors="replace")
     cycle_dir = manifest.parent
     wrote = []
@@ -719,6 +738,33 @@ def close_out(manifest: pathlib.Path, summary=None, next_step=None,
     if status:
         text = write_field(text, "status", status)
         wrote.append(f"status={status}")
+    if branch:
+        # Older manifests predate the template's branch: field — add it.
+        text = _set_field(text, "branch", branch)
+        wrote.append(f"branch={branch}")
+    if qa:
+        if qa not in QA_TERMINAL:
+            raise Problem(f"--qa {qa}: not one of {', '.join(QA_TERMINAL)}")
+        text = _set_field(text, "qa", qa)
+        wrote.append(f"qa={qa}")
+    if (status or "").strip().lower() in ("complete", "completed"):
+        # The spec-gate's completion guards, on the writer the bookkeeping gate
+        # sends every active cycle's close-out through. Before, close-out could
+        # complete a cycle the spec-gate would have refused through Edit (E8,
+        # 2026-10-27). A field the manifest predates is not held against it.
+        state = (read_field(text, "gate_state") or "").lower()
+        if state and state not in ("gates-passed", "complete"):
+            raise Problem(
+                f"cannot complete — gate_state is {state!r}, not gates-passed. "
+                "Run the quality gates first (Rule 5).")
+        cur_qa = (read_field(text, "qa") or "").lower()
+        if cur_qa and cur_qa not in QA_TERMINAL:
+            raise Problem(
+                f"cannot complete — qa is {cur_qa!r}. Say what became of "
+                "independent QA with --qa: passed (auto-QA ran and passed), "
+                "skipped-no-subagent, skipped-disabled, skipped-timeout, or "
+                "waived (the user accepted completion without it). Any but "
+                "passed is logged to .sage/decisions.md automatically.")
     if blocked_on is not None:
         # `status: blocked` without blocked_on: fails `check` — so the command
         # that sets a blocker must be able to name its question in the same pass.
@@ -1642,6 +1688,14 @@ def main(argv=None) -> int:
                     metavar="N", help="check Task N's box in plan.md (repeatable)")
     co.add_argument("--phase", help="set frontmatter phase")
     co.add_argument("--status", help="set frontmatter status")
+    co.add_argument("--branch",
+                    help="set frontmatter branch: the initiative branch's name, "
+                         "or `declined` when the user declined branching "
+                         "(the branch gate honours it for this initiative)")
+    co.add_argument("--qa", choices=QA_TERMINAL,
+                    help="set frontmatter qa: what became of independent QA "
+                         "(required before --status complete while qa is "
+                         "pending; any but passed is logged to decisions.md)")
     co.add_argument("--blocked-on",
                     help="name the blocker (required by `check` when status is "
                          "blocked): the question, the options, whose call")
@@ -1720,7 +1774,8 @@ def main(argv=None) -> int:
                              complete_tasks=args.complete_task,
                              open_questions=args.open_questions,
                              status=args.status, phase=args.phase,
-                             blocked_on=args.blocked_on)
+                             blocked_on=args.blocked_on, branch=args.branch,
+                             qa=args.qa)
 
         manifests = args.manifest or find_manifests(args.repo_root.resolve())
         if not manifests:

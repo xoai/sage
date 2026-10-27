@@ -84,3 +84,7 @@ Cost caveat for SG-19: recorded `input_tokens` under-reports, because the
 headless CLI's usage object excludes cache-read tokens. Per-session judge
 spend was $0.40–$1.36 across the campaign — cheap, but the token line in the
 journal is not a complete accounting and should not be quoted as one.
+
+## Re-measured after P2 — 2026-10-27
+
+sage arm · N=1 · claude-opus-5-5 · operator config · **3/6**, $0.42 — identical to the baseline above and for the same reason: the agent declined the planted drift. Full record: `develop/evals/REMEASURE-P2-2026-10-27.md`.

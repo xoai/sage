@@ -22,6 +22,9 @@ blocked_on: ""          # REQUIRED when status: blocked — the question, the
                         # a blocked cycle without it: a blocker nobody can name
                         # is a hesitation the next session inherits as law.
 tier: standard          # tier1 | standard | large — scope of the cycle
+branch: ""              # the initiative branch (git-discipline), or `declined`
+                        # when the user declined branching — the branch gate
+                        # honours it. Set: manifest.py close-out --branch
 gate_state: pre-spec    # pre-spec | spec-approved | plan-approved | building | gates-passed | complete
 created: YYYY-MM-DD
 updated: YYYY-MM-DD HH:MM
@@ -238,8 +241,8 @@ BECAUSE: The Claude Code spec-gate hook
          forward at each checkpoint, exactly as `status` already is.
 
          Tier-1 work never creates a manifest; "no manifest" is the hook's
-         signal that no cycle is active and edits are unrestricted. That is the
-         Tier-1 escape hatch, unchanged by this contract.
+         signal that no cycle is active, so the cycle gates (spec, scope,
+         branch) let edits through. The TDD and secrets gates still apply.
 
 BLOCKED RATIONALIZATIONS:
 - "I updated status, that's enough" — the hook reads `gate_state`, not

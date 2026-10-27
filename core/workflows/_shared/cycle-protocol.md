@@ -147,7 +147,8 @@ resumed:
    can derive is already mechanical (`gate_state` via the sync hook, `updated:`
    stamped by every advance/sync/close-out write; never set either by hand).
    Recording a blocker goes through the same command (`--status blocked
-   --blocked-on "..."`). The manifest bridge at an `[N]`/context-budget break is
+   --blocked-on "..."`), and so does completing one (`--status complete --qa
+   <disposition>` — it refuses while `qa:` is pending). The manifest bridge at an `[N]`/context-budget break is
    still written immediately (§ Session-break contract — use `close-out` for it
    too: one command, one pass) — that is the bridge, never batched away.
 
