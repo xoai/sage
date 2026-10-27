@@ -492,8 +492,9 @@ Pick A/M/R/V, or tell me what to change.
 merge protocol from
 `sage/core/capabilities/execution/git-discipline/SKILL.md` —
 preconditions, the merge, conflict handling, and the deletion offer
-all live there; do not restate them here. (No git repository or no
-initiative branch → omit [M].)
+all live there; do not restate them here. (No git repository, no
+initiative branch, or a worktree session — git-discipline, "Worktree
+sessions" → omit [M].)
 
 **On approval — checkpoint state (Rule 7):**
 1. **Apply the bookkeeping in ONE pass** — compose the summary, decisions, and

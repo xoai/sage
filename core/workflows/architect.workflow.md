@@ -341,7 +341,8 @@ same branch** (the next merge picks up the delta); the
 branch-deletion offer is suppressed until the initiative completes
 (per git-discipline — deleting mid-initiative would strand later
 milestones on the default branch). Omit [M] when not a git
-repository or no initiative branch exists.
+repository, when no initiative branch exists, or in a worktree session
+(git-discipline, "Worktree sessions").
 
 **Re-validate after each milestone:** Check architecture assumptions
 against what implementation revealed. If the architecture needs

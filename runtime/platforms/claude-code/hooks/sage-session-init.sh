@@ -187,6 +187,38 @@ if [ -n "$MAIN_ROOT" ]; then
   fi
 fi
 
+# ── Desktop mode ──────────────────────────────────────────────────
+# Claude Desktop's Code tab has question buttons, a live task list and its
+# own worktree and pull-request flow; Sage's text conventions (footers,
+# per-task progress lines, [M] merge, a typed branch proposal) map onto them.
+# desktop_mode in .sage/config.yaml: auto (default — on when the app is the
+# host: CLAUDE_CODE_ENTRYPOINT=claude-desktop, which Claude Code sets but does
+# not document, hence the knob), on, or off.
+DESKTOP_MODE=""
+DM=$(sed -n 's/^desktop_mode:[[:space:]]*//p' "$SAGE_DIR/config.yaml" 2>/dev/null | head -1 \
+       | tr -d '\r' | sed "s/[[:space:]]*#.*//; s/[\"']//g; s/[[:space:]]*\$//" | tr 'A-Z' 'a-z')
+case "$DM" in
+  on|true|yes) DESKTOP_MODE=1 ;;
+  off|false|no) ;;
+  *) [ "${CLAUDE_CODE_ENTRYPOINT:-}" = "claude-desktop" ] && DESKTOP_MODE=1 ;;
+esac
+# A worktree session on its own (non-default) branch keeps it; the default
+# branch is resolved as the branch gate resolves it.
+DESKTOP_BRANCH=""
+if [ -n "$DESKTOP_MODE" ] && [ -n "$MAIN_ROOT" ]; then
+  DESKTOP_BRANCH=$(git symbolic-ref --quiet --short HEAD 2>/dev/null)
+  DEFAULT_BRANCH=$(sed -n 's/^default_branch:[[:space:]]*"\{0,1\}\([^"#[:space:]]*\).*/\1/p' "$SAGE_DIR/config.yaml" 2>/dev/null | head -1)
+  if [ -z "$DEFAULT_BRANCH" ]; then
+    for cand in "$(git symbolic-ref --quiet refs/remotes/origin/HEAD 2>/dev/null | sed 's|^refs/remotes/origin/||')" \
+                "$(git config --get init.defaultBranch 2>/dev/null)" main master; do
+      if [ -n "$cand" ] && git show-ref --verify --quiet "refs/heads/$cand" 2>/dev/null; then
+        DEFAULT_BRANCH="$cand"; break
+      fi
+    done
+  fi
+  [ -n "$DEFAULT_BRANCH" ] && [ "$DESKTOP_BRANCH" = "$DEFAULT_BRANCH" ] && DESKTOP_BRANCH=""
+fi
+
 # ── Scan active work via frontmatter ──
 ACTIVE_WORK=""
 WORK_COUNT=0
@@ -268,6 +300,28 @@ if [ -n "$RECENT_DECISIONS" ]; then
   echo ""
   echo "Recent decisions:"
   echo "$RECENT_DECISIONS"
+fi
+
+if [ -n "$DESKTOP_MODE" ]; then
+  echo ""
+  echo "Desktop mode (Claude Desktop's Code tab; desktop_mode in .sage/config.yaml):"
+  echo "- Checkpoints: show the work, then ask with the AskUserQuestion tool — the"
+  echo "  zone's options as buttons — instead of printing the footer; that question"
+  echo "  is the turn's question. Still a hard wait. Zone by zone, and menus of more"
+  echo "  than four options: sage/core/system-skills/sage-checkpoints/references/desktop-mode.md"
+  echo "- Progress: keep the plan's tasks in your task list as you work; plan.md"
+  echo "  checkboxes stay the record. No per-task progress lines in chat."
+  if [ -n "$DESKTOP_BRANCH" ]; then
+    echo "- Branch: this session's worktree is on $DESKTOP_BRANCH. Use it for the"
+    echo "  initiative — propose no other (/autoresearch keeps its own branch rules) —"
+    echo "  and record it: python3 sage/runtime/tools/manifest.py close-out <manifest>"
+    echo "  --branch $DESKTOP_BRANCH (git-discipline: \"Worktree sessions\"). At completion"
+    echo "  offer no [M] merge: the branch is merged from the main checkout or through"
+    echo "  a pull request — the user's call."
+  else
+    echo "- Branch: when git-discipline asks a branch question — create, rename,"
+    echo "  continue, or decline — ask it as buttons."
+  fi
 fi
 
 echo ""

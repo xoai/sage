@@ -155,6 +155,10 @@ After every task (or every 3 tasks for long plans), show brief progress:
 **Sage:** Task [N] complete. Continuing to Task [N+1] — [name].
 Say "pause" to stop.
 
+In Desktop mode, the session's task list is the progress display: mark the
+task done there and skip this line
+(`sage/core/system-skills/sage-checkpoints/references/desktop-mode.md`).
+
 **Batch the bookkeeping** (`batch_bookkeeping`, default `true`): defer memory
 writes and non-essential prose to the completion/session-break checkpoint rather
 than emitting them per task — and when that checkpoint arrives, apply ALL of it
@@ -206,12 +210,15 @@ Quality: All 5 gates passed on final review.
 [A] Approve — accept the work; branch stays unmerged
 [M] Merge to [default] — user-gated merge per git-discipline
 [R] Revise — needs changes
-[P] PR — create a pull request
+[P] PR — draft the pull-request description from the spec
 
 🔒 **MANDATORY CHECKPOINT:** Wait for human decision.
 
 [M] is the ONLY merge path — [A] never merges. Omit [M] when not a
-git repository or no initiative branch exists.
+git repository, when no initiative branch exists, or in a worktree session
+(git-discipline, "Worktree sessions" — the branch goes to review instead).
+Sage never pushes or opens the PR itself: [P] writes the description for
+the user (or their tool) to open it with.
 
 ### Step 7: Wrap Up
 
@@ -220,8 +227,10 @@ Based on human's choice:
   `sage/core/capabilities/execution/git-discipline/SKILL.md` —
   preconditions, the merge itself, conflict handling, and the
   deletion offer all live there; do not restate them here. Omit
-  [M] when not a git repository or no initiative branch exists.
-- **PR:** Create a pull request with the spec as description
+  [M] when not a git repository, when no initiative branch exists, or
+  in a worktree session (git-discipline, "Worktree sessions").
+- **PR:** Write the pull-request description from the spec, for the user
+  to open the PR with — Sage never pushes or opens it (git-discipline)
 - **Keep working:** Note what needs to change, update plan
 - **Discard:** Revert and clean up
 

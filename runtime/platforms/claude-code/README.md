@@ -188,3 +188,18 @@ initiative: its own cycles apply there, not the main checkout's.
   close-out` there copies the cycle to the main checkout's
   `.sage/worktree-records/<worktree>/` — an archive no gate reads, so a
   worktree's open cycle never governs the main checkout.
+
+### Desktop mode
+
+Inside Claude Desktop's Code tab, Sage's text conventions map onto the
+app: each checkpoint is asked with question buttons instead of an
+`[A] [R] [N]` footer (the work is still shown first, and it is still a hard
+wait); progress goes to the session's task list instead of per-task lines
+in chat; branch questions are buttons too, and a worktree session keeps
+the branch it runs on. The session hook switches this on when Claude Code
+reports the Desktop app as its host; `desktop_mode: on|off|auto` in
+`.sage/config.yaml` overrides it (`docs/configuration.md`).
+
+Independently of Desktop mode, a session working in a worktree never
+offers `[M]` merge — `git checkout <default>` fails there; the branch is
+merged from the main checkout or through a pull request, the user's call.

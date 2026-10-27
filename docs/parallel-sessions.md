@@ -109,8 +109,11 @@ You'll see something like:
 
 Open that session and work normally — `/build`, `/fix`, etc. branch and
 commit in place because the session is *already* isolated. When you're
-done and ready to merge, do it from the worktree (or the main checkout)
-with the workflow's `[M]` option.
+done, merge from the main checkout (`git merge --no-ff <branch>` there, or
+through a pull request). A session working in a worktree does not offer
+`[M]`: `git checkout <default>` fails inside a worktree while the main
+checkout has the default branch checked out (git-discipline, "Worktree
+sessions").
 
 Run as many as you want — one worktree per concurrent task:
 
@@ -321,15 +324,15 @@ bookkeeping fighting: each writes to its own work directory.
 # Bug came in — spin up an isolated session for it:
 sage worktree login-timeout --prefix fix
 cd ../myapp-login-timeout && claude
-#   → in that session: /fix, work the bug, [M] Merge when green.
+#   → in that session: /fix, work the bug, approve when green.
 
 # Meanwhile, in another terminal, start the feature you were planning:
 sage worktree saved-views
 cd ../myapp-saved-views && claude
-#   → in that session: /build, spec → plan → implement, [M] when done.
+#   → in that session: /build, spec → plan → implement, approve when done.
 
 # The two sessions never touch the same files — separate directories.
-# Merge each from its own worktree when ready (always user-gated).
+# Merge each from the main checkout when ready: git merge --no-ff fix/login-timeout
 
 # Clean up after merging (harvests .sage/work back into the main checkout first):
 sage worktree remove login-timeout

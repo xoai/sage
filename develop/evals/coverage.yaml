@@ -74,6 +74,10 @@ surfaces:
       through `review.py gate` (counted retries, cycle budget). E19 is the
       scenario that measures it — added, run once 2026-10-26 (N=1, operator config — E19/MEASURED.md); E1/E4/E7/E9/E10/L3
       predate the change.
+      2026-10-27: [M] is also omitted in a worktree session (git-discipline,
+      "Worktree sessions": `git checkout <default>` fails inside a worktree
+      whose default branch is checked out elsewhere). No eval runs a
+      completion checkpoint inside a worktree session — #eval-neutral.
 
   workflow-fix:
     path: core/workflows/fix.workflow.md
@@ -90,6 +94,10 @@ surfaces:
       reads. Before, the decline lived in the decision log only and nothing
       enforced the branch. E13 not re-run; E13 seeds no cycle, but its fix
       opens one on the default branch, so it now meets the gate.
+      2026-10-27: [M] is also omitted in a worktree session (git-discipline,
+      "Worktree sessions": `git checkout <default>` fails inside a worktree
+      whose default branch is checked out elsewhere). No eval runs a
+      completion checkpoint inside a worktree session — #eval-neutral.
 
   workflow-architect:
     path: core/workflows/architect.workflow.md
@@ -101,6 +109,10 @@ surfaces:
       design, per-milestone checkpoints — all of which the eager layer asserts
       as non-negotiable. The plan-approval `scope derive` step (SG-1) mirrors
       build's and is exercised only through L3's build-side twin.
+      2026-10-27: [M] is also omitted in a worktree session (git-discipline,
+      "Worktree sessions": `git checkout <default>` fails inside a worktree
+      whose default branch is checked out elsewhere). No eval runs a
+      completion checkpoint inside a worktree session — #eval-neutral.
 
   workflow-review:
     path: core/workflows/review.workflow.md
@@ -154,6 +166,11 @@ surfaces:
     uncovered: >
       Optional runtime shipped in the sage-autoresearch pack; the optimization
       loop has no scenario. Its own pressure assets move with the pack (P6-T1).
+      2026-10-27: [M] is also omitted in a worktree session (git-discipline,
+      "Worktree sessions": `git checkout <default>` fails inside a worktree
+      whose default branch is checked out elsewhere). No eval runs a
+      completion checkpoint inside a worktree session — #eval-neutral. Its own
+      autoresearch/<slug> branch rules stand in a worktree session.
 
   subworkflow-subagent-execution:
     path: core/workflows/sub-workflows/subagent-execution.workflow.md
@@ -661,6 +678,13 @@ surfaces:
       Final review: the main-checkout notices fire only when the session's
       project is the main checkout; a session started inside a worktree with
       no config is told it is not a Sage project (WT9).
+      2026-10-27 (Desktop mode): inside Claude Desktop's Code tab
+      (desktop_mode auto|on|off; the session hook decides) checkpoints are
+      asked with AskUserQuestion, progress goes to the session's task list,
+      and a worktree session keeps its branch (offering no [M] is structural — git-discipline, "Worktree sessions" — whatever desktop_mode says).
+      Off in `claude -p` — and the eval driver drops the app's host variables so a harness launched from inside the app cannot switch it on — so the
+      covering scenarios run exactly as before: #eval-neutral. Pinned by hook
+      tests DM1–DM7b.
 
   hook-scope-gate:
     path: runtime/platforms/claude-code/hooks/sage-scope-gate.sh
@@ -1092,6 +1116,10 @@ surfaces:
       structurally so: the eval driver is headless and cannot answer an approval
       prompt, so the half of this that matters most to a human user is the half
       the harness cannot see. That is a limit of the instrument, not an oversight.
+      2026-10-27: the checkpoint line says Desktop mode asks a button question
+      instead of the footer — same line count. Desktop mode never switches on
+      under `claude -p` (the eval driver also drops the app's host variables),
+      so #eval-neutral.
 
 
 
@@ -1200,6 +1228,14 @@ surfaces:
       [P] is honored exclusively by --parallel (code-scheduled, opt-in).
       Phase 3's subagent-execution sub-workflow replaces this loop
       when --subagents is active; E9/E10 will cover that path.
+      2026-10-27 (Desktop mode): inside Claude Desktop's Code tab
+      (desktop_mode auto|on|off; the session hook decides) checkpoints are
+      asked with AskUserQuestion, progress goes to the session's task list,
+      and a worktree session keeps its branch (offering no [M] is structural — git-discipline, "Worktree sessions" — whatever desktop_mode says).
+      Off in `claude -p` — and the eval driver drops the app's host variables so a harness launched from inside the app cannot switch it on — so the
+      covering scenarios run exactly as before: #eval-neutral. Pinned by hook
+      tests DM1–DM7b. Also: [P] drafts the PR description — git-discipline
+      never pushes or opens PRs, and the menu said it would.
 
   capability-tdd:
     path: core/capabilities/execution/tdd/SKILL.md
@@ -1253,6 +1289,17 @@ surfaces:
       declined` via `manifest.py close-out --branch declined` — the gate
       honours it. E1 not re-run; E1's /build now has to branch before its
       first source edit.
+      2026-10-27 (Desktop mode): inside Claude Desktop's Code tab
+      (desktop_mode auto|on|off; the session hook decides) checkpoints are
+      asked with AskUserQuestion, progress goes to the session's task list,
+      and a worktree session keeps its branch (offering no [M] is structural — git-discipline, "Worktree sessions" — whatever desktop_mode says).
+      Off in `claude -p` — and the eval driver drops the app's host variables so a harness launched from inside the app cannot switch it on — so the
+      covering scenarios run exactly as before: #eval-neutral. Pinned by hook
+      tests DM1–DM7b. New: "Worktree sessions" — the session's own branch is
+      the initiative's (recorded with close-out --branch; renaming it is the user's call), no
+      [M] (git checkout <default> fails inside a worktree), records via
+      close-out. Applies to `claude --worktree` too; E10 measures
+      propose-confirm on the default branch, unchanged.
 
   capability-auto-review:
     path: core/capabilities/review/auto-review/SKILL.md
@@ -1512,6 +1559,14 @@ surfaces:
       copied into CLAUDE.md's Quick reference (always on), so the formatting
       reaches sessions that never open this skill. Still ungraded, for the
       reason above.
+      2026-10-27 (Desktop mode): inside Claude Desktop's Code tab
+      (desktop_mode auto|on|off; the session hook decides) checkpoints are
+      asked with AskUserQuestion, progress goes to the session's task list,
+      and a worktree session keeps its branch (offering no [M] is structural — git-discipline, "Worktree sessions" — whatever desktop_mode says).
+      Off in `claude -p` — and the eval driver drops the app's host variables so a harness launched from inside the app cannot switch it on — so the
+      covering scenarios run exactly as before: #eval-neutral. Pinned by hook
+      tests DM1–DM7b. The mapping lives in references/desktop-mode.md, read on
+      demand.
 
   system-skill-sage-gates:
     path: core/system-skills/sage-gates/SKILL.md
@@ -1525,6 +1580,14 @@ surfaces:
       2026-10-27 (P2): 'Why you were blocked' gained the branch gate, the Bash
       write gate and the TDD gate's one-change unlock; the branch-gate decline
       is now `manifest.py close-out --branch declined`. E1/E7 not re-run.
+      2026-10-27 (Desktop mode): inside Claude Desktop's Code tab
+      (desktop_mode auto|on|off; the session hook decides) checkpoints are
+      asked with AskUserQuestion, progress goes to the session's task list,
+      and a worktree session keeps its branch (offering no [M] is structural — git-discipline, "Worktree sessions" — whatever desktop_mode says).
+      Off in `claude -p` — and the eval driver drops the app's host variables so a harness launched from inside the app cannot switch it on — so the
+      covering scenarios run exactly as before: #eval-neutral. Pinned by hook
+      tests DM1–DM7b. The branch-block entry says a worktree session never
+      meets it.
 
   system-skill-sage-constitution:
     path: core/system-skills/sage-constitution/SKILL.md

@@ -572,6 +572,20 @@ def isolated_claude_env(ws: pathlib.Path) -> dict:
     persists between sessions; runs never see each other or the real HOME.
     """
     env = dict(os.environ)
+    # The evals measure the headless CLI. Run from a terminal inside Claude
+    # Desktop, the operator's env says the HOST is the app, and Sage's session
+    # hook would switch its checkpoints to question buttons nobody can click
+    # (Desktop mode, 2026-10-27). Whatever launched the harness, the agent
+    # under test is `claude -p`.
+    # The app's other host-only variables go too: one of them offers the agent
+    # AskUserQuestion, the rest wire it to the app's session.
+    for name in ("CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_DESKTOP_APP_VERSION",
+                 "CLAUDE_CODE_ENABLE_ASK_USER_QUESTION_TOOL", "CLAUDE_CODE_TERMINAL_MCP_TOOLS",
+                 "CLAUDE_CODE_EMIT_TOOL_USE_SUMMARIES", "CLAUDE_CODE_HOST_SESSION_ID",
+                 "CLAUDE_CODE_MESSAGING_SOCKET", "CLAUDE_CODE_MESSAGING_TOKEN",
+                 "CLAUDE_CODE_SESSION_ATTENDED", "CLAUDE_CODE_CHILD_SESSION",
+                 "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_REPORT_FINDINGS"):
+        env.pop(name, None)
     if OPERATOR_CONFIG:
         return env
     cfg = ws.parent / "_claude_config"

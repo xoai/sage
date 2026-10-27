@@ -105,7 +105,9 @@ skills:
                           # +20 (2026-10-27, P2): "Why you were blocked" for the
                           # branch gate, the Bash write gate, the TDD one-change unlock
   sage-routing: 105       # measured  90
-  sage-checkpoints: 96    # measured  95 · +4 (C3): the "At a glance" section CLAUDE.md copies
+  sage-checkpoints: 100   # measured  98 · +4 (C3): the "At a glance" section CLAUDE.md copies
+                          # +4 (2026-10-27, Desktop mode): one rule pointing at
+                          # references/desktop-mode.md, which is read on demand
   sage-using-memory: 90   # measured  77
   sage-constitution: 87   # measured  75
   sage-decisions: 80      # measured  69

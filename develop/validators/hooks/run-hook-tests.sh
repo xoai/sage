@@ -2273,6 +2273,55 @@ assert WT26 "a stale enforced worktree does not stop the user's own config edits
   '{"tool_name":"Edit","tool_input":{"file_path":".sage/config.yaml","old_string":"tdd_enforcement: true\n","new_string":""}}' \
   --hook "$CGW" --exit 0 --env "CLAUDE_PROJECT_DIR=$M"
 
+# ── Desktop mode: the session hook maps Sage's text conventions onto the app ──
+dm_out() {  # dm_out <dir> [env...] — the session hook's output there
+  local d="$1"; shift
+  ( cd "$d" && env "$@" bash "$SESSION_INIT" 2>/dev/null )
+}
+dm_case() {  # dm_case <id> <label> <want:yes|no> <output> [must-contain]
+  local ok=true
+  if [ "$3" = yes ]; then
+    printf '%s' "$4" | grep -Fq "Desktop mode (" || ok=false
+    [ -z "${5:-}" ] || printf '%s' "$4" | grep -Fq -- "$5" || ok=false
+  else
+    printf '%s' "$4" | grep -Fq "Desktop mode (" && ok=false
+  fi
+  if [ "$ok" = true ]; then
+    N_PASS=$((N_PASS + 1)); report PASS "$1" "$2"
+  else
+    N_FAIL=$((N_FAIL + 1)); FAILED_IDS="$FAILED_IDS $1"; report FAIL "$1" "$2" "got: $4"
+  fi
+}
+case "$ONLY" in ""|DM*) DM_RUN=1 ;; *) DM_RUN="" ;; esac
+if [ -n "$DM_RUN" ]; then
+  P=$(br_project)
+  dm_case DM1 "in Claude Desktop (auto), the session gets the Desktop rules" yes \
+    "$(dm_out "$P" CLAUDE_CODE_ENTRYPOINT=claude-desktop)" "AskUserQuestion"
+  dm_case DM2 "outside Desktop, nothing changes" no "$(dm_out "$P" CLAUDE_CODE_ENTRYPOINT=cli)"
+  dm_case DM3 "outside a worktree, git-discipline's branch questions are asked as buttons" yes \
+    "$(dm_out "$P" CLAUDE_CODE_ENTRYPOINT=claude-desktop)" "ask it as buttons"
+  printf "desktop_mode: 'OFF'   # quoted, upper case, CRLF\r\n" >> "$P/.sage/config.yaml"
+  dm_case DM4 "desktop_mode: off wins over the host, however it is spelled" no \
+    "$(dm_out "$P" CLAUDE_CODE_ENTRYPOINT=claude-desktop)"
+  sed -i.bak "s/^desktop_mode: .*/desktop_mode: yes/" "$P/.sage/config.yaml" && rm -f "$P/.sage/config.yaml.bak"
+  dm_case DM5 "desktop_mode: yes (on) turns it on anywhere — the host signal is undocumented" yes \
+    "$(dm_out "$P" CLAUDE_CODE_ENTRYPOINT=cli)"
+  M=$(wt_main)
+  out="$(dm_out "$M/.claude/worktrees/x" CLAUDE_CODE_ENTRYPOINT=claude-desktop CLAUDE_PROJECT_DIR="$M")"
+  dm_case DM6 "a worktree session keeps its branch" yes "$out" "worktree is on claude/x"
+  dm_case DM6b "…and offers no [M] merge" yes "$out" "offer no [M] merge"
+  # A worktree ON the default branch is no worktree session: no "keep it".
+  M=$(br_project); W="$M/.claude/worktrees/m"
+  ( cd "$M" && git switch -q -c feat/other && git worktree add -q "$W" main ) >/dev/null 2>&1
+  out="$(dm_out "$W" CLAUDE_CODE_ENTRYPOINT=claude-desktop CLAUDE_PROJECT_DIR="$M")"
+  dm_case DM7 "a worktree on the default branch gets the ordinary branch rules" yes "$out" "ask it as buttons"
+  if printf '%s' "$out" | grep -Fq "propose no other"; then
+    N_FAIL=$((N_FAIL + 1)); FAILED_IDS="$FAILED_IDS DM7b"; report FAIL DM7b "…and is never told to keep main" "$out"
+  else
+    N_PASS=$((N_PASS + 1)); report PASS DM7b "…and is never told to keep main"
+  fi
+fi
+
 if [ -z "$ONLY" ] || [ "$ONLY" = "WT24" ]; then
   M=$(wt_main); W="$M/.claude/worktrees/x"; printf 'branch_gate: false\n' >> "$W/.sage/config.yaml"
   out="$( cd "$W" && CLAUDE_PROJECT_DIR="$M" bash "$SESSION_INIT" 2>/dev/null )"

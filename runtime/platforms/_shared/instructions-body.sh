@@ -181,7 +181,7 @@ inputs. The approval footer is the one that matters:
 
 Choice menus, next-step footers, and the full four-zone protocol: →
 **sage-checkpoints** skill. One zone per response; the footer is always last;
-no footer means no response is expected.
+no footer means no response is expected. (Desktop mode: a button question.)
 
 ## Project State
 
