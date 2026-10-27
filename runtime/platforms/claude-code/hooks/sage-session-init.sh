@@ -11,6 +11,24 @@
 
 SAGE_DIR=".sage"
 
+# Run where the SESSION is. Claude Desktop starts a worktree session's hooks
+# in the main checkout (CLAUDE_PROJECT_DIR), not in the worktree the session
+# works in — seen live, 2026-10-27 — so the hook's own cwd would report the
+# main checkout's state. The SessionStart input names the session's cwd.
+# Bounded: a caller that leaves stdin open and silent (a script, a test)
+# must never hang the hook — Claude Code sends one JSON line and closes it.
+if [ ! -t 0 ]; then
+  HOOK_INPUT=""
+  while IFS= read -r -t 1 HOOK_LINE || [ -n "$HOOK_LINE" ]; do
+    HOOK_INPUT="$HOOK_INPUT$HOOK_LINE"
+    HOOK_LINE=""
+  done
+  SESSION_CWD=$(printf '%s' "$HOOK_INPUT" | sed -n 's/.*"cwd"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
+  if [ -n "$SESSION_CWD" ] && [ -d "$SESSION_CWD" ]; then
+    cd "$SESSION_CWD" 2>/dev/null || true
+  fi
+fi
+
 # ── Linked worktree? (a Claude Desktop session, `claude --worktree`, `sage
 # worktree`). Computed once; the notices below use it.
 GD=""; GCD=""; MAIN_ROOT=""

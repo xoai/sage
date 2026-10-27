@@ -629,7 +629,7 @@ assert TG7 "fixtures without any test source are not a test suite" "$P" "$SRCEDI
 
 if [ -z "$ONLY" ] || [ "$ONLY" = "H32" ]; then
   P="$(mktemp -d "${TMPDIR:-/tmp}/sage-inittest-XXXXXX")/proj"; mkdir -p "$P/src"
-  out="$( cd "$P" && bash "$SESSION_INIT" 2>/dev/null )"
+  out="$( cd "$P" && bash "$SESSION_INIT" 2>/dev/null </dev/null )"
   if printf '%s' "$out" | grep -Fq "NOT initialized" \
      && printf '%s' "$out" | grep -Fq "sage init"; then
     report PASS H32 "an uninitialized project is told to run sage init (not silence)"
@@ -644,7 +644,7 @@ fi
 if [ -z "$ONLY" ] || [ "$ONLY" = "H33" ]; then
   P="$(mktemp -d "${TMPDIR:-/tmp}/sage-inittest-XXXXXX")/proj"
   mkdir -p "$P/.sage/work" "$P/sage/core"
-  out="$( cd "$P" && bash "$SESSION_INIT" 2>/dev/null )"
+  out="$( cd "$P" && bash "$SESSION_INIT" 2>/dev/null </dev/null )"
   if printf '%s' "$out" | grep -Fq "NOT initialized"; then
     report FAIL H33 "a properly initialized project is not nagged" "false alarm: $out"
     N_FAIL=$((N_FAIL + 1)); FAILED_IDS="$FAILED_IDS H33"
@@ -657,7 +657,7 @@ fi
 if [ -z "$ONLY" ] || [ "$ONLY" = "H34" ]; then
   # Half-installed: .sage/ present, the framework removed.
   P="$(mktemp -d "${TMPDIR:-/tmp}/sage-inittest-XXXXXX")/proj"; mkdir -p "$P/.sage/work"
-  out="$( cd "$P" && bash "$SESSION_INIT" 2>/dev/null )"
+  out="$( cd "$P" && bash "$SESSION_INIT" 2>/dev/null </dev/null )"
   if printf '%s' "$out" | grep -Fq "sage update"; then
     report PASS H34 "a half-installed project is told to run sage update"
     N_PASS=$((N_PASS + 1))
@@ -2168,8 +2168,8 @@ if [ -z "$ONLY" ] || [ "$ONLY" = "WT9" ]; then
   # A worktree with no .sage/ of its own is ungoverned (WT5): the session
   # hook says so, and how to fix it, instead of staying silent.
   M=$(wt_main); W="$M/.claude/worktrees/x"; rm -rf "$W/.sage"
-  out="$( cd "$W" && CLAUDE_PROJECT_DIR="$M" bash "$SESSION_INIT" 2>/dev/null )"
-  own="$( cd "$W" && CLAUDE_PROJECT_DIR="$W" bash "$SESSION_INIT" 2>/dev/null )"
+  out="$( cd "$W" && CLAUDE_PROJECT_DIR="$M" bash "$SESSION_INIT" 2>/dev/null </dev/null )"
+  own="$( cd "$W" && CLAUDE_PROJECT_DIR="$W" bash "$SESSION_INIT" 2>/dev/null </dev/null )"
   if printf '%s' "$out" | grep -Fq "judge work here from the main" \
       && printf '%s' "$out" | grep -Fq ".worktreeinclude" \
       && printf '%s' "$own" | grep -Fq "treat it as no Sage project" \
@@ -2184,8 +2184,8 @@ if [ -z "$ONLY" ] || [ "$ONLY" = "WT10" ]; then
   # .sage/work gitignored in a worktree: the session learns close-out mirrors it.
   M=$(wt_main); W="$M/.claude/worktrees/x"
   printf '.sage/work/\n' > "$W/.gitignore"
-  out="$( cd "$W" && bash "$SESSION_INIT" 2>/dev/null )"
-  out_main="$( cd "$M" && bash "$SESSION_INIT" 2>/dev/null )"
+  out="$( cd "$W" && bash "$SESSION_INIT" 2>/dev/null </dev/null )"
+  out_main="$( cd "$M" && bash "$SESSION_INIT" 2>/dev/null </dev/null )"
   if printf '%s' "$out" | grep -Fq "Records (worktree)" \
       && ! printf '%s' "$out_main" | grep -Fq "Records (worktree)"; then
     N_PASS=$((N_PASS + 1)); report PASS WT10 "a worktree whose .sage/work is ignored is told close-out mirrors it"
@@ -2276,7 +2276,7 @@ assert WT26 "a stale enforced worktree does not stop the user's own config edits
 # ── Desktop mode: the session hook maps Sage's text conventions onto the app ──
 dm_out() {  # dm_out <dir> [env...] — the session hook's output there
   local d="$1"; shift
-  ( cd "$d" && env "$@" bash "$SESSION_INIT" 2>/dev/null )
+  ( cd "$d" && env "$@" bash "$SESSION_INIT" 2>/dev/null </dev/null )
 }
 dm_case() {  # dm_case <id> <label> <want:yes|no> <output> [must-contain]
   local ok=true
@@ -2310,6 +2310,14 @@ if [ -n "$DM_RUN" ]; then
   out="$(dm_out "$M/.claude/worktrees/x" CLAUDE_CODE_ENTRYPOINT=claude-desktop CLAUDE_PROJECT_DIR="$M")"
   dm_case DM6 "a worktree session keeps its branch" yes "$out" "worktree is on claude/x"
   dm_case DM6b "…and offers no [M] merge" yes "$out" "offer no [M] merge"
+  # Desktop runs a worktree session's SessionStart hook in the MAIN checkout
+  # (live, 2026-10-27); the session's cwd arrives on stdin.
+  M=$(wt_main)
+  out="$( cd "$M" && printf '{"hook_event_name":"SessionStart","source":"startup","cwd":"%s"}' \
+          "$M/.claude/worktrees/x" | CLAUDE_CODE_ENTRYPOINT=claude-desktop CLAUDE_PROJECT_DIR="$M" \
+          bash "$SESSION_INIT" 2>/dev/null )"
+  dm_case DM6c "run from the main checkout, the hook reports the session's worktree" yes "$out" \
+    "worktree is on claude/x"
   # A worktree ON the default branch is no worktree session: no "keep it".
   M=$(br_project); W="$M/.claude/worktrees/m"
   ( cd "$M" && git switch -q -c feat/other && git worktree add -q "$W" main ) >/dev/null 2>&1
@@ -2324,9 +2332,9 @@ fi
 
 if [ -z "$ONLY" ] || [ "$ONLY" = "WT24" ]; then
   M=$(wt_main); W="$M/.claude/worktrees/x"; printf 'branch_gate: false\n' >> "$W/.sage/config.yaml"
-  out="$( cd "$W" && CLAUDE_PROJECT_DIR="$M" bash "$SESSION_INIT" 2>/dev/null )"
+  out="$( cd "$W" && CLAUDE_PROJECT_DIR="$M" bash "$SESSION_INIT" 2>/dev/null </dev/null )"
   M2=$(wt_main)
-  out_same="$( cd "$M2/.claude/worktrees/x" && CLAUDE_PROJECT_DIR="$M2" bash "$SESSION_INIT" 2>/dev/null )"
+  out_same="$( cd "$M2/.claude/worktrees/x" && CLAUDE_PROJECT_DIR="$M2" bash "$SESSION_INIT" 2>/dev/null </dev/null )"
   if printf '%s' "$out" | grep -Fq "Config (worktree)" && ! printf '%s' "$out_same" | grep -Fq "Config (worktree)"; then
     N_PASS=$((N_PASS + 1)); report PASS WT24 "a worktree whose config differs is told it is judged from the main checkout"
   else

@@ -685,6 +685,12 @@ surfaces:
       Off in `claude -p` — and the eval driver drops the app's host variables so a harness launched from inside the app cannot switch it on — so the
       covering scenarios run exactly as before: #eval-neutral. Pinned by hook
       tests DM1–DM7b.
+      2026-10-27 (live, Claude Desktop 4.29.0): the app runs a worktree
+      session's SessionStart hook in the MAIN checkout, so the hook now reads
+      the session's cwd from its input (DM6c). The rest of Desktop mode held
+      in a live /build
+      (docs/attestations/claude-code-desktop-worktree-session-2026-10-27.md).
+      Context only — #eval-neutral.
 
   hook-scope-gate:
     path: runtime/platforms/claude-code/hooks/sage-scope-gate.sh

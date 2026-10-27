@@ -198,7 +198,9 @@ wait); progress goes to the session's task list instead of per-task lines
 in chat; branch questions are buttons too, and a worktree session keeps
 the branch it runs on. The session hook switches this on when Claude Code
 reports the Desktop app as its host; `desktop_mode: on|off|auto` in
-`.sage/config.yaml` overrides it (`docs/configuration.md`).
+`.sage/config.yaml` overrides it (`docs/configuration.md`). Verified live in
+a Desktop worktree session:
+`docs/attestations/claude-code-desktop-worktree-session-2026-10-27.md`.
 
 Independently of Desktop mode, a session working in a worktree never
 offers `[M]` merge — `git checkout <default>` fails there; the branch is

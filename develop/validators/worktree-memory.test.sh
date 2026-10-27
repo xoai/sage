@@ -40,7 +40,7 @@ WT="$T/main-mtest"
 [ -f "$WT/.mcp.json" ] && check ".mcp.json seeded into worktree (server configured there)" 0 || check ".mcp.json seeded into worktree (server configured there)" 1
 
 # 2) session-init hook in the worktree emits the set_project(main) directive.
-out_wt="$( cd "$WT" && bash "$HOOK" 2>/dev/null )"
+out_wt="$( cd "$WT" && bash "$HOOK" 2>/dev/null </dev/null )"
 printf '%s' "$out_wt" | grep -q "sage_memory_set_project" \
   && check "hook emits set_project directive in a worktree" 0 || check "hook emits set_project directive in a worktree" 1
 # The directive names the MAIN checkout root (as git reports it), not the worktree.
@@ -54,7 +54,7 @@ printf '%s' "$out_wt" | grep -qi "never copy or harvest" \
   && check "directive states .sage-memory is shared (never harvested)" 0 || check "directive states .sage-memory is shared (never harvested)" 1
 
 # 3) Same hook in the MAIN checkout does NOT emit the worktree directive.
-out_main="$( cd "$T/main" && bash "$HOOK" 2>/dev/null )"
+out_main="$( cd "$T/main" && bash "$HOOK" 2>/dev/null </dev/null )"
 printf '%s' "$out_main" | grep -q "Memory (worktree)" \
   && check "main checkout: no worktree directive" 1 || check "main checkout: no worktree directive" 0
 
