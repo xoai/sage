@@ -94,6 +94,94 @@ if not file_path:
 project_root = (os.environ.get("CLAUDE_PROJECT_DIR")
                 or (data.get("cwd") or "").strip() or os.getcwd())
 project_root = os.path.abspath(project_root)
+
+# ── sage-root: identical in every hook (pinned by hook test WT0) ──
+# A Desktop or `--worktree` session edits in a linked worktree while
+# CLAUDE_PROJECT_DIR stays at the main checkout. Judge the checkout the
+# edit lands in: when `probe` is in ANOTHER registered worktree of the same
+# repository whose Sage config (at the project subdirectory, if the project
+# lives in one) says what the main checkout config says, that worktree is
+# the root — its branch, HEAD and cycles. Anything else keeps `base`, as
+# before: the same checkout, a nested repo, a hand-made .git file, a
+# worktree without Sage, or one whose config differs (an empty, laxer or
+# older one would otherwise be the judge — review 2026-10-27).
+def sage_worktree_root(base, probe):
+    import subprocess as _sp
+
+    def _git(d, *a):
+        try:
+            p = _sp.run(["git", "-C", d] + list(a), capture_output=True,
+                        text=True, timeout=5)
+            return p.stdout if p.returncode == 0 else ""
+        except (OSError, _sp.SubprocessError):
+            return ""
+
+    if not base or not probe or not os.path.isfile(os.path.join(base, ".sage", "config.yaml")):
+        return base                      # no Sage policy to match: nothing to switch to
+    d = os.path.abspath(probe)
+    while not os.path.isdir(d):
+        up = os.path.dirname(d)
+        if up == d:
+            return base
+        d = up
+    a = d                                # no .sage/ above the probe: no git calls
+    while not os.path.isdir(os.path.join(a, ".sage")):
+        up = os.path.dirname(a)
+        if up == a:
+            return base
+        a = up
+    # One line per value; --show-prefix prints an EMPTY line at the top.
+    out = _git(d, "rev-parse", "--show-toplevel", "--git-dir", "--git-common-dir").split("\n")[:-1]
+    ref = _git(base, "rev-parse", "--git-dir", "--git-common-dir", "--show-prefix").split("\n")[:-1]
+    if len(out) != 3 or len(ref) != 3 or not all(out) or not all(ref[:2]):
+        return base
+    top, git_dir, common = out
+
+    def real(p, at):
+        return os.path.realpath(os.path.join(at, p))
+
+    if real(common, d) != real(ref[1], base) or real(git_dir, d) == real(ref[0], base):
+        return base                      # another repository, or the base checkout itself
+    root = os.path.join(os.path.realpath(top), ref[2]).rstrip(os.sep)
+    # NUL-separated: a path holding a newline cannot forge an entry.
+    listing = _git(base, "worktree", "list", "--porcelain", "-z")
+    listed = [os.path.realpath(f[9:]) for f in listing.split("\0") if f.startswith("worktree ")]
+    if os.path.realpath(top) not in listed:
+        return base
+
+    def policy(r):
+        try:
+            with open(os.path.join(r, ".sage", "config.yaml"), encoding="utf-8",
+                      errors="replace") as fh:
+                return [x.rstrip() for x in fh.read().split("\n")
+                        if x.strip() and not x.lstrip().startswith("#")
+                        and not x.startswith("sage-version:")]
+        except OSError:
+            return None
+
+    mine = policy(root)
+    if mine is None or mine != policy(base):
+        return base
+    # Hand the root back spelled like the probe (macOS /var is /private/var;
+    # a symlinked directory), or every relpath against it reads "../". No
+    # lexical ancestor that IS the root: keep base rather than guess.
+    a = d
+    while os.path.realpath(a) != root:
+        up = os.path.dirname(a)
+        if up == a:
+            return base
+        a = up
+    return a
+
+
+def sage_probe(data):
+    """Where the call acts: the edited file, else the shell cwd."""
+    cwd = (data.get("cwd") or "").strip()
+    fp = str((data.get("tool_input") or {}).get("file_path") or "").strip()
+    return os.path.join(cwd or os.getcwd(), fp) if fp else cwd
+# ── end sage-root ──
+
+project_root = sage_worktree_root(project_root, sage_probe(data))
 sage_dir = os.path.join(project_root, ".sage")
 if not os.path.isdir(sage_dir):
     emit("ALLOW")

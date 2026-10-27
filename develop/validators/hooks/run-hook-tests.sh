@@ -21,7 +21,7 @@ DEG_LOG="${SAGE_DEG_LOG:-$REPO_ROOT/runtime/platforms/claude-code/hooks/sage-deg
 TDD_GATE="${SAGE_TDD_GATE:-$REPO_ROOT/runtime/platforms/claude-code/hooks/sage-tdd-gate.sh}"
 BWG="$REPO_ROOT/runtime/platforms/claude-code/hooks/sage-bash-write-gate.sh"
 bash_json() { python3 -c 'import json,sys; print(json.dumps({"tool_name":"Bash","tool_input":{"command":sys.argv[1]}}))' "$1"; }
-SESSION_INIT="${SAGE_SESSION_INIT:-$REPO_ROOT/runtime/plugin-overlay/hooks/scripts/sage-session-init.sh}"
+SESSION_INIT="${SAGE_SESSION_INIT:-$REPO_ROOT/runtime/platforms/claude-code/hooks/sage-session-init.sh}"
 
 ONLY=""
 VERBOSE=false
@@ -2086,6 +2086,257 @@ P="$(mk_enforced)"
 assert BR12 "an agent adding branch_gate: false is blocked by the config gate" "$P" \
   '{"tool_name":"Edit","tool_input":{"file_path":".sage/config.yaml","old_string":"hard_enforcement: true","new_string":"hard_enforcement: true\nbranch_gate: false"}}' \
   --hook "$CG" --exit 2 --stderr "enforcement"
+
+# ── Worktree sessions (Desktop, --worktree): judge the checkout being edited ──
+# CLAUDE_PROJECT_DIR stays at the main checkout while the session edits in a
+# linked worktree. Every gate resolved paths against the MAIN checkout, where a
+# Desktop worktree sits under .claude/ — Sage machinery, skipped — so nothing
+# a Desktop worktree session wrote was gated at all (WT4 is that, red before).
+HOOKS_DIR="$REPO_ROOT/runtime/platforms/claude-code/hooks"
+if [ -z "$ONLY" ] || [ "$ONLY" = "WT0" ]; then
+  # One resolver, inlined (hooks ship as standalone files): every copy must
+  # stay byte-identical, or one gate judges a different checkout.
+  WT0_N=$(python3 - "$HOOKS_DIR" "$REPO_ROOT/runtime/tools/scope_judge.py" <<'PY'
+import glob, os, re, sys
+files = glob.glob(os.path.join(sys.argv[1], "*.sh")) + [sys.argv[2]]
+blocks = {}
+for f in files:
+    m = re.search(r"# ── sage-root: .*?# ── end sage-root ──\n", open(f, encoding="utf-8").read(), re.S)
+    if m:
+        blocks.setdefault(m.group(0), []).append(os.path.basename(f))
+print("%d %d" % (sum(len(v) for v in blocks.values()), len(blocks)))
+PY
+)
+  if [ "$WT0_N" = "13 1" ]; then
+    N_PASS=$((N_PASS + 1)); report PASS WT0 "the worktree resolver is identical in all 13 copies"
+  else
+    N_FAIL=$((N_FAIL + 1)); FAILED_IDS="$FAILED_IDS WT0"
+    report FAIL WT0 "the worktree resolver is identical in all 13 copies" "copies, variants: $WT0_N"
+  fi
+fi
+
+wt_main() {  # a main checkout on main, mid-cycle, and a session worktree on claude/x
+  local m; m="$(br_project)"
+  ( cd "$m" && git worktree add -q -b claude/x "$m/.claude/worktrees/x" ) >/dev/null 2>&1
+  echo "$m"
+}
+wt_edit() {  # wt_edit <cwd> <file>
+  python3 -c 'import json,sys; print(json.dumps({"tool_name":"Edit","cwd":sys.argv[1],"tool_input":{"file_path":sys.argv[2],"old_string":"x = 1","new_string":"x = 2"}}))' "$1" "$2"
+}
+M=$(wt_main); W="$M/.claude/worktrees/x"
+assert WT1 "an edit in a session worktree on its own branch passes the branch gate" "$M" \
+  "$(wt_edit "$W" "$W/src/app.py")" --hook "$BRG" --exit 0 --env "CLAUDE_PROJECT_DIR=$M"
+assert WT2 "an edit in the main checkout, on main, is still blocked" "$M" \
+  "$(wt_edit "$W" "$M/src/app.py")" --hook "$BRG" --exit 2 --env "CLAUDE_PROJECT_DIR=$M" \
+  --stderr "default branch (main)"
+assert WT3 "a shell write from the worktree is judged by the worktree" "$M" \
+  "$(python3 -c 'import json,sys; print(json.dumps({"tool_name":"Bash","cwd":sys.argv[1],"tool_input":{"command":"echo y=2 >> src/app.py"}}))' "$W")" \
+  --hook "$BWG" --exit 0 --env "CLAUDE_PROJECT_DIR=$M"
+# The worktree's OWN cycle state decides: reopen the spec there only.
+sed -i.bak 's/gate_state: building/gate_state: pre-spec/' "$W/.sage/work/20261027-rate/manifest.md" \
+  && rm -f "$W/.sage/work/20261027-rate/manifest.md.bak"
+assert WT4 "the spec gate reads the worktree's cycle, not the main checkout's" "$M" \
+  "$(wt_edit "$W" "$W/src/app.py")" --exit 2 --env "CLAUDE_PROJECT_DIR=$M"
+
+M=$(br_project); W="$M/.claude/worktrees/m"
+( cd "$M" && git switch -q -c feat/other && git worktree add -q "$W" main ) >/dev/null 2>&1
+assert WT7 "a worktree on the default branch is blocked, though the main checkout is not on it" "$M" \
+  "$(wt_edit "$W" "$W/src/app.py")" --hook "$BRG" --exit 2 --env "CLAUDE_PROJECT_DIR=$M" \
+  --stderr "default branch (main)"
+
+if [ -z "$ONLY" ] || [ "$ONLY" = "WT8" ]; then
+  # manifest-sync advances the cycle in the checkout the source was written in.
+  M=$(wt_main); W="$M/.claude/worktrees/x"; ln -s "$REPO_ROOT" "$M/sage"
+  for d in "$M" "$W"; do
+    sed -i.bak 's/gate_state: building/gate_state: plan-approved/' "$d/.sage/work/20261027-rate/manifest.md"
+    rm -f "$d/.sage/work/20261027-rate/manifest.md.bak"
+  done
+  printf '%s' "$(wt_edit "$W" "$W/src/app.py")" \
+    | ( cd "$M" && CLAUDE_PROJECT_DIR="$M" bash "$HOOKS_DIR/sage-manifest-sync.sh" ) >/dev/null 2>&1
+  if grep -q "gate_state: building" "$W/.sage/work/20261027-rate/manifest.md" \
+      && grep -q "gate_state: plan-approved" "$M/.sage/work/20261027-rate/manifest.md"; then
+    N_PASS=$((N_PASS + 1)); report PASS WT8 "manifest-sync advances the worktree's cycle, not the main checkout's"
+  else
+    N_FAIL=$((N_FAIL + 1)); FAILED_IDS="$FAILED_IDS WT8"
+    report FAIL WT8 "manifest-sync advances the worktree's cycle, not the main checkout's" \
+      "worktree: $(grep gate_state "$W/.sage/work/20261027-rate/manifest.md")" \
+      "main: $(grep gate_state "$M/.sage/work/20261027-rate/manifest.md")"
+  fi
+fi
+
+if [ -z "$ONLY" ] || [ "$ONLY" = "WT9" ]; then
+  # A worktree with no .sage/ of its own is ungoverned (WT5): the session
+  # hook says so, and how to fix it, instead of staying silent.
+  M=$(wt_main); W="$M/.claude/worktrees/x"; rm -rf "$W/.sage"
+  out="$( cd "$W" && CLAUDE_PROJECT_DIR="$M" bash "$SESSION_INIT" 2>/dev/null )"
+  own="$( cd "$W" && CLAUDE_PROJECT_DIR="$W" bash "$SESSION_INIT" 2>/dev/null )"
+  if printf '%s' "$out" | grep -Fq "judge work here from the main" \
+      && printf '%s' "$out" | grep -Fq ".worktreeinclude" \
+      && printf '%s' "$own" | grep -Fq "treat it as no Sage project" \
+      && ! printf '%s' "$out$own" | grep -Fq "NOT initialized"; then
+    N_PASS=$((N_PASS + 1)); report PASS WT9 "a worktree without Sage config is told what judges it, and how to fix it"
+  else
+    N_FAIL=$((N_FAIL + 1)); FAILED_IDS="$FAILED_IDS WT9"
+    report FAIL WT9 "a worktree without Sage config is told what judges it, and how to fix it" "got: $out"
+  fi
+fi
+if [ -z "$ONLY" ] || [ "$ONLY" = "WT10" ]; then
+  # .sage/work gitignored in a worktree: the session learns close-out mirrors it.
+  M=$(wt_main); W="$M/.claude/worktrees/x"
+  printf '.sage/work/\n' > "$W/.gitignore"
+  out="$( cd "$W" && bash "$SESSION_INIT" 2>/dev/null )"
+  out_main="$( cd "$M" && bash "$SESSION_INIT" 2>/dev/null )"
+  if printf '%s' "$out" | grep -Fq "Records (worktree)" \
+      && ! printf '%s' "$out_main" | grep -Fq "Records (worktree)"; then
+    N_PASS=$((N_PASS + 1)); report PASS WT10 "a worktree whose .sage/work is ignored is told close-out mirrors it"
+  else
+    N_FAIL=$((N_FAIL + 1)); FAILED_IDS="$FAILED_IDS WT10"
+    report FAIL WT10 "a worktree whose .sage/work is ignored is told close-out mirrors it" "got: $out"
+  fi
+fi
+
+# ── The review's escapes (2026-10-27), each a regression of the first cut ──
+CGW="$HOOKS_DIR/sage-config-gate.sh"
+wt_bash() {  # wt_bash <cwd> <command>
+  python3 -c 'import json,sys; print(json.dumps({"tool_name":"Bash","cwd":sys.argv[1],"tool_input":{"command":sys.argv[2]}}))' "$1" "$2"
+}
+wt_write() {  # wt_write <cwd> <file> <content>
+  python3 -c 'import json,sys; print(json.dumps({"tool_name":"Write","cwd":sys.argv[1],"tool_input":{"file_path":sys.argv[2],"content":sys.argv[3]}}))' "$1" "$2" "$3"
+}
+M=$(wt_main); W="$M/.claude/worktrees/x"
+printf 'sage-version: "1"\nhard_enforcement: false\n' > "$W/.sage/config.yaml"
+assert WT11 "a worktree with a lax config cannot switch off the main checkout's enforcement" "$M" \
+  "$(wt_bash "$W" "sed -i.bak 's/hard_enforcement: true/hard_enforcement: false/' $M/.sage/config.yaml")" \
+  --hook "$CGW" --exit 2 --env "CLAUDE_PROJECT_DIR=$M"
+M=$(wt_main); W="$M/.claude/worktrees/x"; rm -rf "$W/.sage"
+assert WT12 "a worktree cannot be given a laxer Sage config than the main checkout's" "$M" \
+  "$(wt_write "$W" "$W/.sage/config.yaml" "hard_enforcement: false")" \
+  --hook "$CGW" --exit 2 --env "CLAUDE_PROJECT_DIR=$M"
+assert WT12b "…nor an equally strict one: a fresh config would shed the main checkout's cycles" "$M" \
+  "$(wt_write "$W" "$W/.sage/config.yaml" "$(cat "$M/.sage/config.yaml")")" \
+  --hook "$CGW" --exit 2 --env "CLAUDE_PROJECT_DIR=$M" --stderr ".worktreeinclude"
+
+# Second review (2026-10-27): ways to hand a gate a root the agent shaped.
+wt_prespec() {  # wt_prespec <checkout> — reopen the seeded cycle's spec there
+  sed -i.bak 's/gate_state: building/gate_state: pre-spec/' "$1/.sage/work/20261027-rate/manifest.md" \
+    && rm -f "$1/.sage/work/20261027-rate/manifest.md.bak"
+}
+M=$(wt_main); W="$M/.claude/worktrees/x"; wt_prespec "$M"
+mkdir -p "$M/src/.sage" && cp "$M/.sage/config.yaml" "$M/src/.sage/"
+printf 'gitdir: %s/.git/worktrees/x\n' "$M" > "$M/src/.git"
+assert WT19 "a hand-made .git file does not make a directory of the main checkout its own root" "$M" \
+  "$(wt_edit "$M" "$M/src/app.py")" --exit 2 --env "CLAUDE_PROJECT_DIR=$M"
+M=$(wt_main); W="$M/.claude/worktrees/x"; wt_prespec "$M"; : > "$W/.sage/config.yaml"
+assert WT20 "a worktree whose config differs (here: emptied) is judged from the main checkout" "$M" \
+  "$(wt_edit "$W" "$W/src/app.py")" --exit 2 --env "CLAUDE_PROJECT_DIR=$M"
+M=$(br_project); wt_prespec "$M"
+printf 'sage-version: "1.1.11"\nhard_enforcement: false\n' > "$M/.sage/config.yaml"
+( cd "$M" && git -c user.email=t@t -c user.name=t commit -qam lax \
+    && printf 'sage-version: "1.1.11"\nhard_enforcement: true\n' > .sage/config.yaml \
+    && git -c user.email=t@t -c user.name=t commit -qam strict \
+    && git worktree add -q -b esc .claude/worktrees/esc HEAD~1 ) >/dev/null 2>&1
+assert WT21 "a worktree checked out at an older, laxer config is judged from the main checkout" "$M" \
+  "$(wt_edit "$M/.claude/worktrees/esc" "$M/.claude/worktrees/esc/src/app.py")" --exit 2 \
+  --env "CLAUDE_PROJECT_DIR=$M"
+R="$(mktemp -d "${TMPDIR:-/tmp}/sage-hooktest-XXXXXX")/repo"; A="$R/app"
+mkdir -p "$A/.sage/work" "$A/src" && printf 'x = 1\n' > "$A/src/x.py"
+printf 'sage-version: "1"\nhard_enforcement: true\n' > "$A/.sage/config.yaml"
+printf '.sage/\n' > "$R/.gitignore"
+( cd "$R" && git init -q -b main . && git -c user.email=t@t -c user.name=t add -A \
+    && git -c user.email=t@t -c user.name=t commit -qm seed \
+    && git worktree add -q -b claude/x .claude/worktrees/x ) >/dev/null 2>&1
+assert WT22 "in a subdirectory project, a worktree cannot be handed a Sage config either" "$A" \
+  "$(wt_write "$R/.claude/worktrees/x/app" "$R/.claude/worktrees/x/app/.sage/config.yaml" "hard_enforcement: false")" \
+  --hook "$CGW" --exit 2 --env "CLAUDE_PROJECT_DIR=$A"
+M=$(wt_main); W="$M/.claude/worktrees/x"
+printf 'sage-version: "1"\nhard_enforcement: false\n' > "$M/.sage/config.yaml"
+assert WT23 "a shell in a lax checkout cannot loosen a stricter worktree's config" "$M" \
+  "$(wt_bash "$M" "sed -i.bak 's/hard_enforcement: true/hard_enforcement: false/' $W/.sage/config.yaml")" \
+  --hook "$CGW" --exit 2 --env "CLAUDE_PROJECT_DIR=$M"
+# Final review (2026-10-27): a worktree the agent makes for itself starts
+# outside the cycle in progress, and a stale worktree's switch must not reach
+# a call that does not touch it.
+M=$(wt_main)
+assert WT25 "git worktree add while a cycle is in progress is the user's call" "$M" \
+  "$(wt_bash "$M" "git worktree add -q -b esc .claude/worktrees/esc")" \
+  --hook "$CGW" --exit 2 --env "CLAUDE_PROJECT_DIR=$M" --stderr "is in progress"
+assert WT25b "…while sage worktree (the lanes' front door) is not judged here" "$M" \
+  "$(wt_bash "$M" "sage worktree pair-t1")" --hook "$CGW" --exit 0 --env "CLAUDE_PROJECT_DIR=$M"
+sed -i.bak 's/status: in-progress/status: complete/' "$M/.sage/work/20261027-rate/manifest.md" \
+  && rm -f "$M/.sage/work/20261027-rate/manifest.md.bak"
+assert WT25c "…and with no cycle in progress, git worktree add is fine" "$M" \
+  "$(wt_bash "$M" "git worktree add -q -b esc .claude/worktrees/esc")" \
+  --hook "$CGW" --exit 0 --env "CLAUDE_PROJECT_DIR=$M"
+M=$(wt_main); W="$M/.claude/worktrees/x"
+printf 'sage-version: "1"\nhard_enforcement: false\ntdd_enforcement: true\n' > "$M/.sage/config.yaml"
+assert WT26 "a stale enforced worktree does not stop the user's own config edits in the main checkout" "$M" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/config.yaml","old_string":"tdd_enforcement: true\n","new_string":""}}' \
+  --hook "$CGW" --exit 0 --env "CLAUDE_PROJECT_DIR=$M"
+
+if [ -z "$ONLY" ] || [ "$ONLY" = "WT24" ]; then
+  M=$(wt_main); W="$M/.claude/worktrees/x"; printf 'branch_gate: false\n' >> "$W/.sage/config.yaml"
+  out="$( cd "$W" && CLAUDE_PROJECT_DIR="$M" bash "$SESSION_INIT" 2>/dev/null )"
+  M2=$(wt_main)
+  out_same="$( cd "$M2/.claude/worktrees/x" && CLAUDE_PROJECT_DIR="$M2" bash "$SESSION_INIT" 2>/dev/null )"
+  if printf '%s' "$out" | grep -Fq "Config (worktree)" && ! printf '%s' "$out_same" | grep -Fq "Config (worktree)"; then
+    N_PASS=$((N_PASS + 1)); report PASS WT24 "a worktree whose config differs is told it is judged from the main checkout"
+  else
+    N_FAIL=$((N_FAIL + 1)); FAILED_IDS="$FAILED_IDS WT24"
+    report FAIL WT24 "a worktree whose config differs is told it is judged from the main checkout" "got: $out"
+  fi
+fi
+assert WT13 "a project fixture's .sage/config.yaml is not the switch" "$M" \
+  "$(wt_write "$M" "$M/tests/fixtures/demo/.sage/config.yaml" "hard_enforcement: false")" \
+  --hook "$CGW" --exit 0 --env "CLAUDE_PROJECT_DIR=$M"
+M=$(wt_main); W="$M/.claude/worktrees/x"
+assert WT14 "a shell write from a worktree into the main checkout is judged by the main checkout" "$M" \
+  "$(wt_bash "$W" "echo y=2 >> $M/src/app.py")" --hook "$BWG" --exit 2 --env "CLAUDE_PROJECT_DIR=$M" \
+  --stderr "sage-branch-gate"
+M=$(br_project); W="$M/.claude/worktrees/m"
+( cd "$M" && git switch -q -c feat/other && git worktree add -q "$W" main ) >/dev/null 2>&1
+assert WT15 "a shell write in a worktree on the default branch is blocked" "$M" \
+  "$(wt_bash "$W" "echo y=2 >> src/app.py")" --hook "$BWG" --exit 2 --env "CLAUDE_PROJECT_DIR=$M" \
+  --stderr "sage-branch-gate"
+M=$(wt_main); W="$M/.claude/worktrees/x"
+sed -i.bak 's/gate_state: building/gate_state: pre-spec/' "$W/.sage/work/20261027-rate/manifest.md" \
+  && rm -f "$W/.sage/work/20261027-rate/manifest.md.bak"
+mkdir -p "$W/src/deep" && ln -s src/deep "$W/l" && mkdir -p "$M/a" && ln -s "$W/src" "$M/a/l"
+assert WT16 "a symlinked path into the worktree is still judged (no gate falls to 'not a Sage project')" "$M" \
+  "$(wt_edit "$W" "$W/l/app.py")" --exit 2 --env "CLAUDE_PROJECT_DIR=$M"
+# A main-checkout path that reaches the worktree through a symlink cannot be
+# spelled inside the worktree, so it is judged by the main checkout, as before
+# — never waved through as "not a Sage project" (the first cut did).
+sed -i.bak 's/gate_state: building/gate_state: pre-spec/' "$M/.sage/work/20261027-rate/manifest.md" \
+  && rm -f "$M/.sage/work/20261027-rate/manifest.md.bak"
+assert WT17 "a main-checkout symlink into a worktree is judged by the main checkout" "$M" \
+  "$(wt_edit "$M" "$M/a/l/deep/app.py")" --exit 2 --env "CLAUDE_PROJECT_DIR=$M"
+# A project in a subdirectory of its repo: an edit in the main checkout stays
+# judged by the project's own .sage/, not a .sage/ at the repository root.
+R="$(mktemp -d "${TMPDIR:-/tmp}/sage-hooktest-XXXXXX")/repo"; A="$R/app"
+mkdir -p "$A/.sage/work" "$A/src" "$R/.sage/work"
+printf 'sage-version: "1"\nhard_enforcement: true\n' > "$A/.sage/config.yaml"
+printf 'sage-version: "1"\nhard_enforcement: false\n' > "$R/.sage/config.yaml"
+add_manifest "$A" 20261027-rate pre-spec
+printf 'x = 1\n' > "$A/src/x.py"
+( cd "$R" && git init -q -b main . && git -c user.email=t@t -c user.name=t add -A \
+    && git -c user.email=t@t -c user.name=t commit -qm seed ) >/dev/null 2>&1
+assert WT18 "a project in a repo subdirectory is judged by its own .sage/, not the repo root's" "$A" \
+  "$(wt_edit "$A" "$A/src/x.py")" --exit 2 --env "CLAUDE_PROJECT_DIR=$A"
+
+M=$(wt_main); W="$M/.claude/worktrees/x"; rm -rf "$W/.sage"
+# Without its own .sage/ the worktree is judged from the main checkout, where
+# .claude/worktrees/ is not source to the branch gate (the spec gate still
+# applies main's cycles) — as before this change. .worktreeinclude (sage init)
+# carries .sage/ in; the session hook says so.
+assert WT5 "a worktree without .sage/ falls back to the main checkout's judgement" "$M" \
+  "$(wt_edit "$W" "$W/src/app.py")" --hook "$BRG" --exit 0 --env "CLAUDE_PROJECT_DIR=$M"
+
+M=$(br_project); N="$M/libs/other"
+mkdir -p "$N/.sage/work" "$N/src" && printf 'z = 1\n' > "$N/src/z.py" && cp "$M/.sage/config.yaml" "$N/.sage/"
+( cd "$N" && git init -q -b feat/z . && git -c user.email=t@t -c user.name=t add -A \
+    && git -c user.email=t@t -c user.name=t commit -qm nested ) >/dev/null 2>&1
+assert WT6 "a nested repo on its own branch cannot take the project's gates away" "$M" \
+  "$(wt_edit "$M" "$N/src/z.py")" --hook "$BRG" --exit 2 --env "CLAUDE_PROJECT_DIR=$M"
 
 echo "═══ Summary ═══"
 printf '  pass %d · fail %d · xfail %d · xpass %d\n' "$N_PASS" "$N_FAIL" "$N_XFAIL" "$N_XPASS"

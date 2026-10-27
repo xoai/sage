@@ -62,6 +62,7 @@ import datetime
 import hashlib
 import pathlib
 import re
+import shutil
 import subprocess
 import sys
 
@@ -708,6 +709,58 @@ def _set_field(text: str, name: str, value: str) -> str:
         return text.replace(fm, fm.rstrip("\n") + "\n%s: %s" % (name, value), 1)
 
 
+RECORDS_DIR = "worktree-records"
+
+
+def mirror_to_main(cycle_dir: pathlib.Path):
+    """A cycle kept in a linked worktree (a Claude Desktop session, `claude
+    --worktree`) whose .sage/work is gitignored dies with the worktree: git
+    never carries it, and Desktop removes worktrees itself, past `sage worktree
+    remove`'s harvest. So every close-out copies the cycle to the main
+    checkout's .sage/worktree-records/<worktree>/<slug>/ — an archive no gate
+    and no session scan reads, so a worktree's in-progress cycle never governs
+    the main checkout (review 2026-10-27). Only an IGNORED cycle is mirrored:
+    a tracked one, or one git would track, travels with the merge. Returns the
+    destination, or None."""
+    cycle_dir = cycle_dir.resolve()
+    if cycle_dir.parent.name != "work" or cycle_dir.parent.parent.name != ".sage":
+        return None
+    root = cycle_dir.parent.parent.parent
+    git_dir = _git(root, "rev-parse", "--git-dir").strip()
+    common = _git(root, "rev-parse", "--git-common-dir").strip()
+    if not git_dir or not common:
+        return None
+    if (root / git_dir).resolve() == (root / common).resolve():
+        return None                              # the main checkout itself
+    rel = cycle_dir.relative_to(root).as_posix()
+    if subprocess.run(["git", "-C", str(root), "check-ignore", "-q", "--", rel + "/manifest.md"],
+                      capture_output=True).returncode != 0:
+        return None                              # not ignored: git carries it
+    # The main checkout is the first worktree git lists; the project may live
+    # in a subdirectory of the repository, at the same place in both.
+    top = _git(root, "rev-parse", "--show-toplevel").strip()
+    listed = [f[9:] for f in _git(root, "worktree", "list", "--porcelain", "-z").split("\0")
+              if f.startswith("worktree ")]
+    if not top or not listed:
+        return None
+    top = pathlib.Path(top).resolve()
+    main = pathlib.Path(listed[0]).resolve() / root.relative_to(top)
+    if not (main / ".sage").is_dir() or main == root:
+        return None
+    records = main / ".sage" / RECORDS_DIR
+    dst = records / top.name / cycle_dir.name
+    records.mkdir(parents=True, exist_ok=True)
+    ignore = records / ".gitignore"
+    if not ignore.exists():                      # an archive, never committed
+        ignore.write_text("*\n", encoding="utf-8")
+    if dst.is_symlink() or dst.is_file():
+        dst.unlink()
+    elif dst.exists():
+        shutil.rmtree(dst)
+    shutil.copytree(cycle_dir, dst, symlinks=True)
+    return dst
+
+
 def close_out(manifest: pathlib.Path, summary=None, next_step=None,
               decisions=(), complete_tasks=(), open_questions=None,
               status=None, phase=None, blocked_on=None, branch=None,
@@ -805,6 +858,14 @@ def close_out(manifest: pathlib.Path, summary=None, next_step=None,
 
     print("close-out: wrote " + (", ".join(wrote) if wrote else "nothing (no args)")
           + f" · updated: stamped · 1 pass")
+    try:
+        mirrored = mirror_to_main(cycle_dir)
+    except (OSError, ValueError, shutil.Error) as exc:
+        print(f"close-out: note: could not mirror the cycle to the main checkout ({exc})")
+    else:
+        if mirrored:
+            print(f"close-out: cycle record mirrored to {mirrored} (this worktree's "
+                  ".sage/work is gitignored and would be lost with it)")
 
     # SG-19: the scope judge's per-cycle totals surface at close-out —
     # cost and efficacy stay UNCLAIMED in docs until measured, but the

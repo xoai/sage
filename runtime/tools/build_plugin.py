@@ -136,6 +136,9 @@ FILE_MAP = {
     "hooks/scripts/sage-config-gate.sh": "runtime/platforms/claude-code/hooks/sage-config-gate.sh",
     "hooks/scripts/sage-bash-write-gate.sh": "runtime/platforms/claude-code/hooks/sage-bash-write-gate.sh",
     "hooks/scripts/sage-branch-gate.sh": "runtime/platforms/claude-code/hooks/sage-branch-gate.sh",
+    # The overlay used to carry its own session hook, hand-kept; it lost the
+    # collision guard and the worktree notices (2026-10-27). One source now.
+    "hooks/scripts/sage-session-init.sh": "runtime/platforms/claude-code/hooks/sage-session-init.sh",
     # The manifest hook delegates here rather than inlining a second copy of the
     # state machine. A plugin-only project may have no vendored sage/, so the tool
     # ships with the plugin too.
