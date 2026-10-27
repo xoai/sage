@@ -46,8 +46,8 @@ def _load_parser():
 P = _load_parser()
 
 
-def parse(runner, name):
-    return P["parse"](runner, str(OUT / name))
+def parse(runner, name, root=None):
+    return P["parse"](runner, str(OUT / name), root)
 
 
 class Attributable(unittest.TestCase):
@@ -88,6 +88,50 @@ class Attributable(unittest.TestCase):
     def test_mocha_reads_the_full_title_and_keeps_numbers_in_it(self):
         self.assertIds("mocha", "mocha-baseline.txt", [
             "top fails", "Report › v1 › formats", "Report › v2 › waits 5s"])
+
+
+class NodeTap(unittest.TestCase):
+    """node --test writes TAP off a terminal before node 23 — how Sage runs it
+    on node 20 and 22. CI (node 20, 2026-10-27) found the baseline never
+    applied there: the parser read only the spec reporter. The TAP fixtures
+    have their project path rewritten to /work/proj, the root passed here."""
+
+    ROOT = "/work/proj"
+
+    def test_tap_names_what_spec_names_for_the_same_run(self):
+        """One project, both reporters: the same ids, so a baseline recorded
+        under one node judges a run under another."""
+        spec, spec_files, why = parse("npm-test", "node-tap-spec-twin.txt")
+        self.assertIsNotNone(spec, why)
+        tap, tap_files, why = parse("npm-test", "node-tap-baseline.txt", self.ROOT)
+        self.assertIsNotNone(tap, why)
+        self.assertEqual(sorted(tap), sorted(spec))
+        self.assertEqual(tap_files, spec_files)
+        self.assertIn("test/a.test.mjs:8:39 child fails", tap)     # leaf, not parent
+        self.assertIn("test/a.test.mjs:9:1 a # hash \\ slash", tap)  # TAP escapes undone
+        self.assertEqual(list(tap_files.values()), ["test/load.test.mjs"])
+        self.assertEqual(P["tests_ran"]("npm-test", str(OUT / "node-tap-baseline.txt")),
+                         P["tests_ran"]("npm-test", str(OUT / "node-tap-spec-twin.txt")))
+
+    def test_node20_output_from_ci(self):
+        ids, files, why = parse("npm-test", "node20-tap-ci.txt", self.ROOT)
+        self.assertEqual(ids, ["vendor/adapter-test.mjs:2:1 not ours"], why)
+        self.assertEqual(P["tests_ran"]("npm-test", str(OUT / "node20-tap-ci.txt")), 2)
+
+    def test_tap_async_activity_after_a_test_is_unattributable(self):
+        ids, _, why = parse("npm-test", "node-tap-async.txt", self.ROOT)
+        self.assertIsNone(ids)
+        self.assertIn("# Error", why)
+
+    def test_a_tap_failure_without_a_location_is_unattributable(self):
+        text = (OUT / "node20-tap-ci.txt").read_text(encoding="utf-8")
+        text = "\n".join(l for l in text.splitlines() if "location:" not in l)
+        with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as fh:
+            fh.write(text)
+        self.addCleanup(pathlib.Path(fh.name).unlink)
+        ids, _, why = P["parse"]("npm-test", fh.name, self.ROOT)
+        self.assertIsNone(ids)
+        self.assertIn("without its location", why)
 
 
 class NeverExcused(unittest.TestCase):

@@ -662,6 +662,15 @@ surfaces:
       2026-10-27 (P2): comment only — the plugin no longer runs the suite
       after every edit (C5), so the record_attempt note stops naming that
       check. No behavior change.
+      2026-10-27 (CI, node 20): node --test writes TAP off a terminal before
+      node 23, and the node parser read only the spec reporter, so on node
+      20/22 the baseline never applied (gate tests G30i/n/o/p red in CI). A
+      TAP parser now names the same ids as the spec one (path made relative
+      to the project, TAP escapes undone; "# Error:" and "# cancelled N" are
+      never excused). Spec-reporter behavior (node 23+, where the evals run)
+      is unchanged — #eval-neutral for E1/E4/E19; pinned by
+      test_verify_baseline.py NodeTap (a spec/TAP twin of one run, node 20's
+      own CI output) and G30i–p on CI's node 20.
 
   gate-bounded:
     path: core/gates/scripts/sage-bounded.sh

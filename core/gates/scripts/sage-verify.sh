@@ -30,10 +30,11 @@
 # A red run passes only when the gate can PROVE every failure is a baseline
 # one: each runner's output is parsed into fully qualified test ids
 # (pytest node ids, go package::test, jest/vitest file › describe path, mocha
-# full title, node file:line:col title), the runner's own failure count must
-# match the ids named, at least as many tests must have RUN as at the baseline
-# (a fail-fast setting — pytest -x, bail, -failfast — hides every later
-# failure; Sage's own argv also overrides it), and the baseline must come
+# full title, node file:line:col title from its spec or TAP reporter), the
+# runner's own failure count must match the ids named, at least as many tests
+# must have RUN as at the baseline (a fail-fast setting — pytest -x, bail,
+# -failfast — hides every later failure; Sage's own argv also overrides
+# it), and the baseline must come
 # from this branch's history. Anything less is never excused: an interrupted
 # run (collection error, unhandled or async error, panic, failing hook), a
 # count mismatch, an output format it does not parse (flutter), a timeout, a
@@ -343,6 +344,9 @@ NEVER = {
     "jest": None,
     "mocha": re.compile(r"^\s*Exception during run:", re.M),
     "node": re.compile(r"^ℹ cancelled [1-9]|^ℹ Error\b", re.M),
+    # The same banners in node's TAP ("# Error:" — a child's stderr echoed as
+    # "# Error [ERR_…]" is a file failing to load, which names its file).
+    "node-tap": re.compile(r"^# cancelled [1-9]|^# Error:", re.M),
 }
 CODE_EXT = (".py", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".go", ".rs",
             ".java", ".rb", ".dart", ".c", ".cc", ".cpp", ".h", ".swift", ".kt")
@@ -528,6 +532,50 @@ def _node(text):
     return ids + list(files), files, ""
 
 
+def _node_tap(text, root=None):
+    """node --test's TAP — its default reporter off a terminal before node 23,
+    which is how Sage runs it. Ids match _node's: "path:line:col title", the
+    path relative to the project (TAP prints it absolute)."""
+    base = os.path.realpath(root) if root else None
+    lines = text.splitlines()
+    ids, files = [], {}
+    for i, line in enumerate(lines):
+        m = re.match(r"^(\s*)not ok \d+ - (.*?)(\s+# (?:TODO|SKIP)\b.*)?$", line)
+        if not m or m.group(3):
+            continue
+        ind = m.group(1) + "  "
+        loc = kind = None
+        if i + 1 < len(lines) and lines[i + 1] == ind + "---":
+            for yl in lines[i + 2:]:
+                if yl == ind + "...":
+                    break
+                lm = re.match(r"^%slocation: '(.+):(\d+):(\d+)'$" % re.escape(ind), yl)
+                if lm:
+                    loc = lm
+                fm = re.match(r"^%sfailureType: '(\w+)'$" % re.escape(ind), yl)
+                if fm:
+                    kind = fm.group(1)
+        if kind == "subtestsFailed":
+            continue        # a parent failing because a child did
+        if not loc:
+            return None, None, "node reported a failing test (%s) without its location" % (
+                m.group(2))
+        path = loc.group(1)
+        if base and os.path.isabs(path):
+            real = os.path.realpath(path)
+            if real == base or real.startswith(base + os.sep):
+                path = os.path.relpath(real, base)
+        title = re.sub(r"\\(.)", lambda e: {"n": "\n"}.get(e.group(1), e.group(1)),
+                       m.group(2))
+        if title == path:
+            files["%s <failed to load>" % path] = path
+        else:
+            ident = "%s:%s:%s %s" % (path, loc.group(2), loc.group(3), title)
+            if ident not in ids:
+                ids.append(ident)
+    return ids + list(files), files, ""
+
+
 def _fmt(runner, text):
     if runner != "npm-test":
         return {"pytest": "pytest", "go-test": "go-test", "vitest": "vitest",
@@ -540,6 +588,8 @@ def _fmt(runner, text):
         return "mocha"
     if re.search(r"^ℹ fail \d+", text, re.M):
         return "node"
+    if re.search(r"^TAP version", text, re.M) and re.search(r"^# suites \d+", text, re.M):
+        return "node-tap"
     return None
 
 
@@ -581,8 +631,8 @@ def tests_ran(runner, path):
             if " of " in suites.group(1) or (st and listed < int(st.group(1))):
                 return None
         return n or None
-    elif fmt == "node":
-        m = re.search(r"^ℹ tests (\d+)", text, re.M)
+    elif fmt in ("node", "node-tap"):
+        m = re.search(r"^(?:ℹ|#) tests (\d+)", text, re.M)
         return int(m.group(1)) if m else None
     elif fmt == "mocha":
         n = [int(x) for x in re.findall(r"^\s+(\d+) (?:passing|failing|pending)\b", text, re.M)]
@@ -590,14 +640,15 @@ def tests_ran(runner, path):
     return None
 
 
-def parse(runner, path):
+def parse(runner, path, root=None):
     try:
         text = ANSI.sub("", open(path, encoding="utf-8", errors="replace").read())
     except OSError as exc:
         return None, None, "test output unreadable: %s" % exc
     fmt = _fmt(runner, text)
     parser = {"pytest": _pytest, "go-test": _go, "vitest": _vitest,
-              "jest": _jest, "mocha": _mocha, "node": _node}.get(fmt)
+              "jest": _jest, "mocha": _mocha, "node": _node,
+              "node-tap": lambda t: _node_tap(t, root)}.get(fmt)
     if parser is None:
         return None, None, "this runner's output cannot be attributed to named tests"
     bad = NEVER.get(fmt) and NEVER[fmt].search(text)
@@ -700,7 +751,7 @@ def cmd_record(out_path, dest, rc, timed_out, runner, root):
     elif timed_out == "1":
         ids, attributable, why = [], False, "the suite timed out"
     else:
-        ids, _, why = parse(runner, out_path)
+        ids, _, why = parse(runner, out_path, root)
         attributable = ids is not None
         ids = ids or []
     record = {
@@ -763,7 +814,7 @@ def cmd_judge(out_path, base_path, runner, root):
     if not head or git(root, "merge-base", "--is-ancestor", head, "HEAD") is None:
         print("UNATTRIBUTABLE\tthe baseline was not recorded in this branch's history")
         return
-    ids, files, why = parse(runner, out_path)
+    ids, files, why = parse(runner, out_path, root)
     if ids is None:
         print("UNATTRIBUTABLE\t" + why)
         return
