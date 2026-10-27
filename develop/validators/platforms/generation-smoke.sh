@@ -32,7 +32,10 @@ opencode:AGENTS.md
 
 HOME_DIR="$(mktemp -d)"
 ln -s "$REPO_ROOT" "$HOME_DIR/framework"
-trap 'rm -rf "$HOME_DIR"' EXIT
+# The operator's own Claude settings must not change what init writes here (a
+# globally enabled Sage plugin would) — every run reads an empty config dir.
+CLAUDE_CONFIG_DIR="$(mktemp -d)"; export CLAUDE_CONFIG_DIR
+trap 'rm -rf "$HOME_DIR" "$CLAUDE_CONFIG_DIR"' EXIT
 
 echo "═══ Platform generation smoke ═══"
 echo ""
@@ -217,12 +220,37 @@ grep -q '`manifest.py scope derive`' "$target/.sage/config.yaml" || r=bad
 grep -q '^command_prefix: false$' "$target/.sage/config.yaml" || r=bad
 cc_check "config.yaml comments intact; values interpolated" "$r"
 
+# C3: CLAUDE.md carries the Quick reference — routing, tiers, checkpoints.
+# (This project's CLAUDE.md went CRLF above; compare without the CRs.)
+r=ok
+tr -d '\r' < "$target/CLAUDE.md" > "$target/.qr"
+grep -q '^## Quick reference$' "$target/.qr" || r=bad
+for h in 'Routing — when no keyword matches' 'Tiers — what does not lower one' \
+         'Checkpoints — the footers'; do
+  grep -qx "### $h" "$target/.qr" || r=bad
+done
+cc_check "CLAUDE.md carries the Quick reference (routing, tiers, checkpoints)" "$r"
+
 # X6: the vendored CLI refuses to update from itself and leaves sage/ in place.
 r=ok
 ( cd "$target" && HOME="$target/.nohome" SAGE_HOME="" bash sage/bin/sage update </dev/null ) \
   >/dev/null 2>&1 && r=bad
 [ -f "$target/sage/bin/sage" ] && [ -d "$target/sage/core" ] || r=bad
 cc_check "sage/bin/sage update refuses; sage/ survives" "$r"
+rm -rf "$(dirname "$target")"
+
+# C3: with command_prefix on, the Quick reference's commands are prefixed too.
+# (A fresh project: the one above ends with CLAUDE.md markers update won't touch.)
+target="$(cc_new)"
+cc_run "$target" init
+r=ok
+sed -i.bak 's/^command_prefix: false$/command_prefix: true/' "$target/.sage/config.yaml"
+cc_run "$target" update
+sed -n '/^## Quick reference$/,$p' "$target/CLAUDE.md" > "$target/.qr"
+[ -s "$target/.qr" ] || r=bad
+grep -q '`/sage:build`' "$target/.qr" || r=bad
+grep -q '`/build`' "$target/.qr" && r=bad
+cc_check "command_prefix: the Quick reference says /sage:build" "$r"
 rm -rf "$(dirname "$target")"
 
 # C4: a fresh install is marked too, so a user's own addition survives update;
@@ -284,6 +312,76 @@ cc_run "$target" update || r=bad
 [ -d "$REPO_ROOT/core" ] || r=bad
 cc_check "global update over a symlinked sage/ proceeds" "$r"
 rm -rf "$(dirname "$target")"
+
+# C5: the Sage plugin's hooks run instead of ours — decided by who enabled it.
+hooks_in() {  # the Sage hook scripts a settings file registers, sorted
+  python3 - "$1" <<'PY'
+import json, os, re, sys
+p = sys.argv[1]
+d = json.load(open(p)) if os.path.isfile(p) else {}
+names = {re.search(r"(sage-[\w-]+\.sh)", h["command"]).group(1)
+         for es in (d.get("hooks") or {}).values() for e in es for h in e["hooks"]
+         if re.search(r"sage-[\w-]+\.sh", h.get("command", ""))}
+print(" ".join(sorted(names)))
+PY
+}
+# Project level (the team's choice): only what the plugin does not ship.
+target="$(cc_new)"
+printf '{\n  "enabledPlugins": {"sage@sage": true}\n}\n' > "$target/.claude/settings.json"
+cc_run "$target" init
+r=ok
+[ "$(hooks_in "$target/.claude/settings.json")" = "sage-scope-gate.sh sage-scope-journal.sh" ] || r=bad
+[ -z "$(hooks_in "$target/.claude/settings.local.json")" ] || r=bad
+grep -q '"sage@sage": true' "$target/.claude/settings.json" || r=bad
+cc_check "plugin on (project): only the scope gate + journal registered — no duplicates, none lost" "$r"
+# …and enabled later: update trims what an earlier init registered.
+target2="$(cc_new)"; cc_run "$target2" init
+python3 -c 'import json,sys;p=sys.argv[1];d=json.load(open(p));d["enabledPlugins"]={"sage@sage":True};json.dump(d,open(p,"w"))' "$target2/.claude/settings.json"
+cc_run "$target2" update
+r=ok
+[ "$(hooks_in "$target2/.claude/settings.json")" = "sage-scope-gate.sh sage-scope-journal.sh" ] || r=bad
+[ -z "$(hooks_in "$target2/.claude/settings.local.json")" ] || r=bad
+cc_check "plugin enabled later (project): update trims the earlier registrations" "$r"
+rm -rf "$(dirname "$target")" "$(dirname "$target2")"
+# The committed file follows the PROJECT's setting alone — one person's local
+# setting, on or off, never reshapes it for the team.
+target="$(cc_new)"
+printf '{\n  "enabledPlugins": {"sage@sage": true}\n}\n' > "$target/.claude/settings.json"
+printf '{"enabledPlugins": {"sage@sage": true}}\n' > "$target/.claude/settings.local.json"
+cc_run "$target" init
+r=ok
+[ "$(hooks_in "$target/.claude/settings.json")" = "sage-scope-gate.sh sage-scope-journal.sh" ] || r=bad
+cc_check "plugin on (project + local): the committed file still keeps only the scope gate + journal" "$r"
+target2="$(cc_new)"
+printf '{\n  "enabledPlugins": {"sage@sage": true}\n}\n' > "$target2/.claude/settings.json"
+printf '{"enabledPlugins": {"sage@sage": false}}\n' > "$target2/.claude/settings.local.json"
+out=$( cd "$target2" && SAGE_HOME="$HOME_DIR" bash "$REPO_ROOT/bin/sage" init --no-memory --platform claude-code 2>&1 )
+r=ok
+[ "$(hooks_in "$target2/.claude/settings.json")" = "sage-scope-gate.sh sage-scope-journal.sh" ] || r=bad
+hooks_in "$target2/.claude/settings.local.json" | grep -q "sage-session-init.sh" || r=bad
+printf '%s' "$out" | grep -q "your own settings turn it off" || r=bad
+cc_check "plugin on (project) but off locally: team file unchanged, session hook here, the gap said" "$r"
+rm -rf "$(dirname "$target")" "$(dirname "$target2")"
+
+# User level only (one person's choice): the committed file stays whole.
+target="$(cc_new)"
+printf '{"enabledPlugins": {"sage@sage": true}}\n' > "$CLAUDE_CONFIG_DIR/settings.json"
+out=$( cd "$target" && SAGE_HOME="$HOME_DIR" bash "$REPO_ROOT/bin/sage" init --no-memory --platform claude-code 2>&1 )
+r=ok
+hooks_in "$target/.claude/settings.json" | grep -q "sage-spec-gate.sh" || r=bad
+[ -z "$(hooks_in "$target/.claude/settings.local.json")" ] || r=bad
+printf '%s' "$out" | grep -q "enabled in your user settings only" || r=bad
+cc_check "plugin on (user only): committed hooks kept for the team, the overlap said out loud" "$r"
+# Precedence: the project's local settings turn it off → everything registers.
+target3="$(cc_new)"
+printf '{"enabledPlugins": {"sage@sage": false}}\n' > "$target3/.claude/settings.local.json"
+cc_run "$target3" init
+r=ok
+hooks_in "$target3/.claude/settings.json" | grep -q "sage-spec-gate.sh" || r=bad
+hooks_in "$target3/.claude/settings.local.json" | grep -q "sage-session-init.sh" || r=bad
+cc_check "local false beats user true: the plugin is off here, so Sage registers everything" "$r"
+rm -f "$CLAUDE_CONFIG_DIR/settings.json"
+rm -rf "$(dirname "$target")" "$(dirname "$target3")"
 
 echo ""
 printf '  pass %d · fail %d\n' "$N_PASS" "$N_FAIL"

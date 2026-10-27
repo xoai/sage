@@ -13,7 +13,7 @@ Loaded on every turn of every session. This is the one that matters.
 
 | File | Lines | ~Tokens | Budget | |
 |---|---:|---:|---:|---|
-| `CLAUDE.md` | 177 | 2,144 | 190 | ✅ |
+| `CLAUDE.md` | 232 | 2,756 | 235 | ✅ |
 
 ## Per-command layer
 
@@ -22,20 +22,20 @@ each workflow rather than pointing at it.
 
 | Command | Lines | ~Tokens | Budget | |
 |---|---:|---:|---:|---|
-| `/build` | 535 | 5,888 | 580 | ✅ |
-| `/fix` | 465 | 4,684 | 505 | ✅ |
-| `/architect` | 409 | 4,521 | 445 | ✅ |
+| `/build` | 599 | 6,899 | 600 | ✅ |
+| `/fix` | 485 | 5,011 | 505 | ✅ |
+| `/architect` | 419 | 4,661 | 445 | ✅ |
 | `/learn` | 203 | 1,958 | 220 | ✅ |
 | `/reflect` | 186 | 1,569 | 205 | ✅ |
 | `/autoresearch` | 174 | 1,728 | 190 | ✅ |
-| `/continue` | 137 | 1,205 | 150 | ✅ |
+| `/continue` | 149 | 1,410 | 150 | ✅ |
 | `/review` | 126 | 1,131 | 140 | ✅ |
 | `/sage` | 54 | 428 | 70 | ✅ |
 
 ## On-demand layer (system skills)
 
-Content moved out of the always-loaded layer during the context diet. Fetched only
-when the platform's description-triggered discovery matches — so the TOTAL below is
+Content ADR-9 moved out of the eager layer. Fetched only when the
+platform's description-triggered discovery matches — so the TOTAL below is
 not a per-turn cost, and a session that never asks about tiers never pays
 for `sage-tiers`.
 
@@ -46,13 +46,13 @@ trick that reads exactly the same in a release note.
 
 | Skill | Lines | ~Tokens | Budget | |
 |---|---:|---:|---:|---|
-| `sage-gates` | 119 | 1,250 | 140 | ✅ |
-| `sage-routing` | 90 | 829 | 105 | ✅ |
-| `sage-checkpoints` | 79 | 723 | 92 | ✅ |
+| `sage-gates` | 139 | 1,549 | 160 | ✅ |
+| `sage-routing` | 99 | 912 | 105 | ✅ |
+| `sage-checkpoints` | 95 | 891 | 96 | ✅ |
 | `sage-using-memory` | 77 | 794 | 90 | ✅ |
 | `sage-constitution` | 75 | 957 | 87 | ✅ |
 | `sage-decisions` | 69 | 699 | 80 | ✅ |
-| `sage-tiers` | 59 | 662 | 70 | ✅ |
+| `sage-tiers` | 64 | 725 | 70 | ✅ |
 
 ## Generic platform
 
@@ -61,16 +61,17 @@ fetch on demand, so the same content is INLINED into their instructions
 file. Their eager layer is therefore larger — necessarily, not accidentally.
 
 This row exists so that number is visible instead of hiding inside
-claude-code's. Delivery is capability-gated; the cost of a platform
+claude-code's. Delivery is capability-gated (ADR-11); the cost of a platform
 that cannot fetch on demand is that it carries everything.
 
 | File | Lines | ~Tokens | Budget | |
 |---|---:|---:|---:|---|
-| `CLAUDE.md` | 735 | 7,759 | 770 | ✅ |
+| `CLAUDE.md` | 788 | 8,425 | 810 | ✅ |
 
 ## Totals
 
-- Eager: **177 lines** (~2,144 tokens) on every turn.
-- On-demand: **568 lines** (~5,914 tokens) across 7 system skills — paid per skill, per use, never all at once.
-- Generic platform eager: **735 lines** — everything inlined, because nothing there can fetch.
-- Heaviest command: **/build at 535 lines** (~5,888 tokens), on top of the eager layer.
+- Eager: **232 lines** (~2,756 tokens) on every turn.
+- On-demand: **618 lines** (~6,527 tokens) across 7 system skills — paid per skill, per use, never all at once.
+- Generic platform eager: **788 lines** — everything inlined, because nothing there can fetch.
+- Heaviest command: **/build at 599 lines** (~6,899 tokens), on top of the eager layer.
+

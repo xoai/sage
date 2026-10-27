@@ -19,6 +19,8 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 HOOK="${SAGE_SPEC_GATE:-$REPO_ROOT/runtime/platforms/claude-code/hooks/sage-spec-gate.sh}"
 DEG_LOG="${SAGE_DEG_LOG:-$REPO_ROOT/runtime/platforms/claude-code/hooks/sage-degradation-log.sh}"
 TDD_GATE="${SAGE_TDD_GATE:-$REPO_ROOT/runtime/platforms/claude-code/hooks/sage-tdd-gate.sh}"
+BWG="$REPO_ROOT/runtime/platforms/claude-code/hooks/sage-bash-write-gate.sh"
+bash_json() { python3 -c 'import json,sys; print(json.dumps({"tool_name":"Bash","tool_input":{"command":sys.argv[1]}}))' "$1"; }
 SESSION_INIT="${SAGE_SESSION_INIT:-$REPO_ROOT/runtime/plugin-overlay/hooks/scripts/sage-session-init.sh}"
 
 ONLY=""
@@ -130,12 +132,13 @@ assert() {
   [ -n "$ONLY" ] && [ "$ONLY" != "$id" ] && return 0
 
   local want_exit="" xfail="" hook="$HOOK"
-  local want=() nowant=() envs=()
+  local want=() nowant=() envs=() wantout=()
   while [ $# -gt 0 ]; do
     case "$1" in
       --exit)      want_exit="$2"; shift 2 ;;
       --stderr)    want+=("$2"); shift 2 ;;
       --no-stderr) nowant+=("$2"); shift 2 ;;
+      --stdout)    wantout+=("$2"); shift 2 ;;
       --env)       envs+=("$2"); shift 2 ;;
       --hook)      hook="$2"; shift 2 ;;
       --xfail)     xfail="$2"; shift 2 ;;
@@ -143,12 +146,12 @@ assert() {
     esac
   done
 
-  local errfile rc stderr
-  errfile="$(mktemp)"
+  local errfile outfile rc stderr stdout
+  errfile="$(mktemp)"; outfile="$(mktemp)"
   ( cd "$proj" && printf '%s' "$json" \
-      | env ${envs[@]+"${envs[@]}"} bash "$hook" >/dev/null 2>"$errfile" )
+      | env ${envs[@]+"${envs[@]}"} bash "$hook" >"$outfile" 2>"$errfile" )
   rc=$?
-  stderr="$(cat "$errfile")"; rm -f "$errfile"
+  stderr="$(cat "$errfile")"; stdout="$(cat "$outfile")"; rm -f "$errfile" "$outfile"
 
   local ok=true problems=()
   if [ "$rc" -ne "$want_exit" ]; then
@@ -158,6 +161,11 @@ assert() {
   for s in ${want[@]+"${want[@]}"}; do
     if ! printf '%s' "$stderr" | grep -Fq -- "$s"; then
       ok=false; problems+=("stderr missing: '$s'")
+    fi
+  done
+  for s in ${wantout[@]+"${wantout[@]}"}; do
+    if ! printf '%s' "$stdout" | grep -Fq -- "$s"; then
+      ok=false; problems+=("stdout missing: '$s'")
     fi
   done
   for s in ${nowant[@]+"${nowant[@]}"}; do
@@ -371,6 +379,68 @@ printf 'def test_new():\n    assert True\n' > "$P/tests/test_new.py"
     && git -c user.email=t@t -c user.name=t commit -qm "test: first" ) >/dev/null 2>&1
 assert H23 "a source edit is allowed when the last commit was a test" "$P" "$SRCEDIT" \
   --hook "$TDD_GATE" --exit 0
+
+# H23c–g — the red commit buys ONE change (review 2026-10-26, X2), spent only
+# when an edit HAPPENS: sage-verify-tracker.sh (PostToolUse) records the file;
+# the gate (PreToolUse) only reads it.
+edited() {  # edited <proj> <path> — the PostToolUse half of a successful edit
+  ( cd "$1" && printf '{"tool_name":"Edit","tool_input":{"file_path":"%s","new_string":"x"}}' "$2" \
+      | bash "$REPO_ROOT/runtime/platforms/claude-code/hooks/sage-verify-tracker.sh" ) >/dev/null 2>&1
+}
+printf 'X = 1\n' > "$P/src/other.py"
+( cd "$P" && git -c user.email=t@t -c user.name=t add -A src/other.py \
+    && git -c user.email=t@t -c user.name=t commit -qm "other" \
+    && printf 'def test_new2():\n    assert True\n' > tests/test_new2.py \
+    && git -c user.email=t@t -c user.name=t add -A \
+    && git -c user.email=t@t -c user.name=t commit -qm "test: red" ) >/dev/null 2>&1
+assert H23f "an edit that never happened spends nothing (gate allows, no record)" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"src/other.py"}}' --hook "$TDD_GATE" --exit 0
+edited "$P" src/config.py
+assert H23c "the red commit's file may be edited again (one change, several edits)" "$P" "$SRCEDIT" \
+  --hook "$TDD_GATE" --exit 0
+assert H23d "a SECOND source file after one red commit is blocked" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"src/other.py"}}' \
+  --hook "$TDD_GATE" --exit 2 --stderr "unlocked ONE change" --stderr "src/config.py"
+ln -s src "$P/lib"
+assert H23g "the same file through a symlinked path is the same change" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"lib/config.py"}}' --hook "$TDD_GATE" --exit 0
+( cd "$P" && rm -f lib && printf 'TIMEOUT = 31\n' > src/config.py \
+    && git -c user.email=t@t -c user.name=t add -A \
+    && git -c user.email=t@t -c user.name=t commit -qm wip \
+    && printf 'def test_other():\n    assert True\n' > tests/test_other.py \
+    && git -c user.email=t@t -c user.name=t add -A \
+    && git -c user.email=t@t -c user.name=t commit -qm "test: other" ) >/dev/null 2>&1
+assert H23e "a new red commit unlocks the next change" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"src/other.py"}}' \
+  --hook "$TDD_GATE" --exit 0
+
+# H23h–l — what spends the unlock, wherever the project lives and however the
+# write happens (re-review 2026-10-27).
+red_project() {  # red_project [dir-prefix] → a tdd project whose HEAD is a red commit
+  local d; d="$(tdd_project)"
+  if [ -n "${1:-}" ]; then mkdir -p "$(dirname "$d")/$1"; mv "$d" "$(dirname "$d")/$1/proj"; d="$(dirname "$d")/$1/proj"; fi
+  printf 'X = 1\n' > "$d/src/other.py"; printf 'class C {}\n' > "$d/src/c.cs"; printf '<?php\n' > "$d/src/d.php"
+  ( cd "$d" && git -c user.email=t@t -c user.name=t add -A && git -c user.email=t@t -c user.name=t commit -qm src \
+      && printf 'def test_r():\n    assert True\n' > tests/test_r.py && git -c user.email=t@t -c user.name=t add -A \
+      && git -c user.email=t@t -c user.name=t commit -qm "test: red" ) >/dev/null 2>&1
+  echo "$d"
+}
+P=$(red_project .claude/worktrees/x); edited "$P" src/config.py
+assert H23h "a project under .claude/worktrees/ still spends its unlock" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"src/other.py"}}' --hook "$TDD_GATE" --exit 2 --stderr "unlocked ONE change"
+P=$(red_project); edited "$P" src/c.cs
+assert H23i "a C# edit spends the unlock like any source the gate guards" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"src/d.php"}}' --hook "$TDD_GATE" --exit 2 --stderr "src/c.cs"
+P=$(red_project)
+assert H23j "a shell write is allowed on the unlock, and spends it" "$P" \
+  "$(bash_json "sed -i.bak 's/1/2/' src/other.py")" --hook "$BWG" --exit 0
+assert H23k "…so a second file after it is blocked" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"src/config.py"}}' --hook "$TDD_GATE" --exit 2 --stderr "src/other.py"
+P=$(red_project)
+assert H23l "one command cannot write two files on one unlock" "$P" \
+  "$(bash_json 'echo a >> src/other.py; echo b >> src/config.py')" --hook "$BWG" --exit 2 --stderr "unlocked ONE change"
+assert H23m "…and the blocked command spent nothing" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"src/config.py"}}' --hook "$TDD_GATE" --exit 0
 
 # H23b — a commit containing a test AND source is NOT a red commit, and grants
 # nothing. This is the distinction the whole gate turns on: nearly every repo's
@@ -1734,6 +1804,197 @@ assert SC12b "scope_gate: all gates the tier1 cycle too" "$P" \
   --exit 2 --hook "$SCG"
 
 echo ""
+# ── Structured deny (review 2026-10-26, C6) ─────────────────────────────────
+# From Claude Code (hook_event_name: PreToolUse) every gate answers a block
+# with the structured deny — exit 0, permissionDecision "deny", the reason
+# intact — so a correct block reads as a refusal, not "hook error". Without the
+# field (the opencode adapter, every test above) the exit-2 contract holds.
+echo ""
+echo "structured deny — Claude Code"
+deny_json() {  # deny_json <json-without-closing-brace>
+  printf '%s,"hook_event_name":"PreToolUse"}' "${1%\}}"
+}
+D_OUT='"permissionDecision": "deny"'
+
+P=$(new_project); set_config "$P" "hard_enforcement: true"; add_manifest "$P" demo pre-spec
+assert D1 "spec gate" "$P" "$(deny_json "$SRC")" \
+  --exit 0 --stdout "$D_OUT" --stdout "permissionDecisionReason" --no-stderr "spec"
+P=$(tdd_project)
+assert D2 "tdd gate" "$P" "$(deny_json "$SRCEDIT")" \
+  --hook "$TDD_GATE" --exit 0 --stdout "$D_OUT" --stdout "tests before code"
+P=$(new_project); set_config "$P" "hard_enforcement: true"; add_manifest "$P" bk "building"
+assert D3 "bookkeeping gate" "$P" \
+  "$(deny_json '{"tool_name":"Edit","tool_input":{"file_path":".sage/work/bk/manifest.md","new_string":"## Context summary\nx"}}')" \
+  --hook "$BKG" --exit 0 --stdout "$D_OUT" --stdout "close-out"
+P=$(new_project); set_config "$P" "hard_enforcement: true"
+assert D4 "secrets gate" "$P" \
+  "$(deny_json '{"tool_name":"Write","tool_input":{"file_path":"src/client.py","content":"API_KEY = \"sk-proj-Abc123Def456Ghi789Jkl\""}}')" \
+  --hook "$SG" --exit 0 --stdout "$D_OUT" --stdout "environment"
+P="$(new_project)"; set_config "$P" "hard_enforcement: true"
+( cd "$P" && printf '{"tool_name":"Edit","tool_input":{"file_path":"src/app.py","new_string":"x=1"}}' | bash "$VT" ) >/dev/null 2>&1
+assert D5 "verify gate" "$P" "$(deny_json "$COMMIT_JSON")" \
+  --hook "$VG" --exit 0 --stdout "$D_OUT" --stdout "run the tests"
+P="$(mk_enforced)"
+assert D6 "config gate" "$P" \
+  "$(deny_json '{"tool_name":"Edit","tool_input":{"file_path":".sage/config.yaml","old_string":"hard_enforcement: true","new_string":"hard_enforcement: false"}}')" \
+  --hook "$CG" --exit 0 --stdout "$D_OUT" --stdout "disable its own"
+P=$(new_project); add_scoped_manifest "$P" quick building tier1
+printf 'sage-version: "1.3.10"\nhard_enforcement: true\nscope_gate: all\n' > "$P/.sage/config.yaml"
+assert D7 "scope gate" "$P" \
+  "$(deny_json '{"tool_name":"Edit","tool_input":{"file_path":"src/billing/invoice.ts"}}')" \
+  --hook "$SCG" --exit 0 --stdout "$D_OUT"
+P=$(new_project); set_config "$P" "hard_enforcement: true"; add_manifest "$P" demo pre-spec
+assert D8 "an allowed edit from Claude Code prints nothing — no decision to report" "$P" \
+  "$(deny_json '{"tool_name":"Edit","tool_input":{"file_path":"README.md"}}')" \
+  --exit 0 --no-stderr "deny"
+
+# ── sage-bash-write-gate: a shell write to source is the edit it is (X1) ─────
+echo ""
+echo "sage-bash-write-gate — shell writes are judged as edits"
+
+P=$(new_project); set_config "$P" "hard_enforcement: true"; add_manifest "$P" demo pre-spec
+assert BW1 "a heredoc written into source during a pre-spec cycle is blocked by the spec gate" "$P" \
+  "$(bash_json "cat > src/app.ts <<'EOF'
+export const x = 1
+EOF")" --hook "$BWG" --exit 2 --stderr "writes src/app.ts" --stderr "sage-spec-gate"
+assert BW2 "x>src/file (no space) is a write too" "$P" "$(bash_json 'echo x>src/app.ts')" \
+  --hook "$BWG" --exit 2 --stderr "src/app.ts"
+assert BW3 "a shell write to docs is none of this gate's business" "$P" \
+  "$(bash_json 'echo notes >> docs/notes.md')" --hook "$BWG" --exit 0
+assert BW4 "fd redirects and reads are not writes" "$P" \
+  "$(bash_json 'cat src/app.ts 2>/dev/null >&2; grep -n x src/app.ts')" --hook "$BWG" --exit 0
+
+P=$(tdd_project)
+assert BW5 "an in-place sed on source with no test written is blocked by the TDD gate" "$P" \
+  "$(bash_json "sed -i.bak 's/30/31/' src/config.py")" \
+  --hook "$BWG" --exit 2 --stderr "tests before code"
+assert BW6 "tee into source is blocked the same way" "$P" \
+  "$(bash_json 'echo TIMEOUT = 31 | tee src/config.py')" --hook "$BWG" --exit 2 --stderr "src/config.py"
+assert BW7 "cp onto a source path is blocked the same way" "$P" \
+  "$(bash_json 'cp /tmp/x.py src/config.py')" --hook "$BWG" --exit 2 --stderr "src/config.py"
+assert BW8 "writing a TEST through the shell is allowed (that is the point)" "$P" \
+  "$(bash_json "printf 'def test_y():\n    assert 0\n' > tests/test_y.py")" --hook "$BWG" --exit 0
+printf 'def test_new():\n    assert True\n' > "$P/tests/test_new.py"
+assert BW9 "once a test is written, the shell write is allowed like the edit would be" "$P" \
+  "$(bash_json "sed -i.bak 's/30/31/' src/config.py")" --hook "$BWG" --exit 0
+rm -f "$P/tests/test_new.py"
+assert BW10 "from Claude Code, the block is a structured deny" "$P" \
+  "$(python3 -c 'import json; print(json.dumps({"tool_name":"Bash","hook_event_name":"PreToolUse","tool_input":{"command":"cp /tmp/x.py src/config.py"}}))')" \
+  --hook "$BWG" --exit 0 --stdout '"permissionDecision": "deny"' --stdout "src/config.py"
+P="$(mktemp -d)/plain"; mkdir -p "$P/src"
+assert BW11 "not a Sage project: nothing to judge" "$P" "$(bash_json 'echo x > src/a.py')" \
+  --hook "$BWG" --exit 0
+
+# Second review (2026-10-27): the shell's own words, not a regex over raw text.
+bash_cwd() { python3 -c 'import json,sys; print(json.dumps({"tool_name":"Bash","cwd":sys.argv[2],"tool_input":{"command":sys.argv[1]}}))' "$1" "$2"; }
+P=$(new_project); set_config "$P" "hard_enforcement: true"; add_manifest "$P" demo pre-spec; mkdir -p "$P/src/my dir"
+for _case in 'BW12|echo x > "src/my dir/b.py"' 'BW13|dd if=/dev/zero of=src/a.py count=1' \
+             'BW14|git checkout -- src/a.py' 'BW15|cd src && echo y > a.py' \
+             'BW16|curl -o src/a.py https://example.com/x' 'BW17|timeout 5 tee -a src/a.py'; do
+  _id="${_case%%|*}"; _cmd="${_case#*|}"
+  assert "$_id" "a write the regex version missed is judged: $_cmd" "$P" "$(bash_json "$_cmd")" \
+    --hook "$BWG" --exit 2 --stderr "sage-spec-gate"
+done
+assert BW18 "a relative path resolves against the shell's cwd, not the project root" "$P" \
+  "$(bash_cwd 'echo x > a.py' "$P/src")" --hook "$BWG" --exit 2 --stderr "writes src/a.py"
+for _case in 'BW19|echo "x > src/a.py"' 'BW20|git commit -m "fix: redirect > out.py"' \
+             "BW21|awk '\$1>3.py' f" 'BW22|echo x > ~/scratch.py' 'BW23|git checkout -b feat/x'; do
+  _id="${_case%%|*}"; _cmd="${_case#*|}"
+  assert "$_id" "not a source write (quoted text, another command, outside the project): $_cmd" \
+    "$P" "$(bash_json "$_cmd")" --hook "$BWG" --exit 0
+done
+assert BW24 "a heredoc's BODY is data: writing notes.md is all that happens" "$P" \
+  "$(bash_json "$(printf "cat > notes.md <<'EOF'\npython gen.py > src/out.py\nEOF")")" --hook "$BWG" --exit 0
+assert BW25 "git restore --staged only unstages: no working-tree write" "$P" \
+  "$(bash_json 'git restore --staged src/a.py')" --hook "$BWG" --exit 0
+assert BW26 "git restore -SW does write the working tree" "$P" \
+  "$(bash_json 'git restore -SW src/a.py')" --hook "$BWG" --exit 2 --stderr "sage-spec-gate"
+assert BW27 "a backslash-continued command is one command" "$P" \
+  "$(bash_json "$(printf "sed -i.bak 's/a/b/' \\\\\nsrc/a.py")")" --hook "$BWG" --exit 2 --stderr "writes src/a.py"
+assert BW28 "a here-string has no body: the next line is still read" "$P" \
+  "$(bash_json "$(printf 'cat <<< hi\ncat > src/a.py')")" --hook "$BWG" --exit 2 --stderr "writes src/a.py"
+assert BW29 "cd - returns to where the command was" "$P" \
+  "$(bash_json 'cd src && cd - && echo x > src/a.py')" --hook "$BWG" --exit 2 --stderr "writes src/a.py"
+# Under the plugin the scope gate is not shipped beside this hook: the
+# project's own copy (registered by `sage init`) judges the write.
+_plug="$(mktemp -d "${TMPDIR:-/tmp}/sage-plugtest-XXXXXX")"
+cp "$BWG" "$REPO_ROOT/runtime/platforms/claude-code/hooks/sage-spec-gate.sh" "$_plug/"
+P=$(new_project); scope_config "$P"; add_scoped_manifest "$P" refresh plan-approved
+mkdir -p "$P/.claude/hooks"; cp "$REPO_ROOT/runtime/platforms/claude-code/hooks/sage-scope-gate.sh" "$P/.claude/hooks/"
+assert BW30 "plugin layout: the project's scope gate still judges a shell write" "$P" \
+  "$(bash_json 'echo x > src/billing/invoice.ts')" --hook "$_plug/sage-bash-write-gate.sh" \
+  --exit 2 --stderr "sage-scope-gate"
+
+# ── sage-branch-gate: no implementation on the default branch (X4) ──────────
+echo ""
+echo "sage-branch-gate — the default branch is not where a cycle builds"
+BRG="$REPO_ROOT/runtime/platforms/claude-code/hooks/sage-branch-gate.sh"
+br_project() {  # a git repo on main with an in-progress standard cycle "rate"
+  local d; d="$(new_project)"; set_config "$d" "hard_enforcement: true"
+  add_manifest "$d" 20261027-rate building
+  printf 'x = 1\n' > "$d/src/app.py"
+  ( cd "$d" && git init -q -b main . && git -c user.email=t@t -c user.name=t add -A \
+      && git -c user.email=t@t -c user.name=t commit -qm seed ) >/dev/null 2>&1
+  echo "$d"
+}
+EDIT_SRC='{"tool_name":"Edit","tool_input":{"file_path":"src/app.py"}}'
+
+P=$(br_project)
+assert BR1 "a source edit on main during a standard cycle is blocked, with the branch command" "$P" \
+  "$EDIT_SRC" --hook "$BRG" --exit 2 --stderr "default branch (main)" --stderr "git switch -c feat/rate"
+assert BR2 "a test edit on main is fine (writing the test is not implementation)" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"tests/test_app.py"}}' --hook "$BRG" --exit 0
+assert BR3 "docs and Sage's own state are none of this gate's business" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":"README.md"}}' --hook "$BRG" --exit 0
+assert BR4 "from Claude Code the block is a structured deny" "$P" \
+  "$(deny_json "$EDIT_SRC")" --hook "$BRG" --exit 0 --stdout '"permissionDecision": "deny"'
+assert BR5 "a shell write to source on main is blocked through the bash gate" "$P" \
+  "$(bash_json 'echo y=2 >> src/app.py')" --hook "$BWG" --exit 2 --stderr "sage-branch-gate"
+( cd "$P" && git switch -q -c feat/rate ) >/dev/null 2>&1
+assert BR6 "on the initiative branch the edit is allowed" "$P" "$EDIT_SRC" --hook "$BRG" --exit 0
+
+P=$(br_project); sed -i.bak 's/tier: standard/tier: tier1/' "$P/.sage/work/20261027-rate/manifest.md"; rm -f "$P/.sage/work/20261027-rate/manifest.md.bak"
+assert BR7 "a tier1 cycle may work on main" "$P" "$EDIT_SRC" --hook "$BRG" --exit 0
+P=$(br_project); sed -i.bak 's/status: in-progress/status: complete/' "$P/.sage/work/20261027-rate/manifest.md"; rm -f "$P/.sage/work/20261027-rate/manifest.md.bak"
+assert BR8 "no cycle in progress: nothing to keep off main" "$P" "$EDIT_SRC" --hook "$BRG" --exit 0
+P=$(br_project); printf 'sage-version: "1.3.24"\nhard_enforcement: true\nbranch_gate: false\n' > "$P/.sage/config.yaml"
+assert BR9 "branch_gate: false is the opt-out" "$P" "$EDIT_SRC" --hook "$BRG" --exit 0
+P=$(br_project); printf 'sage-version: "1.3.24"\nhard_enforcement: false\n' > "$P/.sage/config.yaml"
+assert BR10 "hard_enforcement off: the gate never fires" "$P" "$EDIT_SRC" --hook "$BRG" --exit 0
+P=$(br_project)
+sed -i.bak 's/^tier: standard$/tier: standard\nbranch: feat\/limiter-v2/' "$P/.sage/work/20261027-rate/manifest.md"; rm -f "$P/.sage/work/20261027-rate/manifest.md.bak"
+assert BR11 "the manifest's recorded branch is the one the message names" "$P" "$EDIT_SRC" \
+  --hook "$BRG" --exit 2 --stderr "git switch -c feat/limiter-v2"
+mf_set() {  # mf_set <proj> <line> — add a frontmatter line after tier:
+  sed -i.bak "s/^tier: standard\$/tier: standard\\
+$2/" "$1/.sage/work/20261027-rate/manifest.md" && rm -f "$1/.sage/work/20261027-rate/manifest.md.bak"
+}
+P=$(br_project); mf_set "$P" "branch: declined"
+assert BR13 "a recorded decline (branch: declined) lets this initiative work on main" "$P" \
+  "$EDIT_SRC" --hook "$BRG" --exit 0
+P=$(br_project); ( cd "$P" && git config init.defaultBranch trunk ) >/dev/null 2>&1
+assert BR14 "init.defaultBranch naming a branch that does not exist falls through to main" "$P" \
+  "$EDIT_SRC" --hook "$BRG" --exit 2 --stderr "default branch (main)"
+P=$(br_project); printf 'sage-version: "1.3.24"\nhard_enforcement: true\ndefault_branch: develop\n' > "$P/.sage/config.yaml"
+assert BR15 "the persisted default_branch is the default: main is not it here" "$P" \
+  "$EDIT_SRC" --hook "$BRG" --exit 0
+P=$(br_project); mf_set "$P" "branch: main"
+assert BR16 "a manifest naming the default branch never yields 'git switch -c main'" "$P" \
+  "$EDIT_SRC" --hook "$BRG" --exit 2 --stderr "git switch -c feat/rate" --no-stderr "switch -c main"
+P=$(br_project); sed -i.bak 's/tier: standard/tier: 1/' "$P/.sage/work/20261027-rate/manifest.md"; rm -f "$P/.sage/work/20261027-rate/manifest.md.bak"
+assert BR17 "tier: 1 is tier1" "$P" "$EDIT_SRC" --hook "$BRG" --exit 0
+P=$(br_project); printf 'sage-version: "1.3.24"\nhard_enforcement: true\nother:\n  branch_gate: false\n' > "$P/.sage/config.yaml"
+assert BR18 "an indented branch_gate under another key is not the opt-out" "$P" \
+  "$EDIT_SRC" --hook "$BRG" --exit 2
+P=$(br_project)
+assert BR19 "the block names how to record the user's decline" "$P" "$EDIT_SRC" \
+  --hook "$BRG" --exit 2 --stderr "--branch declined"
+
+P="$(mk_enforced)"
+assert BR12 "an agent adding branch_gate: false is blocked by the config gate" "$P" \
+  '{"tool_name":"Edit","tool_input":{"file_path":".sage/config.yaml","old_string":"hard_enforcement: true","new_string":"hard_enforcement: true\nbranch_gate: false"}}' \
+  --hook "$CG" --exit 2 --stderr "enforcement"
+
 echo "═══ Summary ═══"
 printf '  pass %d · fail %d · xfail %d · xpass %d\n' "$N_PASS" "$N_FAIL" "$N_XFAIL" "$N_XPASS"
 if [ "$N_FAIL" -gt 0 ] || [ "$N_XPASS" -gt 0 ]; then

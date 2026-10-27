@@ -459,6 +459,24 @@ class CloseOutTest(unittest.TestCase):
         self.assertIn("## Handoff guidance", out)
         self.assertIn("take over", out)
 
+    def test_branch_declined_is_added_when_the_manifest_predates_the_field(self):
+        """The branch gate reads `branch: declined` — and the bookkeeping gate
+        redirects hand-edits here, so close-out must be able to write it into
+        a manifest from before the template had the field."""
+        M.close_out(self.m, branch="declined",
+                    decisions=["branching declined by the user: one-line fix"])
+        self.assertEqual(M.read_field(self.m.read_text(), "branch"), "declined")
+        self.assertIn("branching declined by the user",
+                      (self.d / "decisions.md").read_text())
+
+    def test_branch_replaces_the_template_placeholder(self):
+        self.m.write_text(a_manifest_with_body().replace(
+            "status: in-progress", 'status: in-progress\nbranch: ""'))
+        M.close_out(self.m, branch="feat/close-out")
+        text = self.m.read_text()
+        self.assertEqual(M.read_field(text, "branch"), "feat/close-out")
+        self.assertEqual(M.split_frontmatter(text)[0].count("branch:"), 1)
+
     def test_blocked_on_can_be_set_in_the_same_pass(self):
         """The bookkeeping gate redirects hand-edits to close-out — so close-out
         must be able to record a blocker, or the gate would trap the one write

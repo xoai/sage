@@ -70,6 +70,13 @@ with open('$CLAUDE_MD_NEW', 'w') as f:
   sed -i.bak "s|__CONSTITUTION_PLACEHOLDER__|## Engineering Principles\n\nBase (all projects):\n1. Tests before code\n2. No silent failures\n3. Secrets never in code\n4. Dependencies explicit\n5. Changes reversible|" "$CLAUDE_MD_NEW" 2>/dev/null && rm -f "$CLAUDE_MD_NEW.bak"
 }
 
+# ── Quick reference: the system skills' "At a glance" sections (C3) ──
+# Appended BEFORE the prefix rewrite below, so its /commands get the prefix
+# like every other line Sage writes. See _shared/quick-reference.sh for why.
+source "$(dirname "$0")/../../_shared/quick-reference.sh"
+emit_quick_reference "$CORE" >> "$CLAUDE_MD_NEW" \
+  || echo "  ⚠ Quick reference not generated (python3 missing)"
+
 # ── Apply command prefix to CLAUDE.md routing table ──
 # Replaces all /command references except /sage (which stays unprefixed).
 # Order matters: longer names first to avoid partial matches
@@ -485,8 +492,30 @@ fi
 # now, by the same tool and policy as settings.json below (claude_settings.py:
 # our old entries replaced, everything else kept, an unparseable file refused).
 SETTINGS_LOCAL="$CLAUDE_DIR/settings.local.json"
-if command -v python3 >/dev/null 2>&1 && \
-   python3 "$SAGE_DIR/runtime/tools/claude_settings.py" session "$SETTINGS_LOCAL"; then
+SETTINGS_TOOL="$SAGE_DIR/runtime/tools/claude_settings.py"
+# With the Sage plugin enabled, ITS hooks run — registering ours as well fired
+# every gate twice and ran the suite after every edit (review 2026-10-26, C5).
+# Two questions, kept apart:
+#   PLUGIN_TEAM  — does the committed settings.json enable it? The team's
+#                  choice; it alone decides the committed file, which then
+#                  keeps only what the plugin does not ship (scope gate and
+#                  journal). Nobody's local or user setting reshapes it.
+#   PLUGIN_LEVEL — is it on for THIS person (Claude Code's precedence: local >
+#                  project > user)? Decides the personal session hook, and
+#                  what to warn about: on only for them → the gates run twice
+#                  for them; off for them while the team relies on it → most
+#                  gates do not run for them. Said, not hidden.
+PLUGIN_LEVEL=""
+PLUGIN_TEAM=""
+if command -v python3 >/dev/null 2>&1; then
+  PLUGIN_LEVEL=$(python3 "$SETTINGS_TOOL" plugin "$SAGE_ROOT" 2>/dev/null || true)
+  python3 "$SETTINGS_TOOL" plugin-project "$SAGE_ROOT" 2>/dev/null && PLUGIN_TEAM=1
+fi
+if [ -n "$PLUGIN_LEVEL" ]; then
+  python3 "$SETTINGS_TOOL" strip-session "$SETTINGS_LOCAL" >/dev/null 2>&1 || true
+  echo "  ✓ Sage plugin is enabled ($PLUGIN_LEVEL settings) — its session hook runs"
+elif command -v python3 >/dev/null 2>&1 && \
+   python3 "$SETTINGS_TOOL" session "$SETTINGS_LOCAL"; then
   echo "  ✓ settings.local.json (session hook merged; your settings kept)"
 else
   echo "  ✗ Could not merge the session hook into settings.local.json"
@@ -523,6 +552,8 @@ VERIFY_TRACKER_SRC="$CORE/../runtime/platforms/claude-code/hooks/sage-verify-tra
 CONFIG_GATE_SRC="$CORE/../runtime/platforms/claude-code/hooks/sage-config-gate.sh"
 SCOPE_GATE_SRC="$CORE/../runtime/platforms/claude-code/hooks/sage-scope-gate.sh"
 SCOPE_JOURNAL_SRC="$CORE/../runtime/platforms/claude-code/hooks/sage-scope-journal.sh"
+BASH_WRITE_GATE_SRC="$CORE/../runtime/platforms/claude-code/hooks/sage-bash-write-gate.sh"
+BRANCH_GATE_SRC="$CORE/../runtime/platforms/claude-code/hooks/sage-branch-gate.sh"
 if [ -f "$SPEC_GATE_SRC" ]; then
   cp "$SPEC_GATE_SRC" "$CLAUDE_DIR/hooks/sage-spec-gate.sh"
   chmod +x "$CLAUDE_DIR/hooks/sage-spec-gate.sh"
@@ -566,13 +597,36 @@ if [ -f "$SPEC_GATE_SRC" ]; then
     cp "$SCOPE_JOURNAL_SRC" "$CLAUDE_DIR/hooks/sage-scope-journal.sh"
     chmod +x "$CLAUDE_DIR/hooks/sage-scope-journal.sh"
   fi
+  if [ -f "$BASH_WRITE_GATE_SRC" ]; then
+    cp "$BASH_WRITE_GATE_SRC" "$CLAUDE_DIR/hooks/sage-bash-write-gate.sh"
+    chmod +x "$CLAUDE_DIR/hooks/sage-bash-write-gate.sh"
+  fi
+  if [ -f "$BRANCH_GATE_SRC" ]; then
+    cp "$BRANCH_GATE_SRC" "$CLAUDE_DIR/hooks/sage-branch-gate.sh"
+    chmod +x "$CLAUDE_DIR/hooks/sage-branch-gate.sh"
+  fi
 
   # Merge the hooks into settings.json rather than overwriting, so the user's
   # own settings survive; idempotent so re-running never duplicates an entry, and
   # a file that does not parse is left alone rather than replaced (C4).
   SETTINGS_JSON="$CLAUDE_DIR/settings.json"
-  if command -v python3 >/dev/null 2>&1 && \
-     python3 "$SAGE_DIR/runtime/tools/claude_settings.py" enforce "$SETTINGS_JSON"; then
+  if [ -n "$PLUGIN_TEAM" ]; then
+    if python3 "$SETTINGS_TOOL" enforce-unshipped "$SETTINGS_JSON"; then
+      echo "  ✓ settings.json (the plugin's hooks run; the scope gate and journal are registered here)"
+    else
+      echo "  ✗ Could not update settings.json (not valid JSON?) — left as is."
+    fi
+    if [ -z "$PLUGIN_LEVEL" ]; then
+      echo -e "  \033[33m⚠ The project enables the Sage plugin, but your own settings turn it off:\033[0m"
+      echo -e "  \033[33m  most of Sage's gates will not run for you. Re-enable it, then: sage update\033[0m"
+    fi
+  elif [ -n "$PLUGIN_LEVEL" ] && python3 "$SETTINGS_TOOL" enforce "$SETTINGS_JSON"; then
+    echo "  ✓ settings.json (enforcement hooks merged for the team)"
+    echo -e "  \033[33m⚠ The Sage plugin is enabled in your $PLUGIN_LEVEL settings only, so for you\033[0m"
+    echo -e "  \033[33m  most gates run twice here. Enable it in the project's .claude/settings.json\033[0m"
+    echo -e "  \033[33m  (the team's choice) or disable it for this project, then: sage update\033[0m"
+  elif command -v python3 >/dev/null 2>&1 && \
+     python3 "$SETTINGS_TOOL" enforce "$SETTINGS_JSON"; then
     echo "  ✓ settings.json (enforcement hooks merged; your settings kept)"
   else
     echo "  ✗ Could not register enforcement hooks in settings.json"

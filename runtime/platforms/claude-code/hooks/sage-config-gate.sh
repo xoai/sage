@@ -53,6 +53,15 @@ import sys
 
 
 def emit(decision, message=""):
+    # To Claude Code a block is a structured deny: the model gets the reason
+    # alone, where exit 2 also showed the hook's command line and read like a
+    # script failing (review 2026-10-26, C6; Claude Code still labels both
+    # "hook error" — docs/attestations/claude-code-structured-deny-2026-10-27.md).
+    # Callers that send no hook_event_name (opencode, the tests) keep exit 2.
+    payload = globals().get("data")
+    if (decision == "BLOCK" and isinstance(payload, dict)
+            and payload.get("hook_event_name") == "PreToolUse"):
+        decision = "DENY"
     sys.stdout.write(decision + "\n")
     if message:
         sys.stdout.write(message)
@@ -73,7 +82,7 @@ BLOCK_MSG = (
 #   opt_in  tdd_enforcement / scope_judge — default OFF; ON only when explicitly true.
 #   ranked  scope_gate — off < standard+ < all; lowering the rank is weakening.
 MASTER = "hard_enforcement"
-OPT_OUT = ("secrets_gate", "verify_gate")
+OPT_OUT = ("secrets_gate", "verify_gate", "branch_gate")
 OPT_IN = ("tdd_enforcement", "scope_judge")
 SCOPE_RANK = {"off": 0, "standard+": 1, "all": 2}
 
@@ -363,6 +372,10 @@ DECISION=$(printf '%s\n' "$GATE_OUT" | sed -n '1p')
 MESSAGE=$(printf '%s\n' "$GATE_OUT" | sed -n '2,$p')
 
 case "$DECISION" in
+  DENY)
+    SAGE_DENY_REASON="$MESSAGE" python3 -c 'import json, os; print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": os.environ["SAGE_DENY_REASON"]}}))'
+    exit 0
+    ;;
   BLOCK)
     printf '%s\n' "$MESSAGE" >&2
     exit 2

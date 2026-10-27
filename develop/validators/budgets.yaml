@@ -59,7 +59,13 @@
 # ratchets down). It does not get to drift back up because a batch was hard.
 
 eager:
-  CLAUDE.md: 190          # measured 177 · TARGET MET (≤180) · paid every turn
+  CLAUDE.md: 235          # measured 232 · paid every turn
+                          # +45 (2026-10-26, C3 — the user's call): a Quick
+                          # reference copied from the routing/tiers/checkpoints
+                          # skills' "At a glance" sections. Claude opened a Sage
+                          # system skill once in 27 runs, so on-demand delivery
+                          # alone did not reach it; the full skills stay on demand.
+                          # was 190 (measured 177, target ≤180)
                           # ratchet: 430 → 380 (P2-T5, four redundant blocks deleted)
                           #          380 → 345 (P2-T6, memory + tiers → skills)
                           #          345 → 275 (P2-T7, routing depth + checkpoints)
@@ -95,13 +101,15 @@ commands:
 # layer with extra steps, which is why these have numbers at all.
 
 skills:
-  sage-gates: 140         # measured 119 · the hook/gate explainer; the biggest, and earns it
+  sage-gates: 160         # measured 139 · the hook/gate explainer; the biggest, and earns it
+                          # +20 (2026-10-27, P2): "Why you were blocked" for the
+                          # branch gate, the Bash write gate, the TDD one-change unlock
   sage-routing: 105       # measured  90
-  sage-checkpoints: 92    # measured  79
+  sage-checkpoints: 96    # measured  95 · +4 (C3): the "At a glance" section CLAUDE.md copies
   sage-using-memory: 90   # measured  77
   sage-constitution: 87   # measured  75
   sage-decisions: 80      # measured  69
-  sage-tiers: 70          # measured  59
+  sage-tiers: 70          # measured  64
 
 # ── Generic platform ─────────────────────────────────────────────────────────
 #
@@ -115,6 +123,9 @@ skills:
 # real file was 398.
 
 generic:
-  CLAUDE.md: 770          # measured 735 · falls with the eager diet
+  CLAUDE.md: 810          # measured 788 · falls with the eager diet
+                          # +40 (2026-10-27, P2): generic inlines the system
+                          # skills whole — sage-gates' new block explanations
+                          # and the C3 "At a glance" restructure land here
                           # ratchet: 1010 → 950 (P2-T5) → 910 (P2-T6) → 840 (P2-T7)
                           #          → 770 (P2-T8)

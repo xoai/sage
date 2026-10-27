@@ -251,9 +251,10 @@ fix code, create the initiative branch per
 propose `fix/<slug>`, confirm with the user, record `branch:` in
 the manifest. Moderate and Systemic fixes always branch. **Surgical
 fixes branch by default too**; the user may skip with explicit
-consent, recorded in the initiative decision log — "branch overhead
-exceeds the fix" is the user's call, never the agent's. Not a git
-repository → skip silently.
+consent, recorded with `manifest.py close-out <manifest> --branch
+declined --decision "..."` (the branch gate reads it) — "branch
+overhead exceeds the fix" is the user's call, never the agent's. Not
+a git repository → skip silently.
 
 **Parallel-session note (`isolation: worktree`).** If
 `isolation:` in `.sage/config.yaml` is `worktree` and this session is

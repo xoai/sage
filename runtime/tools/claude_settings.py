@@ -21,6 +21,12 @@ rewritten (review 2026-10-26, C4). One policy for both files now:
 Usage:
     python3 claude_settings.py session  <settings.local.json>
     python3 claude_settings.py enforce  <settings.json>
+    python3 claude_settings.py enforce-unshipped <settings.json>  # plugin on:
+                                 # ours minus what the plugin ships
+    python3 claude_settings.py strip-session|strip-shipped <file>  # remove ours
+    python3 claude_settings.py plugin   <project>   # exit 0 + level if the plugin is on
+    python3 claude_settings.py plugin-project <project>  # exit 0 if the project's
+                                 # committed settings.json enables it
 Exit: 0 merged · 3 refused (unreadable or not a JSON object) · 2 bad invocation
 """
 from __future__ import annotations
@@ -45,7 +51,9 @@ ENFORCE: List[Tuple[str, str, str]] = [
     ("PreToolUse", "Edit|Write|MultiEdit", "sage-tdd-gate.sh"),
     ("PreToolUse", "Edit|Write|MultiEdit", "sage-bookkeeping-gate.sh"),
     ("PreToolUse", "Edit|Write|MultiEdit", "sage-secrets-gate.sh"),
+    ("PreToolUse", "Edit|Write|MultiEdit", "sage-branch-gate.sh"),   # X4
     ("PreToolUse", "Bash", "sage-verify-gate.sh"),
+    ("PreToolUse", "Bash", "sage-bash-write-gate.sh"),   # a shell write is an edit (X1)
     ("PostToolUse", "Bash|Edit|Write|MultiEdit", "sage-verify-tracker.sh"),
     ("PreToolUse", "Bash|Edit|Write|MultiEdit", "sage-config-gate.sh"),
     ("PreToolUse", "Edit|Write|MultiEdit", "sage-scope-gate.sh"),
@@ -128,13 +136,104 @@ def write(path: str, data: Dict) -> None:
         raise
 
 
+# The hook scripts the Sage plugin registers itself (runtime/plugin-overlay/
+# hooks/hooks.json — build_plugin.py --check holds the two lists equal). With
+# the plugin on, `sage init` registers only what the plugin does NOT ship (the
+# scope gate and journal), so nothing fires twice and nothing goes missing.
+PLUGIN_SHIPS = frozenset({
+    "sage-session-init.sh", "sage-spec-gate.sh", "sage-tdd-gate.sh",
+    "sage-bookkeeping-gate.sh", "sage-secrets-gate.sh", "sage-branch-gate.sh",
+    "sage-verify-gate.sh", "sage-bash-write-gate.sh", "sage-config-gate.sh",
+    "sage-degradation-log.sh", "sage-manifest-sync.sh", "sage-verify-tracker.sh",
+})
+
+
+def plugin_state(project: str) -> Tuple[bool, str]:
+    """(enabled, level) for the Sage plugin in this project, by Claude Code's
+    precedence: the project's local settings, then its committed settings,
+    then the user's. The first file that names the plugin decides; one that
+    cannot be read stops the search (unknown → treated as off: never strip on
+    a guess). level is "local" | "project" | "user" | "" (not named).
+    (review 2026-10-26, C5)"""
+    home = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.join(
+        os.path.expanduser("~"), ".claude")
+    for level, path in (("local", os.path.join(project, ".claude", "settings.local.json")),
+                        ("project", os.path.join(project, ".claude", "settings.json")),
+                        ("user", os.path.join(home, "settings.json"))):
+        try:
+            data = load(path)
+        except Refused:
+            return False, ""
+        plugins = data.get("enabledPlugins")
+        if not isinstance(plugins, dict):
+            continue
+        named = [v for k, v in plugins.items() if str(k).split("@")[0] == "sage"]
+        if named:
+            return named[0] is True, level
+    return False, ""
+
+
+def project_enables_plugin(project: str) -> bool:
+    """Whether the committed .claude/settings.json enables the plugin — the
+    team's choice, which alone decides what Sage writes to that shared file.
+    One person's local or user setting must never reshape it for everyone."""
+    try:
+        data = load(os.path.join(project, ".claude", "settings.json"))
+    except Refused:
+        return False
+    plugins = data.get("enabledPlugins")
+    if not isinstance(plugins, dict):
+        return False
+    named = [v for k, v in plugins.items() if str(k).split("@")[0] == "sage"]
+    return bool(named) and named[0] is True
+
+
+def strip(data: Dict, wanted: List[Tuple[str, str, str]]) -> Dict:
+    """Remove Sage's own hook entries (the plugin registers them instead)."""
+    hooks = data.get("hooks")
+    if not isinstance(hooks, dict):
+        return data
+    scripts = {w[2] for w in wanted}
+    for event in list(hooks):
+        entries = hooks[event]
+        if not isinstance(entries, list):
+            raise Refused('"hooks.%s" is not a list' % event)
+        kept = [e for e in entries if not (isinstance(e, dict) and any(
+            isinstance(h, dict) and any(sc in (h.get("command") or "") for sc in scripts)
+            for h in e.get("hooks") or []))]
+        if kept:
+            hooks[event] = kept
+        else:
+            del hooks[event]
+    if not hooks:
+        del data["hooks"]
+    return data
+
+
 def main(argv: List[str]) -> int:
-    if len(argv) != 2 or argv[0] not in ("session", "enforce"):
+    if len(argv) == 2 and argv[0] == "plugin":
+        enabled, level = plugin_state(argv[1])
+        print(level if enabled else "")
+        return 0 if enabled else 1
+    if len(argv) == 2 and argv[0] == "plugin-project":
+        return 0 if project_enables_plugin(argv[1]) else 1
+    if len(argv) != 2 or argv[0] not in ("session", "enforce", "enforce-unshipped",
+                                         "strip-session", "strip-shipped"):
         print(__doc__.split("Usage:")[1].split("Exit:")[0].rstrip(), file=sys.stderr)
         return 2
     kind, path = argv
+    shipped = [w for w in SESSION + ENFORCE if w[2] in PLUGIN_SHIPS]
+    unshipped = [w for w in ENFORCE if w[2] not in PLUGIN_SHIPS]
     try:
-        data = merge(load(path), SESSION if kind == "session" else ENFORCE)
+        data = load(path)
+        if kind.startswith("strip-"):
+            if not data:
+                return 0
+            data = strip(data, SESSION if kind == "strip-session" else shipped)
+        elif kind == "enforce-unshipped":
+            data = merge(strip(data, shipped) if data else data, unshipped)
+        else:
+            data = merge(data, SESSION if kind == "session" else ENFORCE)
     except Refused as exc:
         print(f"    {path}: {exc} — left untouched.", file=sys.stderr)
         return 3

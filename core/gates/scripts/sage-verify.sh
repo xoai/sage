@@ -1002,8 +1002,8 @@ vlog ""
 # A run made AS Gate 5 (--gate, which the quality-gates workflow passes) lands
 # in the in-progress cycle's ledger by itself — re-running the gate on each
 # "continue" is exactly the loop the budget exists to end, so the count is not
-# left to the agent. TDD runs, the commit gate's evidence runs and the
-# plugin's after-edit check do not pass --gate and are not gate attempts. The
+# left to the agent. TDD runs and the commit gate's evidence runs do not pass
+# --gate and are not gate attempts. The
 # verdict (RETRY / ESCALATE / STOP_BUDGET) is printed; the exit code is not
 # changed by it. SAGE_VERIFY_NO_LEDGER=1 skips it (graders on a finished tree).
 record_attempt() {

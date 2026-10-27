@@ -42,7 +42,7 @@ cp "$REPO_ROOT/develop/validators/platforms/opencode-adapter-test.mjs" "$SCRATCH
 for g in sage-spec-gate.sh sage-tdd-gate.sh sage-bookkeeping-gate.sh \
          sage-secrets-gate.sh sage-config-gate.sh sage-scope-gate.sh \
          sage-verify-gate.sh sage-verify-tracker.sh sage-degradation-log.sh \
-         sage-manifest-sync.sh; do
+         sage-manifest-sync.sh sage-bash-write-gate.sh sage-branch-gate.sh; do
   if [ -f "$CC_HOOKS/$g" ]; then
     cp "$CC_HOOKS/$g" "$SCRATCH/.opencode/sage-hooks/$g"
     chmod +x "$SCRATCH/.opencode/sage-hooks/$g"

@@ -41,8 +41,12 @@ const PRE_EDIT_GATES = [
   "sage-secrets-gate.sh",
   "sage-config-gate.sh",
   "sage-scope-gate.sh",   // SG-6: platform-agnostic script, this adapter's wire
+  "sage-branch-gate.sh",  // X4: no implementation on the default branch
 ]
-const PRE_BASH_GATES = ["sage-verify-gate.sh", "sage-config-gate.sh"]
+// sage-bash-write-gate: a shell command that writes a source file is judged as
+// the edit it is — by the edit gates above (review 2026-10-26, X1).
+const PRE_BASH_GATES = ["sage-verify-gate.sh", "sage-config-gate.sh",
+                        "sage-bash-write-gate.sh"]
 // PostToolUse recorders — never block; run for their side effects.
 const POST_HOOKS = ["sage-verify-tracker.sh", "sage-degradation-log.sh",
                     "sage-manifest-sync.sh"]

@@ -85,6 +85,11 @@ surfaces:
       the fixture's red regression test turned green (starts_red gate check),
       scope held, and — sage-only — fix mode's mandatory gates observed actually
       running. E3 still covers verify-before-claiming inside a fix shape.
+      2026-10-27 (P2, X4): a Surgical fix's skipped branch is recorded with
+      `manifest.py close-out --branch declined` — what the new branch gate
+      reads. Before, the decline lived in the decision log only and nothing
+      enforced the branch. E13 not re-run; E13 seeds no cycle, but its fix
+      opens one on the default branch, so it now meets the gate.
 
   workflow-architect:
     path: core/workflows/architect.workflow.md
@@ -213,12 +218,30 @@ surfaces:
     path: runtime/platforms/claude-code/hooks/sage-spec-gate.sh
     kind: hook
     covered-by: [E7]
-    notes: "E7 grades both the block and the agent's recovery from it."
+    notes: >
+      E7 grades both the block and the agent's recovery from it.
+      2026-10-27 (P2, C6): from Claude Code (the input names hook_event_name)
+      a block is the structured deny — permissionDecision: deny with the
+      reason, exit 0 — so the model gets the reason without the hook's command
+      line. Claude Code 2.1.289 still labels it 'hook error'
+      (docs/attestations/claude-code-structured-deny-2026-10-27.md). Other
+      callers keep exit 2. Pinned by hook tests D1–D8; E7 not re-run.
 
   hook-tdd-gate:
     path: runtime/platforms/claude-code/hooks/sage-tdd-gate.sh
     kind: hook
     covered-by: [E1]
+    notes: >
+      2026-10-27 (P2, C6): from Claude Code (the input names hook_event_name)
+      a block is the structured deny — permissionDecision: deny with the
+      reason, exit 0 — so the model gets the reason without the hook's command
+      line. Claude Code 2.1.289 still labels it 'hook error'
+      (docs/attestations/claude-code-structured-deny-2026-10-27.md). Other
+      callers keep exit 2. Pinned by hook tests D1–D8; E1 not re-run. And (X2)
+      a test-only HEAD commit unlocks ONE source file — the first edited after
+      it, recorded per HEAD in .sage/tmp/tdd-red by the verify tracker — not
+      every edit until the next commit; a second file needs its own test.
+      Pinned by H23c–m (incl. a shell write spending it); E1 not re-run.
 
   hook-degradation-log:
     path: runtime/platforms/claude-code/hooks/sage-degradation-log.sh
@@ -227,6 +250,37 @@ surfaces:
     notes: >
       E8 is the scenario that proved the thesis: the decisions.md line appears
       because a script writes it, not because the model remembered to.
+
+  hook-bash-write-gate:
+    path: runtime/platforms/claude-code/hooks/sage-bash-write-gate.sh
+    kind: hook
+    uncovered: >
+      2026-10-27 (P2, X1): a Bash command that writes a source file —
+      redirects, heredocs, tee, an in-place sed/perl/awk,
+      cp/mv/install/ln/rsync destinations, dd of=, sort -o, curl -o, wget -O,
+      git checkout/restore paths — is put through the spec, TDD, scope and
+      branch gates as the Write it is. A shell write also spends the TDD
+      gate's one-file unlock (X2). Pinned by hook tests BW1–BW30, H23j–m and
+      the opencode adapter suite; no eval scenario provokes a shell write (the
+      review saw one in 3 of 27 runs). Not seen, by design: what an
+      interpreter or script writes at run time, xargs and find -exec, $VAR
+      paths, git apply, patch, tar, unzip.
+
+  hook-branch-gate:
+    path: runtime/platforms/claude-code/hooks/sage-branch-gate.sh
+    kind: hook
+    uncovered: >
+      2026-10-27 (P2, X4): no source edit on the default branch while a
+      Standard+ cycle is in progress in this checkout (hard_enforcement on;
+      tier1, `branch: declined` and other checkouts' cycles exempt;
+      `branch_gate: false` opts out). Pinned by hook tests BR1–BR19. No
+      scenario measures it; the review saw 4 of 4 small /build runs implement
+      on master, and E19 run 1 branched on its own. Every scenario that seeds
+      an in-progress Standard cycle on a fresh repo's default branch under
+      `sage init`'s enforcement — E7–E11, E15–E18, E-PAR-1–3, E-JUDGE-1a/b,
+      L1, L3 — or opens one through /build or /fix (E1, E4, E13, E19) now has
+      to branch before its first source edit; re-run before citing their
+      numbers for this version.
 
   hook-config-gate:
     path: runtime/platforms/claude-code/hooks/sage-config-gate.sh
@@ -243,6 +297,14 @@ surfaces:
       gate_retry_cap joined the protected review floor (an agent may not raise
       or zero its own stop); pinned by hook tests C11f–C11k. E15 not re-run
       for this addition.
+      2026-10-27 (P2, C6): from Claude Code (the input names hook_event_name)
+      a block is the structured deny — permissionDecision: deny with the
+      reason, exit 0 — so the model gets the reason without the hook's command
+      line. Claude Code 2.1.289 still labels it 'hook error'
+      (docs/attestations/claude-code-structured-deny-2026-10-27.md). Other
+      callers keep exit 2. Pinned by hook tests D1–D8; E15 not re-run.
+      branch_gate joined the protected opt-outs (an agent may not add
+      branch_gate: false; BR12).
 
   hook-verify-gate:
     path: runtime/platforms/claude-code/hooks/sage-verify-gate.sh
@@ -259,6 +321,12 @@ surfaces:
       tests already passed' — no edit, no commit) is un-hookable without
       judging prose: the first measured failure mode that resists
       mechanization, recorded in E14's rationale.
+      2026-10-27 (P2, C6): from Claude Code (the input names hook_event_name)
+      a block is the structured deny — permissionDecision: deny with the
+      reason, exit 0 — so the model gets the reason without the hook's command
+      line. Claude Code 2.1.289 still labels it 'hook error'
+      (docs/attestations/claude-code-structured-deny-2026-10-27.md). Other
+      callers keep exit 2. Pinned by hook tests D1–D8; E14 not re-run.
 
   hook-verify-tracker:
     path: runtime/platforms/claude-code/hooks/sage-verify-tracker.sh
@@ -274,6 +342,13 @@ surfaces:
       2026-10-26 (P1, the loop must end): a `sage-verify.sh --record-baseline`
       run is not test evidence (recording exits 0 over a red suite). Pinned by
       the hook tests; E14 not re-run for it.
+      2026-10-27 (P2, X2): after a successful edit of a non-test source file,
+      the tracker records `<HEAD>\t<file>` in .sage/tmp/tdd-red (once per
+      HEAD) — the one file a test-only commit unlocks for the TDD gate; the
+      gate's own extension list decides, and Sage-machinery paths are judged
+      relative to the project (one under .claude/worktrees/ still counts).
+      Pinned by H23c–i. The test-evidence half E14 grades is unchanged; E14
+      not re-run.
 
   hook-secrets-gate:
     path: runtime/platforms/claude-code/hooks/sage-secrets-gate.sh
@@ -288,6 +363,12 @@ surfaces:
       allowed. Own suite: S1–S8 in run-hook-tests.sh. E2 covers it end-to-end;
       the down-model proof is the haiku re-run recorded in
       WEAK-MODEL-CAMPAIGN.md.
+      2026-10-27 (P2, C6): from Claude Code (the input names hook_event_name)
+      a block is the structured deny — permissionDecision: deny with the
+      reason, exit 0 — so the model gets the reason without the hook's command
+      line. Claude Code 2.1.289 still labels it 'hook error'
+      (docs/attestations/claude-code-structured-deny-2026-10-27.md). Other
+      callers keep exit 2. Pinned by hook tests D1–D8; E2 not re-run.
 
   hook-bookkeeping-gate:
     path: runtime/platforms/claude-code/hooks/sage-bookkeeping-gate.sh
@@ -316,6 +397,12 @@ surfaces:
       review-ledger.json are machine-owned — any Edit/Write, even creation, is
       blocked (a forged baseline is an excuse, an edited ledger a refunded
       budget). Pinned by hook tests B6b/B6c; L1 not re-run for it.
+      2026-10-27 (P2, C6): from Claude Code (the input names hook_event_name)
+      a block is the structured deny — permissionDecision: deny with the
+      reason, exit 0 — so the model gets the reason without the hook's command
+      line. Claude Code 2.1.289 still labels it 'hook error'
+      (docs/attestations/claude-code-structured-deny-2026-10-27.md). Other
+      callers keep exit 2. Pinned by hook tests D1–D8; L1 not re-run.
 
   hook-manifest-sync:
     path: runtime/platforms/claude-code/hooks/sage-manifest-sync.sh
@@ -371,6 +458,12 @@ surfaces:
       3/3 at BOTH opus and haiku tiers, zero false blocks — the gate is
       harmless and prevented nothing, because no bare run drifted. Default
       stays off; "≥ bare" is a no-harm test, not a benefit test.
+      2026-10-27 (P2, C6): from Claude Code (the input names hook_event_name)
+      a block is the structured deny — permissionDecision: deny with the
+      reason, exit 0 — so the model gets the reason without the hook's command
+      line. Claude Code 2.1.289 still labels it 'hook error'
+      (docs/attestations/claude-code-structured-deny-2026-10-27.md). Other
+      callers keep exit 2. Pinned by hook tests D1–D8; L3 not re-run.
 
   hook-scope-journal:
     path: runtime/platforms/claude-code/hooks/sage-scope-journal.sh
@@ -399,6 +492,11 @@ surfaces:
       E-PAR-1/2/3 exercise the graph and lanes blocks end-to-end — AUTHORED
       2026-08-09, NOT YET EXECUTED (budget-gated): until they run, every
       parallel-mode property is a deterministic-layer claim only.
+      2026-10-27 (P2, X4): `close-out --branch` writes the frontmatter
+      `branch:` (inserting it into manifests from before the template had it)
+      — how the user's decline, `declined`, reaches the branch gate. Pinned by
+      test_manifest.py CloseOutTest (test_branch_*); the E-PAR/L1 scenarios do
+      not use it, not re-run.
 
   tool-lanes:
     path: runtime/tools/lanes.py
@@ -478,7 +576,7 @@ surfaces:
     uncovered: >
       Stated, not deferred: no eval scenario drives opencode — the harness
       runs claude-code. What pins the adapter is deterministic and in
-      fastcheck: develop/validators/platforms/opencode-adapter-test.mjs (13 checks, via develop/validators/
+      fastcheck: develop/validators/platforms/opencode-adapter-test.mjs (14 checks, via develop/validators/
       platforms/run-opencode-adapter-tests.sh) drives the REAL gate scripts
       and the REAL judge runtime through the plugin wire — veto, journal
       schema with byte-parity against the claude-code hook's rows, sub-flag
@@ -489,6 +587,10 @@ surfaces:
       opencode-context-injection-midstream-2026-08-04.md, expires 1.4).
       Efficacy on opencode is explicitly unclaimed (E-JUDGE-1 never ran
       there); an opencode-driving scenario would replace this row.
+      2026-10-27 (P2): the Bash gates now include sage-bash-write-gate (a
+      shell write to source is judged as the edit it is) and the edit gates
+      sage-branch-gate; the adapter suite went 13 → 14 checks with a pre-spec
+      source write through bash vetoed.
 
 # ── Gate scripts (three-state, standalone-invocable) ─────────────────────────
 
@@ -512,6 +614,9 @@ surfaces:
       Pinned by test_verify_baseline.py (real runner output, collision cases,
       second-review shapes) and gate tests G30a–s; E19 exercises it live —
       added, run once 2026-10-26 (N=1, operator config — E19/MEASURED.md).
+      2026-10-27 (P2): comment only — the plugin no longer runs the suite
+      after every edit (C5), so the record_attempt note stops naming that
+      check. No behavior change.
 
   gate-bounded:
     path: core/gates/scripts/sage-bounded.sh
@@ -606,6 +711,9 @@ surfaces:
       with the prose gone, the prose was decoration and the hooks are the product.
       If they regress, the hooks are not as sufficient as v1.2.0 claimed, and that
       is a far more valuable thing to learn than a smaller context window.
+      2026-10-27 (P2, X4): the Branch line names its hook (sage-branch-gate).
+      Also new in CLAUDE.md, outside any anchored block: the Quick reference
+      (C3) — see system-skill-sage-routing. E1/E7 not re-run.
 
   eager-rule-1-state-first:
     path: runtime/platforms/_shared/instructions-body.sh
@@ -857,6 +965,12 @@ surfaces:
       Partial: E1's git_order grader depends on the commit discipline this
       skill defines, but nothing grades the branch gate — the rule that
       implementation never lands on the default branch.
+      2026-10-27 (P2, X4): 'not on the default branch' is now enforced by
+      sage-branch-gate.sh (source edits blocked while a Standard+ cycle is in
+      progress), and the user's decline is recorded as frontmatter `branch:
+      declined` via `manifest.py close-out --branch declined` — the gate
+      honours it. E1 not re-run; E1's /build now has to branch before its
+      first source edit.
 
   capability-auto-review:
     path: core/capabilities/review/auto-review/SKILL.md
@@ -1074,12 +1188,24 @@ surfaces:
       is the one piece of eager content that cannot fully move, because a skill
       that teaches routing cannot fire on a turn where routing already failed.
       The keyword map stays eager for exactly that reason.
+      2026-10-27 (P2, C3): the shape table and the confirm rule moved into an
+      'At a glance' section, which the Claude Code generator and the plugin
+      navigator copy into the always-on layer as the Quick reference
+      (runtime/platforms/_shared/quick-reference.sh) — the review saw Claude
+      open a Sage system skill once in 27 runs. Pinned by generation-smoke
+      (Quick reference present; command prefix applied). E6/E11 not re-run.
 
   system-skill-sage-tiers:
     path: core/system-skills/sage-tiers/SKILL.md
     kind: system-skill
     covered-by: [E11]
-    notes: "E11 prompt 3 asks which tier a cross-service change is."
+    notes: >
+      E11 prompt 3 asks which tier a cross-service change is.
+      2026-10-27 (P2, C3): the rationalization table is the 'At a glance'
+      section, copied into CLAUDE.md's Quick reference (always on). The Tier 1
+      text now says what is true: the cycle gates (spec, scope, branch) have
+      nothing to hold without a manifest, but the TDD and secrets gates still
+      fire. E11 not re-run.
 
   system-skill-sage-using-memory:
     path: core/system-skills/sage-using-memory/SKILL.md
@@ -1097,6 +1223,10 @@ surfaces:
       The eval driver is headless: it cannot answer an [A]/[R] prompt, so the
       half of this skill that matters most to a human user is the half a headless
       harness structurally cannot see. Honest gap, not an oversight.
+      2026-10-27 (P2, C3): the four footers are the 'At a glance' section, now
+      copied into CLAUDE.md's Quick reference (always on), so the formatting
+      reaches sessions that never open this skill. Still ungraded, for the
+      reason above.
 
   system-skill-sage-gates:
     path: core/system-skills/sage-gates/SKILL.md
@@ -1107,6 +1237,9 @@ surfaces:
       which this skill explains. The hooks enforce regardless of whether the skill
       is read, which is the point: if E1/E7 hold after this content leaves the
       eager layer, ADR-9's central claim is confirmed on the strongest case.
+      2026-10-27 (P2): 'Why you were blocked' gained the branch gate, the Bash
+      write gate and the TDD gate's one-change unlock; the branch-gate decline
+      is now `manifest.py close-out --branch declined`. E1/E7 not re-run.
 
   system-skill-sage-constitution:
     path: core/system-skills/sage-constitution/SKILL.md

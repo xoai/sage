@@ -65,13 +65,14 @@ safe: a project that has never heard of a key is never surprise-blocked.
 | Key | New projects | Absent means | What it gates |
 |---|---|---|---|
 | `hard_enforcement` | `true` | off | The master switch. Nothing below fires without it. Projects upgraded by `sage update` get it added as `false` with a notice — enforcement never surprises an established workflow. |
-| `tdd_enforcement` | `true` | off | The TDD gate: a source edit is blocked until a test SOURCE file (test location/name + a source-code extension — never a fixture, snapshot or `__pycache__` bytecode) is dirty/untracked, or the last commit touched only test source. Escape hatches: `tier: tier1` on the cycle manifest, or this key. |
+| `tdd_enforcement` | `true` | off | The TDD gate: a source edit is blocked until a test SOURCE file (test location/name + a source-code extension — never a fixture, snapshot or `__pycache__` bytecode) is dirty/untracked, or the last commit touched only test source — that red commit unlocks ONE source file (the first one edited after it); a second file needs its own test. Escape hatches: `tier: tier1` on the cycle manifest, or this key. |
 | `secrets_gate` | on | on | Credentials in source are blocked (provider-shaped patterns; `.env` and test fixtures allowed; live-marked keys blocked everywhere but `.env`). `false` is the explicit opt-out. |
 | `verify_gate` | on | on | A code-bearing commit demands this-session test evidence. `false` opts out. |
 | `bookkeeping_gate` | on | on | Hand-edits of an active cycle's `manifest.md`/`decisions.md` are redirected to the one-command `manifest.py close-out` writer. `false` opts out. |
+| `branch_gate` | on | on | While a Standard+ cycle is in progress, a source edit on the default branch is blocked, and the block names the `git switch -c` that fixes it. Tier1 cycles are exempt. `false` opts out. |
 
 **What the config-gate blocks the agent from writing** (humans out-of-band
-only): flipping `hard_enforcement` off; adding `secrets_gate`/`verify_gate:
+only): flipping `hard_enforcement` off; adding `secrets_gate`/`verify_gate`/`branch_gate:
 false`; removing `tdd_enforcement: true`; softening the review floor
 (`review_loop.mode` v2→v1, `witness_capping` off) while v2 is active;
 lifting the cycle's stop (raising or zeroing `cycle_round_budget` or
@@ -324,7 +325,8 @@ plan and code each had five rounds, and a red gate had uncounted retries —
 so "continue" could run forever against a failure the cycle did not cause.
 Two mechanisms close that. The cycle budget above, which Gate 5 spends by
 itself (each `sage-verify.sh --gate` run of an in-progress cycle lands in its
-ledger; TDD runs and the plugin's after-edit check are not gate attempts). And Gate 5's baseline: `sage-verify.sh --record-baseline
+ledger; TDD runs are not gate attempts). And Gate 5's baseline:
+`sage-verify.sh --record-baseline
 .sage/work/<cycle>/verify-baseline.json`, once at cycle start, names the
 tests already failing; Gate 5 then passes a red run only when it can prove
 every failure is one of those — fully qualified test ids, matched against

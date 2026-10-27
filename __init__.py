@@ -21,8 +21,11 @@ Hermes tool mapping (verified against the live tool schemas):
   write_file -> args["path"], args["content"]
   patch      -> args["path"], args["new_string"] (replace mode),
                 args["patch"] (V4A patch mode — new_text is the patch body)
-Everything else (terminal, execute_code, …) is not gated — the same documented
-hole the claude-code hooks have (they matched Edit|Write|MultiEdit only).
+Everything else (terminal, execute_code, …) is not gated. The claude-code
+hooks have since closed part of that hole (sage-bash-write-gate.sh) and added
+a branch gate (sage-branch-gate.sh); neither is ported here yet. The config
+gate still protects `branch_gate`, so the key means the same thing if the
+gate arrives.
 """
 
 from __future__ import annotations
@@ -573,7 +576,7 @@ _CONFIG_BLOCK_MSG = (
     "the work it is pointing at — that is what it is for.")
 
 _CFG_MASTER = "hard_enforcement"
-_CFG_OPT_OUT = ("secrets_gate", "verify_gate")
+_CFG_OPT_OUT = ("secrets_gate", "verify_gate", "branch_gate")
 _CFG_OPT_IN = ("tdd_enforcement",)
 
 
@@ -691,7 +694,7 @@ def _config_gate(project_root, sage_dir, tool_name, args, path, new_text):
         writes = re.search(r">\s*[^|]*\.sage/config\.ya?ml|"
                            r"\bsed\b[^\n]*-i|\btee\b[^\n]*\.sage/config\.ya?ml", cmd)
         turns_off = re.search(
-            r"(?:%s|secrets_gate|verify_gate)\s*:?\s*false" % re.escape(_CFG_MASTER),
+            r"(?:%s|secrets_gate|verify_gate|branch_gate)\s*:?\s*false" % re.escape(_CFG_MASTER),
             cmd, re.I)
         review_off = _cfg_review_mode(current, absent="v1") == "v2" and re.search(
             r"witness_capping\s*:?\s*false|mode\s*:?\s*v1", cmd, re.I)

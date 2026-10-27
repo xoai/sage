@@ -32,6 +32,23 @@ SOURCE file or a red commit (test source touched, no other source) as
 evidence. Fixtures, snapshots and `__pycache__` bytecode under `tests/` do not
 count — they prove no test was written.
 
+**"…the last commit (tests only) unlocked ONE change."** A red commit is
+evidence for one source file — the first one edited after it. A change that
+genuinely spans a second file needs that file's test too: write it (a dirty
+test file is evidence), or commit it as its own red commit.
+
+**"Sage: implementation does not start on the default branch."** A Standard+
+cycle is in progress and HEAD is the default branch. Run the `git switch -c`
+the message names, then make the edit. If the USER declines branching, record
+it with `manifest.py close-out <manifest> --branch declined --decision "..."`
+— that is their call, not yours.
+
+**A Bash command blocked by a gate.** `sage-bash-write-gate.sh` finds the
+source files a shell command would write (`>`, `tee`, an in-place `sed`,
+`cp`/`mv`, `git checkout -- <file>`, …) and puts each through the same spec,
+TDD, scope and branch gates an Edit gets. Writing through the shell is not a
+way around a gate; satisfy the gate it names.
+
 **Completion blocked.** The manifest cannot reach `complete` while
 `gate_state` is anything short of `gates-passed`, and it cannot complete with
 an unresolved `qa:` disposition. This is Rule 5 with a script behind it.
@@ -58,8 +75,9 @@ If either is missing, create it first. No exceptions.
 | "Just build it" | Write a minimal five-line spec and get `[A]`. |
 
 **Branch gate (Standard+, git projects).** Before implementation commits begin,
-HEAD must not be the default branch — unless a branching decline is recorded in
-the initiative's decision log. Merging is **always** a user-gated `[M]` action.
+HEAD must not be the default branch — unless the user's decline is recorded
+(`manifest.py close-out --branch declined`). The branch-gate hook enforces it
+on source edits while `hard_enforcement` is on. Merging is **always** a user-gated `[M]` action.
 No workflow path merges on its own. Full protocol:
 `sage/core/capabilities/execution/git-discipline/SKILL.md`.
 

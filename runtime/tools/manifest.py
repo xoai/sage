@@ -692,7 +692,7 @@ def check(manifests, root: pathlib.Path) -> int:
 
 def close_out(manifest: pathlib.Path, summary=None, next_step=None,
               decisions=(), complete_tasks=(), open_questions=None,
-              status=None, phase=None, blocked_on=None) -> int:
+              status=None, phase=None, blocked_on=None, branch=None) -> int:
     text = manifest.read_text(encoding="utf-8", errors="replace")
     cycle_dir = manifest.parent
     wrote = []
@@ -719,6 +719,16 @@ def close_out(manifest: pathlib.Path, summary=None, next_step=None,
     if status:
         text = write_field(text, "status", status)
         wrote.append(f"status={status}")
+    if branch:
+        # Older manifests predate the template's branch: field — add it.
+        try:
+            text = write_field(text, "branch", branch)
+        except Problem:
+            fm, _ = split_frontmatter(text)
+            if fm is None:
+                raise
+            text = text.replace(fm, fm.rstrip("\n") + "\nbranch: %s" % branch, 1)
+        wrote.append(f"branch={branch}")
     if blocked_on is not None:
         # `status: blocked` without blocked_on: fails `check` — so the command
         # that sets a blocker must be able to name its question in the same pass.
@@ -1642,6 +1652,10 @@ def main(argv=None) -> int:
                     metavar="N", help="check Task N's box in plan.md (repeatable)")
     co.add_argument("--phase", help="set frontmatter phase")
     co.add_argument("--status", help="set frontmatter status")
+    co.add_argument("--branch",
+                    help="set frontmatter branch: the initiative branch's name, "
+                         "or `declined` when the user declined branching "
+                         "(the branch gate honours it for this initiative)")
     co.add_argument("--blocked-on",
                     help="name the blocker (required by `check` when status is "
                          "blocked): the question, the options, whose call")
@@ -1720,7 +1734,7 @@ def main(argv=None) -> int:
                              complete_tasks=args.complete_task,
                              open_questions=args.open_questions,
                              status=args.status, phase=args.phase,
-                             blocked_on=args.blocked_on)
+                             blocked_on=args.blocked_on, branch=args.branch)
 
         manifests = args.manifest or find_manifests(args.repo_root.resolve())
         if not manifests:
