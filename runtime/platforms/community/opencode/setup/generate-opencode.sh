@@ -73,8 +73,17 @@ emit_instructions_body \
 #
 # The conformance suite caught exactly that regression here (P4-T4): "declared
 # false, and nothing is inlined — the content is unreachable on this platform".
+#
+# Unless Codex shares this file. Codex reads at most 32 KiB of AGENTS.md and
+# inlined skills do not fit, so its generator lists them instead (see
+# emit_system_skills_index). This generator runs after Codex's and fills the same
+# block, so it must list them too, or it puts the oversized file back.
 source "$(dirname "$0")/../../../_shared/system-skills.sh"
-emit_system_skills_inline "$CORE" >> "$AGENTS_MD_NEW"
+if [ -d "$SAGE_ROOT/.codex" ]; then
+  emit_system_skills_index "$CORE" "sage/core" >> "$AGENTS_MD_NEW"
+else
+  emit_system_skills_inline "$CORE" >> "$AGENTS_MD_NEW"
+fi
 
 # ── Dynamic constitution merging (same as Claude Code) ──
 CONST_SECTION="## Engineering Principles

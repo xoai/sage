@@ -227,9 +227,35 @@ if printf '%s' "$LEVELS" | grep -q 1; then
         # This check found a real regression on all four community platforms
         # (P4-T4): ADR-9 took 220 lines out of the eager body and only claude-code
         # and generic ever got them back.
+        #
+        # Inlined, or listed by a path that exists in the project (Codex: inlined
+        # skills do not fit under its 32 KiB AGENTS.md cap). Each skill is checked:
+        # a list that points at a file init never wrote is the same bug again.
         INSTR="$WORK/proj/$INSTR_FILE"
+        N_IN=0; N_LISTED=0; LOST=""
         if [ -f "$INSTR" ] && grep -q "^# Reference" "$INSTR"; then
-          ok "native-skill-discovery" "declared false, and the skills are INLINED instead"
+          for sk in "$REPO_ROOT"/core/system-skills/*/SKILL.md; do
+            [ -f "$sk" ] || continue
+            sk_name="$(basename "$(dirname "$sk")")"
+            sk_head="$(awk 'NR>1 && /^---$/ { b=1; next } b && /^# / { print; exit }' "$sk")"
+            sk_path="sage/core/system-skills/$sk_name/SKILL.md"
+            if [ -n "$sk_head" ] && grep -qxF "$sk_head" "$INSTR"; then
+              N_IN=$((N_IN + 1))
+            elif grep -qF "\`$sk_path\`" "$INSTR" && [ -f "$WORK/proj/$sk_path" ]; then
+              N_LISTED=$((N_LISTED + 1))
+            else
+              LOST="$LOST $sk_name"
+            fi
+          done
+        fi
+        if [ $((N_IN + N_LISTED)) -gt 0 ] && [ -z "$LOST" ]; then
+          if [ "$N_LISTED" -eq 0 ]; then
+            ok "native-skill-discovery" "declared false, and the skills are INLINED instead"
+          else
+            ok "native-skill-discovery" "declared false; $N_IN skill(s) inlined, $N_LISTED listed by a path that exists in the project"
+          fi
+        elif [ -n "$LOST" ]; then
+          bad "native-skill-discovery" "declared false, and neither inlined nor listed by an existing path:$LOST — UNREACHABLE for this platform's users"
         else
           bad "native-skill-discovery" "declared false, and nothing is inlined — the content is UNREACHABLE for this platform's users"
         fi ;;

@@ -221,9 +221,8 @@ for entry in $MD_CASES; do
 done
 
 # Codex: the 32 KiB cap is about what Codex reads — the whole AGENTS.md, the
-# user's text included, not just Sage's block. (Sage's block alone is already
-# over the cap, so the warning itself proves little: the byte count it names
-# must be the whole file's.)
+# user's text included, not just Sage's block. (The warning alone proves
+# little: the byte count it names must be the whole file's.)
 d="$(md_new)"
 python3 -c 'print("# Team rules\n" + "x" * 79 + "\n" + ("y" * 79 + "\n") * 400, end="")' > "$d/AGENTS.md"
 out=$( cd "$d" && SAGE_HOME="$HOME_DIR" bash "$REPO_ROOT/bin/sage" init --no-memory \
@@ -233,6 +232,34 @@ r=ok
 printf '%s' "$out" | grep -q "AGENTS.md is $(wc -c < "$d/AGENTS.md" | tr -d ' ') bytes" || r=bad
 md_check "codex" "32 KiB cap counts the whole AGENTS.md and warns" "$r"
 rm -rf "$(dirname "$d")"
+
+# Codex: Sage's own text fits under the cap, with room left for the project's.
+# Codex reads at most 32 KiB of AGENTS.md and drops the rest without a word, and
+# the system skills came last: inlined, a fresh file was ~33.5 KB, so a default
+# install lost the tail of Sage's instructions. They are listed now, each by a
+# path the agent reads — so each path must exist in the project, or the list
+# points at nothing. Opencode fills the same block after Codex, so the shared
+# install is held to the same budget.
+CODEX_CAP=32768
+CODEX_HEADROOM=8192   # left for the project's own AGENTS.md text
+for plats in codex codex,opencode; do
+  d="$(md_new)"; r=ok; n=0; listed=0
+  md_run "$d" init "$plats" || r=bad
+  size=$(wc -c < "$d/AGENTS.md" | tr -d ' ')
+  [ "$size" -le $((CODEX_CAP - CODEX_HEADROOM)) ] || r=bad
+  for sk in "$REPO_ROOT"/core/system-skills/*/SKILL.md; do
+    p="sage/core/system-skills/$(basename "$(dirname "$sk")")/SKILL.md"
+    n=$((n + 1))
+    if md_block_has "$d/AGENTS.md" "\`$p\`" && [ -f "$d/$p" ]; then
+      listed=$((listed + 1))
+    else
+      r=bad
+    fi
+  done
+  [ "$n" -gt 0 ] || r=bad
+  md_check "$plats" "fresh AGENTS.md $size B (budget $((CODEX_CAP - CODEX_HEADROOM))); $listed/$n skills listed by a path that exists" "$r"
+  rm -rf "$(dirname "$d")"
+done
 
 # ── Claude Code install pins (review 2026-10-26: C1, C2, C4, X3, X5, X6) ──
 # What `sage init` GENERATES, checked directly — the evals measure model
