@@ -5,8 +5,8 @@
 | **Platform** | `claude-code`, inside the Claude Desktop app's Code tab |
 | **Capability** | Sage governs a Desktop session that works in an app-made worktree, and its checkpoints, progress and branch handling use the app (Desktop mode) |
 | **Verdict** | **yes, with one fix and two open items** — see "What it found" |
-| **Method** | one live, interactive `/build` in a Desktop worktree session; transcript read afterwards; one probe of the installed hooks |
-| **Verified** | 2026-10-27 |
+| **Method** | two live, interactive `/build`s in Desktop worktree sessions (the second with sage-memory); transcripts read afterwards; one probe of the installed hooks; the memory store read directly |
+| **Verified** | 2026-10-27, memory 2026-10-28 |
 | **Platform version** | Claude Code 2.1.308–2.1.309 (session entrypoint `claude-desktop`), Claude Desktop 4.29.0 |
 | **Expires** | release 1.4 |
 | **Probed by** | feat/desktop-native (Phases A and B) |
@@ -60,9 +60,33 @@ blocked it. The agent re-ran `review.py` alone. The block also stopped a hand
 edit, but the rule is coarse (a known limit of the config gate's shell
 matching).
 
+## Second run — sage-memory (2026-10-28)
+
+Same project, after `sage setup memory` wrote `.mcp.json` (committed, so git
+carries it into worktrees; `.worktreeinclude` lists it too for projects that
+ignore it) and gitignored `.sage-memory/`. One convention was seeded into the
+main checkout's store beforehand — that every calc function throws
+`TypeError("calc: expected finite numbers")` on non-finite input — deliberately
+untrue of the code, so following it or questioning it would both show it was
+read. A second Desktop worktree session (`wonderful-poitras-ba57a7`) ran
+`/build Add a modulo(a, b) function … with tests`, with no mention of memory.
+
+| Claim | Observed |
+|---|---|
+| The memory server reaches a worktree session | The `sage-memory` tools were loaded; 7 searches, 5 stores, 4 links. |
+| A worktree session reads the main checkout's store | The first search returned the seeded convention. The agent saw it contradicted `calc.mjs` and asked about it at the spec checkpoint (follow the code or the memory); the user chose the code. |
+| A worktree session writes the main checkout's store | Three new memories landed in the main checkout's `.sage-memory/memory.db` — a correction of the seeded convention, a `%`/`-0` gotcha and a Gate 4 gotcha. No `.sage-memory/` was created in the worktree; the main checkout's is the only store. |
+
+The agent never called `sage_memory_set_project`, though the session hook
+suggests it in a linked worktree: the server resolved the main checkout's
+store by itself (presumably launched from the main checkout, as Desktop runs
+the SessionStart hook there). The call stays in the hook as the fallback for
+hosts that launch the server inside the worktree. The run also repeated the
+first run's open item: the agent advanced `gate_state` with `sed -i` once.
+
 ## Not covered
 
 A Desktop session without a worktree (an ordinary checkout — the branch
 gate's propose-confirm as buttons); `desktop_mode: off`; the plugin install
 path; a project that tracks `.sage/`. The deterministic hook tests cover
-those shapes (WT*, DM*); this probe is the one live run.
+those shapes (WT*, DM*); these probes are the live runs.
