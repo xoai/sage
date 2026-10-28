@@ -22,12 +22,29 @@ the same file: there is one block, and the last generator to run fills it.
 
 ### 32 KiB AGENTS.md cap
 
-Codex caps the combined instructions file at 32 KiB by default. The
-generator measures the whole AGENTS.md — the project's own text plus
-Sage's block — and warns when it is over. Sage's block alone is about
-33 KB since the system skills are inlined (ADR-9), so a default install
-already warns. Users can raise the cap via `project_doc_max_bytes` in
-`~/.codex/config.toml`.
+Codex reads at most 32 KiB of AGENTS.md (`project_doc_max_bytes`) and drops
+the rest without a word. Inlined like on the other community platforms, the
+seven system skills made a fresh AGENTS.md ~33.5 KB — and they come last, so a
+default install lost the tail of Sage's instructions.
+
+So Codex's AGENTS.md **lists** the system skills instead of inlining them: each
+skill's own description (the trigger text native discovery matches on) and the
+path of its `SKILL.md` under `sage/core/system-skills/`, which `sage init`
+copies into the project. The agent reads the file when a description matches —
+discovery done by hand (`emit_system_skills_index` in `_shared/system-skills.sh`).
+A fresh AGENTS.md is about 11.5 KB (13 KB with Opencode's note), leaving ~20 KB
+for a project's own text. When Opencode shares the file it lists them too, or
+it would put the oversized block back.
+
+`generation-smoke.sh` holds a fresh AGENTS.md (codex, and codex + opencode) to
+24 KiB — 8 KiB of the cap kept for the project — and checks that every listed
+path exists. The generator still measures the whole file, the project's own
+text included, and warns when it is over; users can raise the cap via
+`project_doc_max_bytes` in `~/.codex/config.toml`.
+
+Not used, because nobody has checked it: recent Codex releases are reported
+to discover `SKILL.md` skills themselves. If that is attested, the skills can
+be emitted for discovery and `native-skill-discovery` set accordingly.
 
 ### Sub-agent invocation
 

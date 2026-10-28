@@ -67,6 +67,12 @@ they did.
 All four community platforms shipped exactly that bug, and the conformance suite
 is what found it. Do not rediscover it.
 
+If your instructions file has a size cap the inlined skills do not fit under,
+use `emit_system_skills_index "$CORE" "sage/core"` instead: it lists each skill's
+description and the path of its `SKILL.md` in the project, for the agent to read
+when the description matches. Codex does this — inlined, its AGENTS.md was over
+Codex's 32 KiB cap, and Codex silently drops what is past it.
+
 ## 3. Declare where your artifacts land
 
 ```yaml

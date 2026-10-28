@@ -10,7 +10,7 @@ maintainer: "unclaimed"     # R113: nobody answers when this goes red.
 capabilities:
   context-injection: true         # an instructions file is generated
   command-delivery: true          # commands are generated
-  native-skill-discovery: false   # the generator emits no skills, and nothing here would discover them
+  native-skill-discovery: false   # nothing here discovers skills; AGENTS.md lists them by path (32 KiB cap)
   pre-tool-veto: false            # no hook surface. Nothing blocks an edit.
   post-tool-events: false
   subagent-dispatch: false        # no evidence Sage has ever dispatched one here

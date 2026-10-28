@@ -52,19 +52,23 @@ emit_instructions_body \
     -e 's|`.claude/commands/\[workflow\].md`|`AGENTS.md` (this file)|g' \
   > "$AGENTS_MD_NEW"
 
-# ── Inline the system skills (ADR-9: no discovery on this platform) ──
+# ── List the system skills (ADR-9: no discovery on this platform) ──
 #
 # The eager body no longer carries the routing chain, memory guide, gates
 # explainer, checkpoint protocol, tiers, constitution text or decision protocol —
 # ADR-9 moved them into skills. Claude Code fetches those on demand. This platform
-# has no discovery mechanism, so they must be INLINED, or its users lose the
-# content entirely while their instructions file still points at it ("→ sage-gates
-# skill") as though it were reachable.
+# has no discovery mechanism, so the content has to be reachable some other way,
+# or its users lose it while their instructions file still points at it ("→
+# sage-gates skill"). The conformance suite caught exactly that regression here
+# (P4-T4).
 #
-# The conformance suite caught exactly that regression here (P4-T4): "declared
-# false, and nothing is inlined — the content is unreachable on this platform".
+# Other platforms inline the skills. Codex cannot: inlined, they made AGENTS.md
+# ~33.5 KB, over Codex's 32 KiB cap, and Codex silently drops what is past it —
+# the skills, which come last. So Codex gets an index instead: each skill's
+# description and the path of its SKILL.md under sage/, which init copies into
+# the project. The agent reads the file when the description matches.
 source "$(dirname "$0")/../../../_shared/system-skills.sh"
-emit_system_skills_inline "$CORE" >> "$AGENTS_MD_NEW"
+emit_system_skills_index "$CORE" "sage/core" >> "$AGENTS_MD_NEW"
 
 # ── Dynamic constitution merging (same as Claude Code) ──
 CONST_SECTION="## Engineering Principles
