@@ -63,8 +63,16 @@ them as `@sage-reviewer` when running reviews.
 
 ## Multi-Platform Behavior
 
+Sage's text lives between `<!-- BEGIN SAGE … -->` and `<!-- END SAGE -->`
+markers, and `sage init` / `sage update` only ever rewrite that block. A
+project's own `AGENTS.md` is kept line for line with the block appended; one
+Sage wrote whole before the markers existed is backed up once to
+`.sage/backups/` and then replaced by the block; malformed markers leave
+the file untouched with a warning (`_shared/managed-md.sh`). Codex writes
+the same file: there is one block, and the last generator to run fills it.
+
 If both Codex and Opencode are selected for a project, the second
-generator overwrites AGENTS.md with its own terminology swaps. Both
+generator refills that block with its own terminology swaps. Both
 platforms read the same file; the content is functionally equivalent
 but the terminology differs slightly (Codex generator says "AGENTS.md
 (this file)", Opencode generator says "`.opencode/commands/[workflow].md`").

@@ -46,27 +46,21 @@ mkdir -p "$OC_DIR/commands" "$OC_DIR/agents"
 # ═══════════════════════════════════════════════════════════════
 echo "📝 Generating AGENTS.md..."
 
-# Only write AGENTS.md if it doesn't exist OR is Sage-generated.
-# This avoids clobbering a user's manual AGENTS.md.
-SKIP_AGENTS_MD=false
-if [ -f "$SAGE_ROOT/AGENTS.md" ]; then
-  if head -1 "$SAGE_ROOT/AGENTS.md" 2>/dev/null | grep -q "Sage"; then
-    SKIP_AGENTS_MD=false  # Sage-generated, safe to overwrite
-  else
-    SKIP_AGENTS_MD=true
-    echo "  ⚠ AGENTS.md exists and is not Sage-generated — skipping write."
-    echo "    Move or rename it if you want Sage to manage it."
-  fi
-fi
+# Generate into a scratch file first. AGENTS.md may be the user's own: what lands
+# there is decided once, at the end, by install_managed_md. (This generator used
+# to skip a user's AGENTS.md — their file survived, but Sage then ran with no
+# instructions at all.)
+AGENTS_MD="$SAGE_ROOT/AGENTS.md"
+AGENTS_MD_NEW=$(mktemp "${TMPDIR:-/tmp}/sage-agents-md-XXXXXX")
+trap 'rm -f "$AGENTS_MD_NEW" "$AGENTS_MD_NEW.managed" "$AGENTS_MD_NEW.managed.out"' EXIT
 
-if [ "$SKIP_AGENTS_MD" = false ]; then
-  source "$(dirname "$0")/../../../_shared/instructions-body.sh"
-  emit_instructions_body \
-    | sed \
-      -e 's|Task tool|sub-agent invocation|g' \
-      -e 's|the Task tool|the sub-agent system|g' \
-      -e 's|`.claude/commands/\[workflow\].md`|`.opencode/commands/[workflow].md`|g' \
-    > "$SAGE_ROOT/AGENTS.md"
+source "$(dirname "$0")/../../../_shared/instructions-body.sh"
+emit_instructions_body \
+  | sed \
+    -e 's|Task tool|sub-agent invocation|g' \
+    -e 's|the Task tool|the sub-agent system|g' \
+    -e 's|`.claude/commands/\[workflow\].md`|`.opencode/commands/[workflow].md`|g' \
+  > "$AGENTS_MD_NEW"
 
 # ── Inline the system skills (ADR-9: no discovery on this platform) ──
 #
@@ -80,9 +74,7 @@ if [ "$SKIP_AGENTS_MD" = false ]; then
 # The conformance suite caught exactly that regression here (P4-T4): "declared
 # false, and nothing is inlined — the content is unreachable on this platform".
 source "$(dirname "$0")/../../../_shared/system-skills.sh"
-emit_system_skills_inline "$CORE" >> ""$SAGE_ROOT/AGENTS.md""
-  echo "  ✓ AGENTS.md"
-fi
+emit_system_skills_inline "$CORE" >> "$AGENTS_MD_NEW"
 
 # ── Dynamic constitution merging (same as Claude Code) ──
 CONST_SECTION="## Engineering Principles
@@ -117,16 +109,14 @@ $NEW_PRINCIPLE"
   fi
 fi
 
-if [ "$SKIP_AGENTS_MD" = false ]; then
-  python3 -c "
-with open('$SAGE_ROOT/AGENTS.md', 'r') as f:
+python3 -c "
+with open('$AGENTS_MD_NEW', 'r') as f:
     content = f.read()
 replacement = '''$CONST_SECTION'''
 content = content.replace('__CONSTITUTION_PLACEHOLDER__', replacement)
-with open('$SAGE_ROOT/AGENTS.md', 'w') as f:
+with open('$AGENTS_MD_NEW', 'w') as f:
     f.write(content)
 " 2>/dev/null || true
-fi
 
 # ── Reviewer dispatch binding (opencode-specific) ──
 #
@@ -170,12 +160,18 @@ primary. Either way, record the serving model in the ledger entry
 named roles under the same bindings (resolve once per burst; `lanes.py
 open --model` records what served the lane).'
 
-if [ "$SKIP_AGENTS_MD" = false ]; then
-  {
-    echo ""
-    printf '%s\n' "$REVIEWER_NOTE"
-  } >> "$SAGE_ROOT/AGENTS.md"
-fi
+{
+  echo ""
+  printf '%s\n' "$REVIEWER_NOTE"
+} >> "$AGENTS_MD_NEW"
+
+# ── Install: never destroy a user's AGENTS.md ──
+# Sage's text goes in a marked block; only the block is ever rewritten. See
+# _shared/managed-md.sh for every case (user file, legacy Sage file, CRLF,
+# malformed markers). Codex writes the same file: one block, last writer wins.
+source "$(dirname "$0")/../../../_shared/managed-md.sh"
+install_managed_md "$AGENTS_MD" "$AGENTS_MD_NEW" "$PROJECT_SAGE/backups"
+rm -f "$AGENTS_MD_NEW"
 
 # ═══════════════════════════════════════════════════════════════
 # Per-workflow command files in .opencode/commands/

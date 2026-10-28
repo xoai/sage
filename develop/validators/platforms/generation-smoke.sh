@@ -5,7 +5,8 @@
 #   first-class (claude-code, generic) — generate, then the generated tree is
 #     further exercised by the gate/hook/reference CI jobs.
 #   community (antigravity, codex, gemini-cli, opencode) — generation-smoke
-#     only: the generator runs and emits its instructions file.
+#     only: the generator runs, emits its instructions file, and keeps a
+#     user's own AGENTS.md / GEMINI.md (Sage's text in a marked block).
 #
 # This job proves each generator at least runs and writes output. It does NOT
 # exercise the community quality chain (there isn't one — see each STATUS.md).
@@ -119,6 +120,119 @@ else
     "$(grep '^sage-version:' "$target/.sage/config.yaml" 2>/dev/null || echo missing)"
 fi
 rm -rf "$(dirname "$target")"
+
+# ── Community instructions files: a user's AGENTS.md / GEMINI.md survives ──
+# Codex and Antigravity wrote theirs wholesale (the user's file gone, no
+# backup); Opencode and Gemini CLI skipped a user's file and so installed Sage
+# with no instructions at all. Same contract as CLAUDE.md (C4): Sage's text in
+# a marked block, the user's lines kept, one block however often it runs.
+md_check() {  # $1 = platform label, $2 = check label, $3 = "ok" | anything else
+  if [ "$3" = ok ]; then
+    N_PASS=$((N_PASS + 1)); printf '  [PASS]  %-14s → %s\n' "$1" "$2"
+  else
+    N_FAIL=$((N_FAIL + 1)); printf '  [FAIL]  %-14s %s\n' "$1" "$2"
+  fi
+}
+md_run() {  # md_run <project> init <platforms> | md_run <project> update
+  local d="$1"
+  if [ "$2" = init ]; then
+    ( cd "$d" && SAGE_HOME="$HOME_DIR" bash "$REPO_ROOT/bin/sage" init --no-memory \
+        --platform "$3" </dev/null ) >/dev/null 2>&1
+  else
+    ( cd "$d" && SAGE_HOME="$HOME_DIR" bash "$REPO_ROOT/bin/sage" update </dev/null ) >/dev/null 2>&1
+  fi
+}
+md_new() {  # a fresh git project; prints its path
+  local d; d="$(mktemp -d)/proj"; mkdir -p "$d"
+  ( cd "$d" && git init -q . 2>/dev/null || true ); echo "$d"
+}
+md_blocks() { tr -d '\r' < "$1" | grep -c '^<!-- BEGIN SAGE' || true; }
+md_block_has() {  # md_block_has <file> <ERE> — a line inside the Sage block matches
+  # awk, not `sed | grep -q`: grep -q quits early and, under pipefail, the
+  # writer's SIGPIPE fails the pipeline on a block this size.
+  tr -d '\r' < "$1" | awk -v re="$2" '/^<!-- BEGIN SAGE/ { in_b=1 } in_b && $0 ~ re { hit=1 }
+    /^<!-- END SAGE/ { in_b=0 } END { exit !hit }'
+}
+md_kept() {  # md_kept <before> <after> — <after> starts with <before>, byte for byte
+  head -c "$(wc -c < "$1" | tr -d ' ')" "$2" | cmp -s - "$1"
+}
+md_stale() {  # md_stale <file> — change a line inside Sage's block, so an update
+  # that silently does nothing cannot pass for an idempotent one
+  python3 -c 'import sys;p=sys.argv[1];d=open(p,"rb").read();assert b"## Engineering Principles" in d;open(p,"wb").write(d.replace(b"## Engineering Principles",b"STALE LINE",1))' "$1"
+}
+
+# platforms (comma-separated) : the file they write
+MD_CASES="
+codex:AGENTS.md
+opencode:AGENTS.md
+codex,opencode:AGENTS.md
+antigravity:GEMINI.md
+gemini-cli:GEMINI.md
+antigravity,gemini-cli:GEMINI.md
+"
+for entry in $MD_CASES; do
+  plats="${entry%%:*}"; f="${entry#*:}"
+
+  # A user's own file: kept line for line, one block appended, update idempotent.
+  d="$(md_new)"
+  printf '# Team rules\n\nNever edit /build output by hand.\n' > "$d/$f"
+  cp "$d/$f" "$d/.before"
+  r=ok
+  md_run "$d" init "$plats" || r=bad
+  md_kept "$d/.before" "$d/$f" || r=bad
+  [ "$(md_blocks "$d/$f")" = 1 ] || r=bad
+  md_block_has "$d/$f" '^# Sage — Project Instructions' || r=bad
+  grep -q '__CONSTITUTION_PLACEHOLDER__' "$d/$f" && r=bad
+  md_block_has "$d/$f" '^## Engineering Principles' || r=bad
+  cp "$d/$f" "$d/.after-init"
+  md_stale "$d/$f"
+  md_run "$d" update || r=bad
+  cmp -s "$d/$f" "$d/.after-init" || r=bad
+  md_run "$d" update || r=bad
+  cmp -s "$d/$f" "$d/.after-init" || r=bad
+  md_check "$plats" "user $f kept; one Sage block; updates refresh it to the same bytes" "$r"
+
+  # CRLF: the user's Windows file keeps its bytes and gets a CRLF block, once.
+  python3 -c 'import sys;p=sys.argv[1];d=open(p,"rb").read().replace(b"\r\n",b"\n");open(p,"wb").write(d.replace(b"\n",b"\r\n"))' "$d/$f"
+  printf '# Team rules\r\n\r\nNever edit /build output by hand.\r\n' > "$d/.before"
+  md_stale "$d/$f"
+  r=ok
+  md_run "$d" update || r=bad
+  grep -q 'STALE LINE' "$d/$f" && r=bad
+  md_kept "$d/.before" "$d/$f" || r=bad
+  [ "$(md_blocks "$d/$f")" = 1 ] || r=bad
+  [ "$(grep -c $'\r$' "$d/$f")" = "$(wc -l < "$d/$f" | tr -d ' ')" ] || r=bad
+  md_check "$plats" "CRLF $f: block refreshed once, still CRLF throughout" "$r"
+  rm -rf "$(dirname "$d")"
+
+  # A Sage-written file from before markers: backed up once, then the block alone.
+  d="$(md_new)"
+  printf '# Sage — Project Instructions\n\nold body\nMY OWN LINE\n' > "$d/$f"
+  r=ok
+  md_run "$d" init "$plats" || r=bad
+  grep -q 'MY OWN LINE' "$d/$f" && r=bad
+  [ "$(md_blocks "$d/$f")" = 1 ] || r=bad
+  [ "$(ls "$d/.sage/backups/$f".*.bak 2>/dev/null | wc -l | tr -d ' ')" = 1 ] || r=bad
+  grep -l 'MY OWN LINE' "$d/.sage/backups/$f".*.bak >/dev/null 2>&1 || r=bad
+  md_run "$d" update || r=bad
+  [ "$(ls "$d/.sage/backups/$f".*.bak 2>/dev/null | wc -l | tr -d ' ')" = 1 ] || r=bad
+  md_check "$plats" "legacy Sage $f moved to a block, old file backed up once" "$r"
+  rm -rf "$(dirname "$d")"
+done
+
+# Codex: the 32 KiB cap is about what Codex reads — the whole AGENTS.md, the
+# user's text included, not just Sage's block. (Sage's block alone is already
+# over the cap, so the warning itself proves little: the byte count it names
+# must be the whole file's.)
+d="$(md_new)"
+python3 -c 'print("# Team rules\n" + "x" * 79 + "\n" + ("y" * 79 + "\n") * 400, end="")' > "$d/AGENTS.md"
+out=$( cd "$d" && SAGE_HOME="$HOME_DIR" bash "$REPO_ROOT/bin/sage" init --no-memory \
+         --platform codex </dev/null 2>&1 )
+r=ok
+[ "$(wc -c < "$d/AGENTS.md" | tr -d ' ')" -gt 32768 ] || r=bad
+printf '%s' "$out" | grep -q "AGENTS.md is $(wc -c < "$d/AGENTS.md" | tr -d ' ') bytes" || r=bad
+md_check "codex" "32 KiB cap counts the whole AGENTS.md and warns" "$r"
+rm -rf "$(dirname "$d")"
 
 # ── Claude Code install pins (review 2026-10-26: C1, C2, C4, X3, X5, X6) ──
 # What `sage init` GENERATES, checked directly — the evals measure model

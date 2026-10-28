@@ -45,26 +45,22 @@ mkdir -p "$GEMINI_DIR/commands"
 # ═══════════════════════════════════════════════════════════════
 echo "📝 Generating GEMINI.md..."
 
-# Only write GEMINI.md if it doesn't exist OR is Sage-generated.
-SKIP_GEMINI_MD=false
-if [ -f "$SAGE_ROOT/GEMINI.md" ]; then
-  if head -1 "$SAGE_ROOT/GEMINI.md" 2>/dev/null | grep -q "Sage"; then
-    SKIP_GEMINI_MD=false
-  else
-    SKIP_GEMINI_MD=true
-    echo "  ⚠ GEMINI.md exists and is not Sage-generated — skipping write."
-  fi
-fi
+# Generate into a scratch file first. GEMINI.md may be the user's own: what lands
+# there is decided once, at the end, by install_managed_md. (This generator used
+# to skip a user's GEMINI.md — their file survived, but Sage then ran with no
+# instructions at all.)
+GEMINI_MD="$SAGE_ROOT/GEMINI.md"
+GEMINI_MD_NEW=$(mktemp "${TMPDIR:-/tmp}/sage-gemini-md-XXXXXX")
+trap 'rm -f "$GEMINI_MD_NEW" "$GEMINI_MD_NEW.managed" "$GEMINI_MD_NEW.managed.out"' EXIT
 
-if [ "$SKIP_GEMINI_MD" = false ]; then
-  source "$(dirname "$0")/../../../_shared/instructions-body.sh"
-  emit_instructions_body \
-    | sed \
-      -e 's|Task tool|sub-agent invocation|g' \
-      -e 's|the Task tool|the sub-agent system|g' \
-      -e 's|`.claude/commands/\[workflow\].md`|`.gemini/commands/[workflow].toml`|g' \
-      -e 's|\$ARGUMENTS|{{args}}|g' \
-    > "$SAGE_ROOT/GEMINI.md"
+source "$(dirname "$0")/../../../_shared/instructions-body.sh"
+emit_instructions_body \
+  | sed \
+    -e 's|Task tool|sub-agent invocation|g' \
+    -e 's|the Task tool|the sub-agent system|g' \
+    -e 's|`.claude/commands/\[workflow\].md`|`.gemini/commands/[workflow].toml`|g' \
+    -e 's|\$ARGUMENTS|{{args}}|g' \
+  > "$GEMINI_MD_NEW"
 
 # ── Inline the system skills (ADR-9: no discovery on this platform) ──
 #
@@ -78,9 +74,7 @@ if [ "$SKIP_GEMINI_MD" = false ]; then
 # The conformance suite caught exactly that regression here (P4-T4): "declared
 # false, and nothing is inlined — the content is unreachable on this platform".
 source "$(dirname "$0")/../../../_shared/system-skills.sh"
-emit_system_skills_inline "$CORE" >> ""$SAGE_ROOT/GEMINI.md""
-  echo "  ✓ GEMINI.md"
-fi
+emit_system_skills_inline "$CORE" >> "$GEMINI_MD_NEW"
 
 # ── Dynamic constitution merging ──
 CONST_SECTION="## Engineering Principles
@@ -115,16 +109,22 @@ $NEW_PRINCIPLE"
   fi
 fi
 
-if [ "$SKIP_GEMINI_MD" = false ]; then
-  python3 -c "
-with open('$SAGE_ROOT/GEMINI.md', 'r') as f:
+python3 -c "
+with open('$GEMINI_MD_NEW', 'r') as f:
     content = f.read()
 replacement = '''$CONST_SECTION'''
 content = content.replace('__CONSTITUTION_PLACEHOLDER__', replacement)
-with open('$SAGE_ROOT/GEMINI.md', 'w') as f:
+with open('$GEMINI_MD_NEW', 'w') as f:
     f.write(content)
 " 2>/dev/null || true
-fi
+
+# ── Install: never destroy a user's GEMINI.md ──
+# Sage's text goes in a marked block; only the block is ever rewritten. See
+# _shared/managed-md.sh for every case (user file, legacy Sage file, CRLF,
+# malformed markers). Antigravity writes the same file: one block, last writer wins.
+source "$(dirname "$0")/../../../_shared/managed-md.sh"
+install_managed_md "$GEMINI_MD" "$GEMINI_MD_NEW" "$PROJECT_SAGE/backups"
+rm -f "$GEMINI_MD_NEW"
 
 # ═══════════════════════════════════════════════════════════════
 # Per-workflow TOML commands in .gemini/commands/

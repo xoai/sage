@@ -44,9 +44,15 @@ Sage uses this when `command_prefix: true` is set in `.sage/config.yaml`:
 ## GEMINI.md Sharing with Antigravity
 
 Both Antigravity and Gemini CLI read `GEMINI.md` from the project
-root. If both platforms are installed, the second generator overwrites
-the first. The content is functionally equivalent (same routing,
-process, rules) — terminology may differ slightly.
+root. Sage's text lives between `<!-- BEGIN SAGE … -->` and `<!-- END SAGE -->`
+markers, and `sage init` / `sage update` only ever rewrite that block. A
+project's own `GEMINI.md` is kept line for line with the block appended; one
+Sage wrote whole before the markers existed is backed up once to
+`.sage/backups/` and then replaced by the block; malformed markers leave
+the file untouched with a warning (`_shared/managed-md.sh`). If both
+platforms are installed there is one block, and the last generator to run
+fills it. The content is functionally equivalent (same routing, process,
+rules) — terminology may differ slightly.
 
 ## Sub-Agent Support
 
