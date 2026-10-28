@@ -10,13 +10,24 @@
 
 ## Platform-Specific Behavior
 
+### Your own AGENTS.md
+
+Sage's text lives between `<!-- BEGIN SAGE … -->` and `<!-- END SAGE -->`
+markers, and `sage init` / `sage update` only ever rewrite that block. A
+project's own `AGENTS.md` is kept line for line with the block appended; one
+Sage wrote whole before the markers existed is backed up once to
+`.sage/backups/` and then replaced by the block; malformed markers leave
+the file untouched with a warning (`_shared/managed-md.sh`). Opencode writes
+the same file: there is one block, and the last generator to run fills it.
+
 ### 32 KiB AGENTS.md cap
 
 Codex caps the combined instructions file at 32 KiB by default. The
-Sage-generated AGENTS.md is currently ~15 KB, well under the limit.
-If a project's preset + project additions grow the file, the
-generator will warn. Users can raise the cap via
-`project_doc_max_bytes` in `~/.codex/config.toml`.
+generator measures the whole AGENTS.md — the project's own text plus
+Sage's block — and warns when it is over. Sage's block alone is about
+33 KB since the system skills are inlined (ADR-9), so a default install
+already warns. Users can raise the cap via `project_doc_max_bytes` in
+`~/.codex/config.toml`.
 
 ### Sub-agent invocation
 

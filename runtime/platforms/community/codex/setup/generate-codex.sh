@@ -39,12 +39,18 @@ echo "📝 Generating AGENTS.md..."
 
 source "$(dirname "$0")/../../../_shared/instructions-body.sh"
 
+# Generate into a scratch file first. AGENTS.md may be the user's own: what lands
+# there is decided once, at the end, by install_managed_md.
+AGENTS_MD="$SAGE_ROOT/AGENTS.md"
+AGENTS_MD_NEW=$(mktemp "${TMPDIR:-/tmp}/sage-agents-md-XXXXXX")
+trap 'rm -f "$AGENTS_MD_NEW" "$AGENTS_MD_NEW.bak" "$AGENTS_MD_NEW.managed" "$AGENTS_MD_NEW.managed.out"' EXIT
+
 emit_instructions_body \
   | sed \
     -e 's|Task tool|sub-agent invocation|g' \
     -e 's|the Task tool|the sub-agent system|g' \
     -e 's|`.claude/commands/\[workflow\].md`|`AGENTS.md` (this file)|g' \
-  > "$SAGE_ROOT/AGENTS.md"
+  > "$AGENTS_MD_NEW"
 
 # ── Inline the system skills (ADR-9: no discovery on this platform) ──
 #
@@ -58,7 +64,7 @@ emit_instructions_body \
 # The conformance suite caught exactly that regression here (P4-T4): "declared
 # false, and nothing is inlined — the content is unreachable on this platform".
 source "$(dirname "$0")/../../../_shared/system-skills.sh"
-emit_system_skills_inline "$CORE" >> ""$SAGE_ROOT/AGENTS.md""
+emit_system_skills_inline "$CORE" >> "$AGENTS_MD_NEW"
 
 # ── Dynamic constitution merging (same as Claude Code) ──
 CONST_SECTION="## Engineering Principles
@@ -107,26 +113,35 @@ ${PRINCIPLE_NUM}. ${line}"
   fi
 fi
 
-# Replace placeholder in AGENTS.md
+# Replace placeholder in the generated text
 python3 -c "
-with open('$SAGE_ROOT/AGENTS.md', 'r') as f:
+with open('$AGENTS_MD_NEW', 'r') as f:
     content = f.read()
 replacement = '''$CONST_SECTION'''
 content = content.replace('__CONSTITUTION_PLACEHOLDER__', replacement)
-with open('$SAGE_ROOT/AGENTS.md', 'w') as f:
+with open('$AGENTS_MD_NEW', 'w') as f:
     f.write(content)
 " 2>/dev/null || {
-  sed -i.bak "s|__CONSTITUTION_PLACEHOLDER__|## Engineering Principles\n\nBase (all projects):\n1. Tests before code\n2. No silent failures\n3. Secrets never in code\n4. Dependencies explicit\n5. Changes reversible|" "$SAGE_ROOT/AGENTS.md" 2>/dev/null && rm -f "$SAGE_ROOT/AGENTS.md.bak"
+  sed -i.bak "s|__CONSTITUTION_PLACEHOLDER__|## Engineering Principles\n\nBase (all projects):\n1. Tests before code\n2. No silent failures\n3. Secrets never in code\n4. Dependencies explicit\n5. Changes reversible|" "$AGENTS_MD_NEW" 2>/dev/null && rm -f "$AGENTS_MD_NEW.bak"
 }
 
+# ── Install: never destroy a user's AGENTS.md ──
+# Sage's text goes in a marked block; only the block is ever rewritten. See
+# _shared/managed-md.sh for every case (user file, legacy Sage file, CRLF,
+# malformed markers). Opencode writes the same file: one block, last writer wins.
+source "$(dirname "$0")/../../../_shared/managed-md.sh"
+install_managed_md "$AGENTS_MD" "$AGENTS_MD_NEW" "$PROJECT_SAGE/backups"
+rm -f "$AGENTS_MD_NEW"
+
 # ── Size check (Codex 32 KiB cap) ──
-AGENTS_SIZE=$(wc -c < "$SAGE_ROOT/AGENTS.md")
+# Codex reads the whole file, so the user's own text counts against the cap too.
+AGENTS_SIZE=$(wc -c < "$AGENTS_MD" | tr -d ' ')
 AGENTS_LIMIT=32768
 if [ "$AGENTS_SIZE" -gt "$AGENTS_LIMIT" ]; then
   echo "  ⚠ AGENTS.md is $AGENTS_SIZE bytes — Codex default cap is 32 KiB."
   echo "    Set project_doc_max_bytes in ~/.codex/config.toml to allow it."
 else
-  echo "  ✓ AGENTS.md ($AGENTS_SIZE bytes, under 32 KiB cap)"
+  echo "  ✓ AGENTS.md is $AGENTS_SIZE bytes, under Codex's 32 KiB cap"
 fi
 
 # ═══════════════════════════════════════════════════════════════
