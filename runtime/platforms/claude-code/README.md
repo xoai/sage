@@ -20,6 +20,7 @@ bash sage/runtime/platforms/claude-code/setup/generate-claude-code.sh .
 ```
 your-project/
 ├── CLAUDE.md                    # Always-on project instructions
+├── .worktreeinclude             # Sage's gitignored files, copied into new worktrees
 ├── .claude/
 │   └── commands/                # Slash commands
 │       ├── sage.md              # /sage — intelligent entry point
@@ -155,3 +156,52 @@ Session hooks in your `settings.local.json` are dropped whenever the plugin
 is on (the plugin starts the session). The vendored `sage/` is still written:
 the plugin's skills read it. The check runs at `sage init` / `sage update`
 only — after turning the plugin on or off, run `sage update` again.
+
+### Worktree sessions (Claude Desktop, `claude --worktree`)
+
+Claude Desktop runs each Code session in its own git worktree, under
+`.claude/worktrees/`, on a branch the app names; `claude --worktree` does the
+same from the CLI. Sage's gates judge the worktree being edited — its branch,
+its cycles, its HEAD — not the main checkout, where `CLAUDE_PROJECT_DIR`
+points. They do that for a registered worktree whose `.sage/config.yaml`
+says what the main checkout's says (comments, blank lines and `sage-version`
+aside); any other worktree is judged from the main checkout — its config and
+cycles — and the session says so at start. A worktree is a separate
+initiative: its own cycles apply there, not the main checkout's.
+
+- **Tracked `.sage/`** travels with git; nothing to do.
+- **Gitignored `.sage/`** — `sage init` / `sage update` write a marked Sage
+  block into `.worktreeinclude`, which Claude Code reads to copy gitignored
+  files into each new worktree: `CLAUDE.md`, a vendored `sage/`, and the
+  `worktree_copy` paths from `.sage/config.yaml`. A worktree made before that
+  is judged from the main checkout's `.sage/` — its config and cycles — and
+  its own branch and commits are not seen; the session says so at start.
+- **The switch stays protected across worktrees.** While enforcement is on in
+  any checkout, the agent cannot loosen any checkout's `.sage/config.yaml`,
+  and cannot create one: a worktree's config comes from `.worktreeinclude` or
+  `sage worktree`, never from the agent. While a cycle is in progress, the
+  agent cannot `git worktree add` either — a new worktree would start outside
+  that cycle; Desktop's own session worktrees and `sage worktree` are not
+  affected.
+- **Cycle records** in a gitignored `.sage/work/` would die with the worktree
+  (the app removes it, not `sage worktree remove`). Every `manifest.py
+  close-out` there copies the cycle to the main checkout's
+  `.sage/worktree-records/<worktree>/` — an archive no gate reads, so a
+  worktree's open cycle never governs the main checkout.
+
+### Desktop mode
+
+Inside Claude Desktop's Code tab, Sage's text conventions map onto the
+app: each checkpoint is asked with question buttons instead of an
+`[A] [R] [N]` footer (the work is still shown first, and it is still a hard
+wait); progress goes to the session's task list instead of per-task lines
+in chat; branch questions are buttons too, and a worktree session keeps
+the branch it runs on. The session hook switches this on when Claude Code
+reports the Desktop app as its host; `desktop_mode: on|off|auto` in
+`.sage/config.yaml` overrides it (`docs/configuration.md`). Verified live in
+a Desktop worktree session:
+`docs/attestations/claude-code-desktop-worktree-session-2026-10-27.md`.
+
+Independently of Desktop mode, a session working in a worktree never
+offers `[M]` merge — `git checkout <default>` fails there; the branch is
+merged from the main checkout or through a pull request, the user's call.

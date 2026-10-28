@@ -103,8 +103,11 @@ lone sequential session must still be able to proceed):
 
 When already running **in a linked worktree** (the user launched via
 `sage worktree`), skip the bounce and branch/commit in place as usual
-— the session is already isolated. With `isolation: branch` (default),
+— the session is already isolated (merging: "Worktree sessions" below). With `isolation: branch` (default),
 the bounce never fires.
+
+In Claude Desktop, the same bounce is simpler: offer to start a new Desktop
+session with a worktree for the initiative instead of `sage worktree`.
 
 ## Branch creation (propose-confirm)
 
@@ -112,7 +115,9 @@ At the workflow step that consumes this capability, when HEAD is on
 the default branch with a clean tree:
 
 1. **Propose** the branch name from the table above.
-2. **Let the user confirm or rename.** Never create silently.
+2. **Let the user confirm or rename.** Never create silently. In Desktop
+   mode the proposal is one button question: create it (Recommended),
+   rename it, or stay on the default branch (the decline, recorded below).
 3. `git checkout -b <branch>`
 4. **Record the actual branch name** in the initiative's manifest
    frontmatter: `branch: feat/payment-retry`. Resume matching reads
@@ -126,7 +131,8 @@ approves the message), or abort the workflow. Never stash silently.
 **Already on a branch** (HEAD on a non-default branch): ask whether
 to (a) continue on it — the user may have prepared one — or
 (b) create the initiative branch from the default branch. Record the
-choice in the initiative decision log.
+choice in the initiative decision log. In a worktree session (Claude
+Desktop, `claude --worktree`) do not ask: see "Worktree sessions" below.
 
 **Detached HEAD** (tag/SHA checkout; `git worktree add` without
 `-b`): surface the state, offer to create the initiative branch from
@@ -172,10 +178,45 @@ Implementation commits land on the initiative branch using
 conventional-commit subjects. The workflow's existing commit cadence
 is unchanged — only the branch it lands on changes.
 
+## Worktree sessions (Claude Desktop, `claude --worktree`)
+
+A Claude Desktop Code session can run in its own linked worktree — under
+`.claude/worktrees/<name>`, on a branch the app created for it — and
+`claude --worktree` does the same from the CLI. Such a session works from
+that worktree; the user chose that when starting it. (A Desktop session
+without a worktree is an ordinary checkout: the sections above apply.)
+
+When HEAD is a linked worktree on a **non-default** branch:
+
+- **Branch:** that branch IS the isolation this capability exists to
+  provide. Use it for the initiative and propose no other; renaming it is
+  the user's call. Record it, and why, in one pass:
+  ```
+  python3 sage/runtime/tools/manifest.py close-out .sage/work/<slug>/manifest.md \
+    --branch <current-branch> --decision "worktree session branch kept for the initiative"
+  ```
+  This replaces the "Already on a branch" question. `/autoresearch` keeps its
+  own `autoresearch/<slug>` branch rules.
+- **Merge:** do not offer `[M]`. `git checkout <default>` fails inside a
+  worktree whose default branch is checked out elsewhere. The branch is
+  merged from the main checkout, or through a pull request (Desktop's own
+  flow) — the user's call, outside this session. The completion checkpoint
+  offers Approve and Revise; the branch stays as it is.
+- **Records:** if `.sage/work/` is gitignored, it is not in git and dies
+  with the worktree. Each `manifest.py close-out` copies the cycle to the
+  main checkout's `.sage/worktree-records/<worktree>/` — an archive no gate
+  reads — so record state through close-out.
+
+A worktree on the default branch (unusual: the main checkout is on another
+branch) follows "Branch creation" above as usual. `sage worktree` lanes are
+driven by `lanes.py`, which merges them; this section is for a session
+working in a worktree itself.
+
 ## Merge protocol (ALWAYS user-gated)
 
 Merging is offered **only** at a completion checkpoint as an explicit
-menu option (`[M] Merge to <default>`). No workflow path executes a
+menu option (`[M] Merge to <default>`) — and never in a worktree session
+(see "Worktree sessions"). No workflow path executes a
 merge without the user choosing that option in the same session. This
 is a hard line, not a default.
 

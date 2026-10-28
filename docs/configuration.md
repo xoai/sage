@@ -462,8 +462,9 @@ close-out economy`.
 | Key | Default | Meaning |
 |---|---|---|
 | `isolation` | `branch` | `worktree` gives each initiative its own worktree for parallel sessions ([guide](parallel-sessions.md)). |
-| `worktree_copy` | `[.sage/config.yaml, .sage/constitution.md, .sage/gates, .sage/agents.toml, .sage/prompts, .sage/scripts, .mcp.json]` | Gitignored paths `sage worktree` seeds INTO a new worktree. |
+| `worktree_copy` | `[.sage/config.yaml, .sage/constitution.md, .sage/gates, .sage/agents.toml, .sage/prompts, .sage/scripts, .mcp.json]` | Gitignored paths `sage worktree` seeds INTO a new worktree. On Claude Code, `sage init` / `sage update` also list them (with `CLAUDE.md` and a vendored `sage/`) in `.worktreeinclude`, so the worktrees Claude Code makes — Desktop sessions, `claude --worktree` — carry them too. |
 | `worktree_harvest` | `[.sage/work/*]` | Gitignored paths `sage worktree remove` harvests BACK (trailing `/*` = each child independently). Without this, `.sage/` state dies with the worktree. |
+| `desktop_mode` | `auto` | Claude Code only. `on`: checkpoints are asked as question buttons and progress goes to the session's task list; the session hook also states the branch rules for a worktree session. `auto` (default) turns it on inside Claude Desktop's Code tab; `off` keeps the text footers. Quotes, case and `yes`/`no` are accepted. (Independently of this key, a worktree session never offers `[M]` — git-discipline, "Worktree sessions".) |
 
 Cycles carry an `owner:` field so `/continue` — and the scope gate — ignore
 cycles that belong to another checkout.

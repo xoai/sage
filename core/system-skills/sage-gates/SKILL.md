@@ -42,7 +42,9 @@ cycle is in progress and HEAD is the default branch. Propose the branch the
 message names; once the user confirms or renames it, `git switch -c` it, record
 it (`manifest.py close-out <manifest> --branch <name>`), then make the edit.
 If the USER declines branching, record `--branch declined --decision "..."`
-— either way it is their call, not yours.
+— either way it is their call, not yours. A worktree session on its own
+branch (Desktop's, `claude --worktree`) never meets this block; if it does,
+that worktree is on the default branch.
 
 **A Bash command blocked by a gate.** `sage-bash-write-gate.sh` finds the
 source files a shell command would write (`>`, `tee`, an in-place `sed`,

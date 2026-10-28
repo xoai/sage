@@ -159,6 +159,28 @@ class DriverErrorResultTest(unittest.TestCase):
         self.assertNotIn("CLAUDE_CONFIG_DIR", captured)
         self.assertFalse(RE.OPERATOR_CONFIG, "the default must stay isolated")
 
+    def test_the_agent_under_test_never_inherits_the_desktop_host(self):
+        """Run from a terminal inside Claude Desktop, the operator's env names
+        the app as the host; the agent under test is `claude -p`, and Sage's
+        Desktop mode (question buttons) must not switch on in it."""
+        captured = {}
+
+        def spy(cmd, **kw):
+            captured.update(kw.get("env") or {})
+            return FakeProc([result_event()])
+
+        for operator in (False, True):
+            captured.clear()
+            with mock.patch.object(RE, "OPERATOR_CONFIG", operator), \
+                    mock.patch.dict(RE.os.environ, {"CLAUDE_CODE_ENTRYPOINT": "claude-desktop",
+                                                    "CLAUDE_CODE_DESKTOP_APP_VERSION": "3",
+                                                    "CLAUDE_CODE_ENABLE_ASK_USER_QUESTION_TOOL": "true"}), \
+                    mock.patch.object(RE.subprocess, "run", side_effect=spy):
+                self.driver.run(self.d, ["go"], self.out)
+            self.assertNotIn("CLAUDE_CODE_ENTRYPOINT", captured, operator)
+            self.assertNotIn("CLAUDE_CODE_DESKTOP_APP_VERSION", captured, operator)
+            self.assertNotIn("CLAUDE_CODE_ENABLE_ASK_USER_QUESTION_TOOL", captured, operator)
+
     def test_a_clean_result_still_drives(self):
         run = self.drive([result_event()])
         self.assertTrue(run["ok"])

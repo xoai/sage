@@ -398,7 +398,8 @@ Pick A/M/R/V, or tell me what to change.
 merge protocol from `sage/core/capabilities/execution/git-discipline/
 SKILL.md` — preconditions, the merge, conflict handling, and the
 deletion offer all live there; do not restate them here. Omit [M]
-when not a git repository or no initiative branch exists.
+when not a git repository, when no initiative branch exists, or in a
+worktree session (git-discipline, "Worktree sessions").
 
 **On approval — Post-Flight (Rule 7):**
 1. Prepend root cause and fix to the initiative's decisions.md

@@ -267,36 +267,206 @@ tool_input = data.get("tool_input") or {}
 project_root = (os.environ.get("CLAUDE_PROJECT_DIR")
                 or (data.get("cwd") or "").strip() or os.getcwd())
 project_root = os.path.abspath(project_root)
-config_path = os.path.join(project_root, ".sage", "config.yaml")
-if not os.path.isfile(config_path):
-    emit("ALLOW")
 
-try:
-    with open(config_path, encoding="utf-8", errors="replace") as fh:
-        current = fh.read()
-except OSError:
+# ── sage-root: identical in every hook (pinned by hook test WT0) ──
+# A Desktop or `--worktree` session edits in a linked worktree while
+# CLAUDE_PROJECT_DIR stays at the main checkout. Judge the checkout the
+# edit lands in: when `probe` is in ANOTHER registered worktree of the same
+# repository whose Sage config (at the project subdirectory, if the project
+# lives in one) says what the main checkout config says, that worktree is
+# the root — its branch, HEAD and cycles. Anything else keeps `base`, as
+# before: the same checkout, a nested repo, a hand-made .git file, a
+# worktree without Sage, or one whose config differs (an empty, laxer or
+# older one would otherwise be the judge — review 2026-10-27).
+def sage_worktree_root(base, probe):
+    import subprocess as _sp
+
+    def _git(d, *a):
+        try:
+            p = _sp.run(["git", "-C", d] + list(a), capture_output=True,
+                        text=True, timeout=5)
+            return p.stdout if p.returncode == 0 else ""
+        except (OSError, _sp.SubprocessError):
+            return ""
+
+    if not base or not probe or not os.path.isfile(os.path.join(base, ".sage", "config.yaml")):
+        return base                      # no Sage policy to match: nothing to switch to
+    d = os.path.abspath(probe)
+    while not os.path.isdir(d):
+        up = os.path.dirname(d)
+        if up == d:
+            return base
+        d = up
+    a = d                                # no .sage/ above the probe: no git calls
+    while not os.path.isdir(os.path.join(a, ".sage")):
+        up = os.path.dirname(a)
+        if up == a:
+            return base
+        a = up
+    # One line per value; --show-prefix prints an EMPTY line at the top.
+    out = _git(d, "rev-parse", "--show-toplevel", "--git-dir", "--git-common-dir").split("\n")[:-1]
+    ref = _git(base, "rev-parse", "--git-dir", "--git-common-dir", "--show-prefix").split("\n")[:-1]
+    if len(out) != 3 or len(ref) != 3 or not all(out) or not all(ref[:2]):
+        return base
+    top, git_dir, common = out
+
+    def real(p, at):
+        return os.path.realpath(os.path.join(at, p))
+
+    if real(common, d) != real(ref[1], base) or real(git_dir, d) == real(ref[0], base):
+        return base                      # another repository, or the base checkout itself
+    root = os.path.join(os.path.realpath(top), ref[2]).rstrip(os.sep)
+    # NUL-separated: a path holding a newline cannot forge an entry.
+    listing = _git(base, "worktree", "list", "--porcelain", "-z")
+    listed = [os.path.realpath(f[9:]) for f in listing.split("\0") if f.startswith("worktree ")]
+    if os.path.realpath(top) not in listed:
+        return base
+
+    def policy(r):
+        try:
+            with open(os.path.join(r, ".sage", "config.yaml"), encoding="utf-8",
+                      errors="replace") as fh:
+                return [x.rstrip() for x in fh.read().split("\n")
+                        if x.strip() and not x.lstrip().startswith("#")
+                        and not x.startswith("sage-version:")]
+        except OSError:
+            return None
+
+    mine = policy(root)
+    if mine is None or mine != policy(base):
+        return base
+    # Hand the root back spelled like the probe (macOS /var is /private/var;
+    # a symlinked directory), or every relpath against it reads "../". No
+    # lexical ancestor that IS the root: keep base rather than guess.
+    a = d
+    while os.path.realpath(a) != root:
+        up = os.path.dirname(a)
+        if up == a:
+            return base
+        a = up
+    return a
+
+
+def sage_probe(data):
+    """Where the call acts: the edited file, else the shell cwd."""
+    cwd = (data.get("cwd") or "").strip()
+    fp = str((data.get("tool_input") or {}).get("file_path") or "").strip()
+    return os.path.join(cwd or os.getcwd(), fp) if fp else cwd
+# ── end sage-root ──
+
+# Worktree sessions: the session's project (base_root) and the checkout the
+# call acts in (project_root) can differ. The switch is protected while EITHER
+# has enforcement on — judged from the acting checkout alone, a worktree with a
+# lax config could rewrite the main checkout's (review 2026-10-27).
+base_root = project_root
+project_root = sage_worktree_root(project_root, sage_probe(data))
+
+
+def read_config(root):
+    try:
+        with open(os.path.join(root, ".sage", "config.yaml"),
+                  encoding="utf-8", errors="replace") as fh:
+            return fh.read()
+    except OSError:
+        return None
+
+
+def git_lines(d, *args):
+    import subprocess as _sp
+    try:
+        q = _sp.run(["git", "-C", d] + list(args), capture_output=True, text=True, timeout=5)
+    except (OSError, _sp.SubprocessError):
+        return []
+    return q.stdout.split("\n")[:-1] if q.returncode == 0 else []
+
+
+def checkout_configs():
+    """The Sage config path of every registered checkout of this repository —
+    at the project subdirectory when the project lives in one."""
+    ref = git_lines(base_root, "rev-parse", "--show-prefix")
+    prefix = ref[0] if ref else ""
+    import subprocess as _sp
+    try:
+        q = _sp.run(["git", "-C", base_root, "worktree", "list", "--porcelain", "-z"],
+                    capture_output=True, text=True, timeout=5)
+    except (OSError, _sp.SubprocessError):
+        return []
+    return [os.path.join(os.path.realpath(f[9:]), prefix, ".sage", "config.yaml")
+            for f in (q.stdout.split("\0") if q.returncode == 0 else [])
+            if f.startswith("worktree ")]
+
+
+def checkout_config(path):
+    """The path is the Sage config of one of this repository's checkouts —
+    the session's, the acting one, or another worktree (one without Sage yet
+    included: writing a config there is how a worktree would escape). A
+    fixture's .sage/ elsewhere in the tree is not one."""
+    if not path:
+        return None
+    p = os.path.abspath(path if os.path.isabs(path)
+                        else os.path.join((data.get("cwd") or "").strip() or project_root, path))
+    if not re.search(r"(^|/)\.sage/config\.ya?ml$", p.replace(os.sep, "/")):
+        return None
+    real = os.path.join(os.path.realpath(os.path.dirname(os.path.dirname(p))), ".sage", "config.yaml")
+    known = checkout_configs() + [os.path.join(os.path.realpath(r), ".sage", "config.yaml")
+                                  for r in (base_root, project_root)]
+    return p if real in known or real[:-5] + ".yml" in [k[:-5] + ".yml" for k in known] else None
+
+
+configs = [c for c in (read_config(project_root), read_config(base_root)) if c is not None]
+# A call may reach another checkout's config — the shell's cwd is not
+# necessarily the checkout it writes (review 2026-10-27). Its enforcement
+# counts too: for an Edit/Write, the target's own config; for a shell, every
+# checkout config the command names. A stale worktree's switch never reaches
+# a call that does not touch it.
+shell_cwd = (data.get("cwd") or "").strip() or project_root
+named = []
+if tool == "Bash" and re.search(r"\.sage/config\.ya?ml", str(tool_input.get("command") or "")):
+    cmd_text = str(tool_input.get("command") or "")
+    named = [c for c in checkout_configs()
+             if c in cmd_text or os.path.relpath(c, os.path.realpath(shell_cwd)) in cmd_text]
+elif tool in ("Edit", "Write", "MultiEdit"):
+    fp = str(tool_input.get("file_path") or "")
+    if re.search(r"(^|/)\.sage/config\.ya?ml$", fp):
+        named = [os.path.abspath(os.path.join(shell_cwd, fp))]
+for path in named:
+    try:
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            configs.append(fh.read())
+    except OSError:
+        pass
+if not configs:
     emit("ALLOW")
+current = configs[0]
+reference = next((c for c in configs if enabled(c, MASTER)), None)
 
 # Only active while enforcement is currently ON — nothing to protect otherwise,
 # and this is what makes turning enforcement ON (off→on) always allowed.
-if not enabled(current, MASTER):
+if reference is None:
     emit("ALLOW")
-
-
-def rel_is_config(path):
-    if not path:
-        return False
-    p = path if os.path.isabs(path) else os.path.join(project_root, path)
-    try:
-        return os.path.abspath(p) == config_path
-    except Exception:
-        return False
 
 
 # ── Edit/Write/MultiEdit: reconstruct the resulting file and compare ──
 if tool in ("Edit", "Write", "MultiEdit"):
-    if not rel_is_config(str(tool_input.get("file_path") or "")):
+    target = checkout_config(str(tool_input.get("file_path") or ""))
+    if target is None:
         emit("ALLOW")
+    # A checkout without a Sage config gets one from .worktreeinclude or
+    # `sage worktree` — never from the agent: a fresh config is how a
+    # worktree would shed the main checkout's cycles (review 2026-10-27).
+    if not os.path.isfile(target):
+        emit("BLOCK", (
+            "sage-config-gate: %s does not exist, and enforcement is on. A "
+            "worktree's Sage config comes from .worktreeinclude (Claude Code "
+            "copies it when it makes the worktree) or from `sage worktree` — not "
+            "from the agent. Tell the user; they run `sage update` in the main "
+            "checkout, then start a new worktree session." % target))
+    # Judged against the file it replaces.
+    try:
+        with open(target, encoding="utf-8", errors="replace") as fh:
+            current = fh.read()
+    except OSError:
+        pass
     after = None
     if tool == "Write":
         after = str(tool_input.get("content") or "")
@@ -380,6 +550,31 @@ if tool == "Bash":
             "them. Deleting or rewriting one would excuse the cycle's own failures "
             "or refund its budget. If one is wrong, tell the user; they fix it "
             "outside the agent."))
+    # A worktree the agent makes for itself starts without the cycle the
+    # session is in, and the gates judge a worktree by its own cycles — so
+    # while a cycle is in progress, making one is the user's call. Desktop
+    # makes its session worktrees itself, and lanes use `sage worktree`;
+    # neither runs through here (review 2026-10-27).
+    if re.search(r"\bgit\b[^;&|\n]*\bworktree\s+add\b", cmd):
+        active = []
+        for root in {os.path.realpath(base_root), os.path.realpath(project_root)}:
+            work = os.path.join(root, ".sage", "work")
+            for slug in (os.listdir(work) if os.path.isdir(work) else []):
+                try:
+                    with open(os.path.join(work, slug, "manifest.md"), encoding="utf-8",
+                              errors="replace") as fh:
+                        head = fh.read(4000)
+                except OSError:
+                    continue
+                if re.search(r"(?m)^status:\s*\"?in-progress", head):
+                    active.append(slug)
+        if active:
+            emit("BLOCK", (
+                "sage-config-gate: `git worktree add` while cycle %s is in progress. "
+                "A worktree is judged by its own cycles, so a new one would start "
+                "outside this one's spec and plan. Ask the user: they can start a "
+                "Desktop worktree session, or run `sage worktree <slug>`; finish or "
+                "pause the cycle first otherwise." % ", ".join(sorted(active))))
     names_config = re.search(r"\.sage/config\.ya?ml", cmd) is not None
     # While enforcement is on, the shell does not write the config at all.
     # Matching what a write SAYS was a losing game — `sed s/budget: 10/

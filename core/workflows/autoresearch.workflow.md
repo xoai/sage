@@ -115,7 +115,8 @@ Sage: Autoresearch complete.
   - #[N]: [description] ([metric delta])
   - #[M]: [description] ([metric delta])
 
-  [M] Merge — review and merge the branch
+  [M] Merge — review and merge the branch (not in a worktree session:
+      the user merges it from the main checkout — git-discipline)
   [C] Continue — resume iterating
   [R] Results — show full results.tsv
 

@@ -536,6 +536,94 @@ class CloseOutTest(unittest.TestCase):
             M.write_field(a_manifest(), "no_such_field", "x")
 
 
+class WorktreeMirrorTest(unittest.TestCase):
+    """A Desktop session's worktree is removed by the app, past `sage worktree
+    remove`'s harvest; with .sage/ gitignored, its cycle record went with it.
+    Every close-out in a linked worktree now mirrors the cycle to an archive in
+    the main checkout that no gate reads (2026-10-27)."""
+
+    def setUp(self):
+        self.d = pathlib.Path(tempfile.mkdtemp(prefix="manifest-mirror-"))
+        self.addCleanup(shutil.rmtree, self.d, ignore_errors=True)
+        self.main = self.d / "proj"
+        (self.main / ".sage" / "work").mkdir(parents=True)
+        (self.main / ".gitignore").write_text(".sage/\n.claude/\n")
+        self.git(self.main, "init", "-q", "-b", "main")
+        self.git(self.main, "add", "-A")
+        self.git(self.main, "commit", "-qm", "seed")
+        self.wt = self.main / ".claude" / "worktrees" / "x"
+        self.git(self.main, "worktree", "add", "-q", "-b", "claude/x", str(self.wt))
+        self.cycle = self.wt / ".sage" / "work" / "001-rate"
+        self.cycle.mkdir(parents=True)
+        self.m = self.cycle / "manifest.md"
+        self.m.write_text(a_manifest_with_body())
+
+    @staticmethod
+    def git(cwd, *args):
+        subprocess.run(["git", "-C", str(cwd), "-c", "user.email=t@t", "-c", "user.name=t",
+                        *args], check=True, capture_output=True)
+
+    def records(self, *parts):
+        return self.main.joinpath(".sage", "worktree-records", "x", *parts)
+
+    def test_close_out_in_a_worktree_mirrors_the_cycle_to_an_archive(self):
+        M.close_out(self.m, summary="first pass")
+        self.assertIn("first pass", self.records("001-rate", "manifest.md").read_text())
+        M.close_out(self.m, summary="second pass")       # refreshed, not stacked
+        self.assertIn("second pass", self.records("001-rate", "manifest.md").read_text())
+        self.assertEqual((self.main / ".sage" / "worktree-records" / ".gitignore").read_text(), "*\n")
+
+    def test_the_main_checkout_never_sees_it_as_its_own_cycle(self):
+        """Review 2026-10-27: mirrored into .sage/work, a worktree's pre-spec
+        cycle made the main checkout's spec gate block main's own edits."""
+        own = self.main / ".sage" / "work" / "001-rate"
+        own.mkdir()
+        (own / "manifest.md").write_text("main's own\n")
+        M.close_out(self.m, summary="from the worktree")
+        self.assertEqual((own / "manifest.md").read_text(), "main's own\n")
+        self.assertEqual(sorted(p.name for p in (self.main / ".sage" / "work").iterdir()),
+                         ["001-rate"])
+
+    def test_nothing_is_mirrored_from_the_main_checkout_or_when_git_carries_it(self):
+        main_cycle = self.main / ".sage" / "work" / "002-main"
+        main_cycle.mkdir()
+        (main_cycle / "manifest.md").write_text(a_manifest_with_body())
+        self.assertIsNone(M.mirror_to_main(main_cycle))
+        # A project that tracks .sage/work: the FIRST close-out comes before the
+        # cycle is committed — untracked, not ignored — and a mirror would make
+        # the later merge abort on untracked files (review 2026-10-27).
+        (self.wt / ".gitignore").write_text(".claude/\n")
+        self.assertIsNone(M.mirror_to_main(self.cycle))
+        self.assertFalse(self.records().exists())
+
+    def test_a_project_in_a_repo_subdirectory_archives_into_its_own_sage(self):
+        """Review 2026-10-27: the main checkout was the parent of the common
+        git dir — the repository root, not the project — so nothing was
+        archived (or it landed in another project's .sage/)."""
+        repo = self.d / "repo"
+        app = repo / "app"
+        (app / ".sage" / "work").mkdir(parents=True)
+        (repo / ".sage").mkdir()                          # another project at the root
+        (repo / ".gitignore").write_text(".sage/\n.claude/\n")
+        self.git(repo, "init", "-q", "-b", "main")
+        self.git(repo, "add", "-A")
+        self.git(repo, "commit", "-qm", "seed")
+        wt = repo / ".claude" / "worktrees" / "y"
+        self.git(repo, "worktree", "add", "-q", "-b", "claude/y", str(wt))
+        cycle = wt / "app" / ".sage" / "work" / "009-sub"
+        cycle.mkdir(parents=True)
+        (cycle / "manifest.md").write_text(a_manifest_with_body())
+        dst = M.mirror_to_main(cycle)
+        self.assertEqual(dst, (app / ".sage" / "worktree-records" / "y" / "009-sub").resolve())
+        self.assertFalse((repo / ".sage" / "worktree-records").exists())
+
+    def test_a_mirror_that_fails_never_fails_the_close_out(self):
+        bad = self.main / ".sage" / "worktree-records"
+        bad.write_text("not a directory\n")
+        self.assertEqual(M.close_out(self.m, summary="still written"), 0)
+        self.assertIn("still written", self.m.read_text())
+
+
 class UpdatedStampTest(unittest.TestCase):
     """advance/sync own updated: now — one less field the model maintains."""
 

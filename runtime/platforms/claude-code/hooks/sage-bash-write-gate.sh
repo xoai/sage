@@ -87,6 +87,98 @@ if not project_root:
             sys.exit(0)
         probe = parent
 project_root = os.path.abspath(project_root)
+
+# ── sage-root: identical in every hook (pinned by hook test WT0) ──
+# A Desktop or `--worktree` session edits in a linked worktree while
+# CLAUDE_PROJECT_DIR stays at the main checkout. Judge the checkout the
+# edit lands in: when `probe` is in ANOTHER registered worktree of the same
+# repository whose Sage config (at the project subdirectory, if the project
+# lives in one) says what the main checkout config says, that worktree is
+# the root — its branch, HEAD and cycles. Anything else keeps `base`, as
+# before: the same checkout, a nested repo, a hand-made .git file, a
+# worktree without Sage, or one whose config differs (an empty, laxer or
+# older one would otherwise be the judge — review 2026-10-27).
+def sage_worktree_root(base, probe):
+    import subprocess as _sp
+
+    def _git(d, *a):
+        try:
+            p = _sp.run(["git", "-C", d] + list(a), capture_output=True,
+                        text=True, timeout=5)
+            return p.stdout if p.returncode == 0 else ""
+        except (OSError, _sp.SubprocessError):
+            return ""
+
+    if not base or not probe or not os.path.isfile(os.path.join(base, ".sage", "config.yaml")):
+        return base                      # no Sage policy to match: nothing to switch to
+    d = os.path.abspath(probe)
+    while not os.path.isdir(d):
+        up = os.path.dirname(d)
+        if up == d:
+            return base
+        d = up
+    a = d                                # no .sage/ above the probe: no git calls
+    while not os.path.isdir(os.path.join(a, ".sage")):
+        up = os.path.dirname(a)
+        if up == a:
+            return base
+        a = up
+    # One line per value; --show-prefix prints an EMPTY line at the top.
+    out = _git(d, "rev-parse", "--show-toplevel", "--git-dir", "--git-common-dir").split("\n")[:-1]
+    ref = _git(base, "rev-parse", "--git-dir", "--git-common-dir", "--show-prefix").split("\n")[:-1]
+    if len(out) != 3 or len(ref) != 3 or not all(out) or not all(ref[:2]):
+        return base
+    top, git_dir, common = out
+
+    def real(p, at):
+        return os.path.realpath(os.path.join(at, p))
+
+    if real(common, d) != real(ref[1], base) or real(git_dir, d) == real(ref[0], base):
+        return base                      # another repository, or the base checkout itself
+    root = os.path.join(os.path.realpath(top), ref[2]).rstrip(os.sep)
+    # NUL-separated: a path holding a newline cannot forge an entry.
+    listing = _git(base, "worktree", "list", "--porcelain", "-z")
+    listed = [os.path.realpath(f[9:]) for f in listing.split("\0") if f.startswith("worktree ")]
+    if os.path.realpath(top) not in listed:
+        return base
+
+    def policy(r):
+        try:
+            with open(os.path.join(r, ".sage", "config.yaml"), encoding="utf-8",
+                      errors="replace") as fh:
+                return [x.rstrip() for x in fh.read().split("\n")
+                        if x.strip() and not x.lstrip().startswith("#")
+                        and not x.startswith("sage-version:")]
+        except OSError:
+            return None
+
+    mine = policy(root)
+    if mine is None or mine != policy(base):
+        return base
+    # Hand the root back spelled like the probe (macOS /var is /private/var;
+    # a symlinked directory), or every relpath against it reads "../". No
+    # lexical ancestor that IS the root: keep base rather than guess.
+    a = d
+    while os.path.realpath(a) != root:
+        up = os.path.dirname(a)
+        if up == a:
+            return base
+        a = up
+    return a
+
+
+def sage_probe(data):
+    """Where the call acts: the edited file, else the shell cwd."""
+    cwd = (data.get("cwd") or "").strip()
+    fp = str((data.get("tool_input") or {}).get("file_path") or "").strip()
+    return os.path.join(cwd or os.getcwd(), fp) if fp else cwd
+# ── end sage-root ──
+
+# Each written path is judged in the checkout it lands in (a command run from
+# a worktree may write into the main checkout, or the reverse): base_root is
+# the session's project, and every target resolves its own root from it.
+base_root = project_root
+project_root = sage_worktree_root(project_root, sage_probe(data))
 if not os.path.isdir(os.path.join(project_root, ".sage")):
     sys.exit(0)
 # Claude Code keeps the shell's working directory between calls: a relative
@@ -109,11 +201,14 @@ def add(path, base):
         return
     path = os.path.expanduser(path)
     abspath = os.path.normpath(path if os.path.isabs(path) else os.path.join(base, path))
-    rel = os.path.relpath(abspath, project_root).replace(os.sep, "/")
+    if os.path.splitext(abspath)[1].lower() not in SOURCE_EXT:
+        return                                 # before resolving: the cheap test first
+    root = sage_worktree_root(base_root, abspath)
+    rel = os.path.relpath(abspath, root).replace(os.sep, "/")
     if rel.startswith("..") or any(rel.startswith(p) for p in SKIP_PREFIX):
         return
-    if os.path.splitext(rel)[1].lower() in SOURCE_EXT and rel not in targets:
-        targets.append(rel)
+    if os.path.splitext(rel)[1].lower() in SOURCE_EXT and (root, rel) not in targets:
+        targets.append((root, rel))
 
 
 # Heredoc BODIES are data, not commands: `cat > notes.md <<'EOF'` whose body
@@ -289,7 +384,7 @@ GATES = ("sage-spec-gate.sh", "sage-tdd-gate.sh", "sage-scope-gate.sh",
 def gate_script(name):
     """This hook's sibling, else the project's own copy: under the plugin the
     scope gate is not shipped — `sage init` registers it in .claude/hooks/."""
-    for d in (hook_dir, os.path.join(project_root, ".claude", "hooks")):
+    for d in (hook_dir, os.path.join(base_root, ".claude", "hooks")):
         if os.path.isfile(os.path.join(d, name)):
             return os.path.join(d, name)
     return None
@@ -300,21 +395,31 @@ def gate_script(name):
 # the next target is judged, so one command cannot write two files on it.
 TEST_RE = re.compile(r"(^|/)tests?/|(^|/)__tests__/|(^|/)spec/|(^|/)test_[^/]+$"
                      r"|[^/]*_test\.[a-z]+$|[^/]*\.(test|spec)\.[a-z]+$", re.I)
-red_path = os.path.join(project_root, ".sage", "tmp", "tdd-red")
-try:
-    with open(red_path, encoding="utf-8") as fh:
-        red_before = fh.read()
-except OSError:
-    red_before = None
-try:
-    head = subprocess.run(["git", "-C", project_root, "rev-parse", "HEAD"],
-                          capture_output=True, text=True, timeout=5)
-    head = head.stdout.strip() if head.returncode == 0 else ""
-except (OSError, subprocess.SubprocessError):
-    head = ""
+# Per checkout: each root has its own HEAD and its own unlock record.
+unlock = {}
 
 
-def spend_unlock(rel):
+def unlock_state(root):
+    key = os.path.realpath(root)               # one record per checkout, however spelled
+    if key not in unlock:
+        red_path = os.path.join(root, ".sage", "tmp", "tdd-red")
+        try:
+            with open(red_path, encoding="utf-8") as fh:
+                before = fh.read()
+        except OSError:
+            before = None
+        try:
+            h = subprocess.run(["git", "-C", root, "rev-parse", "HEAD"],
+                               capture_output=True, text=True, timeout=5)
+            h = h.stdout.strip() if h.returncode == 0 else ""
+        except (OSError, subprocess.SubprocessError):
+            h = ""
+        unlock[key] = (red_path, before, h)
+    return unlock[key]
+
+
+def spend_unlock(project_root, rel):
+    red_path, _, head = unlock_state(project_root)
     if not head or TEST_RE.search(rel):
         return
     try:
@@ -339,17 +444,20 @@ def spend_unlock(rel):
 
 def restore_unlock():
     """A blocked command wrote nothing, so it spends nothing."""
-    try:
-        if red_before is None:
-            os.remove(red_path)
-        else:
-            with open(red_path, "w", encoding="utf-8") as fh:
-                fh.write(red_before)
-    except OSError:
-        pass
+    for red_path, red_before, _ in unlock.values():
+        try:
+            if red_before is None:
+                if os.path.exists(red_path):
+                    os.remove(red_path)
+            else:
+                with open(red_path, "w", encoding="utf-8") as fh:
+                    fh.write(red_before)
+        except OSError:
+            pass
 
 
-for rel in targets:
+for project_root, rel in targets:
+    unlock_state(project_root)
     synthetic = {"tool_name": "Write",
                  "tool_input": {"file_path": rel, "content": ""},
                  "cwd": project_root}
@@ -371,7 +479,7 @@ for rel in targets:
                   "Write tool for source changes once the gate allows them."
                   % (rel, gate.replace(".sh", ""), (p.stderr or "").strip()))
             sys.exit(0)
-    spend_unlock(rel)
+    spend_unlock(project_root, rel)
 sys.exit(0)
 PYEOF
 

@@ -24,7 +24,7 @@ in plain text (never a code block):
 - **Open:** "Describe what you want to work on, or type / to see commands."
 
 No footer means no response is expected. At a checkpoint, show the work —
-not a summary of it — and wait.
+not a summary of it — and wait. (Desktop mode: a button question instead.)
 
 ## Checkpoints are sacred (Rule 4, in full)
 
@@ -85,6 +85,9 @@ Describe what you want to work on, or type / to see commands.
   not ask for one.
 - Zone 1 shows chains with `→` and step counts. No time estimates.
 - Zone 2's `[N]` always names the next slash command inline.
+- **Desktop mode** (the session context says so): the same options, asked with
+  `AskUserQuestion` instead of the footer — the mapping is in
+  `sage/core/system-skills/sage-checkpoints/references/desktop-mode.md`.
 
 ## Formatting
 

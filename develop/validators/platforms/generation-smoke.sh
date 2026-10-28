@@ -164,6 +164,40 @@ cmp -s "$target/CLAUDE.md" "$target/.claude-md-before" || r=bad
 rm -f "$target/.claude-md-before"
 cc_check "user CLAUDE.md kept; Sage block merged once across init + update" "$r"
 
+# Desktop: .worktreeinclude carries Sage's gitignored runtime into every worktree
+# Claude Code makes. The user's own lines survive; update refreshes, never stacks.
+r=ok
+d="$(cc_new)"; printf '.env\n' > "$d/.worktreeinclude"
+cc_run "$d" init
+head -1 "$d/.worktreeinclude" | grep -qx '.env' || r=bad
+for want in CLAUDE.md sage/ .sage/config.yaml .sage/gates; do
+  sed -n '/^# BEGIN SAGE/,/^# END SAGE/p' "$d/.worktreeinclude" | grep -qxF "$want" || r=bad
+done
+grep -q '^\.claude' "$d/.worktreeinclude" && r=bad
+sed -i.bak 's|^worktree_copy: \[|worktree_copy: [.sage/team-notes, |' "$d/.sage/config.yaml" && rm -f "$d/.sage/config.yaml.bak"
+cc_run "$d" update
+[ "$(grep -c '^# BEGIN SAGE' "$d/.worktreeinclude")" = 1 ] || r=bad
+sed -n '/^# BEGIN SAGE/,/^# END SAGE/p' "$d/.worktreeinclude" | grep -qxF '.sage/team-notes' || r=bad
+# Read as `sage worktree` reads it: [] copies none of .sage/; block style counts.
+sed -i.bak 's|^worktree_copy: .*|worktree_copy: []|' "$d/.sage/config.yaml" && rm -f "$d/.sage/config.yaml.bak"
+cc_run "$d" update
+sed -n '/^# BEGIN SAGE/,/^# END SAGE/p' "$d/.worktreeinclude" | grep -q '^\.sage/' && r=bad
+sed -n '/^# BEGIN SAGE/,/^# END SAGE/p' "$d/.worktreeinclude" | grep -qxF 'CLAUDE.md' || r=bad
+sed -i.bak 's|^worktree_copy: .*|worktree_copy:\
+  - .sage/config.yaml\
+  - ".sage/gates"|' "$d/.sage/config.yaml" && rm -f "$d/.sage/config.yaml.bak"
+cc_run "$d" update
+for want in .sage/config.yaml .sage/gates; do
+  sed -n '/^# BEGIN SAGE/,/^# END SAGE/p' "$d/.worktreeinclude" | grep -qxF "$want" || r=bad
+done
+# A scalar (malformed) value falls back to the defaults, as `sage worktree` does.
+awk '/^worktree_copy:/ { print "worktree_copy: .sage/config.yaml"; skip=1; next }
+     skip && /^[[:space:]]+-/ { next } { skip=0; print }' "$d/.sage/config.yaml" > "$d/.cfg" \
+  && mv "$d/.cfg" "$d/.sage/config.yaml"
+cc_run "$d" update
+sed -n '/^# BEGIN SAGE/,/^# END SAGE/p' "$d/.worktreeinclude" | grep -qxF '.sage/constitution.md' || r=bad
+cc_check ".worktreeinclude: Sage block from worktree_copy, user lines kept, one block" "$r"
+
 # C4: saved permissions survive init + update; the session hook is registered once.
 r=ok
 python3 - "$target/.claude/settings.local.json" <<'PY' || r=bad

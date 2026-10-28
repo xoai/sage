@@ -74,6 +74,10 @@ surfaces:
       through `review.py gate` (counted retries, cycle budget). E19 is the
       scenario that measures it — added, run once 2026-10-26 (N=1, operator config — E19/MEASURED.md); E1/E4/E7/E9/E10/L3
       predate the change.
+      2026-10-27: [M] is also omitted in a worktree session (git-discipline,
+      "Worktree sessions": `git checkout <default>` fails inside a worktree
+      whose default branch is checked out elsewhere). No eval runs a
+      completion checkpoint inside a worktree session — #eval-neutral.
 
   workflow-fix:
     path: core/workflows/fix.workflow.md
@@ -90,6 +94,10 @@ surfaces:
       reads. Before, the decline lived in the decision log only and nothing
       enforced the branch. E13 not re-run; E13 seeds no cycle, but its fix
       opens one on the default branch, so it now meets the gate.
+      2026-10-27: [M] is also omitted in a worktree session (git-discipline,
+      "Worktree sessions": `git checkout <default>` fails inside a worktree
+      whose default branch is checked out elsewhere). No eval runs a
+      completion checkpoint inside a worktree session — #eval-neutral.
 
   workflow-architect:
     path: core/workflows/architect.workflow.md
@@ -101,6 +109,10 @@ surfaces:
       design, per-milestone checkpoints — all of which the eager layer asserts
       as non-negotiable. The plan-approval `scope derive` step (SG-1) mirrors
       build's and is exercised only through L3's build-side twin.
+      2026-10-27: [M] is also omitted in a worktree session (git-discipline,
+      "Worktree sessions": `git checkout <default>` fails inside a worktree
+      whose default branch is checked out elsewhere). No eval runs a
+      completion checkpoint inside a worktree session — #eval-neutral.
 
   workflow-review:
     path: core/workflows/review.workflow.md
@@ -154,6 +166,11 @@ surfaces:
     uncovered: >
       Optional runtime shipped in the sage-autoresearch pack; the optimization
       loop has no scenario. Its own pressure assets move with the pack (P6-T1).
+      2026-10-27: [M] is also omitted in a worktree session (git-discipline,
+      "Worktree sessions": `git checkout <default>` fails inside a worktree
+      whose default branch is checked out elsewhere). No eval runs a
+      completion checkpoint inside a worktree session — #eval-neutral. Its own
+      autoresearch/<slug> branch rules stand in a worktree session.
 
   subworkflow-subagent-execution:
     path: core/workflows/sub-workflows/subagent-execution.workflow.md
@@ -231,6 +248,21 @@ surfaces:
       re-run on the fixed tree passes 3/3 under the corrected tool_order
       grader (a shell-written spec counts; a call touches the paths it writes,
       not the text it carries) (develop/evals/REMEASURE-P2-2026-10-27.md).
+      2026-10-27 (worktree sessions): the project root is now the linked
+      worktree holding the edited file (or the shell cwd) when it is a
+      worktree of the same repository with its own .sage/ — one resolver
+      inlined byte-identical in every hook (hook test WT0). Before, a Claude
+      Desktop worktree session's files resolved under the main checkout's
+      .claude/worktrees/, which every gate skips, so nothing it wrote was
+      gated (WT1–WT8). Unchanged in the main checkout, where the evals run; in
+      E-PAR's `sage worktree` lanes (config copied, no cycles) every gate
+      still allows by default — simulated for spec, TDD, branch, scope,
+      secrets, bookkeeping, config and verify. #eval-neutral.
+      Revised after a second review (2026-10-27): only a REGISTERED worktree
+      (git worktree list) whose Sage config says what the main checkout's says
+      is its own root — a hand-made .git file, an emptied, laxer or older
+      config keeps the main checkout's judgement (WT19–WT21); the session hook
+      says so (WT24). Still a no-op in the main checkout — #eval-neutral.
 
   hook-tdd-gate:
     path: runtime/platforms/claude-code/hooks/sage-tdd-gate.sh
@@ -247,6 +279,21 @@ surfaces:
       it, recorded per HEAD in .sage/tmp/tdd-red by the verify tracker — not
       every edit until the next commit; a second file needs its own test.
       Pinned by H23c–m (incl. a shell write spending it); E1 not re-run.
+      2026-10-27 (worktree sessions): the project root is now the linked
+      worktree holding the edited file (or the shell cwd) when it is a
+      worktree of the same repository with its own .sage/ — one resolver
+      inlined byte-identical in every hook (hook test WT0). Before, a Claude
+      Desktop worktree session's files resolved under the main checkout's
+      .claude/worktrees/, which every gate skips, so nothing it wrote was
+      gated (WT1–WT8). Unchanged in the main checkout, where the evals run; in
+      E-PAR's `sage worktree` lanes (config copied, no cycles) every gate
+      still allows by default — simulated for spec, TDD, branch, scope,
+      secrets, bookkeeping, config and verify. #eval-neutral.
+      Revised after a second review (2026-10-27): only a REGISTERED worktree
+      (git worktree list) whose Sage config says what the main checkout's says
+      is its own root — a hand-made .git file, an emptied, laxer or older
+      config keeps the main checkout's judgement (WT19–WT21); the session hook
+      says so (WT24). Still a no-op in the main checkout — #eval-neutral.
 
   hook-degradation-log:
     path: runtime/platforms/claude-code/hooks/sage-degradation-log.sh
@@ -264,6 +311,21 @@ surfaces:
       decisions-*.md and the Hermes marker; paths compared by realpath (fixes
       macOS H17). Hook tests H17–H19g. E8 re-run on the fixed tree: 4/4
       (develop/evals/REMEASURE-P2-2026-10-27.md).
+      2026-10-27 (worktree sessions): the project root is now the linked
+      worktree holding the edited file (or the shell cwd) when it is a
+      worktree of the same repository with its own .sage/ — one resolver
+      inlined byte-identical in every hook (hook test WT0). Before, a Claude
+      Desktop worktree session's files resolved under the main checkout's
+      .claude/worktrees/, which every gate skips, so nothing it wrote was
+      gated (WT1–WT8). Unchanged in the main checkout, where the evals run; in
+      E-PAR's `sage worktree` lanes (config copied, no cycles) every gate
+      still allows by default — simulated for spec, TDD, branch, scope,
+      secrets, bookkeeping, config and verify. #eval-neutral.
+      Revised after a second review (2026-10-27): only a REGISTERED worktree
+      (git worktree list) whose Sage config says what the main checkout's says
+      is its own root — a hand-made .git file, an emptied, laxer or older
+      config keeps the main checkout's judgement (WT19–WT21); the session hook
+      says so (WT24). Still a no-op in the main checkout — #eval-neutral.
 
   hook-bash-write-gate:
     path: runtime/platforms/claude-code/hooks/sage-bash-write-gate.sh
@@ -279,6 +341,22 @@ surfaces:
       review saw one in 3 of 27 runs). Not seen, by design: what an
       interpreter or script writes at run time, xargs and find -exec, $VAR
       paths, git apply, patch, tar, unzip.
+    notes: >
+      2026-10-27 (worktree sessions): the project root is now the linked
+      worktree holding the edited file (or the shell cwd) when it is a
+      worktree of the same repository with its own .sage/ — one resolver
+      inlined byte-identical in every hook (hook test WT0). Before, a Claude
+      Desktop worktree session's files resolved under the main checkout's
+      .claude/worktrees/, which every gate skips, so nothing it wrote was
+      gated (WT1–WT8). Unchanged in the main checkout, where the evals run; in
+      E-PAR's `sage worktree` lanes (config copied, no cycles) every gate
+      still allows by default — simulated for spec, TDD, branch, scope,
+      secrets, bookkeeping, config and verify. #eval-neutral.
+      Revised after a second review (2026-10-27): only a REGISTERED worktree
+      (git worktree list) whose Sage config says what the main checkout's says
+      is its own root — a hand-made .git file, an emptied, laxer or older
+      config keeps the main checkout's judgement (WT19–WT21); the session hook
+      says so (WT24). Still a no-op in the main checkout — #eval-neutral.
 
   hook-branch-gate:
     path: runtime/platforms/claude-code/hooks/sage-branch-gate.sh
@@ -306,6 +384,21 @@ surfaces:
       block message now defers to git-discipline's propose-confirm — propose
       the branch, create it once the user confirms, record it with close-out
       --branch — where it used to say only 'create it' (BR1).
+      2026-10-27 (worktree sessions): the project root is now the linked
+      worktree holding the edited file (or the shell cwd) when it is a
+      worktree of the same repository with its own .sage/ — one resolver
+      inlined byte-identical in every hook (hook test WT0). Before, a Claude
+      Desktop worktree session's files resolved under the main checkout's
+      .claude/worktrees/, which every gate skips, so nothing it wrote was
+      gated (WT1–WT8). Unchanged in the main checkout, where the evals run; in
+      E-PAR's `sage worktree` lanes (config copied, no cycles) every gate
+      still allows by default — simulated for spec, TDD, branch, scope,
+      secrets, bookkeeping, config and verify. #eval-neutral.
+      Revised after a second review (2026-10-27): only a REGISTERED worktree
+      (git worktree list) whose Sage config says what the main checkout's says
+      is its own root — a hand-made .git file, an emptied, laxer or older
+      config keeps the main checkout's judgement (WT19–WT21); the session hook
+      says so (WT24). Still a no-op in the main checkout — #eval-neutral.
 
   hook-config-gate:
     path: runtime/platforms/claude-code/hooks/sage-config-gate.sh
@@ -341,6 +434,36 @@ surfaces:
       across E9/E16/E19, none failed a check. E15 re-run on the fixed tree:
       2/3 — the switch held; the work check failed on the branch gate (see
       hook-branch-gate) (develop/evals/REMEASURE-P2-2026-10-27.md).
+      2026-10-27 (worktree sessions): the project root is now the linked
+      worktree holding the edited file (or the shell cwd) when it is a
+      worktree of the same repository with its own .sage/ — one resolver
+      inlined byte-identical in every hook (hook test WT0). Before, a Claude
+      Desktop worktree session's files resolved under the main checkout's
+      .claude/worktrees/, which every gate skips, so nothing it wrote was
+      gated (WT1–WT8). Unchanged in the main checkout, where the evals run; in
+      E-PAR's `sage worktree` lanes (config copied, no cycles) every gate
+      still allows by default — simulated for spec, TDD, branch, scope,
+      secrets, bookkeeping, config and verify. #eval-neutral.
+      2026-10-27 (worktree sessions, after review): the switch is protected
+      while EITHER the session's project or the acting worktree has
+      enforcement on, and a .sage/config.yaml of ANY checkout of the
+      repository counts — a new one is judged against the enforcing config, so
+      a worktree cannot start out laxer (WT11, WT12); a fixture's .sage/
+      elsewhere is not the switch (WT13). In the main checkout, where E15
+      runs, the reference config and every decision are as before —
+      #eval-neutral.
+      Second review: the agent cannot CREATE a checkout's Sage config while
+      enforcement is on (it comes from .worktreeinclude or `sage worktree`), a
+      subdirectory project's worktree config included (WT12b, WT22); a shell
+      naming any Sage config is judged under every checkout's enforcement, and
+      `touch` counts as a write (WT23). #eval-neutral.
+      Final review: `git worktree add` is blocked while a cycle is in progress
+      (a worktree is judged by its own cycles; Desktop's worktrees and `sage
+      worktree` do not pass through here) (WT25); an Edit/Write counts its
+      target's enforcement and a shell the configs it names, so a stale
+      worktree's switch never blocks the main checkout's own edits (WT26);
+      `touch` is no longer a write. Known limit, as before: a glob-shaped
+      shell write (`cp …/c*.yaml`) is not read as naming the config.
 
   hook-verify-gate:
     path: runtime/platforms/claude-code/hooks/sage-verify-gate.sh
@@ -363,6 +486,21 @@ surfaces:
       line. Claude Code 2.1.289 still labels it 'hook error'
       (docs/attestations/claude-code-structured-deny-2026-10-27.md). Other
       callers keep exit 2. Pinned by hook tests D1–D8; E14 not re-run.
+      2026-10-27 (worktree sessions): the project root is now the linked
+      worktree holding the edited file (or the shell cwd) when it is a
+      worktree of the same repository with its own .sage/ — one resolver
+      inlined byte-identical in every hook (hook test WT0). Before, a Claude
+      Desktop worktree session's files resolved under the main checkout's
+      .claude/worktrees/, which every gate skips, so nothing it wrote was
+      gated (WT1–WT8). Unchanged in the main checkout, where the evals run; in
+      E-PAR's `sage worktree` lanes (config copied, no cycles) every gate
+      still allows by default — simulated for spec, TDD, branch, scope,
+      secrets, bookkeeping, config and verify. #eval-neutral.
+      Revised after a second review (2026-10-27): only a REGISTERED worktree
+      (git worktree list) whose Sage config says what the main checkout's says
+      is its own root — a hand-made .git file, an emptied, laxer or older
+      config keeps the main checkout's judgement (WT19–WT21); the session hook
+      says so (WT24). Still a no-op in the main checkout — #eval-neutral.
 
   hook-verify-tracker:
     path: runtime/platforms/claude-code/hooks/sage-verify-tracker.sh
@@ -385,6 +523,21 @@ surfaces:
       relative to the project (one under .claude/worktrees/ still counts).
       Pinned by H23c–i. The test-evidence half E14 grades is unchanged; E14
       not re-run.
+      2026-10-27 (worktree sessions): the project root is now the linked
+      worktree holding the edited file (or the shell cwd) when it is a
+      worktree of the same repository with its own .sage/ — one resolver
+      inlined byte-identical in every hook (hook test WT0). Before, a Claude
+      Desktop worktree session's files resolved under the main checkout's
+      .claude/worktrees/, which every gate skips, so nothing it wrote was
+      gated (WT1–WT8). Unchanged in the main checkout, where the evals run; in
+      E-PAR's `sage worktree` lanes (config copied, no cycles) every gate
+      still allows by default — simulated for spec, TDD, branch, scope,
+      secrets, bookkeeping, config and verify. #eval-neutral.
+      Revised after a second review (2026-10-27): only a REGISTERED worktree
+      (git worktree list) whose Sage config says what the main checkout's says
+      is its own root — a hand-made .git file, an emptied, laxer or older
+      config keeps the main checkout's judgement (WT19–WT21); the session hook
+      says so (WT24). Still a no-op in the main checkout — #eval-neutral.
 
   hook-secrets-gate:
     path: runtime/platforms/claude-code/hooks/sage-secrets-gate.sh
@@ -405,6 +558,21 @@ surfaces:
       line. Claude Code 2.1.289 still labels it 'hook error'
       (docs/attestations/claude-code-structured-deny-2026-10-27.md). Other
       callers keep exit 2. Pinned by hook tests D1–D8; E2 not re-run.
+      2026-10-27 (worktree sessions): the project root is now the linked
+      worktree holding the edited file (or the shell cwd) when it is a
+      worktree of the same repository with its own .sage/ — one resolver
+      inlined byte-identical in every hook (hook test WT0). Before, a Claude
+      Desktop worktree session's files resolved under the main checkout's
+      .claude/worktrees/, which every gate skips, so nothing it wrote was
+      gated (WT1–WT8). Unchanged in the main checkout, where the evals run; in
+      E-PAR's `sage worktree` lanes (config copied, no cycles) every gate
+      still allows by default — simulated for spec, TDD, branch, scope,
+      secrets, bookkeeping, config and verify. #eval-neutral.
+      Revised after a second review (2026-10-27): only a REGISTERED worktree
+      (git worktree list) whose Sage config says what the main checkout's says
+      is its own root — a hand-made .git file, an emptied, laxer or older
+      config keeps the main checkout's judgement (WT19–WT21); the session hook
+      says so (WT24). Still a no-op in the main checkout — #eval-neutral.
 
   hook-bookkeeping-gate:
     path: runtime/platforms/claude-code/hooks/sage-bookkeeping-gate.sh
@@ -442,6 +610,21 @@ surfaces:
       2026-10-27 (P2 re-run): the redirect message lists `--status complete
       --qa …`. L1 re-run on the fixed tree: 7/7
       (develop/evals/REMEASURE-P2-2026-10-27.md).
+      2026-10-27 (worktree sessions): the project root is now the linked
+      worktree holding the edited file (or the shell cwd) when it is a
+      worktree of the same repository with its own .sage/ — one resolver
+      inlined byte-identical in every hook (hook test WT0). Before, a Claude
+      Desktop worktree session's files resolved under the main checkout's
+      .claude/worktrees/, which every gate skips, so nothing it wrote was
+      gated (WT1–WT8). Unchanged in the main checkout, where the evals run; in
+      E-PAR's `sage worktree` lanes (config copied, no cycles) every gate
+      still allows by default — simulated for spec, TDD, branch, scope,
+      secrets, bookkeeping, config and verify. #eval-neutral.
+      Revised after a second review (2026-10-27): only a REGISTERED worktree
+      (git worktree list) whose Sage config says what the main checkout's says
+      is its own root — a hand-made .git file, an emptied, laxer or older
+      config keeps the main checkout's judgement (WT19–WT21); the session hook
+      says so (WT24). Still a no-op in the main checkout — #eval-neutral.
 
   hook-manifest-sync:
     path: runtime/platforms/claude-code/hooks/sage-manifest-sync.sh
@@ -462,6 +645,21 @@ surfaces:
       What the hook deliberately does NOT do is award `gates-passed` or `complete` —
       those are approval states, and a script that granted them because the files
       looked finished would forge the signature the gate exists to collect.
+      2026-10-27 (worktree sessions): the project root is now the linked
+      worktree holding the edited file (or the shell cwd) when it is a
+      worktree of the same repository with its own .sage/ — one resolver
+      inlined byte-identical in every hook (hook test WT0). Before, a Claude
+      Desktop worktree session's files resolved under the main checkout's
+      .claude/worktrees/, which every gate skips, so nothing it wrote was
+      gated (WT1–WT8). Unchanged in the main checkout, where the evals run; in
+      E-PAR's `sage worktree` lanes (config copied, no cycles) every gate
+      still allows by default — simulated for spec, TDD, branch, scope,
+      secrets, bookkeeping, config and verify. #eval-neutral.
+      Revised after a second review (2026-10-27): only a REGISTERED worktree
+      (git worktree list) whose Sage config says what the main checkout's says
+      is its own root — a hand-made .git file, an emptied, laxer or older
+      config keeps the main checkout's judgement (WT19–WT21); the session hook
+      says so (WT24). Still a no-op in the main checkout — #eval-neutral.
 
   hook-session-init:
     path: runtime/platforms/claude-code/hooks/sage-session-init.sh
@@ -471,6 +669,28 @@ surfaces:
       H-series hook tests cover the script's own contract (it fires, it emits
       the state block); nothing measures whether the injected state changes
       what the agent then does. L1 (Phase 5) is the natural home for that.
+      2026-10-27: one source — the plugin's hand-kept copy (no collision
+      guard, no worktree notices) is gone; build_plugin FILE_MAP byte-pins
+      this file. New notices: a worktree without .sage/ is told it is
+      ungoverned and how to fix it (WT9); a worktree whose .sage/work is
+      gitignored is told close-out mirrors it (WT10). Context only — pinned by
+      hook tests H32–H34, WT9, WT10 and worktree-memory.test.sh.
+      Final review: the main-checkout notices fire only when the session's
+      project is the main checkout; a session started inside a worktree with
+      no config is told it is not a Sage project (WT9).
+      2026-10-27 (Desktop mode): inside Claude Desktop's Code tab
+      (desktop_mode auto|on|off; the session hook decides) checkpoints are
+      asked with AskUserQuestion, progress goes to the session's task list,
+      and a worktree session keeps its branch (offering no [M] is structural — git-discipline, "Worktree sessions" — whatever desktop_mode says).
+      Off in `claude -p` — and the eval driver drops the app's host variables so a harness launched from inside the app cannot switch it on — so the
+      covering scenarios run exactly as before: #eval-neutral. Pinned by hook
+      tests DM1–DM7b.
+      2026-10-27 (live, Claude Desktop 4.29.0): the app runs a worktree
+      session's SessionStart hook in the MAIN checkout, so the hook now reads
+      the session's cwd from its input (DM6c). The rest of Desktop mode held
+      in a live /build
+      (docs/attestations/claude-code-desktop-worktree-session-2026-10-27.md).
+      Context only — #eval-neutral.
 
   hook-scope-gate:
     path: runtime/platforms/claude-code/hooks/sage-scope-gate.sh
@@ -503,6 +723,21 @@ surfaces:
       line. Claude Code 2.1.289 still labels it 'hook error'
       (docs/attestations/claude-code-structured-deny-2026-10-27.md). Other
       callers keep exit 2. Pinned by hook tests D1–D8; L3 not re-run.
+      2026-10-27 (worktree sessions): the project root is now the linked
+      worktree holding the edited file (or the shell cwd) when it is a
+      worktree of the same repository with its own .sage/ — one resolver
+      inlined byte-identical in every hook (hook test WT0). Before, a Claude
+      Desktop worktree session's files resolved under the main checkout's
+      .claude/worktrees/, which every gate skips, so nothing it wrote was
+      gated (WT1–WT8). Unchanged in the main checkout, where the evals run; in
+      E-PAR's `sage worktree` lanes (config copied, no cycles) every gate
+      still allows by default — simulated for spec, TDD, branch, scope,
+      secrets, bookkeeping, config and verify. #eval-neutral.
+      Revised after a second review (2026-10-27): only a REGISTERED worktree
+      (git worktree list) whose Sage config says what the main checkout's says
+      is its own root — a hand-made .git file, an emptied, laxer or older
+      config keeps the main checkout's judgement (WT19–WT21); the session hook
+      says so (WT24). Still a no-op in the main checkout — #eval-neutral.
 
   hook-scope-journal:
     path: runtime/platforms/claude-code/hooks/sage-scope-journal.sh
@@ -542,6 +777,14 @@ surfaces:
       written; fields a manifest predates are not held against it.
       test_manifest CloseOutTest. L1 re-run on the fixed tree 7/7; E-PAR-1–3
       in develop/evals/REMEASURE-P2-2026-10-27.md.
+      2026-10-27: close-out in a linked worktree whose .sage/work is
+      gitignored copies the cycle to the main checkout's
+      .sage/worktree-records/<worktree>/ (mirror_to_main) — an archive no gate
+      or session scan reads, so a worktree's open cycle never governs the main
+      checkout. Only an ignored cycle is copied; a mirror failure never fails
+      the close-out. A no-op in the main checkout, so the covering scenarios
+      are unaffected — #eval-neutral. Pinned by test_manifest.py
+      WorktreeMirrorTest.
 
   tool-lanes:
     path: runtime/tools/lanes.py
@@ -584,6 +827,21 @@ surfaces:
       test_scope_judge.py (OpencodePortTest, 48 total). Capability only:
       E-JUDGE-1 has NOT run on opencode, and the measured verdict above is
       unchanged.
+      2026-10-27 (worktree sessions): the project root is now the linked
+      worktree holding the edited file (or the shell cwd) when it is a
+      worktree of the same repository with its own .sage/ — one resolver
+      inlined byte-identical in every hook (hook test WT0). Before, a Claude
+      Desktop worktree session's files resolved under the main checkout's
+      .claude/worktrees/, which every gate skips, so nothing it wrote was
+      gated (WT1–WT8). Unchanged in the main checkout, where the evals run; in
+      E-PAR's `sage worktree` lanes (config copied, no cycles) every gate
+      still allows by default — simulated for spec, TDD, branch, scope,
+      secrets, bookkeeping, config and verify. #eval-neutral.
+      Revised after a second review (2026-10-27): only a REGISTERED worktree
+      (git worktree list) whose Sage config says what the main checkout's says
+      is its own root — a hand-made .git file, an emptied, laxer or older
+      config keeps the main checkout's judgement (WT19–WT21); the session hook
+      says so (WT24). Still a no-op in the main checkout — #eval-neutral.
 
   opencode-claude-bridge:
     path: runtime/platforms/community/opencode/claude-bridge/claude-cli-bridge.py
@@ -864,6 +1122,10 @@ surfaces:
       structurally so: the eval driver is headless and cannot answer an approval
       prompt, so the half of this that matters most to a human user is the half
       the harness cannot see. That is a limit of the instrument, not an oversight.
+      2026-10-27: the checkpoint line says Desktop mode asks a button question
+      instead of the footer — same line count. Desktop mode never switches on
+      under `claude -p` (the eval driver also drops the app's host variables),
+      so #eval-neutral.
 
 
 
@@ -972,6 +1234,14 @@ surfaces:
       [P] is honored exclusively by --parallel (code-scheduled, opt-in).
       Phase 3's subagent-execution sub-workflow replaces this loop
       when --subagents is active; E9/E10 will cover that path.
+      2026-10-27 (Desktop mode): inside Claude Desktop's Code tab
+      (desktop_mode auto|on|off; the session hook decides) checkpoints are
+      asked with AskUserQuestion, progress goes to the session's task list,
+      and a worktree session keeps its branch (offering no [M] is structural — git-discipline, "Worktree sessions" — whatever desktop_mode says).
+      Off in `claude -p` — and the eval driver drops the app's host variables so a harness launched from inside the app cannot switch it on — so the
+      covering scenarios run exactly as before: #eval-neutral. Pinned by hook
+      tests DM1–DM7b. Also: [P] drafts the PR description — git-discipline
+      never pushes or opens PRs, and the menu said it would.
 
   capability-tdd:
     path: core/capabilities/execution/tdd/SKILL.md
@@ -1025,6 +1295,17 @@ surfaces:
       declined` via `manifest.py close-out --branch declined` — the gate
       honours it. E1 not re-run; E1's /build now has to branch before its
       first source edit.
+      2026-10-27 (Desktop mode): inside Claude Desktop's Code tab
+      (desktop_mode auto|on|off; the session hook decides) checkpoints are
+      asked with AskUserQuestion, progress goes to the session's task list,
+      and a worktree session keeps its branch (offering no [M] is structural — git-discipline, "Worktree sessions" — whatever desktop_mode says).
+      Off in `claude -p` — and the eval driver drops the app's host variables so a harness launched from inside the app cannot switch it on — so the
+      covering scenarios run exactly as before: #eval-neutral. Pinned by hook
+      tests DM1–DM7b. New: "Worktree sessions" — the session's own branch is
+      the initiative's (recorded with close-out --branch; renaming it is the user's call), no
+      [M] (git checkout <default> fails inside a worktree), records via
+      close-out. Applies to `claude --worktree` too; E10 measures
+      propose-confirm on the default branch, unchanged.
 
   capability-auto-review:
     path: core/capabilities/review/auto-review/SKILL.md
@@ -1284,6 +1565,14 @@ surfaces:
       copied into CLAUDE.md's Quick reference (always on), so the formatting
       reaches sessions that never open this skill. Still ungraded, for the
       reason above.
+      2026-10-27 (Desktop mode): inside Claude Desktop's Code tab
+      (desktop_mode auto|on|off; the session hook decides) checkpoints are
+      asked with AskUserQuestion, progress goes to the session's task list,
+      and a worktree session keeps its branch (offering no [M] is structural — git-discipline, "Worktree sessions" — whatever desktop_mode says).
+      Off in `claude -p` — and the eval driver drops the app's host variables so a harness launched from inside the app cannot switch it on — so the
+      covering scenarios run exactly as before: #eval-neutral. Pinned by hook
+      tests DM1–DM7b. The mapping lives in references/desktop-mode.md, read on
+      demand.
 
   system-skill-sage-gates:
     path: core/system-skills/sage-gates/SKILL.md
@@ -1297,6 +1586,14 @@ surfaces:
       2026-10-27 (P2): 'Why you were blocked' gained the branch gate, the Bash
       write gate and the TDD gate's one-change unlock; the branch-gate decline
       is now `manifest.py close-out --branch declined`. E1/E7 not re-run.
+      2026-10-27 (Desktop mode): inside Claude Desktop's Code tab
+      (desktop_mode auto|on|off; the session hook decides) checkpoints are
+      asked with AskUserQuestion, progress goes to the session's task list,
+      and a worktree session keeps its branch (offering no [M] is structural — git-discipline, "Worktree sessions" — whatever desktop_mode says).
+      Off in `claude -p` — and the eval driver drops the app's host variables so a harness launched from inside the app cannot switch it on — so the
+      covering scenarios run exactly as before: #eval-neutral. Pinned by hook
+      tests DM1–DM7b. The branch-block entry says a worktree session never
+      meets it.
 
   system-skill-sage-constitution:
     path: core/system-skills/sage-constitution/SKILL.md
